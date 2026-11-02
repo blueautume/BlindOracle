@@ -39,6 +39,40 @@ struct ProfileResolution: Sendable {
 }
 
 enum ProfileDirectory {
+    /// An incomplete cached form must not hide facts subsequently saved for
+    /// the same UUID. Explicit unknowns and edited known values remain intact.
+    static func restoringKnownFields(in draft: OracleProfile, from saved: OracleProfile) -> OracleProfile {
+        guard draft.id == saved.id else { return draft }
+        var patch = ProfileUpdate(id: draft.id)
+        let declared = draft.declaredUnknownFields ?? draft.unknownFields
+        func canRestore(_ field: OracleField, missing: Bool) -> Bool {
+            !declared.contains(field) && (missing || draft.unknownFields.contains(field))
+                && !saved.unknownFields.contains(field) && saved.declaredUnknownFields?.contains(field) != true
+        }
+        if canRestore(.name, missing: draft.resolvedName.isEmpty), !saved.resolvedName.isEmpty { patch.name = saved.resolvedName }
+        if canRestore(.birthDate, missing: draft.birthDate == nil), let date = saved.birthDate {
+            patch.birthDate = saved.birthDateText ?? format(date, zone: saved.birthTimeZoneID, pattern: "yyyy-MM-dd")
+        }
+        if canRestore(.birthTime, missing: !draft.birthTimeKnown || (draft.birthTimeText == nil && draft.birthDate == nil)), saved.birthTimeKnown {
+            patch.birthTime = saved.birthTimeText ?? saved.birthDate.map { format($0, zone: saved.birthTimeZoneID, pattern: "HH:mm:ss") }
+            if patch.birthTime != nil { patch.birthTimeKnown = true }
+        }
+        if canRestore(.birthTimeZone, missing: TimeZone(identifier: draft.birthTimeZoneID) == nil), TimeZone(identifier: saved.birthTimeZoneID) != nil {
+            patch.birthTimeZoneID = saved.birthTimeZoneID
+        }
+        if canRestore(.gender, missing: draft.sex == "未提供"), ["男", "女"].contains(saved.sex) { patch.sex = saved.sex }
+        if canRestore(.birthPlace, missing: draft.birthPlace.isEmpty), !saved.birthPlace.isEmpty { patch.birthPlace = saved.birthPlace }
+        if canRestore(.birthCoordinates, missing: draft.birthLatitude == nil || draft.birthLongitude == nil),
+           let latitude = saved.birthLatitude, let longitude = saved.birthLongitude,
+           (-90...90).contains(latitude), (-180...180).contains(longitude) {
+            patch.birthLatitude = latitude; patch.birthLongitude = longitude
+        }
+        guard patch != ProfileUpdate(id: draft.id) else { return draft }
+        var value = applying([patch], to: [draft]).profiles.first ?? draft
+        if patch.name != nil { value.unknownFields.remove(.name) }
+        return value
+    }
+
     static func applying(_ updates: [ProfileUpdate], to profiles: [OracleProfile]) -> ProfileMergeResult {
         var result = ProfileMergeResult(profiles: profiles, appliedIDs: [], issues: [])
         for update in updates.prefix(20) {

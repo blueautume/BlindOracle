@@ -2,17 +2,18 @@
   "date": "2026-11-03",
   "xcode": "27.1 (27A9275)",
   "minimum_iOS": "17.0",
-  "release_arm64_bundle_bytes": 16767957,
+  "release_arm64_bundle_bytes": 16785174,
   "release_contains_development_key_resource": false,
   "source_credential_matches": [],
   "release_credential_matches": [],
-  "unit_tests_passed": 205,
-  "ui_tests_passed": 13,
+  "unit_tests_passed": 219,
+  "ui_tests_passed": 5,
   "live_api_tests_passed": 1,
   "default_live_test_skipped_intentionally": 3,
   "local_plugin_count": 10,
   "release_is_signed": false,
   "notes": [
+    "Saved-profile reuse update 0.1.6 / Build 7: 219 non-live unit tests and five UI regressions passed; three opt-in live tests skipped. Existing named profiles retain UUID, birthday, wall-clock time, confirmed birth timezone and location. Empty AI participant arrays and missing name selections cannot hide grounded saved records; a sole saved person is only a visible form candidate, without automatic self binding. Incomplete non-declared-unknown draft fields are repaired from the matching saved UUID while intentional known edits and explicit unknowns remain. Birth timezone restoration preserves the local clock. Synthetic saved-profile → unqualified fortune question → prefilled form → one confirmation → coins/result, timezone selection, multi-person and followup flows verified. Final Debug tests and unsigned Release archive completed with zero warnings; live DeepSeek/physical GPS were not rerun. Other broader UI evidence below retains its earlier version.",
     "Unified intake update 0.1.5 / Build 6: 205 non-live unit tests and 13 UI regressions passed; three opt-in live tests skipped. New readings open one complete form with all selected people inline and any requested numbers; one successful submit directly starts the reading or required card/coin operation. Missing required data stays in the same form with combined feedback. Searchable Chinese timezone selection, independent birth/current location, saved birthdays, draft recovery, stale callbacks, history, tarot/coin continuity, multi-person inputs and ordinary follow-ups verified. Final Debug builds and unsigned Release archive completed with zero warnings. Live DeepSeek/physical GPS were not rerun; older evidence below retains its original version.",
     "Continuation and birth-location update 0.1.4 / Build 5: 194 non-live unit tests and five UI regressions passed; three opt-in live tests skipped. Detail follow-ups preserve the saved lines/cards, inputs, results and reading reference across relaunch; explicit recasts still require confirmation and fresh interactions. Birth/current location fields stay independent and preserve the resolved location timezone. Location UI uses a deterministic Debug fixture; physical GPS and live DeepSeek were not rerun. Final Debug builds and unsigned Release archive completed with zero warnings; older evidence below retains its original version.",
     "Reading deletion update 0.1.3 / Build 4: 171 non-live unit tests and two deletion UI tests passed; three opt-in live tests skipped. Recent and all-record trash controls, explicit Cancel/Delete alert, relaunch persistence, UUID isolation, current/archived link cleanup, and cancellation without resurrection verified. Release archive completed with zero warnings; other UI/live results below are retained earlier evidence.",
@@ -31,14 +32,14 @@
     "Earlier offline tarot deck, keyboard, broader interaction, and history regression evidence remains at the retained paths. No reasoning_content is decoded, displayed, or persisted.",
     "Changing the requested method while supplying data preserves the original question, applies the new method, and requires a new summary confirmation. A clock correction alone cannot change methods; ambiguous questions or negative replies cannot act as confirmation."
   ],
-  "unit_test_result": "build-unified-intake/units-closed.xcresult",
-  "final_ui_result": "build-unified-intake/forms-ui-final.xcresult",
+  "unit_test_result": "build-saved-profile/units-closed.xcresult",
+  "final_ui_result": "build-saved-profile/saved-ui-final.xcresult",
   "live_api_result": "build-conversation/live-verified.xcresult",
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "0.1.5",
-  "build": "6",
+  "version": "0.1.6",
+  "build": "7",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",
@@ -62,7 +63,7 @@
   "build_warning_cleanup": {
     "debug_clean_build_warning_count": 0,
     "release_archive_warning_count": 0,
-    "release_archive_path": "build-unified-intake/BlindOracle-final.xcarchive",
+    "release_archive_path": "build-saved-profile/BlindOracle-closed.xcarchive",
     "archive_signed": false,
     "store_upload_performed": false,
     "ipad_orientations": [
@@ -120,15 +121,15 @@
     "generator_reads_central_version_verified": true,
     "debug_build_settings_verified": true,
     "release_archive_metadata_verified": true,
-    "version": "0.1.5",
-    "build": 6,
-    "release_archive_path": "build-unified-intake/BlindOracle-final.xcarchive"
+    "version": "0.1.6",
+    "build": 7,
+    "release_archive_path": "build-saved-profile/BlindOracle-closed.xcarchive"
   },
   "reading_deletion_tests_passed": 8,
   "reading_deletion_ui_tests_passed": 2,
   "unit_test_evidence_version": {
-    "version": "0.1.5",
-    "build": "6"
+    "version": "0.1.6",
+    "build": "7"
   },
   "reading_deletion": {
     "right_side_trash_in_recent_and_all_lists": true,
@@ -152,7 +153,7 @@
     "context_includes_original_inputs_and_limitations": true,
     "live_api_rerun": false,
     "ui_tests_passed": 2,
-    "ui_result": "build-followup-location/ui-final.xcresult"
+    "ui_result": "build-saved-profile/flows-ui.xcresult"
   },
   "birth_location_shortcut": {
     "unit_tests_passed": 3,
@@ -189,8 +190,33 @@
     "forms_ui_tests_passed": 7,
     "forms_ui_result": "build-unified-intake/forms-ui-final.xcresult",
     "ui_tests_passed": 13,
-    "timezone_picker_ui_tests_passed": 1
+    "timezone_picker_ui_tests_passed": 1,
+    "full_ui_evidence_version": {
+      "version": "0.1.5",
+      "build": "6"
+    }
   },
-  "additional_ui_result": "build-unified-intake/flows-ui-final.xcresult",
-  "form_confirmation_required": true
+  "additional_ui_result": "build-saved-profile/flows-ui.xcresult",
+  "form_confirmation_required": true,
+  "saved_profile_reuse": {
+    "unit_regression_tests_passed": 12,
+    "ai_profile_prompt_routing_tests_passed": 2,
+    "empty_ai_selection_preserves_known_self_or_name": true,
+    "grounded_question_names_override_ai_omissions": true,
+    "sole_saved_profile_prefilled_as_form_candidate": true,
+    "candidate_does_not_create_self_binding": true,
+    "duplicate_names_and_other_people_require_selection": true,
+    "saved_birth_values_and_confirmed_timezone_reused": true,
+    "stale_unknown_drafts_cannot_hide_new_known_values": true,
+    "intentional_edits_and_explicit_unknowns_preserved": true,
+    "restored_timezone_preserves_local_clock": true,
+    "profile_data_questions_routed_to_form": true,
+    "live_api_rerun": false,
+    "flows_ui_tests_passed": 3,
+    "flows_ui_result": "build-saved-profile/flows-ui.xcresult",
+    "saved_profile_and_timezone_ui_tests_passed": 2,
+    "ui_result": "build-saved-profile/saved-ui-final.xcresult",
+    "total_ui_tests_passed": 5,
+    "ui_fixture_uses_synthetic_identity": true
+  }
 }

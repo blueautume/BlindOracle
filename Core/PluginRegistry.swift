@@ -64,7 +64,7 @@ struct PluginRegistry: Sendable {
         return results
     }
     func localPlan(question: String, profile: OracleProfile) -> OraclePlan {
-        let personal = ["我", "自己", "本人", "运势", "性格", "事业", "感情", "婚", "工作", "名字", "命"].contains { question.contains($0) }
+        let personal = ["我", "自己", "本人", "运势", "财运", "性格", "事业", "感情", "婚", "工作", "名字", "命"].contains { question.contains($0) }
         let other = ["朋友", "家人", "孩子", "他", "她", "对象", "父亲", "母亲"].contains { question.contains($0) }
         let naming = ["姓名", "名字", "改名", "取名"].contains { question.contains($0) }
         let tarotRequested = question.localizedCaseInsensitiveContains("tarot") || question.contains("塔罗") || question.contains("塔羅")

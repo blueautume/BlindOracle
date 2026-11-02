@@ -2,6 +2,18 @@ import XCTest
 @testable import BlindOracle
 
 final class AIServiceTests: XCTestCase {
+    func testSavedProfileFieldQuestionsUseTheFormInsteadOfRepeatingChatPrompts() {
+        XCTAssertTrue(AIPlanRouting.shouldOpenFormForProfileRequest(action: "clarify", note: "这次要看的姓名是什么？", question: "看一下财运明年", hasPendingQuestion: false))
+        XCTAssertTrue(AIPlanRouting.shouldOpenFormForProfileRequest(action: "reply", note: "请明确出生地时区。", question: "李浩的事业", hasPendingQuestion: false))
+        XCTAssertTrue(AIPlanRouting.shouldOpenFormForProfileRequest(action: "collect", note: "请补充生日和性别。", question: "李浩", hasPendingQuestion: true))
+    }
+
+    func testOrdinaryClarificationAndProfileExplanationDoNotBecomeNewReadings() {
+        XCTAssertFalse(AIPlanRouting.shouldOpenFormForProfileRequest(action: "clarify", note: "你最想问的是哪件事？", question: "帮我看看", hasPendingQuestion: false))
+        XCTAssertFalse(AIPlanRouting.shouldOpenFormForProfileRequest(action: "reply", note: "出生地时区表示当地采用的时间标准。", question: "什么是出生地时区", hasPendingQuestion: false))
+        XCTAssertFalse(AIPlanRouting.shouldOpenFormForProfileRequest(action: "intake", note: "请填写生日。", question: "财运", hasPendingQuestion: false))
+    }
+
     func testReplyAndClarificationNeverCreateFallbackCharts() {
         let available = Set(OracleMethod.allCases)
         XCTAssertEqual(AIPlanRouting.normalizedAction(nil), "intake")

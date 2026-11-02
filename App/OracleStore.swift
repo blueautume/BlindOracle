@@ -149,7 +149,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         persist()
     }
     func defaultParticipants(for plan: OraclePlan) -> [OracleProfile] {
-        if let ids = plan.participantIDs {
+        if let ids = plan.participantIDs, !ids.isEmpty {
             var seen = Set<UUID>()
             return ids.compactMap { id in seen.insert(id).inserted ? profiles.first(where: { $0.id == id }) : nil }
         }
@@ -202,7 +202,16 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         }
         return plan
     }
-    private func resolveParticipants(in plan: inout OraclePlan, question: String) {
+    func resolveParticipants(in plan: inout OraclePlan, question: String) {
+        let groundedNames = ProfileDirectory.referencedNames(in: question, profiles: profiles)
+        if !groundedNames.isEmpty {
+            plan.participantNames = groundedNames
+            let match = ProfileDirectory.resolve(names: groundedNames, in: profiles)
+            let selected = Set(pendingPlan?.participantIDs ?? [])
+            plan.participantIDs = match.ids + match.issues.flatMap { issue in
+                issue.candidateIDs.filter { selected.contains($0) }
+            }
+        }
         let hasExplicitIDs = !(plan.participantIDs ?? []).isEmpty
         var seenNames = Set<String>()
         let requestedNames = (plan.participantNames ?? []).filter { seenNames.insert($0).inserted }
@@ -224,7 +233,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
             let match = ProfileDirectory.resolve(names: requestedNames, in: profiles)
             if !match.issues.isEmpty { notice = match.issues.map(\.message).joined(separator: "\n") }
             if !hasExplicitIDs { plan.participantIDs = match.ids }
-        } else if plan.participantIDs == nil, plan.subject == "本人", let selfProfileID {
+        } else if (plan.participantIDs ?? []).isEmpty, plan.subject == "本人", let selfProfileID {
             plan.participantIDs = [selfProfileID]
         }
         if let ids = plan.participantIDs, !ids.isEmpty {
@@ -341,7 +350,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
 
     var intakeParticipants: [OracleProfile] {
         guard let plan = pendingPlan else { return [] }
-        return plan.draftParticipants ?? preparationParticipants(for: plan)
+        return initialIntakeParticipants(for: plan)
     }
     var intakeNumbers: [Int] { pendingPlan?.draftNumbers ?? [] }
 
@@ -359,7 +368,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     /// the form authorizes a calculation; a chat confirmation never bypasses it.
     func confirmPendingIntake() {
         guard pendingPlan != nil, !isBusy else { return }
-        showIntake = true; showInteraction = false; phase = .awaitingIntake
+        intakeError = nil; showIntake = true; showInteraction = false; phase = .awaitingIntake
     }
 
     func saveIntakeDraft(profiles: [OracleProfile], numbers: [Int], sessionID: UUID) {
@@ -375,7 +384,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         plan.preparationStage = .collecting
         plan.requestedProfileID = nil; plan.requestedFields = nil
         plan.reviewedParticipants = nil; plan.pendingAnswer = nil
-        let people = plan.draftParticipants ?? preparationParticipants(for: plan)
+        let people = initialIntakeParticipants(for: plan)
         let report = ReadingPreparationPolicy.evaluate(plan: plan, participants: people, descriptors: registry.descriptors)
         plan.omittedMethods = report.omissions; plan.preparationNotes = preparationNotes(report)
         pendingPlan = plan; intakeSessionID = UUID(); intakeError = nil
@@ -391,6 +400,23 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     private func preparationParticipants(for plan: OraclePlan) -> [OracleProfile] {
         let people = defaultParticipants(for: plan)
         return plan.collectionDeclined == true && plan.subject == "多人" && people.count < 2 ? [] : people
+    }
+
+    private func initialIntakeParticipants(for plan: OraclePlan) -> [OracleProfile] {
+        if let drafts = plan.draftParticipants {
+            return drafts.map { draft in
+                guard let saved = profiles.first(where: { $0.id == draft.id }) else { return draft }
+                return ProfileDirectory.restoringKnownFields(in: draft, from: saved)
+            }
+        }
+        let selected = preparationParticipants(for: plan)
+        guard selected.isEmpty, plan.subject == "本人", selfProfileID == nil,
+              (plan.participantIDs ?? []).isEmpty, (plan.participantNames ?? []).isEmpty,
+              plan.collectionDeclined != true else { return selected }
+        // A sole saved person is a visible form candidate, never an implicit
+        // self binding or permission to calculate without confirmation.
+        let candidates = profiles.filter { !$0.resolvedName.isEmpty }
+        return candidates.count == 1 ? candidates : []
     }
 
     private func preparationNotes(_ report: ReadingPreparationReport) -> [String] {
@@ -495,6 +521,13 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
                 persist()
             }
             var plan = localPeoplePlan(question: text, collectedIDs: collected.appliedIDs)
+            if var pending = previousPlan, pending.subject != "多人",
+               let person = profiles.first(where: { $0.resolvedName == text }),
+               ProfileDirectory.resolve(names: [text], in: profiles).ids == [person.id] {
+                pending.participantIDs = [person.id]; pending.participantNames = [person.resolvedName]
+                pending.draftParticipants = nil
+                prepareConversation(pending); return
+            }
             let clauses = text.components(separatedBy: CharacterSet(charactersIn: "，,。；;\n")).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             let recastWithProfileUpdate = !explicitUpdates.isEmpty
                 && clauses.contains(where: ReadingContinuationPolicy.isBareRecastRequest)
@@ -537,6 +570,11 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
                 }
             }
             guard operationID == id, !Task.isCancelled else { return }
+            if AIPlanRouting.shouldOpenFormForProfileRequest(action: plan.action, note: plan.note, question: text, hasPendingQuestion: previousPlan != nil) {
+                let updates = plan.profileUpdates
+                plan = AIPlanRouting.isConcreteReadingQuestion(text) ? localPeoplePlan(question: text, collectedIDs: collected.appliedIDs) : previousPlan ?? plan
+                plan.action = "intake"; plan.profileUpdates = updates
+            }
             var grounded = answer.clarification == nil ? ProfileDirectory.groundedUpdates(plan.profileUpdates ?? [], in: text, profiles: profiles,
                                                            contextIDs: contextIDs) : []
             if text.contains("农历") || text.contains("阴历") { for index in grounded.indices { grounded[index].birthDate = nil } }
@@ -584,7 +622,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
                 let note: String
                 if !issues.isEmpty { note = issues.map(\.message).joined(separator: "\n") }
                 else if names.isEmpty { note = "请写下需要留存或补充的姓名和已知资料；未明确的内容先保留原样。" }
-                else { note = !plan.note.isEmpty ? plan.note : "已分别记下\(names.joined(separator: "、"))的资料。可以继续补充，或说说这次想问的事。" }
+                else { note = "已分别记下\(names.joined(separator: "、"))的资料。问卦时会自动带入，不需要重复填写已知信息。" }
                 messages.append(ChatMessage(role: .assistant, content: note))
                 activityMessageID = messages.last?.id
                 progress(names.isEmpty ? "等待明确人员资料" : "资料已按姓名分别留存", state: names.isEmpty ? .waiting : .completed)
