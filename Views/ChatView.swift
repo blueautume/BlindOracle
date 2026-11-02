@@ -229,7 +229,13 @@ struct ChatView: View {
                         Label("问事笺已确认", systemImage: "checkmark.seal").font(.system(size: 12)).foregroundStyle(InkTheme.sage)
                     }
                 }
-                if message.kind != .intake, let runID = message.runID, !message.content.isEmpty {
+                if let deletedID = message.deletedRunID {
+                    Label("推演记录已删除", systemImage: "trash")
+                        .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                        .accessibilityIdentifier("deletedReading-\(deletedID.uuidString)")
+                }
+                if message.kind != .intake, let runID = message.runID, !message.content.isEmpty,
+                   store.runs.contains(where: { $0.id == runID }) {
                     if let run = store.runs.first(where: { $0.id == runID }), let synthesis = run.synthesis, message.kind == .reading, synthesis.hasSignificantConflict {
                         alternatives(synthesis.alternatives, run: run)
                     }

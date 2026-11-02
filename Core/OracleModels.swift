@@ -207,6 +207,8 @@ struct ChatMessage: Codable, Identifiable, Sendable {
     var date = Date()
     var runID: UUID?
     var activities: [OracleActivity]? = nil
+    /// Keeps the transcript's deleted reference distinct from another reading.
+    var deletedRunID: UUID? = nil
 }
 
 struct ReadingAlternative: Codable, Identifiable, Sendable {

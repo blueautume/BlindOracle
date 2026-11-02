@@ -34,6 +34,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     private var waitingPhase: OraclePhase { pendingInteraction != nil ? .awaitingInteraction : pendingPlan != nil ? .awaitingIntake : .idle }
     var profile: OracleProfile { profiles.first(where: { $0.id == selfProfileID }) ?? OracleProfile() }
     var latestRun: OracleRun? {
+        if messages.last(where: { $0.runID != nil || $0.deletedRunID != nil })?.deletedRunID != nil { return nil }
         let referenced = Set(messages.compactMap(\.runID))
         return runs.last { referenced.contains($0.id) }
     }
@@ -81,6 +82,9 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         if let plan = pendingPlan, plan.preparationStage == nil { prepareConversation(plan) }
         else { restoreActivities() }
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-testing-local") && ProcessInfo.processInfo.arguments.contains("--ui-testing-reading-library") {
+            seedReadingLibraryPreview()
+        }
         if ProcessInfo.processInfo.arguments.contains("--ui-testing-progress") || ProcessInfo.processInfo.arguments.contains("--ui-testing-progress-paused") {
             startProgressPreview(paused: ProcessInfo.processInfo.arguments.contains("--ui-testing-progress-paused"))
         }
@@ -115,6 +119,31 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     func deleteProfile(id: UUID) {
         profiles.removeAll { $0.id == id }
         if selfProfileID == id { selfProfileID = nil }
+        persist()
+    }
+    func deleteReading(id: UUID) {
+        guard runs.contains(where: { $0.id == id }) else { return }
+        let ownsActivity = activityRunID == id || activityMessageID.map { messageID in
+            messages.contains { $0.id == messageID && $0.runID == id }
+        } == true
+        if ownsActivity {
+            let emptyReadingMessages = Set(messages.filter { $0.runID == id && $0.content.isEmpty }.map(\.id))
+            cancelConversationTask()
+            for index in messages.indices where emptyReadingMessages.contains(messages[index].id) {
+                messages[index].content = "这份推演记录已删除。"
+            }
+            activityRunID = nil; activityMessageID = nil
+            activities = []; status = ""; activitySessionID = UUID()
+            phase = waitingPhase
+        }
+        runs.removeAll { $0.id == id }
+        func detach(_ transcript: inout [ChatMessage]) {
+            for index in transcript.indices where transcript[index].runID == id {
+                transcript[index].runID = nil; transcript[index].deletedRunID = id
+            }
+        }
+        detach(&messages)
+        for index in conversations.indices { detach(&conversations[index].messages) }
         persist()
     }
     func defaultParticipants(for plan: OraclePlan) -> [OracleProfile] {
@@ -681,7 +710,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         persist()
     }
     func retrySynthesis(_ run: OracleRun) {
-        guard !isBusy else { return }
+        guard !isBusy, runs.contains(where: { $0.id == run.id }) else { return }
         guard pendingInteraction == nil else { notice = "请先完成当前选择，再继续解读。"; return }
         beginActivitySession(); activityRunID = run.id
         progress("沿用已保存的推演结果", detail: run.results.map { $0.method.progressName }.joined(separator: "、"), state: .completed)
@@ -813,6 +842,26 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     }
 
     #if DEBUG
+    private func seedReadingLibraryPreview() {
+        guard !vault.contains("reading-library-fixture") else { return }
+        let people = ProfileDirectory.applying([ProfileUpdate(name: "陈平", birthDate: "1992-06-15", birthTime: "08:30", birthTimeZoneID: "Asia/Shanghai")], to: []).profiles
+        profiles = people
+        runs = (1...10).map { index in
+            let question = "推演删除测试\(index)"
+            let input = OracleInput(question: question, profile: people[0], castingDate: Date(timeIntervalSince1970: 1_700_000_000 + Double(index) * 60), participants: people)
+            let plan = OraclePlan(intent: "删除记录验收", subject: "事件", methods: [.xiaoliuren], requiredFields: [], note: "", question: question)
+            var run = OracleRun(input: input, plan: plan, results: [OracleResult(method: .xiaoliuren, headline: "本地测试记录\(index)", rows: [.init("测试编号", "\(index)")])])
+            run.synthesis = ReadingSynthesis(text: "第\(index)份测试解读。", alternatives: [])
+            run.completedAt = input.castingDate
+            return run
+        }
+        messages = runs.flatMap { run in
+            [ChatMessage(role: .user, content: run.input.question), ChatMessage(role: .assistant, content: run.synthesis!.text, kind: .reading, runID: run.id)]
+        }
+        try? vault.save(true, as: "reading-library-fixture")
+        persist()
+    }
+
     /// Deterministic UI preview only. Production progress is driven exclusively
     /// by actual registry and network events, never by a rotating timer.
     private func startProgressPreview(paused: Bool) {

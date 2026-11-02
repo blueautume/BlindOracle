@@ -5,6 +5,7 @@ struct DataLibraryView: View {
     @State private var settingsPresented = false
     @State private var editingProfile: OracleProfile?
     @State private var deletingProfile: OracleProfile?
+    @State private var deletingReading: OracleRun?
 
     var body: some View {
         NavigationStack {
@@ -23,12 +24,12 @@ struct DataLibraryView: View {
                             VStack(alignment: .leading, spacing: 12) {
                                 SectionEyebrow(text: "推演记录")
                                 ForEach(Array(store.runs.reversed().prefix(8))) { run in
-                                    NavigationLink { ReadingRecordView(runID: run.id) } label: { ReadingRecordCard(run: run) }
-                                        .buttonStyle(.plain)
+                                    ReadingRecordRow(run: run) { deletingReading = run }
                                 }
                                 if store.runs.count > 8 {
                                     NavigationLink("查看全部 \(store.runs.count) 份记录") { AllReadingsView() }
                                         .font(.system(size: 14, design: .serif)).tint(InkTheme.cinnabar)
+                                        .accessibilityIdentifier("allReadings")
                                 }
                             }
                         }
@@ -121,6 +122,7 @@ struct DataLibraryView: View {
             } message: {
                 Text("\(deletingProfile.map(profileTitle) ?? "这份资料")将从留存名单移除，过去的推演快照仍保留。")
             }
+            .modifier(ReadingDeletionConfirmation(reading: $deletingReading))
         }.tint(InkTheme.cinnabar)
     }
 
@@ -140,10 +142,32 @@ struct DataLibraryView: View {
     }
 }
 
-private struct ReadingRecordCard: View {
+private struct ReadingRecordRow: View {
     let run: OracleRun
+    let onDelete: () -> Void
     var body: some View {
         PaperCard {
+            HStack(spacing: 12) {
+                NavigationLink { ReadingRecordView(runID: run.id) } label: {
+                    ReadingRecordSummary(run: run).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("readingRecord-\(run.id.uuidString)")
+                Button(action: onDelete) {
+                    Image(systemName: "trash").font(.system(size: 14, weight: .light))
+                        .foregroundStyle(InkTheme.secondary).frame(width: 36, height: 40)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("删除推演记录：\(String(run.input.question.prefix(60)))")
+                .accessibilityIdentifier("deleteReading-\(run.id.uuidString)")
+            }
+        }.accessibilityElement(children: .contain)
+    }
+}
+
+private struct ReadingRecordSummary: View {
+    let run: OracleRun
+    var body: some View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text(run.input.castingDate.formatted(.dateTime.year().month().day())).font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
@@ -160,21 +184,46 @@ private struct ReadingRecordCard: View {
                     Image(systemName: "arrow.up.right").font(.system(size: 12, weight: .light)).foregroundStyle(InkTheme.cinnabar)
                 }
             }
+    }
+}
+
+private struct ReadingDeletionConfirmation: ViewModifier {
+    @EnvironmentObject private var store: OracleStore
+    @Binding var reading: OracleRun?
+
+    func body(content: Content) -> some View {
+        content.alert("删除这份推演记录？", isPresented: Binding(get: { reading != nil }, set: { if !$0 { reading = nil } })) {
+            Button("删除推演记录", role: .destructive) {
+                if let reading { store.deleteReading(id: reading.id) }
+                reading = nil
+            }.accessibilityIdentifier("confirmDeleteReading")
+            Button("取消", role: .cancel) { reading = nil }
+                .accessibilityIdentifier("cancelDeleteReading")
+        } message: {
+            Text("将删除这份推演记录及其原始结果。对话文字和留存人员资料仍保留。")
         }
     }
 }
 
 private struct AllReadingsView: View {
     @EnvironmentObject private var store: OracleStore
+    @State private var deletingReading: OracleRun?
     var body: some View {
         ZStack {
             PaperBackground()
             ScrollView { LazyVStack(spacing: 12) {
+                if store.runs.isEmpty {
+                    PaperCard {
+                        Text("推演记录已清空，往后的结果会留在这里。")
+                            .font(.system(size: 14, design: .serif)).foregroundStyle(InkTheme.secondary)
+                    }
+                }
                 ForEach(store.runs.reversed()) { run in
-                    NavigationLink { ReadingRecordView(runID: run.id) } label: { ReadingRecordCard(run: run) }.buttonStyle(.plain)
+                    ReadingRecordRow(run: run) { deletingReading = run }
                 }
             }.padding(20).frame(maxWidth: 760).frame(maxWidth: .infinity) }
         }.navigationTitle("推演记录").navigationBarTitleDisplayMode(.inline)
+            .modifier(ReadingDeletionConfirmation(reading: $deletingReading))
     }
 }
 

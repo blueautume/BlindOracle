@@ -103,6 +103,8 @@
 		A1C6C77DBF3FE8C75354B064 = { isa = PBXBuildFile; fileRef = 52869BFC452B5FC9F80F0A9A; };
 		C31054DBCC765277FF56A5C1 = { isa = PBXBuildFile; fileRef = 205A6ED808200F169EFC5A3C; };
 		5B17B68A7FEE3C86E97083C6 = { isa = PBXBuildFile; fileRef = 33D171549E71AE201F2AD73B; };
+		3449126A9E213EAE8BB0072A = { isa = PBXBuildFile; fileRef = 2C0ADB7AF00A0DC236719610; };
+		29E2F54E63793CEA9CA90B37 = { isa = PBXBuildFile; fileRef = 677A6D59D043E9D024B38A68; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -222,6 +224,8 @@
 		52869BFC452B5FC9F80F0A9A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ReadingPreparationTests.swift"; sourceTree = "<group>"; };
 		205A6ED808200F169EFC5A3C = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ConversationalIntakeTests.swift"; sourceTree = "<group>"; };
 		33D171549E71AE201F2AD73B = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITests/ProfileEditingUITests.swift"; sourceTree = "<group>"; };
+		2C0ADB7AF00A0DC236719610 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ReadingDeletionTests.swift"; sourceTree = "<group>"; };
+		677A6D59D043E9D024B38A68 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITests/ReadingDeletionUITests.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -343,6 +347,7 @@
 				06C18B57A601909EF3654E3C,
 				52869BFC452B5FC9F80F0A9A,
 				205A6ED808200F169EFC5A3C,
+				2C0ADB7AF00A0DC236719610,
 			);
 			name = Tests;
 			sourceTree = "<group>";
@@ -355,6 +360,7 @@
 				7C468C36997B89D270418938,
 				92F0731FEDC931C2DD157383,
 				33D171549E71AE201F2AD73B,
+				677A6D59D043E9D024B38A68,
 			);
 			name = UITests;
 			sourceTree = "<group>";
@@ -507,6 +513,7 @@
 				75C36303236DCEF68D110F96,
 				106EE0C2BA81B2AAA9258B3F,
 				5B17B68A7FEE3C86E97083C6,
+				29E2F54E63793CEA9CA90B37,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -606,6 +613,7 @@
 				4BAC15E3752BB819CA79CA51,
 				A1C6C77DBF3FE8C75354B064,
 				C31054DBCC765277FF56A5C1,
+				3449126A9E213EAE8BB0072A,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -677,7 +685,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = A82X46N3WS;
 				ENABLE_TESTABILITY = YES;
@@ -697,7 +705,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.2;
+				MARKETING_VERSION = 0.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lihao.BlindOracle;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -736,7 +744,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = A82X46N3WS;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -751,7 +759,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.2;
+				MARKETING_VERSION = 0.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lihao.BlindOracle;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
