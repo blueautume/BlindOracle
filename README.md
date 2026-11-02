@@ -2,12 +2,14 @@
 
 一个以水墨宣纸为视觉语言的原生 SwiftUI iOS 应用。只有「对话」「数据」两个标签。十种方法在设备本地执行，DeepSeek 负责选择适用插件、提出资料与交互需求、整合中文解读和回答追问。
 
-当前版本：**0.1.1（Build 2）**。
+当前版本：**0.1.2（Build 3）**。
+
+每批修改提交前同时递增补丁版本和 Build，运行一次 `python3 Scripts/version.py` 即可同步版本配置。单一版本源为 `Configuration/Version.json`，工程生成脚本也从这里读取；构建和测试不会自动加版本。`python3 Scripts/version.py --check` 检查工作区同步状态，提交钩子用 `--check-staged` 检查暂存区相对 HEAD 的递增。首次克隆后使用 `git config core.hooksPath .githooks` 启用密钥及版本检查。
 
 ## 打开与运行
 
 1. 用 Xcode 27.1 打开 `BlindOracle.xcodeproj`，选择 `BlindOracle` scheme。
-2. 选择 iOS 17 或更高版本的模拟器运行。真机需在 Signing & Capabilities 选择自己的开发团队；bundle identifier 为 `com.lihao.BlindOracle`，可自行修改。
+2. 选择 iOS 17 或更高版本的模拟器运行。真机需在 Signing & Capabilities 选择自己的开发团队；本项目的 bundle identifier 保持为 `com.lihao.BlindOracle`。
 3. 将 `Configuration/Secrets.example.json` 复制为 `Configuration/Secrets.local.json`，填写 `deepseek_api_key`。本地密钥文件已被 Git 忽略，仓库只保留空白模板。Debug 构建读取文件，启动时同步到设备钥匙串；修改后重新编译即可更新。Release 不复制开发凭据。原工程上一级 `key` 目录仍保留兼容读取。
 4. 也可以在「数据 → 设置」填写自己的密钥。联网部分仅调用 `https://api.deepseek.com`。默认模型为 DeepSeek Pro（`deepseek-v4-pro`），开启 thinking，推理强度为 `max`；可在设置修改模型。旧版 Flash 默认值首次升级为 Pro，之后用户主动选定的模型会保留。
 

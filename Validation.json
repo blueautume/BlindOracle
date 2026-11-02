@@ -2,7 +2,7 @@
   "date": "2026-11-02",
   "xcode": "27.1 (27A9275)",
   "minimum_iOS": "17.0",
-  "release_arm64_bundle_bytes": 16609336,
+  "release_arm64_bundle_bytes": 16609411,
   "release_contains_development_key_resource": false,
   "source_credential_matches": [],
   "release_credential_matches": [],
@@ -13,6 +13,7 @@
   "local_plugin_count": 10,
   "release_is_signed": false,
   "notes": [
+    "Versioning update: version 0.1.2 / Build 3 verified in Debug build settings and the unsigned Release archive, with the same app name and bundle ID. Four isolated version-guard tests plus nine credential-script tests passed. Earlier functional/UI/live result paths are retained evidence from 0.1.1 / Build 2, not newly rerun suites.",
     "Branding-only update: supplied artwork installed as opaque 1024px app icon and matching avatar; display name, in-app identity and export title use 瞎子. Debug and Release product bundle identifiers remain com.lihao.BlindOracle. One UI regression and Release archive passed with zero warnings; the last full unit suite and broader interaction results below are retained evidence.",
     "Release measured from the stripped unsigned arm64 archive .app, not App Store compressed download size.",
     "163 non-live unit tests passed in the final run; three opt-in live tests were skipped there.",
@@ -33,8 +34,8 @@
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "0.1.1",
-  "build": "2",
+  "version": "0.1.2",
+  "build": "3",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",
@@ -58,7 +59,7 @@
   "build_warning_cleanup": {
     "debug_clean_build_warning_count": 0,
     "release_archive_warning_count": 0,
-    "release_archive_path": "build-branding/BlindOracle.xcarchive",
+    "release_archive_path": "build-version/BlindOracle.xcarchive",
     "archive_signed": false,
     "store_upload_performed": false,
     "ipad_orientations": [
@@ -102,5 +103,22 @@
     "icon_and_avatar_match": true,
     "debug_and_release_metadata_verified": true,
     "ui_result": "build-branding/branding-ui.xcresult"
+  },
+  "retained_functional_test_evidence_version": {
+    "version": "0.1.1",
+    "build": "2"
+  },
+  "versioning": {
+    "source": "Configuration/Version.json",
+    "patch_and_build_per_commit": true,
+    "staged_guard_enabled": true,
+    "version_guard_integration_tests_passed": 4,
+    "developer_script_tests_passed": 13,
+    "generator_reads_central_version_verified": true,
+    "debug_build_settings_verified": true,
+    "release_archive_metadata_verified": true,
+    "version": "0.1.2",
+    "build": 3,
+    "release_archive_path": "build-version/BlindOracle.xcarchive"
   }
 }

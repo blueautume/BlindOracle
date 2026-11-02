@@ -1,3 +1,4 @@
 #!/bin/sh
 set -eu
-exec python3 Scripts/check_secrets.py --staged
+python3 Scripts/check_secrets.py --staged
+exec python3 Scripts/version.py --check-staged

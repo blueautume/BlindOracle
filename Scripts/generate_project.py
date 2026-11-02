@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+VERSION = json.loads((ROOT / 'Configuration/Version.json').read_text())
 objects = {}
 def ident(value): return hashlib.sha1(value.encode()).hexdigest()[:24].upper()
 def add(key, value):
@@ -34,7 +35,7 @@ common = dict(SWIFT_VERSION=q('5.0'), IPHONEOS_DEPLOYMENT_TARGET=q('17.0'), SDKR
     HEADER_SEARCH_PATHS=array([q('$(inherited)'),q('$(SRCROOT)/Vendor/Astronomy')]))
 appsettings=dict(common, PRODUCT_BUNDLE_IDENTIFIER=q('com.lihao.BlindOracle'),
     DEVELOPMENT_TEAM=q(os.environ.get('DEVELOPMENT_TEAM', 'A82X46N3WS')),
-    INFOPLIST_FILE=q('App/Info.plist'), CURRENT_PROJECT_VERSION=2, MARKETING_VERSION=q('0.1.1'),
+    INFOPLIST_FILE=q('App/Info.plist'), CURRENT_PROJECT_VERSION=VERSION['build'], MARKETING_VERSION=q(VERSION['version']),
     ASSETCATALOG_COMPILER_APPICON_NAME=q('AppIcon'),
     SWIFT_OBJC_BRIDGING_HEADER=q('App/BlindOracle-Bridging-Header.h'),
     HEADER_SEARCH_PATHS=array([q('$(inherited)'),q('$(SRCROOT)/Vendor/Astronomy')]),
