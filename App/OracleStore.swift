@@ -5,6 +5,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
 
 @MainActor final class OracleStore: ObservableObject {
     @Published var profiles: [OracleProfile]
+    @Published var selfProfileID: UUID?
     @Published var messages: [ChatMessage]
     @Published var runs: [OracleRun]
     @Published var weights: [String: Double]
@@ -31,7 +32,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     private var activityRunID: UUID?
     var isBusy: Bool { [.planning, .calculating, .synthesizing].contains(phase) }
     private var waitingPhase: OraclePhase { pendingInteraction != nil ? .awaitingInteraction : pendingPlan != nil ? .awaitingIntake : .idle }
-    var profile: OracleProfile { profiles.first ?? OracleProfile() }
+    var profile: OracleProfile { profiles.first(where: { $0.id == selfProfileID }) ?? OracleProfile() }
     var latestRun: OracleRun? {
         let referenced = Set(messages.compactMap(\.runID))
         return runs.last { referenced.contains($0.id) }
@@ -51,7 +52,19 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         conversations = history.archive.conversations
         activeConversationID = history.archive.activeConversationID
         let active = history.archive.conversations.first { $0.id == history.archive.activeConversationID }
-        profiles = vault.load([OracleProfile].self, from: "profiles", fallback: [OracleProfile()])
+        let originalProfiles = vault.load([OracleProfile].self, from: "profiles", fallback: [])
+        let storedProfiles = originalProfiles.filter {
+            !$0.resolvedName.isEmpty || $0.birthDate != nil || !$0.birthPlace.isEmpty
+        }
+        profiles = storedProfiles
+        if vault.contains("self-profile-id") {
+            selfProfileID = vault.load(UUID?.self, from: "self-profile-id", fallback: nil)
+        } else {
+            // Prior releases explicitly treated the first legacy record as self.
+            // Named records created by the new directory never acquire this role.
+            let originalSelf = originalProfiles.first
+            selfProfileID = originalSelf?.name == nil && storedProfiles.contains(where: { $0.id == originalSelf?.id }) ? originalSelf?.id : nil
+        }
         messages = active?.messages ?? []
         runs = vault.load([OracleRun].self, from: "readings", fallback: [])
         weights = PreferenceLearning.normalized(vault.load([String: Double].self, from: "preferences", fallback: PreferenceLearning.initial))
@@ -79,6 +92,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         captureCurrentConversation()
         do {
             try vault.save(profiles, as: "profiles")
+            try vault.save(selfProfileID, as: "self-profile-id")
             try vault.save(runs, as: "readings")
             try vault.save(weights, as: "preferences")
             let history = OracleConversationArchive(activeConversationID: activeConversationID, conversations: conversations)
@@ -92,9 +106,89 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     }
     func saveProfile(_ value: OracleProfile) {
         var copy = value; copy.updatedAt = Date()
+        guard !copy.resolvedName.isEmpty else { notice = "请先填写姓名，再保存这份资料。"; return }
         if let index = profiles.firstIndex(where: { $0.id == copy.id }) { profiles[index] = copy }
         else { profiles.append(copy) }
         persist()
+    }
+    func deleteProfile(id: UUID) {
+        profiles.removeAll { $0.id == id }
+        if selfProfileID == id { selfProfileID = nil }
+        persist()
+    }
+    func defaultParticipants(for plan: OraclePlan) -> [OracleProfile] {
+        if let ids = plan.participantIDs {
+            var seen = Set<UUID>()
+            return ids.compactMap { id in seen.insert(id).inserted ? profiles.first(where: { $0.id == id }) : nil }
+        }
+        if let names = plan.participantNames, !names.isEmpty {
+            let resolution = ProfileDirectory.resolve(names: names, in: profiles)
+            return resolution.ids.compactMap { id in profiles.first(where: { $0.id == id }) }
+        }
+        if plan.subject == "本人", let selfProfileID, let own = profiles.first(where: { $0.id == selfProfileID }) { return [own] }
+        return []
+    }
+    @discardableResult func applyProfileUpdates(_ updates: [ProfileUpdate]) -> ProfileMergeResult {
+        let result = ProfileDirectory.applying(updates, to: profiles)
+        profiles = result.profiles
+        if !result.issues.isEmpty { notice = result.issues.map(\.message).joined(separator: "\n") }
+        persist()
+        return result
+    }
+    private func localPeoplePlan(question: String, collectedIDs: [UUID]) -> OraclePlan {
+        var plan = registry.localPlan(question: question, profile: profile)
+        let statement = !collectedIDs.isEmpty || !ProfileDirectory.parseExplicitUpdates(in: question, profiles: profiles).isEmpty
+        let asks = ["？", "?", "看看", "算卦", "问卦", "如何", "怎样", "适合", "关系", "友情", "姻缘", "婚姻", "合作", "运势", "建议", "合不合", "感情"]
+            .contains(where: question.contains)
+        let deferReading = ["不要算", "先不算", "暂不算", "不需要解读"].contains(where: question.contains)
+        if statement && (!asks || deferReading) {
+            plan.action = "collect"; plan.methods = []; plan.requiredFields = []; plan.interactions = []
+            let names = collectedIDs.compactMap { id in profiles.first(where: { $0.id == id })?.resolvedName }
+            plan.note = names.isEmpty ? (notice ?? "请明确需要补充哪位的资料。") : "已分别记下\(names.joined(separator: "、"))的资料。可以继续补充，或告诉我这次想问的事。"
+            return plan
+        }
+        let names = ProfileDirectory.referencedNames(in: question, profiles: profiles)
+        let resolved = ProfileDirectory.resolve(names: names, in: profiles)
+        if !names.isEmpty { plan.participantNames = names; plan.participantIDs = resolved.ids }
+        if Set(names).count > 1 || ["我们", "两人", "双方", "合婚"].contains(where: question.contains) {
+            plan.subject = "多人"
+            plan.relationship = ["友情", "姻缘", "婚姻", "合作", "恋爱", "家庭"].first(where: question.contains) ?? "关系"
+            if !plan.methods.contains(.tarot) && !plan.methods.contains(where: \.usesPersonalProfile) {
+                plan.methods += [.bazi, .ziwei, .astrology]
+                plan.requiredFields = Array(Set(plan.methods.flatMap { registry.plugin($0)?.descriptor.requiredFields ?? [] }))
+            }
+        }
+        return plan
+    }
+    private func resolveParticipants(in plan: inout OraclePlan, question: String) {
+        let hasExplicitIDs = !(plan.participantIDs ?? []).isEmpty
+        var seenNames = Set<String>()
+        let requestedNames = (plan.participantNames ?? []).filter { seenNames.insert($0).inserted }
+        let newNames = requestedNames.filter { name in
+            !name.isEmpty && !["我", "本人", "他人", "朋友", "对象"].contains(name) && question.contains(name)
+                && !profiles.contains(where: { $0.resolvedName == name })
+        }
+        if !newNames.isEmpty { _ = applyProfileUpdates(newNames.map { ProfileUpdate(name: $0) }) }
+        let validIDs = Set(profiles.map(\.id))
+        if let ids = plan.participantIDs {
+            var seen = Set<UUID>()
+            plan.participantIDs = ids.filter { id in
+                guard validIDs.contains(id), seen.insert(id).inserted, let person = profiles.first(where: { $0.id == id }) else { return false }
+                let sameName = profiles.filter { $0.resolvedName == person.resolvedName }
+                return sameName.count <= 1 || pendingPlan?.participantIDs?.contains(id) == true
+            }
+        }
+        if !requestedNames.isEmpty {
+            let match = ProfileDirectory.resolve(names: requestedNames, in: profiles)
+            if !match.issues.isEmpty { notice = match.issues.map(\.message).joined(separator: "\n") }
+            if !hasExplicitIDs { plan.participantIDs = match.ids }
+        } else if plan.participantIDs == nil, plan.subject == "本人", let selfProfileID {
+            plan.participantIDs = [selfProfileID]
+        }
+        if let ids = plan.participantIDs, !ids.isEmpty {
+            plan.participantNames = ids.compactMap { id in profiles.first(where: { $0.id == id })?.resolvedName }
+        }
+        if let ids = plan.participantIDs, ids.count > 1 { plan.subject = "多人" }
     }
     func resetPreferences() { weights = PreferenceLearning.initial; persist() }
     func export() -> URL? { try? vault.export(profiles: profiles, runs: runs, weights: weights) }
@@ -217,21 +311,76 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
             await prepareContext(operation: id)
             guard operationID == id, !Task.isCancelled else { return }
             let history = ContextCompressor.history(messages: Array(messages.dropLast()), summary: summary)
+            let pendingContextIDs = pendingPlan?.participantIDs ?? selfProfileID.map { [$0] } ?? []
+            let refersToSelf = ["我", "本人"].contains(where: text.contains)
+            let refersToOther = ["他", "她"].contains(where: text.contains)
+            let introducesOtherPerson = ["另外", "另一个", "另一位", "其他人", "别人", "他人", "朋友", "同事", "同学", "家人", "亲戚", "对象", "伴侣", "对方", "父亲", "母亲", "爸爸", "妈妈", "孩子", "儿子", "女儿", "男友", "女友", "丈夫", "妻子", "老公", "老婆"]
+                .contains(where: text.contains)
+            let contextIDs: [UUID]
+            if introducesOtherPerson || (refersToSelf && refersToOther) { contextIDs = [] }
+            else if refersToSelf { contextIDs = selfProfileID.map { [$0] } ?? [] }
+            else if refersToOther, pendingContextIDs.count == 1, pendingContextIDs.first == selfProfileID { contextIDs = [] }
+            else { contextIDs = pendingContextIDs }
+            var explicitUpdates = ProfileDirectory.parseExplicitUpdates(in: text, profiles: profiles)
+            if explicitUpdates.isEmpty, contextIDs.count == 1,
+               ["出生", "生日", "性别", "时区"].contains(where: text.contains),
+               let selected = profiles.first(where: { $0.id == contextIDs[0] }),
+               !selected.resolvedName.isEmpty,
+               !refersToSelf || selected.id == selfProfileID,
+               !refersToOther || selected.id != selfProfileID,
+               !introducesOtherPerson,
+               !profiles.contains(where: { $0.id != selected.id && !$0.resolvedName.isEmpty && text.contains($0.resolvedName) }),
+               (pendingPlan != nil || !["他", "她", "朋友"].contains(where: text.contains)) {
+                explicitUpdates = ProfileDirectory.parseExplicitUpdates(in: "姓名：\(selected.resolvedName)，\(text)", profiles: profiles)
+            }
+            let collected = applyProfileUpdates(explicitUpdates)
+            if let name = ProfileDirectory.explicitSelfName(in: text, profiles: profiles) {
+                let own = ProfileDirectory.resolve(names: [name], in: profiles)
+                selfProfileID = own.ids.count == 1 ? own.ids[0] : nil
+                persist()
+            }
             let followup = latestRun != nil && (["再细说些", "详细解读", "继续说"].contains(text) || text.hasPrefix("请结合刚才的结果"))
             let greeting = text.count < 20 && ["你好", "您好", "在吗", "你是谁", "你能做什么"].contains { text.contains($0) }
             if (followup || greeting), hasCredential, !localOnly {
                 await answerFollowUp(text, history: history, operation: id); return
             }
-            var plan = registry.localPlan(question: text, profile: profile)
+            var plan = localPeoplePlan(question: text, collectedIDs: collected.appliedIDs)
             progress("选择适用方法与所需资料")
             if hasCredential && !localOnly {
-                do { plan = try await client.plan(question: text, profile: profile, plugins: registry.descriptors, history: history) }
+                do { plan = try await client.plan(question: text, profile: profile, plugins: registry.descriptors, history: history, profiles: profiles, pendingPlan: pendingPlan) }
                 catch {
                     guard !Task.isCancelled else { return }
                     notice = error.localizedDescription + " 已改为本地准备问事笺。"
                 }
             }
             guard operationID == id, !Task.isCancelled else { return }
+            let grounded = ProfileDirectory.groundedUpdates(plan.profileUpdates ?? [], in: text, profiles: profiles,
+                                                           contextIDs: contextIDs)
+            let extracted = applyProfileUpdates(grounded)
+            let changedIDs = Array(Set(collected.appliedIDs + extracted.appliedIDs))
+            resolveParticipants(in: &plan, question: text)
+            if plan.action == "collect" {
+                if plan.resumesPendingQuestion == true, var pending = pendingPlan {
+                    pending.participantIDs = plan.participantIDs ?? pending.participantIDs
+                    pending.participantNames = pending.participantIDs?.compactMap { id in self.profiles.first(where: { $0.id == id })?.resolvedName }
+                    pending.relationship = plan.relationship ?? pending.relationship
+                    pendingPlan = pending
+                }
+                let names = changedIDs.compactMap { id in self.profiles.first(where: { $0.id == id })?.resolvedName }.sorted()
+                let issues = collected.issues + extracted.issues
+                let note: String
+                if !issues.isEmpty { note = issues.map(\.message).joined(separator: "\n") }
+                else if names.isEmpty { note = "请写下需要留存或补充的姓名和已知资料；未明确的内容先保留原样。" }
+                else { note = !plan.note.isEmpty ? plan.note : "已分别记下\(names.joined(separator: "、"))的资料。可以继续补充，或说说这次想问的事。" }
+                messages.append(ChatMessage(role: .assistant, content: note))
+                activityMessageID = messages.last?.id
+                progress(names.isEmpty ? "等待明确人员资料" : "资料已按姓名分别留存", state: names.isEmpty ? .waiting : .completed)
+                phase = waitingPhase; operationID = nil; showIntake = false; persist(); return
+            }
+            if !changedIDs.isEmpty {
+                let names = changedIDs.compactMap { id in self.profiles.first(where: { $0.id == id })?.resolvedName }.sorted()
+                messages.append(ChatMessage(role: .assistant, content: "已按姓名更新留存资料：\(names.joined(separator: "、"))。", kind: .notice))
+            }
             if plan.action == "reply" {
                 await answerFollowUp(text, history: history, operation: id); return
             }
@@ -248,8 +397,10 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
             progress("等待你确认问事资料", state: .waiting)
             messages.append(ChatMessage(role: .assistant, content: plan.note.isEmpty ? "先留一份问事笺。能确定的写下，不确定的也如实留着。" : plan.note, kind: .intake))
             activityMessageID = messages.last?.id; syncActivities()
-            if plan.methods == [.tarot], plan.requiredFields.isEmpty {
-                confirmIntake(profile: plan.subject == "他人" ? OracleProfile() : profile, numbers: [], save: false)
+            let participants = defaultParticipants(for: plan)
+            let hasRequiredPeople = plan.subject != "多人" || participants.filter { !$0.resolvedName.isEmpty }.count >= 2
+            if plan.methods == [.tarot], plan.requiredFields.isEmpty, hasRequiredPeople {
+                confirmGroupIntake(profiles: participants, numbers: [], save: false)
             } else { showIntake = true; persist() }
         }
     }
@@ -271,10 +422,24 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     }
 
     func confirmIntake(profile submittedProfile: OracleProfile, numbers: [Int], save: Bool) {
-        guard let plan = pendingPlan, !isBusy else { return }
-        if save { saveProfile(submittedProfile) }
+        confirmGroupIntake(profiles: [submittedProfile], numbers: numbers, save: save)
+    }
+    func confirmGroupIntake(profiles submittedProfiles: [OracleProfile], numbers: [Int], save: Bool) {
+        guard var plan = pendingPlan, !isBusy else { return }
+        var seen = Set<UUID>()
+        let participants = submittedProfiles.filter { seen.insert($0.id).inserted }
+        if plan.subject == "多人", participants.count < 2 { notice = "请选择至少两人的资料，再一起看。"; return }
+        if plan.methods.contains(where: \.usesPersonalProfile), participants.isEmpty { notice = "请选择这次问事对应的姓名。"; return }
+        if (plan.subject == "多人" || plan.methods.contains(where: \.usesPersonalProfile)), participants.contains(where: { $0.resolvedName.isEmpty }) {
+            notice = "请先填写每位参与人的姓名。"; return
+        }
+        plan.participantIDs = participants.map(\.id)
+        plan.participantNames = participants.map(\.resolvedName)
+        if participants.count > 1 { plan.subject = "多人" }
+        if save { for person in participants { saveProfile(person) } }
         let style = ["蓍草", "大衍"].contains { plan.question.contains($0) } ? "yarrow" : "coins"
-        let input = OracleInput(question: plan.question, profile: submittedProfile, numbers: numbers, subject: plan.subject, castingStyle: style)
+        let input = OracleInput(question: plan.question, profile: participants.first ?? OracleProfile(), numbers: numbers,
+                                subject: plan.subject, castingStyle: style, participants: participants, relationship: plan.relationship)
         let requests = OracleInteractionPolicy.requests(for: plan, numbers: numbers)
         if !requests.isEmpty {
             pendingInteraction = OracleInteractionSession(input: input, plan: plan, requests: requests)
@@ -316,8 +481,8 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         let conversationID = activeConversationID
         task = Task { [weak self] in
             guard let self else { return }
-            let results = await registry.calculate(input, methods: plan.methods, onMethodStart: { [weak self] method, index, total in
-                await self?.beginMethod(method, index: index, total: total, runID: run.id, operation: operation, conversationID: conversationID)
+            let results = await registry.calculate(input, methods: plan.methods, onParticipantStart: { [weak self] method, person, index, total in
+                await self?.beginMethod(method, person: person, index: index, total: total, runID: run.id, operation: operation, conversationID: conversationID)
             }, onProgress: { [weak self] result in
                 await self?.receive(result, for: run.id, operation: operation)
             })
@@ -326,17 +491,18 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
             await synthesize(runID: run.id, operation: operation)
         }
     }
-    private func beginMethod(_ method: OracleMethod, index: Int, total: Int, runID: UUID, operation: UUID, conversationID: UUID) {
+    private func beginMethod(_ method: OracleMethod, person: OracleProfile?, index: Int, total: Int, runID: UUID, operation: UUID, conversationID: UUID) {
         guard operationID == operation, activeConversationID == conversationID,
               runs.contains(where: { $0.id == runID }), !Task.isCancelled else { return }
-        progress("正在推演\(method.progressName)", detail: "第 \(index) 项，共 \(total) 项推演", method: method)
+        let name = person?.resolvedName ?? ""
+        progress("正在推演\(name.isEmpty ? "" : name + "的")\(method.progressName)", detail: "第 \(index) 项，共 \(total) 项推演", method: method)
     }
     private func receive(_ result: OracleResult, for runID: UUID, operation: UUID) {
         guard operationID == operation, let index = runs.firstIndex(where: { $0.id == runID }) else { return }
         runs[index].results.append(result)
         finishActivity(status: result.status == .failed ? .failed : .completed)
         let detail = result.status == .unavailable ? "资料不足，此项不参与解读。" : "\(result.rows.count) 项盘面数据 · \(result.evidence.count) 条规则线索"
-        progress("整理\(result.method.progressName)结果", detail: detail, method: result.method,
+        progress("整理\(result.participantName.map { $0 + "的" } ?? "")\(result.method.progressName)结果", detail: detail, method: result.method,
                  state: result.status == .failed ? .failed : .completed)
         persist()
     }
@@ -394,10 +560,16 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     }
     private func readingProgress(_ stage: AIReadingProgress, runID: UUID, operation: UUID) {
         guard operationID == operation, let run = runs.first(where: { $0.id == runID }), !Task.isCancelled else { return }
-        let methods = run.results.filter { $0.status == .complete || $0.status == .partial }.map { $0.method.progressName }
+        var seen = Set<OracleMethod>()
+        let methods = run.results.filter { ($0.status == .complete || $0.status == .partial) && seen.insert($0.method).inserted }.map { $0.method.progressName }
         switch stage {
         case .preparing: progress("汇集各项推演结果", detail: methods.joined(separator: "、"))
         case .requesting:
+            let people = run.input.readingParticipants.map(\.resolvedName).filter { !$0.isEmpty }
+            if people.count > 1 {
+                progress("综合解析\(people.prefix(3).joined(separator: "、"))的关系", detail: methods.joined(separator: "、"))
+                return
+            }
             let names = methods.prefix(2).joined(separator: "、") + (methods.count > 2 ? "等" : "")
             progress(methods.count == 1 ? "正在解读\(names)结果" : "综合解析\(names)结果",
                      detail: "结合问题、已保存结果与资料限制生成解读。")

@@ -116,7 +116,7 @@ private struct ReadingResultReferenceCard: View {
                     Image(systemName: result.method.symbol)
                         .font(.system(size: 18, weight: .light))
                         .foregroundStyle(InkTheme.cinnabar)
-                    Text(result.method.title)
+                    Text(result.displayTitle)
                         .font(.system(size: 18, design: .serif))
                         .foregroundStyle(InkTheme.ink)
                     Spacer(minLength: 4)

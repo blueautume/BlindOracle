@@ -64,6 +64,46 @@ final class LiveIntegrationTests: XCTestCase {
         XCTAssertTrue(reading.alternatives.isEmpty || reading.alternatives.count == 2)
         XCTAssertEqual(collector.text, reading.text)
     }
+
+    func testNamedPeopleAreCollectedIncrementallyAndJointReadingRetainsBothResults() async throws {
+        let client = try liveClient()
+        let registry = PluginRegistry()
+        let firstText = "先留存两个人的资料：姓名：张三，男，1995年1月2日出生；姓名：李四，女，1996年3月4日出生。先保存资料，不要算卦。"
+        // Match OracleStore: explicit local facts are saved before asking the
+        // model to route the message; model extraction can supplement them.
+        var people = ProfileDirectory.applying(ProfileDirectory.parseExplicitUpdates(in: firstText, profiles: []), to: []).profiles
+        let first = try await client.plan(question: firstText, profile: OracleProfile(), plugins: registry.descriptors, history: [], profiles: people)
+        XCTAssertEqual(first.action, "collect")
+        XCTAssertTrue(first.methods.isEmpty)
+        let firstUpdates = ProfileDirectory.groundedUpdates(first.profileUpdates ?? [], in: firstText, profiles: people)
+        people = ProfileDirectory.applying(firstUpdates, to: people).profiles
+        XCTAssertEqual(Set(people.map(\.resolvedName)), ["张三", "李四"])
+        let secondText = "补充张三的出生时间08:30，出生时区Asia/Shanghai；李四的出生时间不确定，出生时区Asia/Shanghai。只补充资料。"
+        let history = [AIConversationTurn(role: "user", content: firstText), AIConversationTurn(role: "assistant", content: first.note)]
+        people = ProfileDirectory.applying(ProfileDirectory.parseExplicitUpdates(in: secondText, profiles: people), to: people).profiles
+        XCTAssertEqual(people.first { $0.resolvedName == "张三" }?.birthTimeText, "08:30")
+        let second = try await client.plan(question: secondText, profile: OracleProfile(), plugins: registry.descriptors, history: history, profiles: people)
+        XCTAssertEqual(second.action, "collect")
+        let secondUpdates = ProfileDirectory.groundedUpdates(second.profileUpdates ?? [], in: secondText, profiles: people)
+        people = ProfileDirectory.applying(secondUpdates, to: people).profiles
+        XCTAssertEqual(people.first { $0.resolvedName == "张三" }?.birthTimeText, "08:30")
+        XCTAssertEqual(people.first { $0.resolvedName == "李四" }?.birthDateText, "1996-03-04")
+        XCTAssertEqual(people.first { $0.resolvedName == "李四" }?.birthTimeKnown, false)
+        let question = "请只用八字，联合看看张三和李四的友情相处与沟通建议，分别保留两个人的资料。"
+        let plan = try await client.plan(question: question, profile: OracleProfile(), plugins: registry.descriptors, history: history, profiles: people)
+        XCTAssertEqual(plan.subject, "多人")
+        XCTAssertEqual(plan.methods, [.bazi])
+        let selected = Set(plan.participantIDs ?? [])
+        XCTAssertEqual(selected, Set(people.map(\.id)))
+        let input = OracleInput(question: question, profile: people[0], seed: 42, subject: "多人", participants: people, relationship: "友情")
+        let results = await registry.calculate(input, methods: plan.methods) { _ in }
+        XCTAssertEqual(results.count, 2)
+        XCTAssertEqual(Set(results.compactMap(\.participantID)), Set(people.map(\.id)))
+        let run = OracleRun(input: input, plan: plan, results: results)
+        let reading = try await client.synthesize(run: run, weights: PreferenceLearning.initial, history: []) { _ in }
+        XCTAssertTrue(reading.text.contains("张三"))
+        XCTAssertTrue(reading.text.contains("李四"))
+    }
 }
 
 private actor LiveProgressCollector {

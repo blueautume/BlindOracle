@@ -125,7 +125,8 @@ final class ConversationHistoryTests: XCTestCase {
         let store = OracleStore(vault: vault, bootstrapCredential: false)
         let deletedID = store.activeConversationID
         store.messages = [message("待删除的当前卷")]
-        store.saveProfile(store.profile)
+        var saved = store.profile; saved.name = "留存测试人员"
+        store.saveProfile(saved)
         store.deleteConversation(deletedID)
         XCTAssertNotEqual(store.activeConversationID, deletedID)
         XCTAssertTrue(store.messages.isEmpty)

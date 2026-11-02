@@ -55,6 +55,18 @@ AI 汇总仅接收 complete/partial 结果；partial 限制必须保留，failed
 
 ## 6. 本地存储与上下文
 
+### 具名多人档案
+
+`OracleProfile`以稳定UUID区分人员，`name`为统一姓名；`resolvedName`按非空姓名、旧`familyName + givenName`、旧`displayName`兼容读取，排除“我、本人、他人资料”等占位值。档案不要求人物称谓，也不将数组首项默认绑定为本人。`OracleInput.participants`保存本次具名参与者的输入快照，`OraclePlan.participantIDs`只引用目录里已确认的UUID；多人的联合问事不混用各自生辰，也不因以后编辑永久档案而修改历史输入。
+
+`Core/ProfileDirectory.swift`提供纯本地目录操作。`ProfileUpdate`的ID、姓名及各资料字段均为可选补丁；`applying(_:to:)`仅覆盖明确提供且格式有效的字段，其余原值保留。新记录必须有姓名；指定ID只能更新已有记录，未知ID不能直接新建。同名无明确ID时返回`ambiguousName`及候选UUID，不按顺序或最近使用时间选人。`resolve(names:in:)`也遵守同样的歧义规则。一次最多应用20条更新，姓名最多80字。
+
+出生日期与时刻另外保存规范`birthDateText`（YYYY-MM-DD）、`birthTimeText`（HH:mm或HH:mm:ss），支持先报时刻、后补生日，或以后再补出生时区。未提供时区时UTC只作内部存储锚点，并保留`unknownFields.birthTimeZone`；不向用户声明其出生地在UTC，也不从出生地推断时区。补充已知时区时按原墙上时间重建Date，保留用户原来的日历生日和时刻。明确不确定字段以增量`unknownFields`标记，优先于同条冲突值；未知时刻不会变成默认中午，日期在内部使用的中午只是不参与时柱的存储占位。
+
+`parseExplicitUpdates(in:profiles:)`为无网络/测试模式提供保守的具名资料语法，支持逗号、分号、换行分隔的多人生日、性别，以及既有姓名后补出生时刻、地点、时区。只解析明确字段，不从“他、她、我”或关系词猜测人物。`explicitSelfName(in:profiles:)`仅接受姓名后有标点或句末的“我叫/我是”直接声明，“我是张三的朋友”不会绑定为张三。
+
+AI只提交`ProfileUpdate`候选，不直接写档案。`groundedUpdates(_:in:profiles:contextIDs:)`按本条消息、同一具名人员的明确资料逐字段佐证，剥离默认值、其他人的事实与未提供的未知标记。仅有一个已明确选择的context ID且本条没有其他具名人员时，才允许绑定省略姓名的补充；多人上下文不代猜。同名情况下，模型自行选择一个UUID不能绕过本地歧义确认。
+
 Application Support/BlindOracle：profiles.json（永久资料）、readings.json（每次快照与逐项结果）、preferences.json（全局个人偏好）、conversation-history.json（版本化会话列表与当前 ID）。每段聊天拥有自己的消息、摘要、待填问事笺与待完成交互；conversation.json、context.json、pending-intake.json 继续作为兼容快照保存。新增交互与塔罗字段兼容旧 JSON 缺失字段，旧档案仍按原输入读取，不为历史记录补抽牌。
 
 任务步骤以可选 `OracleRun.activities` 随推演保存，包含各插件实际执行及后续解读的状态和耗时；旧记录没有该字段时仍可读取。步骤文本是应用工作记录，不包含模型隐藏推理。

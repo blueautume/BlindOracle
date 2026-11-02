@@ -2,31 +2,59 @@ import SwiftUI
 
 struct IntakeView: View {
     let plan: OraclePlan
-    let initialProfile: OracleProfile
     let onConfirm: (OracleProfile, [Int], Bool) -> Void
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var store: OracleStore
     @State private var profile: OracleProfile
     @State private var birthDateKnown: Bool
     @State private var birthDate: Date
+    @State private var lastValidBirthZoneID: String
+    @State private var birthDateChoiceChanged = false
+    @State private var birthTimeChoiceChanged = false
+    @State private var birthClockEdited = false
+    @State private var birthZoneEdited = false
     @State private var keepProfile = true
     @State private var showBirthDetails = false
+    @State private var showNameParts = false
     @State private var error: String?
     @StateObject private var location = LocationService()
     private var needsBirth: Bool { plan.requiredFields.contains { [.birthDate, .birthTime, .birthPlace, .birthTimeZone, .birthCoordinates].contains($0) } }
-    private var needsName: Bool { plan.requiredFields.contains(.surname) || plan.requiredFields.contains(.givenName) }
     private var isEditing: Bool { plan.intent == "编辑基础资料" }
 
     init(plan: OraclePlan, profile: OracleProfile, onConfirm: @escaping (OracleProfile, [Int], Bool) -> Void) {
-        self.plan = plan; initialProfile = profile; self.onConfirm = onConfirm
-        _profile = State(initialValue: profile)
-        _birthDateKnown = State(initialValue: profile.birthDate != nil && !profile.unknownFields.contains(.birthDate))
-        _birthDate = State(initialValue: profile.birthDate ?? Self.initialBirthDate)
-        _showBirthDetails = State(initialValue: plan.intent == "编辑基础资料")
+        var editable = profile
+        let empty = [profile.name ?? "", profile.fullName, profile.displayName, profile.birthDateText ?? "", profile.birthTimeText ?? ""]
+            .allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        if empty, profile.birthDate == nil, profile.birthPlace.isEmpty, profile.birthLatitude == nil, profile.birthLongitude == nil {
+            editable.birthTimeZoneID = "UTC"
+            editable.birthTimeKnown = false
+            editable.unknownFields.formUnion([.birthDate, .birthTime, .birthTimeZone, .gender, .birthPlace, .birthCoordinates])
+        }
+        self.plan = plan; self.onConfirm = onConfirm
+        _profile = State(initialValue: editable)
+        _birthDateKnown = State(initialValue: editable.birthDate != nil && !editable.unknownFields.contains(.birthDate))
+        _birthDate = State(initialValue: Self.initialClockDate(for: editable))
+        _lastValidBirthZoneID = State(initialValue: TimeZone(identifier: editable.birthTimeZoneID) == nil ? "UTC" : editable.birthTimeZoneID)
+        _showBirthDetails = State(initialValue: false)
     }
     static var initialBirthDate: Date {
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
         return calendar.date(from: DateComponents(year: 1995, month: 1, day: 1, hour: 12))!
+    }
+
+    private static func initialClockDate(for profile: OracleProfile) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: profile.birthTimeZoneID) ?? TimeZone(secondsFromGMT: 0)!
+        var parts = profile.birthDate.map { calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: $0) }
+            ?? DateComponents(year: 1995, month: 1, day: 1, hour: 12, minute: 0, second: 0)
+        if let text = profile.birthTimeText {
+            let clock = text.split(separator: ":").compactMap { Int($0) }
+            if (clock.count == 2 || clock.count == 3), (0...23).contains(clock[0]), (0...59).contains(clock[1]),
+               clock.count == 2 || (0...59).contains(clock[2]) {
+                parts.hour = clock[0]; parts.minute = clock[1]
+                if clock.count == 3 { parts.second = clock[2] }
+            }
+        }
+        return calendar.date(from: parts) ?? initialBirthDate
     }
 
     var body: some View {
@@ -36,17 +64,6 @@ struct IntakeView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 22) {
                         header
-                        if plan.subject == "他人", store.profiles.count > 1 {
-                            Menu("从留存资料中选取") {
-                                ForEach(store.profiles.dropFirst()) { saved in
-                                    Button(saved.displayName.isEmpty ? saved.fullName : saved.displayName) {
-                                        profile = saved
-                                        birthDateKnown = saved.birthDate != nil && !saved.unknownFields.contains(.birthDate)
-                                        birthDate = saved.birthDate ?? Self.initialBirthDate
-                                    }
-                                }
-                            }.font(.system(size: 13)).tint(InkTheme.cinnabar)
-                        }
                         if !isEditing { PaperCard {
                             VStack(alignment: .leading, spacing: 16) {
                                 SectionEyebrow(text: "此次所问")
@@ -60,34 +77,37 @@ struct IntakeView: View {
                         } }
                         PaperCard {
                             VStack(alignment: .leading, spacing: 16) {
-                                SectionEyebrow(text: "留个称呼")
-                                TextField("怎么称呼你（可不填）", text: $profile.displayName).textContentType(.nickname)
-                                if needsName || showBirthDetails {
-                                    Divider()
-                                    HStack(spacing: 16) {
-                                        TextField("姓氏", text: $profile.familyName).textContentType(.familyName)
-                                        Divider().frame(height: 24)
-                                        TextField("名字", text: $profile.givenName).textContentType(.givenName)
-                                    }
-                                    Toggle("姓名不确定", isOn: unknownBinding(.surname, also: .givenName)).font(.system(size: 12)).tint(InkTheme.sage)
-                                    Text("姓名推演以确认的繁体字形为准；简体转换候选会在数据页留作待核对。").font(.system(size: 10)).foregroundStyle(InkTheme.secondary).lineSpacing(4)
-                                }
+                                SectionEyebrow(text: "姓名")
+                                TextField("填写姓名", text: nameBinding).textContentType(.name).autocorrectionDisabled()
+                                    .accessibilityIdentifier("profileName")
+                                DisclosureGroup("姓名推演用字 · 选填", isExpanded: $showNameParts) {
+                                    VStack(alignment: .leading, spacing: 14) {
+                                        HStack(spacing: 16) {
+                                            TextField("姓氏", text: $profile.familyName).textContentType(.familyName)
+                                            Divider().frame(height: 24)
+                                            TextField("名字", text: $profile.givenName).textContentType(.givenName)
+                                        }
+                                        Toggle("姓与名的划分不确定", isOn: unknownBinding(.surname, also: .givenName)).font(.system(size: 12)).tint(InkTheme.sage)
+                                        Text("使用姓名五格时，可在这里核对姓与名的划分及繁体字形。暂不确定也可以保存。")
+                                            .font(.system(size: 10)).foregroundStyle(InkTheme.secondary).lineSpacing(4)
+                                    }.padding(.top, 12)
+                                }.font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
                             }.font(.system(size: 15, design: .serif))
                         }
                         if needsBirth || showBirthDetails { birthSection }
-                        currentLocationSection
+                        if !isEditing { currentLocationSection }
                         if !needsBirth {
                             Button { withAnimation { showBirthDetails.toggle() } } label: {
-                                Label(showBirthDetails ? "收起其他资料" : "补充其他基础资料", systemImage: showBirthDetails ? "minus.circle" : "plus.circle")
+                                Label(showBirthDetails ? "收起生辰资料" : "补充生辰资料 · 可暂留未知", systemImage: showBirthDetails ? "minus.circle" : "plus.circle")
                                     .font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
-                            }
+                            }.accessibilityIdentifier("toggleBirthDetails")
                         }
-                        Toggle(isOn: $keepProfile) {
+                        if !isEditing { Toggle(isOn: $keepProfile) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("把这份基础资料留在本机").font(.system(size: 13, design: .serif))
                                 Text("以后问事可以直接取用，不随对话压缩。").font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
                             }
-                        }.tint(InkTheme.sage)
+                        }.tint(InkTheme.sage) }
                         if let error { Text(error).font(.system(size: 12)).foregroundStyle(InkTheme.cinnabar) }
                         Button(action: confirm) { HStack { Text(isEditing ? "保存基础资料" : "落笔，交给先知"); Image(systemName: "arrow.right") } }.buttonStyle(InkPrimaryButton()).accessibilityIdentifier("confirmIntake")
                         Text(isEditing ? "基础档案独立保存在本机。" : "问题、所需资料与推演摘要会用于 AI 解读；基础档案保存在本机。")
@@ -107,14 +127,40 @@ struct IntakeView: View {
                 else { profile.currentPlace = String(format: "%.3f°, %.3f°", coordinate.latitude, coordinate.longitude) }
                 profile.unknownFields.remove(.currentLocation)
             }
-            .onChange(of: profile.birthTimeZoneID) { old, new in
-                guard let oldZone = TimeZone(identifier: old), let newZone = TimeZone(identifier: new) else { return }
+            .onChange(of: profile.birthTimeZoneID) { _, new in
+                birthZoneEdited = true
+                guard let oldZone = TimeZone(identifier: lastValidBirthZoneID), let newZone = TimeZone(identifier: new) else { return }
                 var oldCalendar = Calendar(identifier: .gregorian); oldCalendar.timeZone = oldZone
                 var newCalendar = Calendar(identifier: .gregorian); newCalendar.timeZone = newZone
                 let clock = oldCalendar.dateComponents([.year, .month, .day, .hour, .minute], from: birthDate)
                 if let newInstant = newCalendar.date(from: clock) { birthDate = newInstant }
+                lastValidBirthZoneID = new
+                profile.unknownFields.remove(.birthTimeZone)
             }
+            .onChange(of: profile.fullName) { _, value in
+                if showNameParts, !value.isEmpty { profile.name = value }
+            }
+            .onChange(of: birthDateKnown) { _, _ in birthDateChoiceChanged = true }
+            .onChange(of: profile.birthTimeKnown) { _, _ in birthTimeChoiceChanged = true }
+            .onChange(of: profile.unknownFields.contains(.birthTimeZone)) { _, _ in birthZoneEdited = true }
         }.presentationDragIndicator(.visible)
+    }
+
+    private var nameBinding: Binding<String> {
+        Binding(get: { profile.name ?? profile.resolvedName }, set: { value in
+            profile.name = value
+            if !profile.fullName.isEmpty, value != profile.fullName {
+                profile.familyName = ""; profile.givenName = ""
+                profile.unknownFields.insert(.surname); profile.unknownFields.insert(.givenName)
+            }
+        })
+    }
+
+    private var birthClockBinding: Binding<Date> {
+        Binding(get: { birthDate }, set: { value in
+            if value != birthDate { birthClockEdited = true }
+            birthDate = value
+        })
     }
 
     private var header: some View {
@@ -133,18 +179,23 @@ struct IntakeView: View {
                 SectionEyebrow(text: "生辰与来处")
                 Toggle("出生日期已知", isOn: $birthDateKnown).font(.system(size: 15, design: .serif)).tint(InkTheme.sage).accessibilityIdentifier("birthDateKnown")
                 if birthDateKnown {
-                    DatePicker("公历日期", selection: $birthDate, in: Self.allowedBirthDates, displayedComponents: .date)
-                        .font(.system(size: 14)).environment(\.timeZone, TimeZone(identifier: profile.birthTimeZoneID) ?? .current)
-                    Divider()
-                    Toggle("出生时刻已知", isOn: $profile.birthTimeKnown).font(.system(size: 14, design: .serif)).tint(InkTheme.sage)
-                    if profile.birthTimeKnown {
-                        DatePicker("当地钟表时间", selection: $birthDate, displayedComponents: .hourAndMinute)
-                            .font(.system(size: 14)).environment(\.timeZone, TimeZone(identifier: profile.birthTimeZoneID) ?? .current)
-                    } else {
-                        Text("时辰留作未知，不会用现在的时间代替。").font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
-                    }
+                    DatePicker("公历日期", selection: birthClockBinding, in: Self.allowedBirthDates, displayedComponents: .date)
+                        .font(.system(size: 14)).environment(\.timeZone, TimeZone(identifier: profile.birthTimeZoneID) ?? TimeZone(identifier: lastValidBirthZoneID)!)
                 } else {
                     Text("先保留这份不确定，能推演的部分仍会继续。").font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
+                }
+                Divider()
+                Toggle("出生时刻已知", isOn: $profile.birthTimeKnown)
+                    .font(.system(size: 14, design: .serif)).tint(InkTheme.sage).accessibilityIdentifier("birthTimeKnown")
+                if profile.birthTimeKnown {
+                    DatePicker("当地钟表时间", selection: birthClockBinding, displayedComponents: .hourAndMinute)
+                        .font(.system(size: 14)).environment(\.timeZone, TimeZone(identifier: profile.birthTimeZoneID) ?? TimeZone(identifier: lastValidBirthZoneID)!)
+                    if !birthDateKnown {
+                        Text("先单独记下这个时刻，出生日期可以以后补充。")
+                            .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                    }
+                } else {
+                    Text("时辰留作未知，不会用现在的时间代替。").font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                 }
                 Divider()
                 HStack {
@@ -197,20 +248,40 @@ struct IntakeView: View {
     private func confirm() {
         // Numeric casting now has its own requested interaction after intake.
         let parsed: [Int] = []
-        if needsName && !profile.unknownFields.contains(.surname) && (profile.familyName.trimmingCharacters(in: .whitespaces).isEmpty || profile.givenName.trimmingCharacters(in: .whitespaces).isEmpty) {
-            error = "请补上姓氏和名字，或者勾选“姓名不确定”。"; return
+        let name = (profile.name ?? profile.resolvedName).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { error = "请填写这份资料对应的姓名。"; return }
+        profile.name = name; profile.displayName = name
+        if profile.familyName.isEmpty || profile.givenName.isEmpty {
+            profile.unknownFields.insert(.surname); profile.unknownFields.insert(.givenName)
+        } else {
+            profile.unknownFields.remove(.surname); profile.unknownFields.remove(.givenName)
         }
-        if birthDateKnown {
+        // A name-only edit must not round seconds or reconstruct an ambiguous
+        // DST instant. Normalize the birth clock only after an explicit edit.
+        if birthDateChoiceChanged || birthTimeChoiceChanged || birthClockEdited || birthZoneEdited {
+          if birthDateKnown {
             guard let zone = TimeZone(identifier: profile.birthTimeZoneID) else { error = "时区名称无法识别，请从列表选择或填写有效的时区标识。"; return }
             var calendar = Calendar(identifier: .gregorian); calendar.timeZone = zone
             var components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: birthDate)
             if !profile.birthTimeKnown { components.hour = 12; components.minute = 0 }
             guard let instant = calendar.date(from: components) else { error = "出生日期或时间暂时无法识别，请检查。"; return }
             profile.birthDate = instant; profile.unknownFields.remove(.birthDate)
-            if profile.birthTimeKnown { profile.unknownFields.remove(.birthTime) } else { profile.unknownFields.insert(.birthTime) }
-        } else {
-            profile.birthDate = nil; profile.birthTimeKnown = false
-            profile.unknownFields.insert(.birthDate); profile.unknownFields.insert(.birthTime)
+            profile.birthDateText = String(format: "%04d-%02d-%02d", components.year ?? 1995, components.month ?? 1, components.day ?? 1)
+          } else {
+            profile.birthDate = nil
+            if birthDateChoiceChanged { profile.birthDateText = nil }
+            profile.unknownFields.insert(.birthDate)
+          }
+          if profile.birthTimeKnown {
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = TimeZone(identifier: profile.birthTimeZoneID) ?? TimeZone(secondsFromGMT: 0)!
+            let clock = calendar.dateComponents([.hour, .minute], from: birthDate)
+            profile.birthTimeText = String(format: "%02d:%02d", clock.hour ?? 0, clock.minute ?? 0)
+            profile.unknownFields.remove(.birthTime)
+          } else {
+            if birthTimeChoiceChanged { profile.birthTimeText = nil }
+            profile.unknownFields.insert(.birthTime)
+          }
         }
         if profile.sex == "未提供" { profile.unknownFields.insert(.gender) } else { profile.unknownFields.remove(.gender) }
         guard TimeZone(identifier: profile.currentTimeZoneID) != nil else { error = "当前时区名称无法识别，请填写有效的时区标识。"; return }
@@ -221,7 +292,6 @@ struct IntakeView: View {
         else if !(-90...90).contains(profile.birthLatitude!) || !(-180...180).contains(profile.birthLongitude!) { error = "纬度范围为 −90 到 90，经度范围为 −180 到 180。"; return }
         else { profile.unknownFields.remove(.birthCoordinates) }
         if parsed.isEmpty { profile.unknownFields.insert(.numbers) } else { profile.unknownFields.remove(.numbers) }
-        if profile.displayName.isEmpty { profile.displayName = profile.fullName.isEmpty ? (plan.subject == "他人" ? "他人资料" : "我") : profile.fullName }
         profile.updatedAt = Date(); onConfirm(profile, parsed, keepProfile)
     }
     private static var allowedBirthDates: ClosedRange<Date> {
@@ -251,7 +321,7 @@ struct PlaceFields: View {
                 Spacer()
                 Menu {
                     ForEach(["Asia/Shanghai", "Asia/Hong_Kong", "Asia/Taipei", "Asia/Tokyo", "Asia/Singapore", "Asia/Urumqi", "Europe/London", "America/New_York", "America/Los_Angeles", "Australia/Sydney", "UTC"], id: \.self) { zone in
-                        Button(zone) { profile.birthTimeZoneID = zone }
+                        Button(zone) { profile.birthTimeZoneID = zone; profile.unknownFields.remove(.birthTimeZone) }
                     }
                 } label: { Text(profile.birthTimeZoneID).font(.system(size: 12)).foregroundStyle(InkTheme.ink) }
             }
@@ -275,8 +345,8 @@ struct ProfileEditor: View {
     let onSave: (OracleProfile) -> Void
     @Environment(\.dismiss) private var dismiss
     var body: some View {
-        IntakeView(plan: OraclePlan(intent: "编辑基础资料", subject: "本人", methods: [], requiredFields: [.birthDate, .birthTime], note: "", question: "保存一份基础资料，往后少填几次。"), profile: profile) { updated, _, _ in
+        IntakeView(plan: OraclePlan(intent: "编辑基础资料", subject: "事件", methods: [], requiredFields: [], note: "", question: "保存一份具名资料，往后直接选取。"), profile: profile) { updated, _, _ in
             onSave(updated); dismiss()
-        }
+        }.id(profile.id)
     }
 }

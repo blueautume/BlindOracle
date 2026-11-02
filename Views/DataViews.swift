@@ -4,6 +4,7 @@ struct DataLibraryView: View {
     @EnvironmentObject private var store: OracleStore
     @State private var settingsPresented = false
     @State private var editingProfile: OracleProfile?
+    @State private var deletingProfile: OracleProfile?
 
     var body: some View {
         NavigationStack {
@@ -37,13 +38,19 @@ struct DataLibraryView: View {
                                 SectionEyebrow(text: "留存资料")
                                 Spacer()
                                 Button { editingProfile = OracleProfile() } label: { Image(systemName: "plus").font(.system(size: 14)) }
-                                    .tint(InkTheme.cinnabar).accessibilityLabel("新增一份资料")
+                                    .tint(InkTheme.cinnabar).accessibilityLabel("新增人员资料").accessibilityIdentifier("addProfile")
                             }
                             PaperCard {
                                 VStack(spacing: 0) {
+                                    if store.profiles.isEmpty {
+                                        Text("还没有留存的人员资料。点右上方的加号，先记下一个姓名。")
+                                            .font(.system(size: 13, design: .serif)).lineSpacing(5).foregroundStyle(InkTheme.secondary)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
                                     ForEach(Array(store.profiles.enumerated()), id: \.element.id) { index, profile in
                                         if index > 0 { Divider().overlay(InkTheme.line).padding(.vertical, 13) }
-                                        Button { editingProfile = profile } label: {
+                                        HStack(spacing: 12) {
+                                          Button { editingProfile = profile } label: {
                                             HStack(spacing: 12) {
                                                 Image(systemName: "person.text.rectangle").font(.system(size: 21, weight: .light)).frame(width: 30).foregroundStyle(InkTheme.cinnabar)
                                                 VStack(alignment: .leading, spacing: 5) {
@@ -53,11 +60,17 @@ struct DataLibraryView: View {
                                                 Spacer()
                                                 Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                                             }.contentShape(Rectangle())
-                                        }.buttonStyle(.plain)
+                                          }.buttonStyle(.plain).accessibilityIdentifier("profileRow-\(profile.id.uuidString)")
+                                          Button { deletingProfile = profile } label: {
+                                              Image(systemName: "trash").font(.system(size: 14, weight: .light))
+                                                  .foregroundStyle(InkTheme.secondary).frame(width: 36, height: 40)
+                                          }.buttonStyle(.plain).accessibilityLabel("删除\(profileTitle(profile))的资料")
+                                              .accessibilityIdentifier("deleteProfile-\(profile.id.uuidString)")
+                                        }
                                     }
                                 }
                             }
-                            Text("基础资料独立保存在本机，不随对话压缩。")
+                            Text("按姓名分别留存，问事时可选取一人或多人。出生资料不确定，也可以先留白。")
                                 .font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
                         }
 
@@ -98,6 +111,15 @@ struct DataLibraryView: View {
                 if let profile = editingProfile {
                     ProfileEditor(profile: profile) { updated in store.saveProfile(updated); editingProfile = nil }
                 }
+            }
+            .confirmationDialog("删除这份人员资料？", isPresented: Binding(get: { deletingProfile != nil }, set: { if !$0 { deletingProfile = nil } }), titleVisibility: .visible) {
+                Button("删除资料", role: .destructive) {
+                    if let profile = deletingProfile { store.deleteProfile(id: profile.id) }
+                    deletingProfile = nil
+                }.accessibilityIdentifier("confirmDeleteProfile")
+                Button("取消", role: .cancel) { deletingProfile = nil }
+            } message: {
+                Text("\(deletingProfile.map(profileTitle) ?? "这份资料")将从留存名单移除，过去的推演快照仍保留。")
             }
         }.tint(InkTheme.cinnabar)
     }
@@ -182,7 +204,7 @@ struct ReadingRecordView: View {
                                     VStack(alignment: .leading, spacing: 12) {
                                         HStack {
                                             Image(systemName: result.method.symbol).font(.system(size: 17, weight: .light)).foregroundStyle(InkTheme.cinnabar)
-                                            Text(result.method.title).font(.system(size: 17, design: .serif)).foregroundStyle(InkTheme.ink)
+                                            Text(result.displayTitle).font(.system(size: 17, design: .serif)).foregroundStyle(InkTheme.ink)
                                             Spacer()
                                             ResultStatusBadge(status: result.status)
                                         }
@@ -271,7 +293,7 @@ struct OracleResultDetailView: View {
                     Text(result.provenance).font(.system(size: 11)).foregroundStyle(InkTheme.secondary).lineSpacing(4)
                 }.padding(22).frame(maxWidth: 760).frame(maxWidth: .infinity)
             }
-        }.navigationTitle(result.method.title).navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle(result.displayTitle).navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -503,9 +525,7 @@ private struct LocalNoticeView: View {
 }
 
 private func profileTitle(_ profile: OracleProfile) -> String {
-    if !profile.displayName.isEmpty { return profile.displayName }
-    if !profile.fullName.isEmpty { return profile.fullName }
-    return "我的资料"
+    profile.resolvedName.isEmpty ? "未填写姓名" : profile.resolvedName
 }
 private func profileSummary(_ profile: OracleProfile) -> String {
     guard let date = profile.birthDate, !profile.unknownFields.contains(.birthDate) else { return "出生资料待补充 · 可随时修改" }

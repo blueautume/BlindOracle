@@ -7,20 +7,20 @@ final class BlindOracleUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.tabBars.buttons["数据"].waitForExistence(timeout: 15))
         app.tabBars.buttons["数据"].tap()
-        let profile = app.staticTexts["我的资料"]
+        let profile = app.buttons["addProfile"]
         XCTAssertTrue(profile.waitForExistence(timeout: 10)); profile.tap()
-        let name = app.textFields["怎么称呼你（可不填）"]
-        XCTAssertTrue(name.waitForExistence(timeout: 10)); name.tap(); name.typeText("留存测试")
+        let name = app.textFields["profileName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 10)); name.tap(); name.typeText("张小明")
         let save = app.buttons["confirmIntake"]
         for _ in 0..<9 where !save.isHittable { app.swipeUp() }
         XCTAssertTrue(save.isHittable); save.tap()
-        XCTAssertTrue(app.staticTexts["留存测试"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["张小明"].waitForExistence(timeout: 10))
         app.terminate()
         app.launchArguments = ["--ui-testing-local"]
         app.launch()
         XCTAssertTrue(app.tabBars.buttons["数据"].waitForExistence(timeout: 15))
         app.tabBars.buttons["数据"].tap()
-        XCTAssertTrue(app.staticTexts["留存测试"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["张小明"].waitForExistence(timeout: 10))
     }
     @MainActor func testTwoTabsAndLocalReadingFlow() throws {
         let app = XCUIApplication()

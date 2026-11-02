@@ -139,8 +139,8 @@ struct ChatView: View {
                 if store.pendingInteraction != nil { store.showInteraction = true }
             }) {
                 if let plan = store.pendingPlan {
-                    IntakeView(plan: plan, profile: plan.subject == "他人" ? OracleProfile() : store.profile) { profile, numbers, save in
-                        store.confirmIntake(profile: profile, numbers: numbers, save: save)
+                    GroupIntakeView(plan: plan, profiles: store.defaultParticipants(for: plan)) { profiles, numbers, save in
+                        store.confirmGroupIntake(profiles: profiles, numbers: numbers, save: save)
                     }
                 }
             }

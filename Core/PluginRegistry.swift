@@ -13,24 +13,43 @@ struct PluginRegistry: Sendable {
     func plugin(_ method: OracleMethod) -> (any OraclePlugin)? { plugins.first { $0.descriptor.method == method } }
     func calculate(_ input: OracleInput, methods: [OracleMethod],
                    onMethodStart: (@Sendable (OracleMethod, Int, Int) async -> Void)? = nil,
+                   onParticipantStart: (@Sendable (OracleMethod, OracleProfile?, Int, Int) async -> Void)? = nil,
                    onProgress: @escaping @Sendable (OracleResult) async -> Void) async -> [OracleResult] {
         // Each plugin gets a value snapshot; serial scheduling also protects vendored global tables.
         var results: [OracleResult] = []
         let selected = OracleMethod.allCases.filter { methods.contains($0) }
-        for (index, method) in selected.enumerated() {
+        let tasks: [(OracleMethod, OracleProfile?)] = selected.flatMap { method in
+            if method.usesPersonalProfile {
+                let people = input.readingParticipants
+                return people.isEmpty ? [(method, nil)] : people.map { (method, Optional($0)) }
+            }
+            return [(method, nil)]
+        }
+        for (index, item) in tasks.enumerated() {
+            let (method, person) = item
             if Task.isCancelled { break }
-            await onMethodStart?(method, index + 1, selected.count)
+            await onMethodStart?(method, index + 1, tasks.count)
+            await onParticipantStart?(method, person, index + 1, tasks.count)
             if Task.isCancelled { break }
+            if method.usesPersonalProfile, person == nil {
+                let result = OracleResult(method: method, status: .unavailable, headline: "尚未选择问事人员", rows: [], limitations: ["此方法需要明确的个人资料，未套用其他档案。"])
+                results.append(result); await onProgress(result); continue
+            }
             guard let plugin = plugin(method) else {
                 let result = OracleResult(method: method, status: .unavailable, headline: "此方法尚未加载", rows: [])
                 results.append(result); await onProgress(result); continue
             }
             let start = Date()
+            var request = input
+            if let person { request.profile = person }
             var result: OracleResult
-            do { result = try await plugin.calculate(input) }
+            do { result = try await plugin.calculate(request) }
             catch is CancellationError { break }
             catch { result = OracleResult(method: method, status: .failed, headline: "本项未能完成", rows: [], limitations: [error.localizedDescription]) }
             if Task.isCancelled { break }
+            if input.participants != nil, let person {
+                result.participantID = person.id; result.participantName = person.resolvedName
+            }
             result.durationMilliseconds = Date().timeIntervalSince(start) * 1000
             results.append(result); await onProgress(result)
         }

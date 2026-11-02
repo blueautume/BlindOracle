@@ -31,13 +31,14 @@ enum OracleMethod: String, Codable, CaseIterable, Identifiable, Sendable {
         case .tarot: "rectangle.on.rectangle.angled"
         }
     }
+    var usesPersonalProfile: Bool { [.bazi, .ziwei, .chenggu, .xingming, .astrology].contains(self) }
 }
 
 enum OracleField: String, Codable, CaseIterable, Hashable, Sendable {
     case name, surname, givenName, gender, birthDate, birthTime, birthPlace, birthTimeZone, birthCoordinates, currentLocation, numbers
     var title: String {
         switch self {
-        case .name: "称呼"
+        case .name: "姓名"
         case .surname: "姓氏"
         case .givenName: "名字"
         case .gender: "排盘性别"
@@ -71,6 +72,13 @@ struct OracleProfile: Codable, Equatable, Identifiable, Sendable {
     var unknownFields: Set<OracleField> = []
     var updatedAt = Date()
     var fullName: String { familyName + givenName }
+    var name: String? = nil
+    var birthDateText: String? = nil
+    var birthTimeText: String? = nil
+    var resolvedName: String {
+        [name ?? "", fullName, displayName].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first(where: { !$0.isEmpty && !["我", "本人", "他人资料", "我的资料"].contains($0) }) ?? ""
+    }
 }
 
 struct OracleInput: Codable, Sendable {
@@ -84,6 +92,12 @@ struct OracleInput: Codable, Sendable {
     var castingStyle: String? = nil
     var tarotDraws: [TarotDraw]? = nil
     var interactionResponses: [OracleInteractionResponse]? = nil
+    var participants: [OracleProfile]? = nil
+    var relationship: String? = nil
+    var readingParticipants: [OracleProfile] {
+        var seen = Set<UUID>()
+        return (participants ?? [profile]).filter { seen.insert($0.id).inserted }
+    }
 }
 
 struct OracleRow: Codable, Identifiable, Sendable, Equatable {
@@ -121,6 +135,12 @@ struct OracleResult: Codable, Identifiable, Sendable {
     var durationMilliseconds: Double = 0
     var provenance: String
     var tarotDraws: [TarotDraw]? = nil
+    var participantID: UUID? = nil
+    var participantName: String? = nil
+    var displayTitle: String {
+        guard let name = participantName, !name.isEmpty else { return method.title }
+        return "\(name) · \(method.title)"
+    }
     init(method: OracleMethod, version: String = "1.0.0", status: OracleResultStatus = .complete,
          headline: String, rows: [OracleRow], evidence: [OracleEvidence] = [],
          limitations: [String] = [], provenance: String = "本地计算") {
@@ -160,6 +180,11 @@ struct OraclePlan: Codable, Sendable {
     var createdAt = Date()
     var action: String? = nil
     var interactions: [OracleInteractionRequest]? = nil
+    var participantIDs: [UUID]? = nil
+    var participantNames: [String]? = nil
+    var profileUpdates: [ProfileUpdate]? = nil
+    var relationship: String? = nil
+    var resumesPendingQuestion: Bool? = nil
 }
 
 enum ChatRole: String, Codable, Sendable { case user, assistant, system }
