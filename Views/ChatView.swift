@@ -2,11 +2,12 @@ import SwiftUI
 
 struct ChatView: View {
     @EnvironmentObject private var store: OracleStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var draft = ""
-    @State private var showActivities = false
     @State private var confirmNew = false
     @State private var showHistory = false
     @State private var selectedReading: ReadingReference?
+    @State private var inspectingActivities = false
     @FocusState private var composing: Bool
     private let suggestions = ["最近的工作，该进还是该守？", "这段关系，我该如何往前走？", "心里有件事，想听一句建议。"]
 
@@ -14,7 +15,8 @@ struct ChatView: View {
         NavigationStack {
             ZStack {
                 PaperBackground()
-                ScrollViewReader { proxy in
+                VStack(spacing: 0) {
+                  ScrollViewReader { proxy in
                     ScrollView {
                         VStack(spacing: 26) {
                             if store.messages.isEmpty { welcome }
@@ -26,14 +28,31 @@ struct ChatView: View {
                                 }.padding(.top, 8)
                             }
                             LazyVStack(spacing: 24) {
-                                ForEach(store.messages) { message in
+                                ForEach(store.messages.prefix(activityInsertionIndex)) { message in
+                                    messageView(message).id(message.id)
+                                }
+                                if !store.activities.isEmpty {
+                                    OracleProcessingView(activities: store.activities, isBusy: store.isBusy, onExpansionChanged: { expanded in
+                                        inspectingActivities = expanded
+                                        let sessionID = store.activitySessionID
+                                        Task { @MainActor in
+                                            await Task.yield()
+                                            guard store.activitySessionID == sessionID, inspectingActivities == expanded else { return }
+                                            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
+                                                if expanded { proxy.scrollTo(sessionID, anchor: .top) }
+                                                else { proxy.scrollTo("bottom", anchor: .bottom) }
+                                            }
+                                        }
+                                    })
+                                        .id(store.activitySessionID)
+                                }
+                                ForEach(store.messages.dropFirst(activityInsertionIndex)) { message in
                                     messageView(message).id(message.id)
                                 }
                             }
                             if let session = store.pendingInteraction, let request = session.currentRequest {
                                 interactionCard(request)
                             }
-                            if !store.status.isEmpty { activityLine }
                             if let notice = store.notice {
                                 HStack(alignment: .top, spacing: 8) {
                                     Image(systemName: "info.circle")
@@ -48,22 +67,40 @@ struct ChatView: View {
                             .accessibilityHidden(showHistory)
                     }
                     .scrollDismissesKeyboard(.interactively)
+                    .modifier(TranscriptEdgeEffect())
                     .contentShape(Rectangle())
                     .simultaneousGesture(TapGesture().onEnded { composing = false })
                     .accessibilityIdentifier("chatTranscript")
-                    .onChange(of: store.messages.last?.content) { _, _ in
-                        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
-                    }
-                    .onChange(of: store.messages.count) { _, _ in
-                        withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("bottom", anchor: .bottom) }
-                    }
-                    .onChange(of: store.activeConversationID) { _, _ in
-                        draft = ""; showActivities = false; selectedReading = nil
+                    .onAppear {
                         Task { @MainActor in
                             await Task.yield()
                             proxy.scrollTo("bottom", anchor: .bottom)
                         }
                     }
+                    .onChange(of: store.messages.last?.content) { _, _ in
+                        guard !inspectingActivities else { return }
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
+                    }
+                    .onChange(of: store.messages.count) { _, _ in
+                        guard !inspectingActivities else { return }
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { proxy.scrollTo("bottom", anchor: .bottom) }
+                    }
+                    .onChange(of: store.activities.last?.id) { _, _ in
+                        guard !inspectingActivities else { return }
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
+                    }
+                    .onChange(of: store.activitySessionID) { _, _ in inspectingActivities = false }
+                    .onChange(of: store.activeConversationID) { _, _ in
+                        draft = ""; selectedReading = nil; inspectingActivities = false
+                        Task { @MainActor in
+                            await Task.yield()
+                            proxy.scrollTo("bottom", anchor: .bottom)
+                        }
+                    }
+                  }
+                  .frame(maxWidth: .infinity, maxHeight: .infinity)
+                  .clipped()
+                  composer.accessibilityHidden(showHistory)
                 }
             }
             .toolbar {
@@ -96,7 +133,6 @@ struct ChatView: View {
             }
             .toolbarBackground(InkTheme.paper, for: .navigationBar).toolbarBackground(.visible, for: .navigationBar)
             .navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .bottom, spacing: 0) { composer.accessibilityHidden(showHistory) }
             .sheet(isPresented: Binding(get: {
                 store.showIntake && !showHistory && selectedReading == nil
             }, set: { store.showIntake = $0 }), onDismiss: {
@@ -140,6 +176,12 @@ struct ChatView: View {
         }
     }
 
+    private var activityInsertionIndex: Int {
+        guard let messageID = store.activityMessageID,
+              let index = store.messages.firstIndex(where: { $0.id == messageID }) else { return store.messages.count }
+        return index
+    }
+
     private var welcome: some View {
         VStack(spacing: 0) {
             Text("B L I N D  O R A C L E").font(.system(size: 10, weight: .medium)).tracking(2).foregroundStyle(InkTheme.secondary.opacity(0.8)).padding(.top, 35)
@@ -171,7 +213,10 @@ struct ChatView: View {
     }
 
     @ViewBuilder private func messageView(_ message: ChatMessage) -> some View {
-        if message.role == .user {
+        if message.role == .assistant, message.content.isEmpty,
+           message.id == store.activityMessageID, !store.activities.isEmpty {
+            EmptyView()
+        } else if message.role == .user {
             HStack {
                 Spacer(minLength: 35)
                 Text(message.content).font(.system(size: 16, design: .serif)).lineSpacing(6).textSelection(.enabled)
@@ -184,7 +229,7 @@ struct ChatView: View {
             HStack(alignment: .bottom, spacing: 0) {
               VStack(alignment: .leading, spacing: 12) {
                 if message.content.isEmpty {
-                    Text("稍坐片刻…").font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.secondary).shimmeringActivity()
+                    Text("稍坐片刻…").font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.secondary)
                 } else {
                     Text(.init(message.content)).font(.system(size: 16, design: .serif)).lineSpacing(6).foregroundStyle(InkTheme.ink).textSelection(.enabled).tint(InkTheme.cinnabar)
                 }
@@ -256,28 +301,6 @@ struct ChatView: View {
         }.buttonStyle(.plain).accessibilityIdentifier("interactionCard")
     }
 
-    private var activityLine: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Button { withAnimation(.easeInOut(duration: 0.2)) { showActivities.toggle() } } label: {
-                HStack(spacing: 8) {
-                    if store.isBusy { ProgressView().controlSize(.mini).tint(InkTheme.secondary) }
-                    else { Image(systemName: "checkmark.circle").foregroundStyle(InkTheme.sage) }
-                    Text(store.status).lineLimit(1)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.down").rotationEffect(.degrees(showActivities ? 180 : 0))
-                }.font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
-            }.buttonStyle(.plain)
-            if showActivities {
-                ForEach(store.activities.suffix(6)) { event in
-                    HStack(alignment: .top, spacing: 10) {
-                        Text(event.date, style: .time).monospacedDigit().frame(width: 54, alignment: .leading)
-                        Text(event.text)
-                    }.font(.system(size: 10)).foregroundStyle(InkTheme.secondary.opacity(0.85))
-                }
-            }
-        }.padding(.vertical, 12).padding(.horizontal, 14).background(InkTheme.wash.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
-    }
-
     private func alternatives(_ choices: [ReadingAlternative], run: OracleRun) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("两种处境，哪一种更贴近你？").font(.system(size: 13, design: .serif)).foregroundStyle(InkTheme.secondary)
@@ -318,11 +341,17 @@ struct ChatView: View {
                 }.disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !store.isBusy)
                     .accessibilityLabel(store.isBusy ? "停止回答" : "发送问题").accessibilityIdentifier("sendQuestion")
             }.padding(.horizontal, 13).padding(.vertical, 8)
-                .background(.white.opacity(0.5), in: RoundedRectangle(cornerRadius: 22))
+                .background(Color(red: 0.982, green: 0.975, blue: 0.959), in: RoundedRectangle(cornerRadius: 22))
                 .overlay(RoundedRectangle(cornerRadius: 22).stroke(InkTheme.line, lineWidth: 0.8))
             if store.messages.isEmpty { Text("本地推演 · AI 协助解读").font(.system(size: 9)).tracking(1).foregroundStyle(InkTheme.secondary.opacity(0.75)) }
         }.frame(maxWidth: 720).padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 8).frame(maxWidth: .infinity)
-            .background { InkTheme.paper.contentShape(Rectangle()).onTapGesture { composing = false } }
+            .background {
+                InkTheme.paper.ignoresSafeArea(.container, edges: .bottom)
+                    .contentShape(Rectangle()).onTapGesture { composing = false }
+            }
+            .overlay(alignment: .top) { Rectangle().fill(InkTheme.line).frame(height: 0.6) }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("chatComposerPanel")
     }
     private func submit() {
         guard !store.isBusy else { return }
@@ -333,10 +362,9 @@ struct ChatView: View {
 
 private struct ReadingReference: Identifiable { let id: UUID }
 
-private struct ShimmeringActivity: ViewModifier {
-    @State private var dim = false
-    func body(content: Content) -> some View {
-        content.opacity(dim ? 0.45 : 1).onAppear { withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) { dim = true } }
+private struct TranscriptEdgeEffect: ViewModifier {
+    @ViewBuilder func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) { content.scrollEdgeEffectHidden(true, for: .bottom) }
+        else { content }
     }
 }
-private extension View { func shimmeringActivity() -> some View { modifier(ShimmeringActivity()) } }

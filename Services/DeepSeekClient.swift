@@ -107,7 +107,9 @@ actor DeepSeekClient {
     }
 
     func synthesize(run: OracleRun, weights: [String: Double], history: [AIConversationTurn],
+                    onProgress: (@Sendable (AIReadingProgress) async -> Void)? = nil,
                     onDelta: @escaping @Sendable (String) -> Void) async throws -> ReadingSynthesis {
+        await onProgress?(.preparing)
         let eligible = run.results.filter { $0.status == .complete || $0.status == .partial }
         guard !eligible.isEmpty else {
             throw DeepSeekError.provider("这次资料不足，尚未得到可解读的本地结果。请在「数据」里查看需要补充的项目。")
@@ -132,9 +134,15 @@ actor DeepSeekClient {
             + sanitizedHistory(history)
             + [AIConversationTurn(role: "user", content: payload)]
         var extractor = JSONTextStreamExtractor()
+        var hasWrittenText = false
+        await onProgress?(.requesting)
         let content = try await stream(turns, jsonMode: true, maxTokens: 4000) { piece in
-            if let delta = extractor.append(piece), !delta.isEmpty { onDelta(delta) }
+            if let delta = extractor.append(piece), !delta.isEmpty {
+                if !hasWrittenText { hasWrittenText = true; await onProgress?(.writing) }
+                onDelta(delta)
+            }
         }
+        await onProgress?(.validating)
         guard let data = content.data(using: .utf8),
               let result = try? decoder.decode(SynthesisPayload.self, from: data),
               !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -165,7 +173,7 @@ actor DeepSeekClient {
         let turns = [AIConversationTurn(role: "system", content: system + "\n" + context)]
             + sanitizedHistory(history)
             + [AIConversationTurn(role: "user", content: question)]
-        return try await stream(turns, jsonMode: false, maxTokens: 3500, onPiece: onDelta)
+        return try await stream(turns, jsonMode: false, maxTokens: 3500) { piece in onDelta(piece) }
     }
 
     func summarize(transcript: String, previous: String) async throws -> String {
@@ -231,7 +239,7 @@ actor DeepSeekClient {
     }
 
     private func stream(_ messages: [AIConversationTurn], jsonMode: Bool, maxTokens: Int,
-                        onPiece: (String) -> Void) async throws -> String {
+                        onPiece: (String) async -> Void) async throws -> String {
         let (bytes, response) = try await session.bytes(for: request(messages, jsonMode: jsonMode, streaming: true, maxTokens: maxTokens))
         guard let http = response as? HTTPURLResponse else { throw DeepSeekError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode) }
@@ -240,15 +248,15 @@ actor DeepSeekClient {
         var done = false
         var finalReason: String?
 
-        func consume(_ chunk: DeepSeekSSEChunk) {
+        func consume(_ chunk: DeepSeekSSEChunk) async {
             if chunk.isDone { done = true; return }
             if let reason = chunk.finishReason { finalReason = reason }
-            if !chunk.content.isEmpty { full += chunk.content; onPiece(chunk.content) }
+            if !chunk.content.isEmpty { full += chunk.content; await onPiece(chunk.content) }
         }
 
         for try await line in bytes.lines {
             try Task.checkCancellation()
-            if let chunk = try framer.push(line) { consume(chunk) }
+            if let chunk = try framer.push(line) { await consume(chunk) }
             if done { break }
         }
         if !done { try framer.finish() }

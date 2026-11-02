@@ -31,10 +31,15 @@ final class LiveIntegrationTests: XCTestCase {
         XCTAssertEqual(results.first?.tarotDraws, selected)
         let run = OracleRun(input: input, plan: plan, results: results)
         let collector = StreamCollector()
-        let reading = try await client.synthesize(run: run, weights: PreferenceLearning.initial, history: []) { collector.append($0) }
+        let progress = LiveProgressCollector()
+        let reading = try await client.synthesize(run: run, weights: PreferenceLearning.initial, history: [], onProgress: { stage in
+            await progress.append(stage)
+        }) { collector.append($0) }
         XCTAssertFalse(reading.text.isEmpty)
         XCTAssertEqual(collector.text, reading.text)
         XCTAssertGreaterThan(reading.text.unicodeScalars.filter { (0x4E00...0x9FFF).contains($0.value) }.count, 80)
+        let stages = await progress.snapshot()
+        XCTAssertEqual(stages, [.preparing, .requesting, .writing, .validating])
     }
 
     func testPlannerLocalPluginsAndStreamingReading() async throws {
@@ -59,6 +64,12 @@ final class LiveIntegrationTests: XCTestCase {
         XCTAssertTrue(reading.alternatives.isEmpty || reading.alternatives.count == 2)
         XCTAssertEqual(collector.text, reading.text)
     }
+}
+
+private actor LiveProgressCollector {
+    private var stages: [AIReadingProgress] = []
+    func append(_ stage: AIReadingProgress) { stages.append(stage) }
+    func snapshot() -> [AIReadingProgress] { stages }
 }
 
 private final class StreamCollector: @unchecked Sendable {

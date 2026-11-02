@@ -171,6 +171,7 @@ struct ChatMessage: Codable, Identifiable, Sendable {
     var kind: ChatMessageKind = .text
     var date = Date()
     var runID: UUID?
+    var activities: [OracleActivity]? = nil
 }
 
 struct ReadingAlternative: Codable, Identifiable, Sendable {
@@ -195,6 +196,7 @@ struct OracleRun: Codable, Identifiable, Sendable {
     var selectedAlternative: String?
     var completedAt: Date?
     var weightsSnapshot: [String: Double] = [:]
+    var activities: [OracleActivity]? = nil
 }
 
 struct ConversationSummary: Codable, Sendable {

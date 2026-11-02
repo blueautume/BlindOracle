@@ -2,7 +2,6 @@ import Foundation
 import Combine
 
 enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteraction, calculating, synthesizing }
-struct OracleActivity: Identifiable { let id = UUID(); let text: String; let date = Date() }
 
 @MainActor final class OracleStore: ObservableObject {
     @Published var profiles: [OracleProfile]
@@ -15,6 +14,8 @@ struct OracleActivity: Identifiable { let id = UUID(); let text: String; let dat
     @Published var phase: OraclePhase = .idle
     @Published var status = ""
     @Published var activities: [OracleActivity] = []
+    @Published var activitySessionID = UUID()
+    @Published var activityMessageID: UUID?
     @Published var pendingPlan: OraclePlan?
     @Published var showIntake = false
     @Published var pendingInteraction: OracleInteractionSession?
@@ -27,6 +28,7 @@ struct OracleActivity: Identifiable { let id = UUID(); let text: String; let dat
     private let vault: LocalVault
     private var task: Task<Void, Never>?
     private var operationID: UUID?
+    private var activityRunID: UUID?
     var isBusy: Bool { [.planning, .calculating, .synthesizing].contains(phase) }
     private var waitingPhase: OraclePhase { pendingInteraction != nil ? .awaitingInteraction : pendingPlan != nil ? .awaitingIntake : .idle }
     var profile: OracleProfile { profiles.first ?? OracleProfile() }
@@ -63,10 +65,17 @@ struct OracleActivity: Identifiable { let id = UUID(); let text: String; let dat
         }
         if history.recoveredUnreadableFile { notice = "历史对话暂时无法读取，原文件已保留恢复副本。" }
         if bootstrapCredential { KeychainStore.shared.bootstrapDevelopmentKey(); refreshCredential() }
+        restoreActivities()
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-testing-progress") || ProcessInfo.processInfo.arguments.contains("--ui-testing-progress-paused") {
+            startProgressPreview(paused: ProcessInfo.processInfo.arguments.contains("--ui-testing-progress-paused"))
+        }
+        #endif
     }
 
     func refreshCredential() { hasCredential = KeychainStore.shared.string() != nil }
     private func persist() {
+        syncActivities()
         captureCurrentConversation()
         do {
             try vault.save(profiles, as: "profiles")
@@ -133,6 +142,7 @@ struct OracleActivity: Identifiable { let id = UUID(); let text: String; let dat
         let interrupted = isBusy
         task?.cancel(); task = nil; operationID = nil
         if interrupted {
+            finishActivity(status: .cancelled)
             for index in messages.indices where messages[index].role == .assistant && messages[index].content.isEmpty {
                 messages[index].content = "这次先停在这里，已完成的资料与结果仍保留。"
             }
@@ -141,8 +151,55 @@ struct OracleActivity: Identifiable { let id = UUID(); let text: String; let dat
     private func clearConversationPresentation() {
         showIntake = false; showInteraction = false; notice = nil; status = ""; activities = []
         phase = waitingPhase
+        activityMessageID = nil; activityRunID = nil; activitySessionID = UUID()
+        restoreActivities()
     }
-    private func progress(_ text: String) { status = text; activities.append(OracleActivity(text: text)) }
+    private func beginActivitySession() {
+        activities = []; status = ""; activitySessionID = UUID(); activityMessageID = nil; activityRunID = nil
+    }
+    private func progress(_ text: String, detail: String? = nil, method: OracleMethod? = nil,
+                          state: OracleActivityStatus = .running) {
+        var timeline = OracleProgressTimeline(activities: activities)
+        timeline.begin(text: text, detail: detail, method: method, status: state)
+        activities = timeline.activities; status = text; syncActivities()
+    }
+    private func finishActivity(status: OracleActivityStatus = .completed) {
+        var timeline = OracleProgressTimeline(activities: activities)
+        timeline.finish(status: status); activities = timeline.activities; syncActivities()
+    }
+    private func syncActivities() {
+        if let id = activityRunID, let index = runs.firstIndex(where: { $0.id == id }) { runs[index].activities = activities }
+        if let id = activityMessageID, let index = messages.firstIndex(where: { $0.id == id }) { messages[index].activities = activities }
+    }
+    private func restoreActivities() {
+        let awaitingUser = pendingPlan != nil || pendingInteraction != nil
+        if let message = messages.last(where: {
+            !($0.activities ?? []).isEmpty && (!awaitingUser || ($0.kind == .intake && $0.runID == nil))
+        }) {
+            activityMessageID = message.id; activityRunID = message.kind == .reading ? message.runID : nil
+            activities = message.activities ?? []; activitySessionID = message.id
+            if activities.last?.status == .running { finishActivity(status: .cancelled) }
+            status = activities.last?.text ?? ""
+        } else if !awaitingUser, let run = latestRun, let saved = run.activities, !saved.isEmpty {
+            activities = saved; activityRunID = run.id; activitySessionID = run.id
+            activityMessageID = messages.last(where: { $0.runID == run.id && $0.kind == .reading })?.id
+            if activities.last?.status == .running { finishActivity(status: .cancelled) }
+            status = activities.last?.text ?? ""
+        }
+        if awaitingUser {
+            activityRunID = nil
+            activityMessageID = messages.last(where: { $0.kind == .intake && $0.runID == nil })?.id
+            progress(pendingInteraction != nil ? interactionStatus : "等待你确认问事资料", state: .waiting)
+        }
+    }
+    private var interactionStatus: String {
+        switch pendingInteraction?.currentRequest?.kind {
+        case .tarot: "等待你选牌并翻开"
+        case .numbers: "等待你留下三个数字"
+        case .coins: "等待你依次留下六爻"
+        case nil: "等待你确认选择"
+        }
+    }
 
     func send(_ question: String) {
         let text = question.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -151,8 +208,9 @@ struct OracleActivity: Identifiable { let id = UUID(); let text: String; let dat
             notice = "先完成这次操作，先知便能接着为你解读。"; showInteraction = true; return
         }
         guard text.count <= 6000 else { notice = "这次问题较长，请先整理到六千字以内。"; return }
+        if pendingPlan == nil, activities.last?.status == .waiting { finishActivity() }
         messages.append(ChatMessage(role: .user, content: text))
-        activities = []; phase = .planning; progress("听清你所问的事…")
+        beginActivitySession(); phase = .planning; progress("理解问题与确认询问对象")
         let id = UUID(); operationID = id; persist()
         task = Task { [weak self] in
             guard let self else { return }
@@ -165,6 +223,7 @@ struct OracleActivity: Identifiable { let id = UUID(); let text: String; let dat
                 await answerFollowUp(text, history: history, operation: id); return
             }
             var plan = registry.localPlan(question: text, profile: profile)
+            progress("选择适用方法与所需资料")
             if hasCredential && !localOnly {
                 do { plan = try await client.plan(question: text, profile: profile, plugins: registry.descriptors, history: history) }
                 catch {
@@ -178,14 +237,17 @@ struct OracleActivity: Identifiable { let id = UUID(); let text: String; let dat
             }
             if plan.action == "clarify" {
                 messages.append(ChatMessage(role: .assistant, content: plan.note.isEmpty ? "你最想问的是哪一件具体的事？" : plan.note))
+                activityMessageID = messages.last?.id
+                progress("等待你补充确认所问事项", state: .waiting)
                 phase = waitingPhase; operationID = nil; persist(); return
             }
             // A union of declared requirements prevents a model from bypassing local validation.
             let requirements = registry.descriptors.filter { plan.methods.contains($0.method) }.flatMap(\.requiredFields)
             plan.requiredFields = Array(Set(plan.requiredFields + requirements))
             pendingPlan = plan; phase = .awaitingIntake
-            progress("问事笺已备好，等你确认。")
+            progress("等待你确认问事资料", state: .waiting)
             messages.append(ChatMessage(role: .assistant, content: plan.note.isEmpty ? "先留一份问事笺。能确定的写下，不确定的也如实留着。" : plan.note, kind: .intake))
+            activityMessageID = messages.last?.id; syncActivities()
             if plan.methods == [.tarot], plan.requiredFields.isEmpty {
                 confirmIntake(profile: plan.subject == "他人" ? OracleProfile() : profile, numbers: [], save: false)
             } else { showIntake = true; persist() }
@@ -193,7 +255,9 @@ struct OracleActivity: Identifiable { let id = UUID(); let text: String; let dat
     }
 
     private func prepareContext(operation: UUID) async {
+        guard operationID == operation, !Task.isCancelled else { return }
         guard ContextCompressor.shouldCompress(messages: messages, summary: summary) else { return }
+        progress("整理此前对话与已确认资料")
         if hasCredential && !localOnly {
             do {
                 if let newSummary = try await ContextCompressor.compact(messages: messages, summary: summary, using: client) {
@@ -218,7 +282,7 @@ struct OracleActivity: Identifiable { let id = UUID(); let text: String; let dat
             if let index = messages.lastIndex(where: { $0.kind == .intake && $0.runID == nil }) {
                 messages[index].content = "请先完成这次操作，留下属于你的选择。"
             }
-            progress("静候你落定选择…"); showInteraction = true; persist(); return
+            progress(interactionStatus, state: .waiting); showInteraction = true; persist(); return
         }
         startReading(input: input, plan: plan)
     }
@@ -236,37 +300,51 @@ struct OracleActivity: Identifiable { let id = UUID(); let text: String; let dat
         if session.currentRequest == nil {
             pendingInteraction = nil; showInteraction = false
             startReading(input: session.input, plan: session.plan)
-        } else { persist() }
+        } else { progress(interactionStatus, state: .waiting); persist() }
     }
 
     private func startReading(input: OracleInput, plan: OraclePlan) {
         let run = OracleRun(input: input, plan: plan, weightsSnapshot: weights)
+        activityRunID = run.id
         runs.append(run); showIntake = false; pendingPlan = nil; phase = .calculating
         if let index = messages.lastIndex(where: { $0.kind == .intake }) {
             messages[index].runID = run.id
             messages[index].content = "问事笺已收好。稍坐，我替你理一理。"
         }
-        activities = []; progress("核对这次资料与时辰…")
+        progress("核对资料与已确认的选择")
         let operation = UUID(); operationID = operation; persist()
+        let conversationID = activeConversationID
         task = Task { [weak self] in
             guard let self else { return }
-            let results = await registry.calculate(input, methods: plan.methods) { [weak self] result in
+            let results = await registry.calculate(input, methods: plan.methods, onMethodStart: { [weak self] method, index, total in
+                await self?.beginMethod(method, index: index, total: total, runID: run.id, operation: operation, conversationID: conversationID)
+            }, onProgress: { [weak self] result in
                 await self?.receive(result, for: run.id, operation: operation)
-            }
+            })
             guard operationID == operation, !Task.isCancelled else { return }
             if let index = runs.firstIndex(where: { $0.id == run.id }) { runs[index].results = results }
             await synthesize(runID: run.id, operation: operation)
         }
     }
+    private func beginMethod(_ method: OracleMethod, index: Int, total: Int, runID: UUID, operation: UUID, conversationID: UUID) {
+        guard operationID == operation, activeConversationID == conversationID,
+              runs.contains(where: { $0.id == runID }), !Task.isCancelled else { return }
+        progress("正在推演\(method.progressName)", detail: "第 \(index) 项，共 \(total) 项推演", method: method)
+    }
     private func receive(_ result: OracleResult, for runID: UUID, operation: UUID) {
         guard operationID == operation, let index = runs.firstIndex(where: { $0.id == runID }) else { return }
         runs[index].results.append(result)
-        progress("本地推演 \(runs[index].results.count) / \(runs[index].plan.methods.count)…")
+        finishActivity(status: result.status == .failed ? .failed : .completed)
+        let detail = result.status == .unavailable ? "资料不足，此项不参与解读。" : "\(result.rows.count) 项盘面数据 · \(result.evidence.count) 条规则线索"
+        progress("整理\(result.method.progressName)结果", detail: detail, method: result.method,
+                 state: result.status == .failed ? .failed : .completed)
         persist()
     }
     func retrySynthesis(_ run: OracleRun) {
         guard !isBusy else { return }
         guard pendingInteraction == nil else { notice = "请先完成当前选择，再继续解读。"; return }
+        beginActivitySession(); activityRunID = run.id
+        progress("沿用已保存的推演结果", detail: run.results.map { $0.method.progressName }.joined(separator: "、"), state: .completed)
         phase = .synthesizing
         let operation = UUID(); operationID = operation
         task = Task { [weak self] in await self?.synthesize(runID: run.id, operation: operation) }
@@ -274,14 +352,17 @@ struct OracleActivity: Identifiable { let id = UUID(); let text: String; let dat
     private func synthesize(runID: UUID, operation: UUID) async {
         guard operationID == operation, !Task.isCancelled,
               let run = runs.first(where: { $0.id == runID }) else { return }
-        phase = .synthesizing; progress("将几处线索慢慢合在一起…")
+        phase = .synthesizing
         let messageID = UUID()
         messages.append(ChatMessage(id: messageID, role: .assistant, content: "", kind: .reading, runID: runID))
+        activityMessageID = messageID
         let history = ContextCompressor.history(messages: Array(messages.dropLast()), summary: summary)
         var synthesis: ReadingSynthesis
         if hasCredential && !localOnly {
             do {
-                synthesis = try await client.synthesize(run: run, weights: weights, history: history) { [weak self] delta in
+                synthesis = try await client.synthesize(run: run, weights: weights, history: history, onProgress: { [weak self] stage in
+                    await self?.readingProgress(stage, runID: runID, operation: operation)
+                }) { [weak self] delta in
                     Task { @MainActor [weak self] in
                         guard let self, self.operationID == operation,
                               let index = self.messages.firstIndex(where: { $0.id == messageID }) else { return }
@@ -294,10 +375,12 @@ struct OracleActivity: Identifiable { let id = UUID(); let text: String; let dat
                 if let index = messages.firstIndex(where: { $0.id == messageID }) {
                     messages[index].content = "这次解读暂未完成，请稍后重试。已经确认的选择与本地结果都已保留。"
                 }
-                progress("结果已保留，稍后可重试解读。")
+                finishActivity(status: .failed)
+                progress("解读暂未完成，结果已保留", detail: "可以沿用本次结果重试。", state: .failed)
                 phase = waitingPhase; operationID = nil; persist(); return
             }
         } else {
+            progress("整理本地规则摘要")
             synthesis = localReading(run, reason: localOnly ? "当前为本地试算，以下是规则摘要。" : "本地推演已完成。设置解读密钥后，可以继续听我细说。")
         }
         guard operationID == operation, !Task.isCancelled else { return }
@@ -306,8 +389,21 @@ struct OracleActivity: Identifiable { let id = UUID(); let text: String; let dat
         }
         if let index = messages.firstIndex(where: { $0.id == messageID }) { messages[index].content = synthesis.text }
         if let index = runs.firstIndex(where: { $0.id == runID }) { runs[index].synthesis = synthesis; runs[index].completedAt = Date() }
-        progress("这次推演已记入数据簿。")
+        progress("解读已完成", state: .completed)
         phase = waitingPhase; operationID = nil; persist()
+    }
+    private func readingProgress(_ stage: AIReadingProgress, runID: UUID, operation: UUID) {
+        guard operationID == operation, let run = runs.first(where: { $0.id == runID }), !Task.isCancelled else { return }
+        let methods = run.results.filter { $0.status == .complete || $0.status == .partial }.map { $0.method.progressName }
+        switch stage {
+        case .preparing: progress("汇集各项推演结果", detail: methods.joined(separator: "、"))
+        case .requesting:
+            let names = methods.prefix(2).joined(separator: "、") + (methods.count > 2 ? "等" : "")
+            progress(methods.count == 1 ? "正在解读\(names)结果" : "综合解析\(names)结果",
+                     detail: "结合问题、已保存结果与资料限制生成解读。")
+        case .writing: progress("正在整理中文解读")
+        case .validating: progress("核对解读与分歧选项")
+        }
     }
     private func localReading(_ run: OracleRun, reason: String) -> ReadingSynthesis {
         let eligible = run.results.filter { $0.status == .complete || $0.status == .partial }
@@ -319,13 +415,15 @@ struct OracleActivity: Identifiable { let id = UUID(); let text: String; let dat
         return ReadingSynthesis(text: reason + "\n\n" + body + uncertainty, alternatives: [])
     }
     private func answerFollowUp(_ question: String, history: [AIConversationTurn], operation: UUID) async {
-        phase = .synthesizing; progress("顺着刚才的线索，再说细一些…")
+        phase = .synthesizing; progress("结合已确认资料生成补充解读")
         let messageID = UUID()
         messages.append(ChatMessage(id: messageID, role: .assistant, content: "", runID: latestRun?.id))
+        activityMessageID = messageID
         do {
             let text = try await client.followUp(question: question, run: latestRun, profile: profile, history: history) { [weak self] delta in
                 Task { @MainActor [weak self] in
                     guard let self, self.operationID == operation, let index = self.messages.firstIndex(where: { $0.id == messageID }) else { return }
+                    if self.activities.last?.text != "正在整理补充回答" { self.progress("正在整理补充回答") }
                     self.messages[index].content += delta
                 }
             }
@@ -333,10 +431,11 @@ struct OracleActivity: Identifiable { let id = UUID(); let text: String; let dat
             if let index = messages.firstIndex(where: { $0.id == messageID }) { messages[index].content = text }
         } catch {
             guard !Task.isCancelled else { return }
+            finishActivity(status: .failed)
             if let index = messages.firstIndex(where: { $0.id == messageID }) { messages[index].content = error.localizedDescription }
         }
         guard operationID == operation else { return }
-        progress("我在，慢慢问。")
+        progress(activities.last?.status == .failed ? "补充回答暂未完成" : "补充回答已完成", state: activities.last?.status == .failed ? .failed : .completed)
         phase = waitingPhase; operationID = nil; persist()
     }
     func select(_ alternative: ReadingAlternative, for runID: UUID) {
@@ -355,10 +454,56 @@ struct OracleActivity: Identifiable { let id = UUID(); let text: String; let dat
     }
     func stop() {
         task?.cancel(); task = nil; operationID = nil; phase = waitingPhase
-        progress("已停下，完成的资料与结果仍保留。")
+        finishActivity(status: .cancelled)
+        progress("已停下，已有资料与结果仍保留", state: .cancelled)
         for index in messages.indices where messages[index].role == .assistant && messages[index].content.isEmpty {
             messages[index].content = "这次先停在这里。"
         }
         persist()
     }
+
+    #if DEBUG
+    /// Deterministic UI preview only. Production progress is driven exclusively
+    /// by actual registry and network events, never by a rotating timer.
+    private func startProgressPreview(paused: Bool) {
+        beginActivitySession()
+        messages = []
+        for index in 1...3 {
+            messages.append(ChatMessage(role: .user, content: "第\(index)次问事：接下来如何安排手头的计划？"))
+            let paragraph = "先把手头的事情排出轻重，把需要确认的信息写下来。推进之前，留一点时间核对现实条件，再决定下一步。"
+            messages.append(ChatMessage(role: .assistant, content: Array(repeating: paragraph, count: 3).joined(separator: "\n\n")))
+        }
+        messages.append(ChatMessage(role: .user, content: "请结合八字和紫微斗数，看看未来一个月的工作节奏。"))
+        let messageID = UUID()
+        messages.append(ChatMessage(id: messageID, role: .assistant, content: ""))
+        activityMessageID = messageID
+        let titles = ["理解问题与确认询问对象", "选择适用方法与所需资料", "核对资料与已确认的交互结果",
+                      "正在推演八字", "整理八字结果", "正在推演紫微斗数", "整理紫微斗数结果",
+                      "汇集本次盘面与交互数据", "综合解析八字、紫微斗数等结果"]
+        var timeline = OracleProgressTimeline()
+        let start = Date().addingTimeInterval(-Double(titles.count))
+        for (index, title) in titles.enumerated() {
+            timeline.begin(text: title, at: start.addingTimeInterval(Double(index)))
+        }
+        activities = timeline.activities; status = titles.last!
+        phase = .synthesizing
+        let operation = UUID(); operationID = operation
+        syncActivities()
+        guard !paused else { return }
+        task = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(10))
+                guard let self, self.operationID == operation, !Task.isCancelled else { return }
+                progress("正在整理中文解读")
+                if let index = messages.firstIndex(where: { $0.id == messageID }) {
+                    messages[index].content = "接下来可以先稳住手头的安排，再逐步推进新的计划。把尚未确定的条件留出来核实，能让选择更从容。"
+                }
+                try await Task.sleep(for: .seconds(6))
+                guard operationID == operation, !Task.isCancelled else { return }
+                progress("解读已完成", state: .completed)
+                phase = .idle; operationID = nil; persist()
+            } catch { }
+        }
+    }
+    #endif
 }

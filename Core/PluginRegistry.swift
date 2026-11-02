@@ -11,16 +11,26 @@ struct PluginRegistry: Sendable {
         }
     }
     func plugin(_ method: OracleMethod) -> (any OraclePlugin)? { plugins.first { $0.descriptor.method == method } }
-    func calculate(_ input: OracleInput, methods: [OracleMethod], onProgress: @escaping @Sendable (OracleResult) async -> Void) async -> [OracleResult] {
+    func calculate(_ input: OracleInput, methods: [OracleMethod],
+                   onMethodStart: (@Sendable (OracleMethod, Int, Int) async -> Void)? = nil,
+                   onProgress: @escaping @Sendable (OracleResult) async -> Void) async -> [OracleResult] {
         // Each plugin gets a value snapshot; serial scheduling also protects vendored global tables.
         var results: [OracleResult] = []
-        for method in OracleMethod.allCases where methods.contains(method) {
+        let selected = OracleMethod.allCases.filter { methods.contains($0) }
+        for (index, method) in selected.enumerated() {
             if Task.isCancelled { break }
-            guard let plugin = plugin(method) else { continue }
+            await onMethodStart?(method, index + 1, selected.count)
+            if Task.isCancelled { break }
+            guard let plugin = plugin(method) else {
+                let result = OracleResult(method: method, status: .unavailable, headline: "此方法尚未加载", rows: [])
+                results.append(result); await onProgress(result); continue
+            }
             let start = Date()
             var result: OracleResult
             do { result = try await plugin.calculate(input) }
+            catch is CancellationError { break }
             catch { result = OracleResult(method: method, status: .failed, headline: "本项未能完成", rows: [], limitations: [error.localizedDescription]) }
+            if Task.isCancelled { break }
             result.durationMilliseconds = Date().timeIntervalSince(start) * 1000
             results.append(result); await onProgress(result)
         }

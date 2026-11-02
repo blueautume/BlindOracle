@@ -88,6 +88,10 @@
 		B05D8A18785590E6F0C86505 = { isa = PBXBuildFile; fileRef = 4C0C7F2D19EE90C70F7DE3E6; };
 		B2A6A36FECF092F3FAE05A71 = { isa = PBXBuildFile; fileRef = B19802EFAFD481A88DEA4571; };
 		D4AE0C2971C14BECBD0ECE6E = { isa = PBXBuildFile; fileRef = E08983289BED6FB7BB35C08E; };
+		9B95E6272DB497164733D91F = { isa = PBXBuildFile; fileRef = 94C0E7CD9CC3479716966C3A; };
+		6A7BBD3E7EEAFA04B44C050B = { isa = PBXBuildFile; fileRef = 12951FC3E3F7B5569974CE78; };
+		83C3B4027D23DD2115872E42 = { isa = PBXBuildFile; fileRef = 0816A2498A7B5D421F4FE92A; };
+		75C36303236DCEF68D110F96 = { isa = PBXBuildFile; fileRef = 7C468C36997B89D270418938; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -192,6 +196,10 @@
 		F37A3DE18E78597A11D647FB = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/TarotDeck.swift"; sourceTree = "<group>"; };
 		F5D0CE4657728878EA583034 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/DeepSeekConfigurationTests.swift"; sourceTree = "<group>"; };
 		FBA3BC5E25A6B996FC1BD91A = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Plugins/Native/TarotPlugin.swift"; sourceTree = "<group>"; };
+		94C0E7CD9CC3479716966C3A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Core/OracleProgress.swift"; sourceTree = "<group>"; };
+		12951FC3E3F7B5569974CE78 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/OracleProcessingView.swift"; sourceTree = "<group>"; };
+		0816A2498A7B5D421F4FE92A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/OracleProgressTests.swift"; sourceTree = "<group>"; };
+		7C468C36997B89D270418938 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITests/ChatProgressUITests.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -285,6 +293,8 @@
 				55C384363A8589207F9DFF18,
 				E08983289BED6FB7BB35C08E,
 				4C0C7F2D19EE90C70F7DE3E6,
+				94C0E7CD9CC3479716966C3A,
+				12951FC3E3F7B5569974CE78,
 			);
 			name = Sources;
 			sourceTree = "<group>";
@@ -301,6 +311,7 @@
 				F5D0CE4657728878EA583034,
 				0E670E294D71DD409935A98E,
 				2660E297A06FA807B423590F,
+				0816A2498A7B5D421F4FE92A,
 			);
 			name = Tests;
 			sourceTree = "<group>";
@@ -310,6 +321,7 @@
 			children = (
 				E272884F9DD5FF8215160095 /* UITests/BlindOracleUITests.swift */,
 				B19802EFAFD481A88DEA4571,
+				7C468C36997B89D270418938,
 			);
 			name = UITests;
 			sourceTree = "<group>";
@@ -459,6 +471,7 @@
 			files = (
 				67D503817DF9FD0B0CAC3EA1 /* UITests/BlindOracleUITests.swift in Sources */,
 				B2A6A36FECF092F3FAE05A71,
+				75C36303236DCEF68D110F96,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -530,6 +543,8 @@
 				9A009DCC2D6BEAA937A5DE5E,
 				D4AE0C2971C14BECBD0ECE6E,
 				B05D8A18785590E6F0C86505,
+				9B95E6272DB497164733D91F,
+				6A7BBD3E7EEAFA04B44C050B,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -546,6 +561,7 @@
 				07DD1792BAF6420599BEE707,
 				6FCF72462B41723578A32165,
 				9C79F323EE8960ED9D06526C,
+				83C3B4027D23DD2115872E42,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
