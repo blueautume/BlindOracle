@@ -1,0 +1,168 @@
+{
+  "count" : 20,
+  "date" : "2026-11-02",
+  "generator" : "Built-in ImageGen",
+  "icons" : [
+    {
+      "file" : "01-ink-oracle.png",
+      "height" : 1254,
+      "id" : "01",
+      "promptFile" : "prompt-01.txt",
+      "title" : "水墨先知",
+      "width" : 1254
+    },
+    {
+      "file" : "02-cinnabar-seal.png",
+      "height" : 1254,
+      "id" : "02",
+      "promptFile" : "prompt-02.txt",
+      "title" : "朱砂篆印",
+      "width" : 1254
+    },
+    {
+      "file" : "03-jade-relief.png",
+      "height" : 1254,
+      "id" : "03",
+      "promptFile" : "prompt-03.txt",
+      "title" : "青玉浮雕",
+      "width" : 1254
+    },
+    {
+      "file" : "04-celadon-oracle.png",
+      "height" : 1254,
+      "id" : "04",
+      "promptFile" : "prompt-04.txt",
+      "title" : "宋瓷先知",
+      "width" : 1254
+    },
+    {
+      "file" : "05-black-gold-astrolabe.png",
+      "height" : 1254,
+      "id" : "05",
+      "promptFile" : "prompt-05.txt",
+      "title" : "黑金星盘",
+      "width" : 1254
+    },
+    {
+      "file" : "06-cyber-oracle.png",
+      "height" : 1254,
+      "id" : "06",
+      "promptFile" : "prompt-06.txt",
+      "title" : "赛博霓虹",
+      "width" : 1254
+    },
+    {
+      "file" : "07-holographic-trigram.png",
+      "height" : 1254,
+      "id" : "07",
+      "promptFile" : "prompt-07.txt",
+      "title" : "全息琉璃",
+      "width" : 1254
+    },
+    {
+      "file" : "08-pixel-sage.png",
+      "height" : 1254,
+      "id" : "08",
+      "promptFile" : "prompt-08.txt",
+      "title" : "复古像素",
+      "width" : 1254
+    },
+    {
+      "file" : "09-bauhaus-fate.png",
+      "height" : 1254,
+      "id" : "09",
+      "promptFile" : "prompt-09.txt",
+      "title" : "包豪斯",
+      "width" : 1254
+    },
+    {
+      "file" : "10-swiss-minimal.png",
+      "height" : 1254,
+      "id" : "10",
+      "promptFile" : "prompt-10.txt",
+      "title" : "瑞士极简",
+      "width" : 1254
+    },
+    {
+      "file" : "11-paper-cut.png",
+      "height" : 1254,
+      "id" : "11",
+      "promptFile" : "prompt-11.txt",
+      "title" : "层叠剪纸",
+      "width" : 1254
+    },
+    {
+      "file" : "12-woodcut-oracle.png",
+      "height" : 1254,
+      "id" : "12",
+      "promptFile" : "prompt-12.txt",
+      "title" : "靛蓝木刻",
+      "width" : 1254
+    },
+    {
+      "file" : "13-cloisonne-star.png",
+      "height" : 1254,
+      "id" : "13",
+      "promptFile" : "prompt-13.txt",
+      "title" : "景泰蓝星盘",
+      "width" : 1254
+    },
+    {
+      "file" : "14-clay-sage.png",
+      "height" : 1254,
+      "id" : "14",
+      "promptFile" : "prompt-14.txt",
+      "title" : "温暖陶偶",
+      "width" : 1254
+    },
+    {
+      "file" : "15-monoline-moon.png",
+      "height" : 1254,
+      "id" : "15",
+      "promptFile" : "prompt-15.txt",
+      "title" : "月弧线描",
+      "width" : 1254
+    },
+    {
+      "file" : "16-ukiyoe-oracle.png",
+      "height" : 1254,
+      "id" : "16",
+      "promptFile" : "prompt-16.txt",
+      "title" : "浮世绘",
+      "width" : 1254
+    },
+    {
+      "file" : "17-art-nouveau.png",
+      "height" : 1254,
+      "id" : "17",
+      "promptFile" : "prompt-17.txt",
+      "title" : "新艺术曲线",
+      "width" : 1254
+    },
+    {
+      "file" : "18-liquid-chrome.png",
+      "height" : 1254,
+      "id" : "18",
+      "promptFile" : "prompt-18.txt",
+      "title" : "液态铬",
+      "width" : 1254
+    },
+    {
+      "file" : "19-embroidered-sage.png",
+      "height" : 1254,
+      "id" : "19",
+      "promptFile" : "prompt-19.txt",
+      "title" : "丝线刺绣",
+      "width" : 1254
+    },
+    {
+      "file" : "20-gradient-oracle.png",
+      "height" : 1254,
+      "id" : "20",
+      "promptFile" : "prompt-20.txt",
+      "title" : "流体渐变",
+      "width" : 1254
+    }
+  ],
+  "project" : "盲眼先知 · BlindOracle"
+}

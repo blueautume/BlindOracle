@@ -1,0 +1,6 @@
+Use case: logo-brand / stylized-concept.
+Asset type: one square opaque iOS app icon for BlindOracle, a calm Chinese divination adviser.
+Direction 17 ART NOUVEAU. An exquisitely elegant ornamental crescent moon encloses a simple serene blindfolded elder profile with a flowing ivory beard. Art nouveau botanical curves curve into the beard, two broad stylized ginkgo leaves only, refined antique muted gold and ivory lines against a completely opaque deep plum / aubergine background. A single central ivory star, large bold fluid silhouette, graceful sinuous symmetry, luxury book-cover-like craftsmanship simplified for 60px icon legibility.
+Composition: centered dominant emblem occupying 74 percent of full square, 13 percent safe margins, full-bleed flat deep-plum background. No externally drawn icon container or rounded corners. Keep ornament sparse and generous negative space, not a dense tarot card.
+Text: none.
+Avoid: letters, typography, numbers, actual Chinese characters, watermark, title, labels, multiple icons, UI, mockup, cards, borders, miniature scenery, evil eye or scary imagery. One clean unique polished icon.

@@ -1,0 +1,42 @@
+{
+  "source": "https://github.com/breezyreeds/kangxi-strokecount",
+  "upstreamCommit": "778d23d0566066ab19906557755b882818ec0a06",
+  "upstreamFile": "kangxi-strokecount.csv",
+  "upstreamSHA256": "2564b8b8738bd06ffe83a26e6dd791df98aefc9feb4d1b01b3d0c412b54ae1c8",
+  "license": "MIT, Copyright (c) 2017–2018 Kawai Lo",
+  "characterCount": 63696,
+  "upstreamCoverage": "Unicode 11.0.0 characters represented in the upstream Kangxi radical-stroke table; original entries and supplements",
+  "countingConvention": "Kangxi radical-restored stroke count, not modern handwriting strokes and not Unicode kTotalStrokes",
+  "transformation": "CSV Value/Strokes columns converted losslessly to a JSON string-to-integer dictionary keyed by decimal Unicode scalar. No traditional-form folding or numeric-name-school overrides.",
+  "limits": [
+    "Counts attach to the exact input glyph. 陈=13 and 陳=16 are distinct entries; 张=7 and 張=11 are distinct entries. Name numerology that uses traditional forms must resolve the written traditional name separately.",
+    "Ambiguous simplified-to-traditional conversions must not be silently treated as confirmed names.",
+    "The dictionary radical convention does not implement name-school numeric substitutions such as treating 五 as 5 or 七 as 7.",
+    "Upstream transcription has not been independently verified for all 63,696 entries. Common fixture checks are documented.",
+    "Do not decode this table with glyph keys: Swift String canonical equivalence merges 290 compatibility entries, including 8 differing-count pairs. Scalar keys preserve original glyph-specific counts."
+  ],
+  "checkedExamples": {
+    "清": 12,
+    "華": 14,
+    "陳": 16,
+    "張": 11,
+    "王": 4,
+    "李": 7,
+    "澤": 17,
+    "浩": 11,
+    "玲": 10,
+    "郭": 15,
+    "芳": 10
+  },
+  "resourceBytes": 734218,
+  "resourceSHA256": "952d7c865e9e8d9e0ac3ee9417ecaf31da23050db8a203a0463a7d529befd01b",
+  "format": "JSON dictionary: Unicode scalar decimal string -> Kangxi radical-restored stroke count. Example: 清 U+6E05 -> \"28165\":12. Use String(character.unicodeScalars.first!.value) as lookup key.",
+  "compatibilityConflictExamples": {
+    "朗": 11,
+    "朗": 10,
+    "廊": 12,
+    "廊": 13,
+    "郎": 13,
+    "郎": 14
+  }
+}

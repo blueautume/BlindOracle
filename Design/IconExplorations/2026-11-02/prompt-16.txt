@@ -1,0 +1,7 @@
+Use case: logo-brand / stylized-concept.
+Asset type: a single square opaque iOS app icon proposal for BlindOracle (盲眼先知), a calm Chinese divination conversation adviser.
+Primary request: Direction 16, a contemporary ukiyo-e inspired woodblock illustration of a friendly elderly Chinese oracle with a dark cloth blindfold and flowing ivory beard. Bold flat indigo outlines, stylized swirling beard and minimal circular ochre sun behind the topknot, a single muted vermilion accent, rich warm ivory paper. The sage head is the single dominant graphic subject. Make it graceful, graphic, and calm.
+Composition: head and shoulders centered, fills 76% square, visually simple enough for 60px icon, generous 12% safe margins, completely opaque square full-bleed ivory paper background. Do not pre-round canvas corners.
+Materials: elegant flat woodblock ink fields, slight authentic paper grain, no photorealism.
+Text: none.
+Avoid: letters, numbers, actual Chinese glyphs, watermark, UI, title, labels, mockup, collage, multiple icons, thin fiddly details, scenery, scary magic, generic glowing evil eye, external frame. One clean professional icon image.

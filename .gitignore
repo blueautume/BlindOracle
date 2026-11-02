@@ -1,0 +1,33 @@
+.DS_Store
+build*/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+LocalSecrets*
+dev-key.txt
+*.ipa
+.swiftpm/
+.build/
+
+# Local credentials; only Secrets.example.json belongs in the repository.
+/Configuration/Secrets.local.json
+/Configuration/Secrets.*.local.json
+/key/
+/keys/
+.env
+.env.*
+!.env.example
+*.textClipping
+*.pem
+*.p12
+*.mobileprovision
+*.key
+*.p8
+
+# Python caches and duplicate design export archives.
+__pycache__/
+*.py[cod]
+node_modules/
+*.xcarchive/
+*.xcresult/
+/Design/**/*.zip

@@ -1,0 +1,32 @@
+{
+  "date": "2026-11-02",
+  "xcode": "27.1 (27A9275)",
+  "minimum_iOS": "17.0",
+  "release_arm64_bundle_bytes": 13807596,
+  "release_contains_development_key_resource": false,
+  "source_credential_matches": [],
+  "release_credential_matches": [],
+  "unit_tests_passed": 59,
+  "ui_tests_passed": 4,
+  "live_api_tests_passed": 1,
+  "default_live_test_skipped_intentionally": 1,
+  "local_plugin_count": 9,
+  "release_is_signed": false,
+  "notes": [
+    "Release measured as arm64 .app bytes, not App Store compressed download size.",
+    "Live test uses a synthetic profile; secret never printed.",
+    "UI screenshots come from actual simulator tests.",
+    "Version 0.1.1/build 2: unit tests and Release build rerun; previous UI/live API evidence retained without additional API requests."
+  ],
+  "unit_test_result": "build/Logs/Test/Test-BlindOracle-2026.11.02_20-59-17-+0800.xcresult",
+  "final_ui_result": "build/Logs/Test/Test-BlindOracle-2026.11.02_20-47-26-+0800.xcresult",
+  "live_api_result": "build/Logs/Test/Test-BlindOracle-2026.11.02_17-55-18-+0800.xcresult",
+  "history_migration_tests_passed": 9,
+  "history_deletion_ui_result": "build/Logs/Test/Test-BlindOracle-2026.11.02_20-44-20-+0800.xcresult",
+  "history_reference_ui_result": "build/Logs/Test/Test-BlindOracle-2026.11.02_20-40-18-+0800.xcresult",
+  "live_api_tests_repeated_for_history_update": false,
+  "version": "0.1.1",
+  "build": "2",
+  "developer_configuration_tests_passed": 9,
+  "staged_secret_scan_passed": true
+}

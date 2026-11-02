@@ -1,0 +1,812 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		033C56C418649AA9917F4B19 /* Views/ReadingResultsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9658E6981BE22FFEDA80B6C /* Views/ReadingResultsSheet.swift */; };
+		039183FC04B9E630ADB31B62 /* Resources/ThirdPartyNotices.txt in Resources */ = {isa = PBXBuildFile; fileRef = 25F162EE31CC2A073312F9DC /* Resources/ThirdPartyNotices.txt */; };
+		04372582E955CE1775FBC427 /* Vendor/LunarSwift/Foto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DAAF1F90BCD343A8C081F7A /* Vendor/LunarSwift/Foto.swift */; };
+		04A45B0CCBAB6E71A5D7654C /* Tests/PersistenceAndPreferenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAF993DB33533D4B616777C5 /* Tests/PersistenceAndPreferenceTests.swift */; };
+		0A8297633187AD275FE62253 /* App/OracleStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69B82AE54AF8208EB0E59DE6 /* App/OracleStore.swift */; };
+		0B77E5E4F7CFB30FC448AFB9 /* Views/DataViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 458DA343CF351A710189AD91 /* Views/DataViews.swift */; };
+		0DBCD0A701F634B2B768B352 /* Vendor/LunarSwift/Fu.swift in Sources */ = {isa = PBXBuildFile; fileRef = F704CBB7A9003610B62AE67B /* Vendor/LunarSwift/Fu.swift */; };
+		15282667D81C35E388711ADF /* Vendor/LunarSwift/FotoFestival.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115C9EC4B5B56F7EC6C202B2 /* Vendor/LunarSwift/FotoFestival.swift */; };
+		17063F990CA0F9C819D21E47 /* Core/ConversationHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 002C308C2ABD09C73AFA4BE8 /* Core/ConversationHistory.swift */; };
+		1BEB9F65990743FA14F6EA46 /* Tests/ConversationHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AF1DFCE463B6B761BCA81A /* Tests/ConversationHistoryTests.swift */; };
+		213C330AF37F39F0DD1A134F /* Vendor/LunarSwift/LunarTime.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A536FA9087251C4696F365 /* Vendor/LunarSwift/LunarTime.swift */; };
+		24C749653174E5349B4F3351 /* App/BlindOracleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7798695EE7B7021FBF200561 /* App/BlindOracleApp.swift */; };
+		2F0F4CFC2317D5EB827F400A /* Vendor/LunarSwift/SolarYear.swift in Sources */ = {isa = PBXBuildFile; fileRef = A078C17D7199A7485C2CD159 /* Vendor/LunarSwift/SolarYear.swift */; };
+		30A033228EED3E59F0169C6C /* Views/ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CBFC10119F66BB40AF54375 /* Views/ChatView.swift */; };
+		32040188B3489D3AA795BFF3 /* Vendor/LunarSwift/SolarWeek.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32D003CB4E1896D6CABC6A69 /* Vendor/LunarSwift/SolarWeek.swift */; };
+		372A1E40C99D01DB3C4820DB /* Vendor/LunarSwift/TaoUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 616ED068AC33D4FB9449EB31 /* Vendor/LunarSwift/TaoUtil.swift */; };
+		3DE6CBA0A22BDCD953774104 /* Vendor/LunarSwift/DaYun.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33DBC853DD9D605566BA52A8 /* Vendor/LunarSwift/DaYun.swift */; };
+		3EA08A340576F6491C5AC7DB /* Vendor/LunarSwift/SolarUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AAFCA4F93C7AC9965F68B5F /* Vendor/LunarSwift/SolarUtil.swift */; };
+		49BD94E331905E4E63636EB0 /* Vendor/LunarSwift/LunarMonth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A0A2DD63EA672EB9310151 /* Vendor/LunarSwift/LunarMonth.swift */; };
+		4C5581F0F020AF83D7D02662 /* Plugins/Native/ChengguPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 472406C7D989E466B9DA8BB8 /* Plugins/Native/ChengguPlugin.swift */; };
+		4DB2469F18EAA1FDEBA34892 /* Core/PluginRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4133140DB3C7E888EE383751 /* Core/PluginRegistry.swift */; };
+		4E1F7F891F816AC63C48FC8C /* Vendor/LunarSwift/LunarYear.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC8B3EB2672A26B7ABF9A00B /* Vendor/LunarSwift/LunarYear.swift */; };
+		51E04D8379A6DB36BF561F9F /* Services/KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E51DBF45614D11AA84C0EC5 /* Services/KeychainStore.swift */; };
+		52B1BEBAB802F236671500C3 /* Vendor/LunarSwift/Yun.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4385D45D874D64AD168AA287 /* Vendor/LunarSwift/Yun.swift */; };
+		5702D4ABFD3BD3B9C84925D2 /* Vendor/LunarSwift/LiuYue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D93DB7F462232363EE5D8CE3 /* Vendor/LunarSwift/LiuYue.swift */; };
+		587B702876373BF0CEF258DE /* Services/LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B356011F6FAEF59E7D63A4 /* Services/LocationService.swift */; };
+		5AD747EF296A761A06F2EAE9 /* Vendor/LunarSwift/FotoUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AD62ACA09DB0C13B0201779 /* Vendor/LunarSwift/FotoUtil.swift */; };
+		5DA2F73375E50353D155104C /* Views/IntakeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBC60C2872AB143498164C85 /* Views/IntakeView.swift */; };
+		627BBC9C62B0C159B656E415 /* Resources/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E0E27618A2D2A8FEBDD49F35 /* Resources/Assets.xcassets */; };
+		67D503817DF9FD0B0CAC3EA1 /* UITests/BlindOracleUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E272884F9DD5FF8215160095 /* UITests/BlindOracleUITests.swift */; };
+		6BCF15CE1D308D5A5703596B /* Vendor/LunarSwift/LiuNian.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE748B901BA0D0C243217BB /* Vendor/LunarSwift/LiuNian.swift */; };
+		6D1630B5EA75E78F1440AD6F /* Vendor/LunarSwift/Solar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80AFF95D972AFBA6B05198E6 /* Vendor/LunarSwift/Solar.swift */; };
+		746C5639EB0CEC99AFBAF471 /* Documentation in Resources */ = {isa = PBXBuildFile; fileRef = 48759B6513A7FE260F577D41 /* Documentation */; };
+		74CED8506BD39603E0704024 /* Vendor/LunarSwift/SolarMonth.swift in Sources */ = {isa = PBXBuildFile; fileRef = F986D4BB1FCD3D58BD853930 /* Vendor/LunarSwift/SolarMonth.swift */; };
+		77D1B4D6E941FE3FA21B98A8 /* Vendor/Astronomy/BlindOracleSky.c in Sources */ = {isa = PBXBuildFile; fileRef = AD8DAFF1E2D591F4547537AA /* Vendor/Astronomy/BlindOracleSky.c */; };
+		78B96DF05521BE6B1C616A6D /* Vendor/LunarSwift/NineStar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2273C04BA03DEBAC3621ABE3 /* Vendor/LunarSwift/NineStar.swift */; };
+		7B69A1607CBCAC5312B4C715 /* Vendor/LunarSwift/EightChar.swift in Sources */ = {isa = PBXBuildFile; fileRef = C83D0942CC9F577D18D6B0ED /* Vendor/LunarSwift/EightChar.swift */; };
+		7D7C9E9DC387AF2EA0C9B021 /* Vendor/LunarSwift/HolidayUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0812CE684BCC5EA099DEB5B5 /* Vendor/LunarSwift/HolidayUtil.swift */; };
+		81F541DB98F5B14E344CFD7F /* Vendor/LunarSwift/Tao.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0540227AC09D5DB982AC2B62 /* Vendor/LunarSwift/Tao.swift */; };
+		876ECDAAA3EB1315056096B9 /* Views/ConversationHistorySidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAE2095FD8E3FA1AD8875F7 /* Views/ConversationHistorySidebar.swift */; };
+		8A2E3806BC4E3818DC60623B /* Tests/NativePluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CFFDCE87BF4D13203DA3447 /* Tests/NativePluginTests.swift */; };
+		8B427F0BADD80C692437DEBC /* Plugins/Native/XingmingPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0A31C234F191C3AF5443A3 /* Plugins/Native/XingmingPlugin.swift */; };
+		9293069317A423FF1B8B8176 /* Plugins/Native/LiuyaoPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B45E6CA9A1EB0FBBFDEE04 /* Plugins/Native/LiuyaoPlugin.swift */; };
+		9AB09DD69B6C8DE61FEFFA5C /* Services/DeepSeekClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9547081036B521336C169F30 /* Services/DeepSeekClient.swift */; };
+		9AC904784CD622D520494C80 /* Vendor/LunarSwift/XiaoYun.swift in Sources */ = {isa = PBXBuildFile; fileRef = D75A96199EC52C83C9ED1AF9 /* Vendor/LunarSwift/XiaoYun.swift */; };
+		9D22C8215226F5D79F6617F8 /* Plugins/Native/MeihuaPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9FBACD5DB4A9378D43274A3 /* Plugins/Native/MeihuaPlugin.swift */; };
+		A610D2D8AFAD6041D279FAAC /* Views/InkTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C2D6782D5487BC856F682EB /* Views/InkTheme.swift */; };
+		A67B78724C2A4E982CD4492E /* Vendor/LunarSwift/SolarSeason.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0A70EB8937B43119A88EBD3 /* Vendor/LunarSwift/SolarSeason.swift */; };
+		AC483E5005B1C308F0439EF2 /* Plugins/Native/QimenPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC74CA60FB509514320CD8DA /* Plugins/Native/QimenPlugin.swift */; };
+		B6063DE17974A861E59FA914 /* Vendor/LunarSwift/ShuJiu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8900E0A5CC06D22EE25BF707 /* Vendor/LunarSwift/ShuJiu.swift */; };
+		B8B32F9D350BAA9B5462D4F3 /* Vendor/LunarSwift/SolarHalfYear.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2D7DD003B00C893BE8D52D6 /* Vendor/LunarSwift/SolarHalfYear.swift */; };
+		C27D346B01DDF74439BD2A66 /* Vendor/Astronomy/astronomy.c in Sources */ = {isa = PBXBuildFile; fileRef = B23A91BB4F68D3CBD8864718 /* Vendor/Astronomy/astronomy.c */; };
+		C336DE80D20BB10B10D16E05 /* Tests/SkyPluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE55F98D9D3E05A5FF30160D /* Tests/SkyPluginTests.swift */; };
+		C3C899EE711D48353C5D67D2 /* Core/OracleModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1FF2DC0CAAB8E896C6DCF3A /* Core/OracleModels.swift */; };
+		D1C867563B6C7A076B56B7B9 /* Tests/AIServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD32172FE07185B5709EABAA /* Tests/AIServiceTests.swift */; };
+		D4E0E78DD8A32162315CF6A1 /* Tests/LiveIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03ECE31C7F69A6DD14D6866E /* Tests/LiveIntegrationTests.swift */; };
+		D5A3BA585CFBB2EC28E38A2C /* Plugins/Native/BaziPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2F8C120655A4D337468903 /* Plugins/Native/BaziPlugin.swift */; };
+		D72496060A9C4AFB3638F798 /* Services/ContextCompressor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDBAA86F1747D4914A807631 /* Services/ContextCompressor.swift */; };
+		DF2C2CE6AA9AA823003CD183 /* Vendor/LunarSwift/TaoFestival.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FA034C5888B2339F7A89580 /* Vendor/LunarSwift/TaoFestival.swift */; };
+		E20E43DF0EF623694FA77290 /* Resources/Native in Resources */ = {isa = PBXBuildFile; fileRef = 88538569096914C7E497DEFF /* Resources/Native */; };
+		E66B5BD6F94E13A2AC0D3457 /* Plugins/Native/XiaoliurenPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E037D93B24FECDC028E88E9 /* Plugins/Native/XiaoliurenPlugin.swift */; };
+		E6C95734662DD72D49181038 /* Vendor/LunarSwift/Holiday.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92DFB59011F9A040BA8C93BC /* Vendor/LunarSwift/Holiday.swift */; };
+		E95EA32AA97461216CAF9193 /* Vendor/LunarSwift/ShouXingUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BE8C2BF27E99086C51BD47F /* Vendor/LunarSwift/ShouXingUtil.swift */; };
+		ED9B130A3387D75AF9D5AF48 /* Plugins/Native/NativeSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF77EF2A6D433E476524A995 /* Plugins/Native/NativeSupport.swift */; };
+		F0B2F8F9B5F719701902F6FD /* Vendor/LunarSwift/LunarUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94BA479195B46046DB8D7DB7 /* Vendor/LunarSwift/LunarUtil.swift */; };
+		F241310AF2239B604A24C047 /* Core/LocalVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E0774B2DD8CC0AF35CA454E /* Core/LocalVault.swift */; };
+		F39B1118CA2E5AD9282000D7 /* Resources/Sky in Resources */ = {isa = PBXBuildFile; fileRef = 398169473CB0E42EACE9C08D /* Resources/Sky */; };
+		F858321910B4E380FCC73483 /* Vendor/LunarSwift/Lunar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FEC68C7279139775AAA7301 /* Vendor/LunarSwift/Lunar.swift */; };
+		FC11462A1D5F39B071C88226 /* Plugins/Sky/SkyPlugins.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8476580A3DAFCDE4BA2067A1 /* Plugins/Sky/SkyPlugins.swift */; };
+		FE6A393A73586051011EBA03 /* Vendor/LunarSwift/JieQi.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04CAD42427C269F9F760AFBA /* Vendor/LunarSwift/JieQi.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		7F796F1F402F084D42051CB9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4F6027D858B72CC70E5CC8E9;
+			remoteInfo = BlindOracle;
+		};
+		9FE15850D9525F77FD6AA721 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4F6027D858B72CC70E5CC8E9;
+			remoteInfo = BlindOracle;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		002C308C2ABD09C73AFA4BE8 /* Core/ConversationHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core/ConversationHistory.swift; sourceTree = "<group>"; };
+		03ECE31C7F69A6DD14D6866E /* Tests/LiveIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/LiveIntegrationTests.swift; sourceTree = "<group>"; };
+		04CAD42427C269F9F760AFBA /* Vendor/LunarSwift/JieQi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/JieQi.swift; sourceTree = "<group>"; };
+		0540227AC09D5DB982AC2B62 /* Vendor/LunarSwift/Tao.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/Tao.swift; sourceTree = "<group>"; };
+		0812CE684BCC5EA099DEB5B5 /* Vendor/LunarSwift/HolidayUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/HolidayUtil.swift; sourceTree = "<group>"; };
+		115C9EC4B5B56F7EC6C202B2 /* Vendor/LunarSwift/FotoFestival.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/FotoFestival.swift; sourceTree = "<group>"; };
+		1AD62ACA09DB0C13B0201779 /* Vendor/LunarSwift/FotoUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/FotoUtil.swift; sourceTree = "<group>"; };
+		1CFFDCE87BF4D13203DA3447 /* Tests/NativePluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/NativePluginTests.swift; sourceTree = "<group>"; };
+		2273C04BA03DEBAC3621ABE3 /* Vendor/LunarSwift/NineStar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/NineStar.swift; sourceTree = "<group>"; };
+		25F162EE31CC2A073312F9DC /* Resources/ThirdPartyNotices.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Resources/ThirdPartyNotices.txt; sourceTree = "<group>"; };
+		32D003CB4E1896D6CABC6A69 /* Vendor/LunarSwift/SolarWeek.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/SolarWeek.swift; sourceTree = "<group>"; };
+		33DBC853DD9D605566BA52A8 /* Vendor/LunarSwift/DaYun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/DaYun.swift; sourceTree = "<group>"; };
+		398169473CB0E42EACE9C08D /* Resources/Sky */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources/Sky; sourceTree = "<group>"; };
+		3BE8C2BF27E99086C51BD47F /* Vendor/LunarSwift/ShouXingUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/ShouXingUtil.swift; sourceTree = "<group>"; };
+		3FEC68C7279139775AAA7301 /* Vendor/LunarSwift/Lunar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/Lunar.swift; sourceTree = "<group>"; };
+		4133140DB3C7E888EE383751 /* Core/PluginRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core/PluginRegistry.swift; sourceTree = "<group>"; };
+		4385D45D874D64AD168AA287 /* Vendor/LunarSwift/Yun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/Yun.swift; sourceTree = "<group>"; };
+		458DA343CF351A710189AD91 /* Views/DataViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/DataViews.swift; sourceTree = "<group>"; };
+		472406C7D989E466B9DA8BB8 /* Plugins/Native/ChengguPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Native/ChengguPlugin.swift; sourceTree = "<group>"; };
+		48759B6513A7FE260F577D41 /* Documentation */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Documentation; sourceTree = "<group>"; };
+		5DAAF1F90BCD343A8C081F7A /* Vendor/LunarSwift/Foto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/Foto.swift; sourceTree = "<group>"; };
+		5FA034C5888B2339F7A89580 /* Vendor/LunarSwift/TaoFestival.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/TaoFestival.swift; sourceTree = "<group>"; };
+		616ED068AC33D4FB9449EB31 /* Vendor/LunarSwift/TaoUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/TaoUtil.swift; sourceTree = "<group>"; };
+		6876384C1F14AB301558A48A /* BlindOracleUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BlindOracleUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		69B82AE54AF8208EB0E59DE6 /* App/OracleStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/OracleStore.swift; sourceTree = "<group>"; };
+		6CBFC10119F66BB40AF54375 /* Views/ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/ChatView.swift; sourceTree = "<group>"; };
+		6E037D93B24FECDC028E88E9 /* Plugins/Native/XiaoliurenPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Native/XiaoliurenPlugin.swift; sourceTree = "<group>"; };
+		71A0A2DD63EA672EB9310151 /* Vendor/LunarSwift/LunarMonth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/LunarMonth.swift; sourceTree = "<group>"; };
+		7798695EE7B7021FBF200561 /* App/BlindOracleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/BlindOracleApp.swift; sourceTree = "<group>"; };
+		7E0774B2DD8CC0AF35CA454E /* Core/LocalVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core/LocalVault.swift; sourceTree = "<group>"; };
+		80AFF95D972AFBA6B05198E6 /* Vendor/LunarSwift/Solar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/Solar.swift; sourceTree = "<group>"; };
+		8476580A3DAFCDE4BA2067A1 /* Plugins/Sky/SkyPlugins.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Sky/SkyPlugins.swift; sourceTree = "<group>"; };
+		88538569096914C7E497DEFF /* Resources/Native */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources/Native; sourceTree = "<group>"; };
+		8900E0A5CC06D22EE25BF707 /* Vendor/LunarSwift/ShuJiu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/ShuJiu.swift; sourceTree = "<group>"; };
+		8C2D6782D5487BC856F682EB /* Views/InkTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/InkTheme.swift; sourceTree = "<group>"; };
+		8E51DBF45614D11AA84C0EC5 /* Services/KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/KeychainStore.swift; sourceTree = "<group>"; };
+		92DFB59011F9A040BA8C93BC /* Vendor/LunarSwift/Holiday.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/Holiday.swift; sourceTree = "<group>"; };
+		94BA479195B46046DB8D7DB7 /* Vendor/LunarSwift/LunarUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/LunarUtil.swift; sourceTree = "<group>"; };
+		9547081036B521336C169F30 /* Services/DeepSeekClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/DeepSeekClient.swift; sourceTree = "<group>"; };
+		9AAFCA4F93C7AC9965F68B5F /* Vendor/LunarSwift/SolarUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/SolarUtil.swift; sourceTree = "<group>"; };
+		A078C17D7199A7485C2CD159 /* Vendor/LunarSwift/SolarYear.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/SolarYear.swift; sourceTree = "<group>"; };
+		A0A70EB8937B43119A88EBD3 /* Vendor/LunarSwift/SolarSeason.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/SolarSeason.swift; sourceTree = "<group>"; };
+		A1B45E6CA9A1EB0FBBFDEE04 /* Plugins/Native/LiuyaoPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Native/LiuyaoPlugin.swift; sourceTree = "<group>"; };
+		A1FF2DC0CAAB8E896C6DCF3A /* Core/OracleModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core/OracleModels.swift; sourceTree = "<group>"; };
+		AAAE2095FD8E3FA1AD8875F7 /* Views/ConversationHistorySidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/ConversationHistorySidebar.swift; sourceTree = "<group>"; };
+		AC2F8C120655A4D337468903 /* Plugins/Native/BaziPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Native/BaziPlugin.swift; sourceTree = "<group>"; };
+		AD32172FE07185B5709EABAA /* Tests/AIServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/AIServiceTests.swift; sourceTree = "<group>"; };
+		AD8DAFF1E2D591F4547537AA /* Vendor/Astronomy/BlindOracleSky.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Vendor/Astronomy/BlindOracleSky.c; sourceTree = "<group>"; };
+		B23A91BB4F68D3CBD8864718 /* Vendor/Astronomy/astronomy.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Vendor/Astronomy/astronomy.c; sourceTree = "<group>"; };
+		B5AF1DFCE463B6B761BCA81A /* Tests/ConversationHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/ConversationHistoryTests.swift; sourceTree = "<group>"; };
+		B6CDB6E5D160E013280D3C68 /* BlindOracle.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BlindOracle.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BE0A31C234F191C3AF5443A3 /* Plugins/Native/XingmingPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Native/XingmingPlugin.swift; sourceTree = "<group>"; };
+		BE55F98D9D3E05A5FF30160D /* Tests/SkyPluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/SkyPluginTests.swift; sourceTree = "<group>"; };
+		C83D0942CC9F577D18D6B0ED /* Vendor/LunarSwift/EightChar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/EightChar.swift; sourceTree = "<group>"; };
+		CAF993DB33533D4B616777C5 /* Tests/PersistenceAndPreferenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/PersistenceAndPreferenceTests.swift; sourceTree = "<group>"; };
+		CDBAA86F1747D4914A807631 /* Services/ContextCompressor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/ContextCompressor.swift; sourceTree = "<group>"; };
+		D75A96199EC52C83C9ED1AF9 /* Vendor/LunarSwift/XiaoYun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/XiaoYun.swift; sourceTree = "<group>"; };
+		D93DB7F462232363EE5D8CE3 /* Vendor/LunarSwift/LiuYue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/LiuYue.swift; sourceTree = "<group>"; };
+		D9FBACD5DB4A9378D43274A3 /* Plugins/Native/MeihuaPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Native/MeihuaPlugin.swift; sourceTree = "<group>"; };
+		DBC60C2872AB143498164C85 /* Views/IntakeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/IntakeView.swift; sourceTree = "<group>"; };
+		DC74CA60FB509514320CD8DA /* Plugins/Native/QimenPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Native/QimenPlugin.swift; sourceTree = "<group>"; };
+		DC8B3EB2672A26B7ABF9A00B /* Vendor/LunarSwift/LunarYear.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/LunarYear.swift; sourceTree = "<group>"; };
+		DF77EF2A6D433E476524A995 /* Plugins/Native/NativeSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Native/NativeSupport.swift; sourceTree = "<group>"; };
+		E02A90D9643568EA39115CFB /* BlindOracleTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BlindOracleTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E0E27618A2D2A8FEBDD49F35 /* Resources/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = "<group>"; };
+		E272884F9DD5FF8215160095 /* UITests/BlindOracleUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITests/BlindOracleUITests.swift; sourceTree = "<group>"; };
+		E2D7DD003B00C893BE8D52D6 /* Vendor/LunarSwift/SolarHalfYear.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/SolarHalfYear.swift; sourceTree = "<group>"; };
+		E5A536FA9087251C4696F365 /* Vendor/LunarSwift/LunarTime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/LunarTime.swift; sourceTree = "<group>"; };
+		E9658E6981BE22FFEDA80B6C /* Views/ReadingResultsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/ReadingResultsSheet.swift; sourceTree = "<group>"; };
+		F0B356011F6FAEF59E7D63A4 /* Services/LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/LocationService.swift; sourceTree = "<group>"; };
+		F704CBB7A9003610B62AE67B /* Vendor/LunarSwift/Fu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/Fu.swift; sourceTree = "<group>"; };
+		F986D4BB1FCD3D58BD853930 /* Vendor/LunarSwift/SolarMonth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/SolarMonth.swift; sourceTree = "<group>"; };
+		FDE748B901BA0D0C243217BB /* Vendor/LunarSwift/LiuNian.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/LiuNian.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		F01580CCB5F725E4E879D491 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		3B91224C671A3400805ED16F /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				48759B6513A7FE260F577D41 /* Documentation */,
+				E0E27618A2D2A8FEBDD49F35 /* Resources/Assets.xcassets */,
+				88538569096914C7E497DEFF /* Resources/Native */,
+				398169473CB0E42EACE9C08D /* Resources/Sky */,
+				25F162EE31CC2A073312F9DC /* Resources/ThirdPartyNotices.txt */,
+			);
+			name = Resources;
+			sourceTree = "<group>";
+		};
+		4D820FADAFBC7A1FCACC4F07 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				7798695EE7B7021FBF200561 /* App/BlindOracleApp.swift */,
+				69B82AE54AF8208EB0E59DE6 /* App/OracleStore.swift */,
+				002C308C2ABD09C73AFA4BE8 /* Core/ConversationHistory.swift */,
+				7E0774B2DD8CC0AF35CA454E /* Core/LocalVault.swift */,
+				A1FF2DC0CAAB8E896C6DCF3A /* Core/OracleModels.swift */,
+				4133140DB3C7E888EE383751 /* Core/PluginRegistry.swift */,
+				AC2F8C120655A4D337468903 /* Plugins/Native/BaziPlugin.swift */,
+				472406C7D989E466B9DA8BB8 /* Plugins/Native/ChengguPlugin.swift */,
+				A1B45E6CA9A1EB0FBBFDEE04 /* Plugins/Native/LiuyaoPlugin.swift */,
+				D9FBACD5DB4A9378D43274A3 /* Plugins/Native/MeihuaPlugin.swift */,
+				DF77EF2A6D433E476524A995 /* Plugins/Native/NativeSupport.swift */,
+				DC74CA60FB509514320CD8DA /* Plugins/Native/QimenPlugin.swift */,
+				6E037D93B24FECDC028E88E9 /* Plugins/Native/XiaoliurenPlugin.swift */,
+				BE0A31C234F191C3AF5443A3 /* Plugins/Native/XingmingPlugin.swift */,
+				8476580A3DAFCDE4BA2067A1 /* Plugins/Sky/SkyPlugins.swift */,
+				CDBAA86F1747D4914A807631 /* Services/ContextCompressor.swift */,
+				9547081036B521336C169F30 /* Services/DeepSeekClient.swift */,
+				8E51DBF45614D11AA84C0EC5 /* Services/KeychainStore.swift */,
+				F0B356011F6FAEF59E7D63A4 /* Services/LocationService.swift */,
+				AD8DAFF1E2D591F4547537AA /* Vendor/Astronomy/BlindOracleSky.c */,
+				B23A91BB4F68D3CBD8864718 /* Vendor/Astronomy/astronomy.c */,
+				33DBC853DD9D605566BA52A8 /* Vendor/LunarSwift/DaYun.swift */,
+				C83D0942CC9F577D18D6B0ED /* Vendor/LunarSwift/EightChar.swift */,
+				5DAAF1F90BCD343A8C081F7A /* Vendor/LunarSwift/Foto.swift */,
+				115C9EC4B5B56F7EC6C202B2 /* Vendor/LunarSwift/FotoFestival.swift */,
+				1AD62ACA09DB0C13B0201779 /* Vendor/LunarSwift/FotoUtil.swift */,
+				F704CBB7A9003610B62AE67B /* Vendor/LunarSwift/Fu.swift */,
+				92DFB59011F9A040BA8C93BC /* Vendor/LunarSwift/Holiday.swift */,
+				0812CE684BCC5EA099DEB5B5 /* Vendor/LunarSwift/HolidayUtil.swift */,
+				04CAD42427C269F9F760AFBA /* Vendor/LunarSwift/JieQi.swift */,
+				FDE748B901BA0D0C243217BB /* Vendor/LunarSwift/LiuNian.swift */,
+				D93DB7F462232363EE5D8CE3 /* Vendor/LunarSwift/LiuYue.swift */,
+				3FEC68C7279139775AAA7301 /* Vendor/LunarSwift/Lunar.swift */,
+				71A0A2DD63EA672EB9310151 /* Vendor/LunarSwift/LunarMonth.swift */,
+				E5A536FA9087251C4696F365 /* Vendor/LunarSwift/LunarTime.swift */,
+				94BA479195B46046DB8D7DB7 /* Vendor/LunarSwift/LunarUtil.swift */,
+				DC8B3EB2672A26B7ABF9A00B /* Vendor/LunarSwift/LunarYear.swift */,
+				2273C04BA03DEBAC3621ABE3 /* Vendor/LunarSwift/NineStar.swift */,
+				3BE8C2BF27E99086C51BD47F /* Vendor/LunarSwift/ShouXingUtil.swift */,
+				8900E0A5CC06D22EE25BF707 /* Vendor/LunarSwift/ShuJiu.swift */,
+				80AFF95D972AFBA6B05198E6 /* Vendor/LunarSwift/Solar.swift */,
+				E2D7DD003B00C893BE8D52D6 /* Vendor/LunarSwift/SolarHalfYear.swift */,
+				F986D4BB1FCD3D58BD853930 /* Vendor/LunarSwift/SolarMonth.swift */,
+				A0A70EB8937B43119A88EBD3 /* Vendor/LunarSwift/SolarSeason.swift */,
+				9AAFCA4F93C7AC9965F68B5F /* Vendor/LunarSwift/SolarUtil.swift */,
+				32D003CB4E1896D6CABC6A69 /* Vendor/LunarSwift/SolarWeek.swift */,
+				A078C17D7199A7485C2CD159 /* Vendor/LunarSwift/SolarYear.swift */,
+				0540227AC09D5DB982AC2B62 /* Vendor/LunarSwift/Tao.swift */,
+				5FA034C5888B2339F7A89580 /* Vendor/LunarSwift/TaoFestival.swift */,
+				616ED068AC33D4FB9449EB31 /* Vendor/LunarSwift/TaoUtil.swift */,
+				D75A96199EC52C83C9ED1AF9 /* Vendor/LunarSwift/XiaoYun.swift */,
+				4385D45D874D64AD168AA287 /* Vendor/LunarSwift/Yun.swift */,
+				6CBFC10119F66BB40AF54375 /* Views/ChatView.swift */,
+				AAAE2095FD8E3FA1AD8875F7 /* Views/ConversationHistorySidebar.swift */,
+				458DA343CF351A710189AD91 /* Views/DataViews.swift */,
+				8C2D6782D5487BC856F682EB /* Views/InkTheme.swift */,
+				DBC60C2872AB143498164C85 /* Views/IntakeView.swift */,
+				E9658E6981BE22FFEDA80B6C /* Views/ReadingResultsSheet.swift */,
+			);
+			name = Sources;
+			sourceTree = "<group>";
+		};
+		536329F47F8EAF961EDFDB02 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				AD32172FE07185B5709EABAA /* Tests/AIServiceTests.swift */,
+				B5AF1DFCE463B6B761BCA81A /* Tests/ConversationHistoryTests.swift */,
+				03ECE31C7F69A6DD14D6866E /* Tests/LiveIntegrationTests.swift */,
+				1CFFDCE87BF4D13203DA3447 /* Tests/NativePluginTests.swift */,
+				CAF993DB33533D4B616777C5 /* Tests/PersistenceAndPreferenceTests.swift */,
+				BE55F98D9D3E05A5FF30160D /* Tests/SkyPluginTests.swift */,
+			);
+			name = Tests;
+			sourceTree = "<group>";
+		};
+		666C2AE724655A458A689DF0 /* UITests */ = {
+			isa = PBXGroup;
+			children = (
+				E272884F9DD5FF8215160095 /* UITests/BlindOracleUITests.swift */,
+			);
+			name = UITests;
+			sourceTree = "<group>";
+		};
+		B28B7AF69320201D1CF206EB = {
+			isa = PBXGroup;
+			children = (
+				4D820FADAFBC7A1FCACC4F07 /* Sources */,
+				3B91224C671A3400805ED16F /* Resources */,
+				536329F47F8EAF961EDFDB02 /* Tests */,
+				666C2AE724655A458A689DF0 /* UITests */,
+				FBDC4F23F93125BBEEAE800C /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		FBDC4F23F93125BBEEAE800C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B6CDB6E5D160E013280D3C68 /* BlindOracle.app */,
+				E02A90D9643568EA39115CFB /* BlindOracleTests.xctest */,
+				6876384C1F14AB301558A48A /* BlindOracleUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		4F6027D858B72CC70E5CC8E9 /* BlindOracle */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 60EA43DB068BD71C9709BED5 /* Build configuration list for PBXNativeTarget "BlindOracle" */;
+			buildPhases = (
+				72A8017E75795FC05F78F54C /* Sources */,
+				F01580CCB5F725E4E879D491 /* Frameworks */,
+				963488E8A773A44C9A5DC523 /* Resources */,
+				6AE714225C736D4ADBFFB751 /* Development credential (Debug only) */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BlindOracle;
+			productName = BlindOracle;
+			productReference = B6CDB6E5D160E013280D3C68 /* BlindOracle.app */;
+			productType = "com.apple.product-type.application";
+		};
+		9EDDF07CDE35AC3E819F75FB /* BlindOracleUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C57F3D09EA23F69B6FFD791A /* Build configuration list for PBXNativeTarget "BlindOracleUITests" */;
+			buildPhases = (
+				0AA69D9A4583D0A6B3B9DD67 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				7049CC82325B8E002825BA60 /* PBXTargetDependency */,
+			);
+			name = BlindOracleUITests;
+			productName = BlindOracleUITests;
+			productReference = 6876384C1F14AB301558A48A /* BlindOracleUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		DB232FBED708F45A1A18553B /* BlindOracleTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A0A34E2380831175F5122A0A /* Build configuration list for PBXNativeTarget "BlindOracleTests" */;
+			buildPhases = (
+				EC2E9EAA9E1CA4B18AE2370A /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				536D435B7D8111256AE5EB34 /* PBXTargetDependency */,
+			);
+			name = BlindOracleTests;
+			productName = BlindOracleTests;
+			productReference = E02A90D9643568EA39115CFB /* BlindOracleTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		98F54143AB4E86B28C3AFEE0 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2710;
+			};
+			buildConfigurationList = BC7E287B75C6D3E574547D08 /* Build configuration list for PBXProject "BlindOracle" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = "zh-Hans";
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				"zh-Hans",
+				en,
+				Base,
+			);
+			mainGroup = B28B7AF69320201D1CF206EB;
+			productRefGroup = FBDC4F23F93125BBEEAE800C /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4F6027D858B72CC70E5CC8E9 /* BlindOracle */,
+				DB232FBED708F45A1A18553B /* BlindOracleTests */,
+				9EDDF07CDE35AC3E819F75FB /* BlindOracleUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		963488E8A773A44C9A5DC523 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				746C5639EB0CEC99AFBAF471 /* Documentation in Resources */,
+				627BBC9C62B0C159B656E415 /* Resources/Assets.xcassets in Resources */,
+				E20E43DF0EF623694FA77290 /* Resources/Native in Resources */,
+				F39B1118CA2E5AD9282000D7 /* Resources/Sky in Resources */,
+				039183FC04B9E630ADB31B62 /* Resources/ThirdPartyNotices.txt in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		6AE714225C736D4ADBFFB751 /* Development credential (Debug only) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Development credential (Debug only)";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/usr/bin/python3 \"${SRCROOT}/Scripts/development_key.py\"";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0AA69D9A4583D0A6B3B9DD67 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				67D503817DF9FD0B0CAC3EA1 /* UITests/BlindOracleUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		72A8017E75795FC05F78F54C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				24C749653174E5349B4F3351 /* App/BlindOracleApp.swift in Sources */,
+				0A8297633187AD275FE62253 /* App/OracleStore.swift in Sources */,
+				17063F990CA0F9C819D21E47 /* Core/ConversationHistory.swift in Sources */,
+				F241310AF2239B604A24C047 /* Core/LocalVault.swift in Sources */,
+				C3C899EE711D48353C5D67D2 /* Core/OracleModels.swift in Sources */,
+				4DB2469F18EAA1FDEBA34892 /* Core/PluginRegistry.swift in Sources */,
+				D5A3BA585CFBB2EC28E38A2C /* Plugins/Native/BaziPlugin.swift in Sources */,
+				4C5581F0F020AF83D7D02662 /* Plugins/Native/ChengguPlugin.swift in Sources */,
+				9293069317A423FF1B8B8176 /* Plugins/Native/LiuyaoPlugin.swift in Sources */,
+				9D22C8215226F5D79F6617F8 /* Plugins/Native/MeihuaPlugin.swift in Sources */,
+				ED9B130A3387D75AF9D5AF48 /* Plugins/Native/NativeSupport.swift in Sources */,
+				AC483E5005B1C308F0439EF2 /* Plugins/Native/QimenPlugin.swift in Sources */,
+				E66B5BD6F94E13A2AC0D3457 /* Plugins/Native/XiaoliurenPlugin.swift in Sources */,
+				8B427F0BADD80C692437DEBC /* Plugins/Native/XingmingPlugin.swift in Sources */,
+				FC11462A1D5F39B071C88226 /* Plugins/Sky/SkyPlugins.swift in Sources */,
+				D72496060A9C4AFB3638F798 /* Services/ContextCompressor.swift in Sources */,
+				9AB09DD69B6C8DE61FEFFA5C /* Services/DeepSeekClient.swift in Sources */,
+				51E04D8379A6DB36BF561F9F /* Services/KeychainStore.swift in Sources */,
+				587B702876373BF0CEF258DE /* Services/LocationService.swift in Sources */,
+				77D1B4D6E941FE3FA21B98A8 /* Vendor/Astronomy/BlindOracleSky.c in Sources */,
+				C27D346B01DDF74439BD2A66 /* Vendor/Astronomy/astronomy.c in Sources */,
+				3DE6CBA0A22BDCD953774104 /* Vendor/LunarSwift/DaYun.swift in Sources */,
+				7B69A1607CBCAC5312B4C715 /* Vendor/LunarSwift/EightChar.swift in Sources */,
+				04372582E955CE1775FBC427 /* Vendor/LunarSwift/Foto.swift in Sources */,
+				15282667D81C35E388711ADF /* Vendor/LunarSwift/FotoFestival.swift in Sources */,
+				5AD747EF296A761A06F2EAE9 /* Vendor/LunarSwift/FotoUtil.swift in Sources */,
+				0DBCD0A701F634B2B768B352 /* Vendor/LunarSwift/Fu.swift in Sources */,
+				E6C95734662DD72D49181038 /* Vendor/LunarSwift/Holiday.swift in Sources */,
+				7D7C9E9DC387AF2EA0C9B021 /* Vendor/LunarSwift/HolidayUtil.swift in Sources */,
+				FE6A393A73586051011EBA03 /* Vendor/LunarSwift/JieQi.swift in Sources */,
+				6BCF15CE1D308D5A5703596B /* Vendor/LunarSwift/LiuNian.swift in Sources */,
+				5702D4ABFD3BD3B9C84925D2 /* Vendor/LunarSwift/LiuYue.swift in Sources */,
+				F858321910B4E380FCC73483 /* Vendor/LunarSwift/Lunar.swift in Sources */,
+				49BD94E331905E4E63636EB0 /* Vendor/LunarSwift/LunarMonth.swift in Sources */,
+				213C330AF37F39F0DD1A134F /* Vendor/LunarSwift/LunarTime.swift in Sources */,
+				F0B2F8F9B5F719701902F6FD /* Vendor/LunarSwift/LunarUtil.swift in Sources */,
+				4E1F7F891F816AC63C48FC8C /* Vendor/LunarSwift/LunarYear.swift in Sources */,
+				78B96DF05521BE6B1C616A6D /* Vendor/LunarSwift/NineStar.swift in Sources */,
+				E95EA32AA97461216CAF9193 /* Vendor/LunarSwift/ShouXingUtil.swift in Sources */,
+				B6063DE17974A861E59FA914 /* Vendor/LunarSwift/ShuJiu.swift in Sources */,
+				6D1630B5EA75E78F1440AD6F /* Vendor/LunarSwift/Solar.swift in Sources */,
+				B8B32F9D350BAA9B5462D4F3 /* Vendor/LunarSwift/SolarHalfYear.swift in Sources */,
+				74CED8506BD39603E0704024 /* Vendor/LunarSwift/SolarMonth.swift in Sources */,
+				A67B78724C2A4E982CD4492E /* Vendor/LunarSwift/SolarSeason.swift in Sources */,
+				3EA08A340576F6491C5AC7DB /* Vendor/LunarSwift/SolarUtil.swift in Sources */,
+				32040188B3489D3AA795BFF3 /* Vendor/LunarSwift/SolarWeek.swift in Sources */,
+				2F0F4CFC2317D5EB827F400A /* Vendor/LunarSwift/SolarYear.swift in Sources */,
+				81F541DB98F5B14E344CFD7F /* Vendor/LunarSwift/Tao.swift in Sources */,
+				DF2C2CE6AA9AA823003CD183 /* Vendor/LunarSwift/TaoFestival.swift in Sources */,
+				372A1E40C99D01DB3C4820DB /* Vendor/LunarSwift/TaoUtil.swift in Sources */,
+				9AC904784CD622D520494C80 /* Vendor/LunarSwift/XiaoYun.swift in Sources */,
+				52B1BEBAB802F236671500C3 /* Vendor/LunarSwift/Yun.swift in Sources */,
+				30A033228EED3E59F0169C6C /* Views/ChatView.swift in Sources */,
+				876ECDAAA3EB1315056096B9 /* Views/ConversationHistorySidebar.swift in Sources */,
+				0B77E5E4F7CFB30FC448AFB9 /* Views/DataViews.swift in Sources */,
+				A610D2D8AFAD6041D279FAAC /* Views/InkTheme.swift in Sources */,
+				5DA2F73375E50353D155104C /* Views/IntakeView.swift in Sources */,
+				033C56C418649AA9917F4B19 /* Views/ReadingResultsSheet.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EC2E9EAA9E1CA4B18AE2370A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D1C867563B6C7A076B56B7B9 /* Tests/AIServiceTests.swift in Sources */,
+				1BEB9F65990743FA14F6EA46 /* Tests/ConversationHistoryTests.swift in Sources */,
+				D4E0E78DD8A32162315CF6A1 /* Tests/LiveIntegrationTests.swift in Sources */,
+				8A2E3806BC4E3818DC60623B /* Tests/NativePluginTests.swift in Sources */,
+				04A45B0CCBAB6E71A5D7654C /* Tests/PersistenceAndPreferenceTests.swift in Sources */,
+				C336DE80D20BB10B10D16E05 /* Tests/SkyPluginTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		536D435B7D8111256AE5EB34 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4F6027D858B72CC70E5CC8E9 /* BlindOracle */;
+			targetProxy = 7F796F1F402F084D42051CB9 /* PBXContainerItemProxy */;
+		};
+		7049CC82325B8E002825BA60 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4F6027D858B72CC70E5CC8E9 /* BlindOracle */;
+			targetProxy = 9FE15850D9525F77FD6AA721 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0DBF25066740E4B8CB8AB751 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_WARN_INHIBIT_ALL_WARNINGS = NO;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		19C812D6422FDF71C22582DF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Vendor/Astronomy",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.lihao.BlindOracleTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BlindOracle.app/BlindOracle";
+			};
+			name = Release;
+		};
+		1FA51788B7965A8459664B67 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = A82X46N3WS;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Vendor/Astronomy",
+				);
+				INFOPLIST_FILE = App/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lihao.BlindOracle;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OBJC_BRIDGING_HEADER = "App/BlindOracle-Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		62F853339D0D10F1A61A1EFA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_INHIBIT_ALL_WARNINGS = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		8AD3BB4A5DF33E553662F892 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = A82X46N3WS;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Vendor/Astronomy",
+				);
+				INFOPLIST_FILE = App/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lihao.BlindOracle;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_OBJC_BRIDGING_HEADER = "App/BlindOracle-Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		8F8256A4919E54295364C19B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Vendor/Astronomy",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.lihao.BlindOracleTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BlindOracle.app/BlindOracle";
+			};
+			name = Debug;
+		};
+		B7223F84B7658242BC4AD262 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Vendor/Astronomy",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.lihao.BlindOracleUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = BlindOracle;
+			};
+			name = Debug;
+		};
+		C42EE2BD390452B96426F340 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Vendor/Astronomy",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.lihao.BlindOracleUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = BlindOracle;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		60EA43DB068BD71C9709BED5 /* Build configuration list for PBXNativeTarget "BlindOracle" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1FA51788B7965A8459664B67 /* Debug */,
+				8AD3BB4A5DF33E553662F892 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A0A34E2380831175F5122A0A /* Build configuration list for PBXNativeTarget "BlindOracleTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8F8256A4919E54295364C19B /* Debug */,
+				19C812D6422FDF71C22582DF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BC7E287B75C6D3E574547D08 /* Build configuration list for PBXProject "BlindOracle" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				62F853339D0D10F1A61A1EFA /* Debug */,
+				0DBF25066740E4B8CB8AB751 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C57F3D09EA23F69B6FFD791A /* Build configuration list for PBXNativeTarget "BlindOracleUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B7223F84B7658242BC4AD262 /* Debug */,
+				C42EE2BD390452B96426F340 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+}

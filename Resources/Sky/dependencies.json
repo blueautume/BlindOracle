@@ -1,0 +1,26 @@
+{
+  "iztro": {
+    "version": "2.6.3",
+    "license": "MIT"
+  },
+  "dayjs": {
+    "version": "1.11.23",
+    "license": "MIT"
+  },
+  "i18next": {
+    "version": "23.16.8",
+    "license": "MIT"
+  },
+  "lunar-lite": {
+    "version": "0.2.8",
+    "license": "MIT"
+  },
+  "lunar-typescript": {
+    "version": "1.8.6",
+    "license": "MIT"
+  },
+  "@babel/runtime": {
+    "version": "7.29.10",
+    "license": "MIT"
+  }
+}
