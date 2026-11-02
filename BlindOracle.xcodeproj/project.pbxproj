@@ -110,6 +110,10 @@
 		87EA3B6BDF4A82907B390544 /* Tests/ReadingContinuationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED5CAD6D2C0C6163099DC634 /* Tests/ReadingContinuationTests.swift */; };
 		41FCA247C449BDFC33F40F03 /* Tests/ReadingContinuationStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20234D92C0503593913D8B29 /* Tests/ReadingContinuationStoreTests.swift */; };
 		52A1BDB30179C2605296AB11 /* UITests/ReadingContinuationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2117640136054B5D1E93DE6A /* UITests/ReadingContinuationUITests.swift */; };
+		6DB166F23FEA9936B7A6EA4C /* Views/TimeZonePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3648D9B91033B79D49125D03 /* Views/TimeZonePicker.swift */; };
+		CEF8C6E5786AF9C105533469 /* Tests/ProfileFormTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0992E666DBA55AB834037B6 /* Tests/ProfileFormTests.swift */; };
+		3F09D9994B7AA981D9A3C01D /* Tests/FormIntakeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C8F1B6F4FC8170C35FD889 /* Tests/FormIntakeTests.swift */; };
+		8FB8B9B0D083B355FCF30CDF /* UITests/FormIntakeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01230A2A838CB347186D484 /* UITests/FormIntakeUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -236,6 +240,10 @@
 		ED5CAD6D2C0C6163099DC634 /* Tests/ReadingContinuationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ReadingContinuationTests.swift"; sourceTree = "<group>"; };
 		20234D92C0503593913D8B29 /* Tests/ReadingContinuationStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ReadingContinuationStoreTests.swift"; sourceTree = "<group>"; };
 		2117640136054B5D1E93DE6A /* UITests/ReadingContinuationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITests/ReadingContinuationUITests.swift"; sourceTree = "<group>"; };
+		3648D9B91033B79D49125D03 /* Views/TimeZonePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/TimeZonePicker.swift"; sourceTree = "<group>"; };
+		A0992E666DBA55AB834037B6 /* Tests/ProfileFormTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ProfileFormTests.swift"; sourceTree = "<group>"; };
+		79C8F1B6F4FC8170C35FD889 /* Tests/FormIntakeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/FormIntakeTests.swift"; sourceTree = "<group>"; };
+		D01230A2A838CB347186D484 /* UITests/FormIntakeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITests/FormIntakeUITests.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -265,6 +273,7 @@
 		4D820FADAFBC7A1FCACC4F07 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				3648D9B91033B79D49125D03 /* Views/TimeZonePicker.swift */,
 				61A2541CC296E5BA7163C216 /* Core/ReadingContinuationPolicy.swift */,
 				7798695EE7B7021FBF200561 /* App/BlindOracleApp.swift */,
 				69B82AE54AF8208EB0E59DE6 /* App/OracleStore.swift */,
@@ -344,6 +353,8 @@
 		536329F47F8EAF961EDFDB02 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				79C8F1B6F4FC8170C35FD889 /* Tests/FormIntakeTests.swift */,
+				A0992E666DBA55AB834037B6 /* Tests/ProfileFormTests.swift */,
 				20234D92C0503593913D8B29 /* Tests/ReadingContinuationStoreTests.swift */,
 				ED5CAD6D2C0C6163099DC634 /* Tests/ReadingContinuationTests.swift */,
 				B3467F6498CE5DB51A8061C4 /* Tests/LocationServiceTests.swift */,
@@ -369,6 +380,7 @@
 		666C2AE724655A458A689DF0 /* UITests */ = {
 			isa = PBXGroup;
 			children = (
+				D01230A2A838CB347186D484 /* UITests/FormIntakeUITests.swift */,
 				2117640136054B5D1E93DE6A /* UITests/ReadingContinuationUITests.swift */,
 				E272884F9DD5FF8215160095 /* UITests/BlindOracleUITests.swift */,
 				B19802EFAFD481A88DEA4571,
@@ -523,6 +535,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8FB8B9B0D083B355FCF30CDF /* UITests/FormIntakeUITests.swift in Sources */,
 				52A1BDB30179C2605296AB11 /* UITests/ReadingContinuationUITests.swift in Sources */,
 				67D503817DF9FD0B0CAC3EA1 /* UITests/BlindOracleUITests.swift in Sources */,
 				B2A6A36FECF092F3FAE05A71,
@@ -537,6 +550,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6DB166F23FEA9936B7A6EA4C /* Views/TimeZonePicker.swift in Sources */,
 				53B4DE84F2DA3D0ADDE03AC0 /* Core/ReadingContinuationPolicy.swift in Sources */,
 				24C749653174E5349B4F3351 /* App/BlindOracleApp.swift in Sources */,
 				0A8297633187AD275FE62253 /* App/OracleStore.swift in Sources */,
@@ -616,6 +630,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3F09D9994B7AA981D9A3C01D /* Tests/FormIntakeTests.swift in Sources */,
+				CEF8C6E5786AF9C105533469 /* Tests/ProfileFormTests.swift in Sources */,
 				41FCA247C449BDFC33F40F03 /* Tests/ReadingContinuationStoreTests.swift in Sources */,
 				87EA3B6BDF4A82907B390544 /* Tests/ReadingContinuationTests.swift in Sources */,
 				6EEE4D6CFE5D115EDE5F7078 /* Tests/LocationServiceTests.swift in Sources */,
@@ -705,7 +721,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = A82X46N3WS;
 				ENABLE_TESTABILITY = YES;
@@ -725,7 +741,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lihao.BlindOracle;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -764,7 +780,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = A82X46N3WS;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -779,7 +795,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lihao.BlindOracle;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;

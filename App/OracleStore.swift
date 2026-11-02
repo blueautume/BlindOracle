@@ -19,6 +19,8 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     @Published var activityMessageID: UUID?
     @Published var pendingPlan: OraclePlan?
     @Published var showIntake = false
+    @Published private(set) var intakeSessionID = UUID()
+    @Published var intakeError: String?
     @Published var pendingInteraction: OracleInteractionSession?
     @Published var showInteraction = false
     @Published var notice: String?
@@ -79,7 +81,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         }
         if history.recoveredUnreadableFile { notice = "历史对话暂时无法读取，原文件已保留恢复副本。" }
         if bootstrapCredential { KeychainStore.shared.bootstrapDevelopmentKey(); refreshCredential() }
-        if let plan = pendingPlan, plan.preparationStage == nil { prepareConversation(plan) }
+        if let plan = pendingPlan { prepareConversation(plan, appendMessage: false) }
         else { restoreActivities() }
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-testing-local") && ProcessInfo.processInfo.arguments.contains("--ui-testing-reading-library") {
@@ -161,6 +163,16 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     @discardableResult func applyProfileUpdates(_ updates: [ProfileUpdate]) -> ProfileMergeResult {
         let result = ProfileDirectory.applying(updates, to: profiles)
         profiles = result.profiles
+        if var drafts = pendingPlan?.draftParticipants {
+            for var update in updates {
+                let matches = profiles.filter { $0.id == update.id || (update.id == nil && $0.resolvedName == update.name) }
+                guard matches.count == 1, let id = matches.first?.id,
+                      result.appliedIDs.contains(id), drafts.contains(where: { $0.id == id }) else { continue }
+                update.id = id
+                drafts = ProfileDirectory.applying([update], to: drafts).profiles
+            }
+            pendingPlan?.draftParticipants = drafts
+        }
         if !result.issues.isEmpty { notice = result.issues.map(\.message).joined(separator: "\n") }
         persist()
         return result
@@ -238,7 +250,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         messages = target.messages; summary = target.summary; pendingPlan = target.pendingPlan
         pendingInteraction = target.pendingInteraction
         clearConversationPresentation()
-        if let plan = pendingPlan, plan.preparationStage == nil { prepareConversation(plan) }
+        if let plan = pendingPlan { prepareConversation(plan, appendMessage: false) }
         selectedTab = 0
         persist()
     }
@@ -274,7 +286,8 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         }
     }
     private func clearConversationPresentation() {
-        showIntake = false; showInteraction = false; notice = nil; status = ""; activities = []
+        showIntake = false; showInteraction = false; notice = nil; intakeError = nil; status = ""; activities = []
+        intakeSessionID = UUID()
         phase = waitingPhase
         activityMessageID = nil; activityRunID = nil; activitySessionID = UUID()
         restoreActivities()
@@ -326,81 +339,52 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         }
     }
 
+    var intakeParticipants: [OracleProfile] {
+        guard let plan = pendingPlan else { return [] }
+        return plan.draftParticipants ?? preparationParticipants(for: plan)
+    }
+    var intakeNumbers: [Int] { pendingPlan?.draftNumbers ?? [] }
+
+    func intakePreparationReport(for participants: [OracleProfile]) -> ReadingPreparationReport? {
+        guard let plan = pendingPlan else { return nil }
+        return ReadingPreparationPolicy.evaluate(plan: plan, participants: participants, descriptors: registry.descriptors)
+    }
+
     var canConfirmIntake: Bool {
-        guard let plan = pendingPlan, plan.preparationStage == .confirming,
-              let people = plan.reviewedParticipants, !isBusy else { return false }
-        return ReadingPreparationPolicy.evaluate(plan: plan, participants: people, descriptors: registry.descriptors).canProceed
+        guard let report = intakePreparationReport(for: intakeParticipants), !isBusy else { return false }
+        return report.canProceed
     }
 
+    /// Compatibility entry point for the chat's reopen control. Only submitting
+    /// the form authorizes a calculation; a chat confirmation never bypasses it.
     func confirmPendingIntake() {
-        guard canConfirmIntake, let plan = pendingPlan, let people = plan.reviewedParticipants else { return }
-        guard preparationParticipants(for: plan) == people else { prepareConversation(plan); return }
-        messages.append(ChatMessage(role: .user, content: "资料无误，开始解析。"))
-        var ready = plan
-        let report = ReadingPreparationPolicy.evaluate(plan: plan, participants: people, descriptors: registry.descriptors)
-        ready.methods = report.runnableMethods
-        ready.omittedMethods = report.omissions
-        pendingPlan = ready
-        confirmGroupIntake(profiles: people, numbers: [], save: true)
+        guard pendingPlan != nil, !isBusy else { return }
+        showIntake = true; showInteraction = false; phase = .awaitingIntake
     }
 
-    private func prepareConversation(_ proposed: OraclePlan, clarification: String? = nil, pendingAnswer: String? = nil) {
+    func saveIntakeDraft(profiles: [OracleProfile], numbers: [Int], sessionID: UUID) {
+        guard sessionID == intakeSessionID, pendingPlan != nil, !isBusy else { return }
+        pendingPlan?.draftParticipants = profiles
+        pendingPlan?.draftNumbers = numbers
+        persist()
+    }
+
+    private func prepareConversation(_ proposed: OraclePlan, clarification: String? = nil, pendingAnswer: String? = nil, appendMessage: Bool = true) {
         var plan = proposed
-        showIntake = false; showInteraction = false
-        let people = preparationParticipants(for: plan)
-        let needsPeople = plan.methods.contains(where: \.usesPersonalProfile)
-        var question: String?
-        if clarification != nil {
-            plan.pendingAnswer = pendingAnswer
-            question = clarification
-        } else if (needsPeople || plan.subject == "多人") && (people.isEmpty || (plan.subject == "多人" && people.count < 2)) && plan.collectionDeclined != true {
-            plan.requestedProfileID = nil; plan.requestedFields = [.name]
-            question = plan.subject == "多人" ? "这次要一起看哪几位？请先告诉我\(people.isEmpty ? "至少两位的姓名" : "另一位的姓名")，我会把资料分别记下。" : "这次要看的姓名是什么？我先把资料对应好，再逐项和你核对。"
-        }
+        // Legacy field-by-field preparations reopen as one complete form.
+        plan.preparationStage = .collecting
+        plan.requestedProfileID = nil; plan.requestedFields = nil
+        plan.reviewedParticipants = nil; plan.pendingAnswer = nil
+        let people = plan.draftParticipants ?? preparationParticipants(for: plan)
         let report = ReadingPreparationPolicy.evaluate(plan: plan, participants: people, descriptors: registry.descriptors)
-        plan.omittedMethods = report.omissions
-        plan.preparationNotes = preparationNotes(report)
-        if question == nil {
-            let knownStrictGap = report.assessments.first { assessment in
-                (plan.mandatoryMethods ?? []).contains(assessment.method) && assessment.blocking.contains { $0.state == .explicitlyUnknown }
-            }
-            if let assessment = knownStrictGap {
-                plan.requestedProfileID = assessment.participantID
-                plan.requestedFields = [assessment.blocking.first(where: { $0.state == .explicitlyUnknown })!.field]
-                let fields = assessment.blocking.map { $0.field.title }.joined(separator: "、")
-                question = "目前还缺\(assessment.participantName.map { $0 + "的" } ?? "")\(fields)，暂时无法按你指定的\(assessment.method.progressName)解析。需要补齐这些资料后才能继续；不会换用其他方法代算。"
-            } else {
-                let next = report.questions.first { item in
-                    report.assessments.contains { assessment in
-                        guard assessment.participantID == item.participantID,
-                              (assessment.blocking + assessment.optionalGaps).contains(where: { $0.field == item.field }) else { return false }
-                        return (plan.mandatoryMethods ?? []).contains(assessment.method) || !assessment.blocking.contains { $0.state == .explicitlyUnknown }
-                    }
-                }
-                if let next, !(plan.collectionDeclined == true && next.field == .name) {
-                    plan.requestedProfileID = next.participantID; plan.requestedFields = [next.field]
-                    let prefix = report.strictBlocked ? "目前资料还不齐，暂时无法按你指定的方法解析。" : ""
-                    question = prefix + next.text
-                } else if !report.canProceed {
-                    let fields = report.missing.flatMap(\.fields).map(\.title)
-                    question = "现有资料还不足以按这次要求解读。还需要补充\(fields.isEmpty ? "相关出生资料" : Array(Set(fields)).sorted().joined(separator: "、"))，补齐后我再继续。"
-                    if let missing = report.missing.first {
-                        plan.requestedProfileID = missing.participantID; plan.requestedFields = Array(missing.fields.prefix(1))
-                    }
-                }
-            }
+        plan.omittedMethods = report.omissions; plan.preparationNotes = preparationNotes(report)
+        pendingPlan = plan; intakeSessionID = UUID(); intakeError = nil
+        if appendMessage || !messages.contains(where: { $0.kind == .intake && $0.runID == nil && $0.deletedRunID == nil }) {
+            messages.append(ChatMessage(role: .assistant, content: "请在问事资料中一次填写并核对这次信息。确认后直接开始；需要抽牌或投掷时，再接着完成操作。", kind: .intake))
         }
-        if let question {
-            plan.preparationStage = .collecting; plan.reviewedParticipants = nil
-            messages.append(ChatMessage(role: .assistant, content: question, kind: .intake))
-            progress("等待补充与核对资料", state: .waiting)
-        } else {
-            plan.preparationStage = .confirming; plan.requestedProfileID = nil; plan.requestedFields = nil; plan.pendingAnswer = nil
-            plan.reviewedParticipants = people
-            messages.append(ChatMessage(role: .assistant, content: ConversationalIntake.summary(plan: plan, participants: people), kind: .intake))
-            progress("信息已整理，等待你确认", state: .waiting)
-        }
-        pendingPlan = plan; activityMessageID = messages.last?.id; syncActivities()
+        activityMessageID = messages.last(where: { $0.kind == .intake && $0.runID == nil })?.id
+        progress("等待填写并确认问事资料", state: .waiting)
+        showIntake = true; showInteraction = false
         phase = .awaitingIntake; operationID = nil; persist()
     }
 
@@ -456,7 +440,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
             notice = "先完成这次操作，先知便能接着为你解读。"; showInteraction = true; return
         }
         guard text.count <= 6000 else { notice = "这次问题较长，请先整理到六千字以内。"; return }
-        if canConfirmIntake, ConversationalIntake.isConfirmation(text) { confirmPendingIntake(); return }
+        if pendingPlan != nil, ConversationalIntake.isConfirmation(text) { confirmPendingIntake(); return }
         if var plan = pendingPlan, ["不对", "有问题", "需要修改", "不是", "不准确"].contains(text) {
             plan.preparationStage = .collecting; plan.reviewedParticipants = nil
             messages.append(ChatMessage(role: .user, content: text))
@@ -642,22 +626,51 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         summary = LocalContextPolicy.compact(messages: messages, previous: summary); persist()
     }
 
-    func confirmIntake(profile submittedProfile: OracleProfile, numbers: [Int], save: Bool) {
+    @discardableResult func confirmIntake(profile submittedProfile: OracleProfile, numbers: [Int], save: Bool) -> Bool {
         confirmGroupIntake(profiles: [submittedProfile], numbers: numbers, save: save)
     }
-    func confirmGroupIntake(profiles submittedProfiles: [OracleProfile], numbers: [Int], save: Bool) {
-        guard var plan = pendingPlan, !isBusy else { return }
+    @discardableResult func confirmGroupIntake(profiles submittedProfiles: [OracleProfile], numbers: [Int], save: Bool, sessionID: UUID? = nil) -> Bool {
+        guard var plan = pendingPlan, !isBusy,
+              sessionID == nil || sessionID == intakeSessionID else { return false }
         var seen = Set<UUID>()
         let participants = submittedProfiles.filter { seen.insert($0.id).inserted }
-        if plan.subject == "多人", plan.methods.contains(where: \.usesPersonalProfile), participants.count < 2 { notice = "请补充至少两人的资料，再一起看。"; return }
-        if plan.methods.contains(where: \.usesPersonalProfile), participants.isEmpty { notice = "请选择这次问事对应的姓名。"; return }
-        if (plan.subject == "多人" || plan.methods.contains(where: \.usesPersonalProfile)), participants.contains(where: { $0.resolvedName.isEmpty }) {
-            notice = "请先填写每位参与人的姓名。"; return
+        plan.draftParticipants = participants; plan.draftNumbers = numbers
+        pendingPlan = plan
+        var issues: [String] = []
+        if plan.subject == "多人", participants.count < 2 { issues.append("请补充至少两人的资料，再一起看。") }
+        if plan.methods.contains(where: \.usesPersonalProfile), participants.isEmpty { issues.append("请选择或新增这次问事对应的人员资料。") }
+        if participants.contains(where: { $0.resolvedName.isEmpty }) { issues.append("请填写每位参与人的姓名。") }
+        let report = ReadingPreparationPolicy.evaluate(plan: plan, participants: participants, descriptors: registry.descriptors)
+        if !report.canProceed {
+            for assessment in report.assessments {
+                let owner = assessment.participantName.map { $0 + "：" } ?? ""
+                issues += assessment.blocking.map { owner + assessment.method.progressName + "需要" + $0.field.title + "：" + $0.reason }
+                if let reason = assessment.unavailableReason { issues.append(reason) }
+            }
+            if issues.isEmpty { issues.append("现有资料还不足以按这次要求推演，请补充标明的必要信息。") }
         }
+        let requiresNumbers = OracleInteractionPolicy.requests(for: plan).contains { $0.kind == .numbers }
+        if (requiresNumbers || !numbers.isEmpty), numbers.count != 3 || !numbers.allSatisfy({ (1...999).contains($0) }) {
+            issues.append("请在同一张资料表中选择三个1到999的整数。")
+        }
+        if !issues.isEmpty {
+            var seenIssues = Set<String>()
+            intakeError = issues.filter { seenIssues.insert($0).inserted }.joined(separator: "\n")
+            notice = intakeError; showIntake = true; phase = .awaitingIntake; persist(); return false
+        }
+        intakeError = nil; notice = nil
         plan.participantIDs = participants.map(\.id)
         plan.participantNames = participants.map(\.resolvedName)
         if participants.count > 1 { plan.subject = "多人" }
+        let runnable = Set(report.runnableMethods)
+        var included = Set<OracleMethod>()
+        plan.methods = (plan.methods + report.runnableMethods).filter { runnable.contains($0) && included.insert($0).inserted }
+        plan.omittedMethods = report.omissions
+        plan.preparationNotes = preparationNotes(report)
+        plan.reviewedParticipants = participants; plan.preparationStage = .confirming
+        plan.draftParticipants = nil; plan.draftNumbers = nil
         if save { for person in participants { saveProfile(person) } }
+        messages.append(ChatMessage(role: .user, content: "已核对问事资料，开始推演。"))
         let style = ["蓍草", "大衍"].contains { plan.question.contains($0) } ? "yarrow" : "coins"
         let input = OracleInput(question: plan.question, profile: participants.first ?? OracleProfile(), numbers: numbers,
                                 subject: plan.subject, castingStyle: style, participants: participants, relationship: plan.relationship)
@@ -665,12 +678,10 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         if !requests.isEmpty {
             pendingInteraction = OracleInteractionSession(input: input, plan: plan, requests: requests)
             pendingPlan = nil; showIntake = false; phase = .awaitingInteraction; operationID = nil
-            if let index = messages.lastIndex(where: { $0.kind == .intake && $0.runID == nil }) {
-                messages[index].content = "请先完成这次操作，留下属于你的选择。"
-            }
-            presentRequestedInteraction(); return
+            presentRequestedInteraction(); return true
         }
         startReading(input: input, plan: plan)
+        return true
     }
 
     func saveInteractionProgress(_ response: OracleInteractionResponse, sessionID: UUID) {
@@ -690,12 +701,9 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     }
 
     private func presentRequestedInteraction() {
-        guard let request = pendingInteraction?.currentRequest else { return }
+        guard pendingInteraction?.currentRequest != nil else { return }
         progress(interactionStatus, state: .waiting)
-        showInteraction = request.kind != .numbers
-        if request.kind == .numbers {
-            messages.append(ChatMessage(role: .assistant, content: "接下来请凭心意告诉我三个1到999的整数，直接在对话里回复即可。"))
-        }
+        showInteraction = true
         persist()
     }
 

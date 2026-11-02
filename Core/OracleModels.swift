@@ -195,6 +195,9 @@ struct OraclePlan: Codable, Sendable {
     var preparationNotes: [String]? = nil
     var pendingAnswer: String? = nil
     var collectionDeclined: Bool? = nil
+    /// Unsubmitted form drafts are independent of the permanent people directory.
+    var draftParticipants: [OracleProfile]? = nil
+    var draftNumbers: [Int]? = nil
 }
 
 enum ChatRole: String, Codable, Sendable { case user, assistant, system }

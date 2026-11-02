@@ -29,11 +29,15 @@ final class ReadingContinuationUITests: XCTestCase {
         send("重新起卦，只用六爻看看明天出行是否顺利", in: app)
         let confirm = app.buttons["confirmIntake"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 15))
+        XCTAssertEqual(app.scrollViews.matching(identifier: "intakeFormScroll").count, 1)
+        XCTAssertTrue(app.scrollViews["intakeFormScroll"].exists)
         XCTAssertFalse(app.buttons["castCoins"].exists)
-        for _ in 0..<6 where !confirm.isHittable { app.swipeUp() }
+        for _ in 0..<24 where !confirm.isHittable { app.scrollViews["intakeFormScroll"].swipeUp() }
         XCTAssertTrue(confirm.isHittable)
         confirm.tap()
         XCTAssertTrue(app.buttons["castCoins"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons.matching(identifier: "castCoins").count, 1)
+        XCTAssertFalse(app.buttons["confirmIntake"].exists)
         XCTAssertFalse(app.buttons["confirmInteraction"].isEnabled)
         capture("explicit-new-reading-starts-coins", in: app)
     }
@@ -54,10 +58,11 @@ final class ReadingContinuationUITests: XCTestCase {
 
     @MainActor private func assertNoNewCast(in app: XCUIApplication) {
         XCTAssertFalse(app.buttons["confirmIntake"].exists)
+        XCTAssertFalse(app.buttons["openIntake"].exists)
         XCTAssertFalse(app.buttons["interactionCard"].exists)
         XCTAssertFalse(app.buttons["castCoins"].exists)
         XCTAssertFalse(app.buttons["shuffleTarot"].exists)
-        XCTAssertEqual(app.sheets.count, 0)
+        XCTAssertFalse(app.scrollViews["intakeFormScroll"].exists)
     }
 
     @MainActor private func record(_ question: String, in app: XCUIApplication) -> XCUIElement {

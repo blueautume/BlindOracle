@@ -3,26 +3,30 @@ import XCTest
 final class MultiPersonUITests: XCTestCase {
     @MainActor func testCreateTwoNamedProfilesAndChooseBothForRelationshipReading() {
         let app = launchFreshApp()
+        send("姓名：张三，男，出生日期1995-01-02，出生时间08:00，出生时区Asia/Shanghai，出生地北京，出生地纬度39.9，出生地经度116.4；姓名：李四，女，出生日期1996-03-04，出生时间14:00，出生时区Asia/Shanghai，出生地上海，出生地纬度31.23，出生地经度121.47", in: app)
+        waitUntilReadyToSend(in: app)
         app.tabBars.buttons["数据"].tap()
-        addProfile("张三", in: app)
-        addProfile("李四", in: app)
-        XCTAssertTrue(profileRow("张三", in: app).exists)
+        XCTAssertTrue(profileRow("张三", in: app).waitForExistence(timeout: 15))
         XCTAssertTrue(profileRow("李四", in: app).exists)
         capture("named-profile-directory", in: app)
         app.tabBars.buttons["对话"].tap()
         send("张三和李四的合作关系如何安排？", in: app)
-        waitUntilReadyToSend(in: app)
-        XCTAssertEqual(app.sheets.count, 0)
-        XCTAssertFalse(app.buttons["confirmIntake"].exists)
-        capture("joint-reading-asks-in-chat", in: app)
-        send("张三，男，出生日期1995-01-02，出生时间08:00，出生时区Asia/Shanghai，出生地北京，出生地纬度39.9，出生地经度116.4；李四，女，出生日期1996-03-04，出生时间14:00，出生时区Asia/Shanghai，出生地上海，出生地纬度31.23，出生地经度121.47", in: app)
         let confirm = app.buttons["confirmIntake"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 15))
-        XCTAssertEqual(app.sheets.count, 0)
-        capture("joint-reading-chat-summary-awaiting-confirmation", in: app)
-        for _ in 0..<10 where !confirm.isHittable { app.scrollViews["chatTranscript"].swipeUp() }
+        XCTAssertEqual(app.scrollViews.matching(identifier: "intakeFormScroll").count, 1)
+        let form = app.scrollViews["intakeFormScroll"]
+        XCTAssertTrue(form.exists)
+        for name in ["张三", "李四"] {
+            let selected = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "selectProfile-", name)).firstMatch
+            XCTAssertTrue(selected.exists)
+            XCTAssertTrue(selected.label.contains("已选"))
+        }
+        XCTAssertEqual(app.textFields.matching(identifier: "profileName").count, 2)
+        capture("joint-reading-all-data-in-one-form", in: app)
+        for _ in 0..<36 where !confirm.isHittable { form.swipeUp() }
         XCTAssertTrue(confirm.isHittable)
         confirm.tap()
+        XCTAssertTrue(app.buttons["confirmIntake"].waitForNonExistence(timeout: 5))
         completeCoinsIfRequested(in: app)
         let summary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "当前为本地试算")).firstMatch
         XCTAssertTrue(summary.waitForExistence(timeout: 30))
@@ -81,21 +85,6 @@ final class MultiPersonUITests: XCTestCase {
 
     @MainActor private func profileRow(_ name: String, in app: XCUIApplication) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "profileRow-", name)).firstMatch
-    }
-
-    @MainActor private func addProfile(_ name: String, in app: XCUIApplication) {
-        let add = app.buttons["addProfile"]
-        for _ in 0..<8 where !add.isHittable { app.swipeUp() }
-        XCTAssertTrue(add.isHittable)
-        add.tap()
-        let field = app.textFields["profileName"]
-        XCTAssertTrue(field.waitForExistence(timeout: 10))
-        field.tap(); field.typeText(name)
-        let confirm = app.buttons["confirmIntake"]
-        for _ in 0..<10 where !confirm.isHittable { app.swipeUp() }
-        XCTAssertTrue(confirm.isHittable)
-        confirm.tap()
-        XCTAssertTrue(profileRow(name, in: app).waitForExistence(timeout: 10))
     }
 
     @MainActor private func send(_ text: String, in app: XCUIApplication) {

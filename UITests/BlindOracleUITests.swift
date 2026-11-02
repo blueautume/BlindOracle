@@ -36,8 +36,10 @@ final class BlindOracleUITests: XCTestCase {
         app.buttons["sendQuestion"].tap()
         let confirm = app.buttons["confirmIntake"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 15))
+        XCTAssertEqual(app.scrollViews.matching(identifier: "intakeFormScroll").count, 1)
+        XCTAssertTrue(app.scrollViews["intakeFormScroll"].exists)
         let intake = XCTAttachment(screenshot: app.screenshot()); intake.name = "02-intake"; intake.lifetime = .keepAlways; add(intake)
-        for _ in 0..<5 where !confirm.isHittable { app.swipeUp() }
+        for _ in 0..<24 where !confirm.isHittable { app.scrollViews["intakeFormScroll"].swipeUp() }
         XCTAssertTrue(confirm.isHittable)
         confirm.tap()
         completeCoinInteraction(in: app)
@@ -72,7 +74,9 @@ final class BlindOracleUITests: XCTestCase {
         XCTAssertTrue(input.waitForExistence(timeout: 15)); input.tap(); input.typeText(question)
         app.buttons["sendQuestion"].tap()
         XCTAssertTrue(app.buttons["confirmIntake"].waitForExistence(timeout: 15))
-        XCTAssertEqual(app.sheets.count, 0)
+        XCTAssertEqual(app.scrollViews.matching(identifier: "intakeFormScroll").count, 1)
+        cancelForm(in: app)
+        XCTAssertTrue(app.buttons["openIntake"].exists)
         startNewConversation(app)
         app.buttons["historyButton"].tap()
         let row = historyRow(in: app, titled: question)
@@ -84,6 +88,7 @@ final class BlindOracleUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["confirmIntake"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts[question].exists)
+        cancelForm(in: app)
         app.buttons["historyButton"].tap()
         let restored = historyRow(in: app, titled: question)
         XCTAssertTrue(restored.waitForExistence(timeout: 10)); restored.press(forDuration: 1.2)
@@ -120,6 +125,12 @@ final class BlindOracleUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts[second].exists)
     }
 
+    @MainActor private func cancelForm(in app: XCUIApplication) {
+        let cancel = app.buttons["cancelIntake"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10))
+        cancel.tap()
+        XCTAssertTrue(app.scrollViews["intakeFormScroll"].waitForNonExistence(timeout: 5))
+    }
     @MainActor private func historyRow(in app: XCUIApplication, titled title: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "historyRow-", title)).firstMatch
     }
@@ -134,7 +145,7 @@ final class BlindOracleUITests: XCTestCase {
         app.buttons["sendQuestion"].tap()
         let confirm = app.buttons["confirmIntake"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 15))
-        for _ in 0..<7 where !confirm.isHittable { app.swipeUp() }
+        for _ in 0..<24 where !confirm.isHittable { app.scrollViews["intakeFormScroll"].swipeUp() }
         XCTAssertTrue(confirm.isHittable); confirm.tap()
         completeCoinInteraction(in: app)
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "当前为本地试算")).firstMatch.waitForExistence(timeout: 30))

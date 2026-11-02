@@ -18,7 +18,7 @@ final class ProfileEditingUITests: XCTestCase {
         capture("profile-flat-name-and-birth", in: app)
         name.tap(); name.typeText("陈平\n")
         for identifier in ["profileBirthPlace", "profileBirthTimeZone", "profileBirthLatitude", "profileBirthLongitude", "profileCurrentPlace", "profileCurrentTimeZone", "profileCurrentLatitude", "profileCurrentLongitude"] {
-            let field = app.textFields[identifier]
+            let field = element(identifier, in: app)
             reveal(field, in: app)
             XCTAssertTrue(field.isHittable, identifier)
         }
@@ -81,7 +81,7 @@ final class ProfileEditingUITests: XCTestCase {
         let currentPlace = app.textFields["profileCurrentPlace"]
         reveal(currentPlace, in: app)
         currentPlace.tap(); currentPlace.typeText("原所在地\n")
-        let currentZone = try XCTUnwrap(app.textFields["profileCurrentTimeZone"].value as? String)
+        let currentZone = try XCTUnwrap(app.buttons["profileCurrentTimeZone"].value as? String)
         // Reopen the saved profile at its top before testing the birth shortcut.
         // Dragging down from a keyboard-focused field can dismiss an iOS sheet.
         let initialSave = app.buttons["confirmIntake"]
@@ -97,13 +97,13 @@ final class ProfileEditingUITests: XCTestCase {
         let populated = NSPredicate(format: "value == %@", "日本东京都")
         expectation(for: populated, evaluatedWith: birthPlace)
         waitForExpectations(timeout: 10)
-        XCTAssertEqual(app.textFields["profileBirthTimeZone"].value as? String, "Asia/Tokyo")
+        XCTAssertEqual(app.buttons["profileBirthTimeZone"].value as? String, "Asia/Tokyo")
         XCTAssertTrue((app.textFields["profileBirthLatitude"].value as? String ?? "").contains("35.6762"))
         XCTAssertTrue((app.textFields["profileBirthLongitude"].value as? String ?? "").contains("139.6503"))
         capture("birthplace-current-location-shortcut", in: app)
         reveal(currentPlace, in: app)
         XCTAssertEqual(currentPlace.value as? String, "原所在地")
-        XCTAssertEqual(app.textFields["profileCurrentTimeZone"].value as? String, currentZone)
+        XCTAssertEqual(app.buttons["profileCurrentTimeZone"].value as? String, currentZone)
         let save = app.buttons["confirmIntake"]
         reveal(save, in: app); save.tap()
         XCTAssertTrue(profileRow("位置测试", in: app).waitForExistence(timeout: 10))
@@ -117,10 +117,40 @@ final class ProfileEditingUITests: XCTestCase {
         XCTAssertTrue(app.textFields["profileName"].waitForExistence(timeout: 10))
         reveal(app.textFields["profileBirthPlace"], in: app)
         XCTAssertEqual(app.textFields["profileBirthPlace"].value as? String, "日本东京都")
-        XCTAssertEqual(app.textFields["profileBirthTimeZone"].value as? String, "Asia/Tokyo")
+        XCTAssertEqual(app.buttons["profileBirthTimeZone"].value as? String, "Asia/Tokyo")
         reveal(app.textFields["profileCurrentPlace"], in: app)
         XCTAssertEqual(app.textFields["profileCurrentPlace"].value as? String, "原所在地")
-        XCTAssertEqual(app.textFields["profileCurrentTimeZone"].value as? String, currentZone)
+        XCTAssertEqual(app.buttons["profileCurrentTimeZone"].value as? String, currentZone)
+    }
+
+    @MainActor func testTimezonePickerSupportsChineseSearchAndIndependentSelections() throws {
+        let app = launchFreshApp()
+        app.tabBars.buttons["数据"].tap(); app.buttons["addProfile"].tap()
+        let name = app.textFields["profileName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 10)); name.tap(); name.typeText("时区测试\n")
+        let birthZone = app.buttons["profileBirthTimeZone"]
+        reveal(birthZone, in: app)
+        let originalCurrentZone = app.buttons["profileCurrentTimeZone"].value as? String
+        XCTAssertFalse(app.textFields["profileBirthTimeZone"].exists)
+        birthZone.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 10)); search.tap(); search.typeText("巴黎")
+        let paris = app.buttons["timeZone-Europe/Paris"]
+        XCTAssertTrue(paris.waitForExistence(timeout: 10)); paris.tap()
+        XCTAssertEqual(birthZone.value as? String, "Europe/Paris")
+        XCTAssertEqual(app.buttons["profileCurrentTimeZone"].value as? String, originalCurrentZone)
+        let currentZone = app.buttons["profileCurrentTimeZone"]
+        reveal(currentZone, in: app); currentZone.tap()
+        XCTAssertTrue(search.waitForExistence(timeout: 10)); search.tap(); search.typeText("纽约")
+        let newYork = app.buttons["timeZone-America/New_York"]
+        XCTAssertTrue(newYork.waitForExistence(timeout: 10)); newYork.tap()
+        XCTAssertEqual(currentZone.value as? String, "America/New_York")
+        XCTAssertEqual(birthZone.value as? String, "Europe/Paris")
+        currentZone.tap()
+        XCTAssertTrue(app.buttons["cancelTimeZonePicker"].waitForExistence(timeout: 10))
+        app.buttons["cancelTimeZonePicker"].tap()
+        XCTAssertEqual(currentZone.value as? String, "America/New_York")
+        capture("timezone-chinese-city-selection", in: app)
     }
 
     @MainActor private func launchFreshApp() -> XCUIApplication {

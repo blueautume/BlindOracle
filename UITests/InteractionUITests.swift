@@ -74,13 +74,22 @@ final class InteractionUITests: XCTestCase {
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]
         app.launch()
         send("用梅花报数，看看这次出行如何安排", in: app)
+        let firstNumber = app.textFields["intakeNumber-0"]
+        XCTAssertTrue(firstNumber.waitForExistence(timeout: 15))
+        XCTAssertEqual(app.scrollViews.matching(identifier: "intakeFormScroll").count, 1)
+        let form = app.scrollViews["intakeFormScroll"]
+        for _ in 0..<10 where !firstNumber.isHittable { form.swipeUp() }
+        XCTAssertTrue(firstNumber.isHittable)
+        for (index, value) in ["8", "8", "6"].enumerated() {
+            let field = app.textFields["intakeNumber-\(index)"]
+            field.tap(); field.typeText(value)
+        }
+        capture("numbers-filled-in-unified-form", in: app)
         confirmIntake(in: app)
-        XCTAssertEqual(app.sheets.count, 0)
-        XCTAssertEqual(app.pickerWheels.count, 0)
-        capture("numbers-asked-in-chat", in: app)
-        send("8，8，6", in: app)
         let cast = app.buttons["castCoins"]
         XCTAssertTrue(cast.waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons.matching(identifier: "castCoins").count, 1)
+        XCTAssertFalse(app.buttons["confirmIntake"].exists)
         XCTAssertFalse(app.buttons["confirmInteraction"].isEnabled)
         for index in 0..<6 {
             waitUntilEnabled(cast)
@@ -136,7 +145,8 @@ final class InteractionUITests: XCTestCase {
     @MainActor private func confirmIntake(in app: XCUIApplication) {
         let confirm = app.buttons["confirmIntake"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 15))
-        for _ in 0..<9 where !confirm.isHittable { app.swipeUp() }
+        XCTAssertTrue(app.scrollViews["intakeFormScroll"].exists)
+        for _ in 0..<24 where !confirm.isHittable { app.scrollViews["intakeFormScroll"].swipeUp() }
         XCTAssertTrue(confirm.isHittable)
         confirm.tap()
     }

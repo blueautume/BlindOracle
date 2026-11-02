@@ -50,7 +50,7 @@ struct ChatView: View {
                                     messageView(message).id(message.id)
                                 }
                             }
-                            if let session = store.pendingInteraction, let request = session.currentRequest, request.kind != .numbers {
+                            if let session = store.pendingInteraction, let request = session.currentRequest {
                                 interactionCard(request)
                             }
                             if let notice = store.notice {
@@ -134,9 +134,18 @@ struct ChatView: View {
             .toolbarBackground(InkTheme.paper, for: .navigationBar).toolbarBackground(.visible, for: .navigationBar)
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: Binding(get: {
-                store.showInteraction && !store.showIntake && !showHistory && selectedReading == nil
-            }, set: { store.showInteraction = $0 })) {
-                if let session = store.pendingInteraction {
+                (store.showIntake || store.showInteraction) && !showHistory && selectedReading == nil
+            }, set: { presented in
+                if !presented { store.showIntake = false; store.showInteraction = false }
+            })) {
+                if store.showIntake, let plan = store.pendingPlan {
+                    let sessionID = store.intakeSessionID
+                    GroupIntakeView(plan: plan, profiles: store.intakeParticipants, numbers: store.intakeNumbers, onDraftChange: { profiles, numbers in
+                        store.saveIntakeDraft(profiles: profiles, numbers: numbers, sessionID: sessionID)
+                    }, onConfirm: { profiles, numbers, save in
+                        store.confirmGroupIntake(profiles: profiles, numbers: numbers, save: save, sessionID: sessionID)
+                    }).id(sessionID)
+                } else if let session = store.pendingInteraction {
                     OracleInteractionView(session: session, onProgress: { response in
                         store.saveInteractionProgress(response, sessionID: session.id)
                     }, onComplete: { response in
@@ -224,7 +233,7 @@ struct ChatView: View {
                 }
                 if message.kind == .intake {
                     if message.id == store.pendingIntakeMessageID {
-                        if store.canConfirmIntake { intakeCard }
+                        intakeCard
                     } else if message.runID != nil {
                         Label("问事笺已确认", systemImage: "checkmark.seal").font(.system(size: 12)).foregroundStyle(InkTheme.sage)
                     }
@@ -269,14 +278,14 @@ struct ChatView: View {
             HStack(spacing: 15) {
                 Image(systemName: "doc.text").font(.system(size: 25, weight: .ultraLight)).foregroundStyle(InkTheme.cinnabar)
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("资料无误，开始解析").font(.system(size: 17, design: .serif)).foregroundStyle(InkTheme.ink)
-                    Text("也可以直接回复确认，或告诉我需要更正的地方。").font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                    Text("填写问事资料").font(.system(size: 17, design: .serif)).foregroundStyle(InkTheme.ink)
+                    Text("一次填写并核对，确认后直接开始。").font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "arrow.right").font(.system(size: 13)).foregroundStyle(InkTheme.cinnabar)
             }.padding(19).background(.white.opacity(0.4), in: RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(InkTheme.line, lineWidth: 0.7))
-        }.buttonStyle(.plain).accessibilityIdentifier("confirmIntake")
+        }.buttonStyle(.plain).accessibilityIdentifier("openIntake")
     }
 
     private func interactionCard(_ request: OracleInteractionRequest) -> some View {
