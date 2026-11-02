@@ -2,17 +2,18 @@
   "date": "2026-11-03",
   "xcode": "27.1 (27A9275)",
   "minimum_iOS": "17.0",
-  "release_arm64_bundle_bytes": 16676239,
+  "release_arm64_bundle_bytes": 16712097,
   "release_contains_development_key_resource": false,
   "source_credential_matches": [],
   "release_credential_matches": [],
-  "unit_tests_passed": 171,
-  "ui_tests_passed": 2,
+  "unit_tests_passed": 194,
+  "ui_tests_passed": 5,
   "live_api_tests_passed": 1,
   "default_live_test_skipped_intentionally": 3,
   "local_plugin_count": 10,
   "release_is_signed": false,
   "notes": [
+    "Continuation and birth-location update 0.1.4 / Build 5: 194 non-live unit tests and five UI regressions passed; three opt-in live tests skipped. Detail follow-ups preserve the saved lines/cards, inputs, results and reading reference across relaunch; explicit recasts still require confirmation and fresh interactions. Birth/current location fields stay independent and preserve the resolved location timezone. Location UI uses a deterministic Debug fixture; physical GPS and live DeepSeek were not rerun. Final Debug builds and unsigned Release archive completed with zero warnings; older evidence below retains its original version.",
     "Reading deletion update 0.1.3 / Build 4: 171 non-live unit tests and two deletion UI tests passed; three opt-in live tests skipped. Recent and all-record trash controls, explicit Cancel/Delete alert, relaunch persistence, UUID isolation, current/archived link cleanup, and cancellation without resurrection verified. Release archive completed with zero warnings; other UI/live results below are retained earlier evidence.",
     "Versioning update: version 0.1.2 / Build 3 verified in Debug build settings and the unsigned Release archive, with the same app name and bundle ID. Four isolated version-guard tests plus nine credential-script tests passed. Earlier functional/UI/live result paths are retained evidence from 0.1.1 / Build 2, not newly rerun suites.",
     "Branding-only update: supplied artwork installed as opaque 1024px app icon and matching avatar; display name, in-app identity and export title use 瞎子. Debug and Release product bundle identifiers remain com.lihao.BlindOracle. One UI regression and Release archive passed with zero warnings; the last full unit suite and broader interaction results below are retained evidence.",
@@ -29,14 +30,14 @@
     "Earlier offline tarot deck, keyboard, broader interaction, and history regression evidence remains at the retained paths. No reasoning_content is decoded, displayed, or persisted.",
     "Changing the requested method while supplying data preserves the original question, applies the new method, and requires a new summary confirmation. A clock correction alone cannot change methods; ambiguous questions or negative replies cannot act as confirmation."
   ],
-  "unit_test_result": "build-reading-deletion/units-final.xcresult",
-  "final_ui_result": "build-reading-deletion/ui-confirmed.xcresult",
+  "unit_test_result": "build-followup-location/units-confirmed.xcresult",
+  "final_ui_result": "build-followup-location/ui-final.xcresult",
   "live_api_result": "build-conversation/live-verified.xcresult",
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "0.1.3",
-  "build": "4",
+  "version": "0.1.4",
+  "build": "5",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",
@@ -60,7 +61,7 @@
   "build_warning_cleanup": {
     "debug_clean_build_warning_count": 0,
     "release_archive_warning_count": 0,
-    "release_archive_path": "build-reading-deletion/BlindOracle-confirmed.xcarchive",
+    "release_archive_path": "build-followup-location/BlindOracle-confirmed.xcarchive",
     "archive_signed": false,
     "store_upload_performed": false,
     "ipad_orientations": [
@@ -83,7 +84,7 @@
   },
   "conversational_intake_tests_passed": 16,
   "reading_preparation_tests_passed": 16,
-  "profile_editing_ui_tests_passed": 2,
+  "profile_editing_ui_tests_passed": 3,
   "spinner_ui_result": "build-conversation/closed.xcresult",
   "spinner_animation_frame_changed_pixels": 289,
   "chat_forms_removed": true,
@@ -118,15 +119,15 @@
     "generator_reads_central_version_verified": true,
     "debug_build_settings_verified": true,
     "release_archive_metadata_verified": true,
-    "version": "0.1.3",
-    "build": 4,
-    "release_archive_path": "build-reading-deletion/BlindOracle-confirmed.xcarchive"
+    "version": "0.1.4",
+    "build": 5,
+    "release_archive_path": "build-followup-location/BlindOracle-confirmed.xcarchive"
   },
   "reading_deletion_tests_passed": 8,
   "reading_deletion_ui_tests_passed": 2,
   "unit_test_evidence_version": {
-    "version": "0.1.3",
-    "build": "4"
+    "version": "0.1.4",
+    "build": "5"
   },
   "reading_deletion": {
     "right_side_trash_in_recent_and_all_lists": true,
@@ -138,5 +139,30 @@
     "owned_activity_cancelled_without_resurrection": true,
     "other_activity_continues": true,
     "debug_fixture_excluded_from_release": true
+  },
+  "reading_continuation": {
+    "policy_tests_passed": 10,
+    "store_tests_passed": 10,
+    "saved_chart_is_default_for_followups": true,
+    "original_lines_cards_seed_and_results_preserved": true,
+    "bare_recast_keeps_original_question_and_scope": true,
+    "recast_after_profile_update_uses_updated_profiles": true,
+    "new_conversation_and_deleted_reading_isolated": true,
+    "context_includes_original_inputs_and_limitations": true,
+    "live_api_rerun": false,
+    "ui_tests_passed": 2,
+    "ui_result": "build-followup-location/ui-final.xcresult"
+  },
+  "birth_location_shortcut": {
+    "unit_tests_passed": 3,
+    "explicit_user_action_required": true,
+    "birth_and_current_location_targets_independent": true,
+    "location_timezone_used_instead_of_device_timezone": true,
+    "manual_edit_cancels_pending_lookup": true,
+    "debug_fixture_excluded_from_release": true,
+    "ui_location_source": "deterministic Debug simulator fixture; physical GPS not exercised",
+    "ui_tests_passed": 1,
+    "ui_result": "build-followup-location/ui-final.xcresult",
+    "persists_after_relaunch": true
   }
 }

@@ -19,7 +19,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>经你允许，填写当前所在地的坐标，减少问事资料的输入。不会将当前位置当作出生地。</string>
+	<string>点击定位后，填写当前所在地的地名、坐标和时区；仅在你点击出生地的“使用当前位置”时，才将其填写为出生地。</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchScreen</key>

@@ -109,15 +109,11 @@ struct IntakeView: View {
             .navigationTitle(isEditing ? "基础资料" : "问事笺").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("稍后填写") { dismiss() }.font(.system(size: 13)).foregroundStyle(InkTheme.secondary) } }
             .toolbarBackground(InkTheme.paper, for: .navigationBar).toolbarBackground(.visible, for: .navigationBar)
-            .onReceive(location.$coordinate) { coordinate in
-                guard let coordinate else { return }
-                profile.currentLatitude = coordinate.latitude; profile.currentLongitude = coordinate.longitude
-                profile.currentTimeZoneID = TimeZone.current.identifier
-                let nearby = LocalPlace.catalog.min { distance($0, coordinate.latitude, coordinate.longitude) < distance($1, coordinate.latitude, coordinate.longitude) }
-                if let nearby, distance(nearby, coordinate.latitude, coordinate.longitude) < 0.25 { profile.currentPlace = nearby.name }
-                else { profile.currentPlace = String(format: "%.3f°, %.3f°", coordinate.latitude, coordinate.longitude) }
-                profile.unknownFields.remove(.currentLocation)
+            .onReceive(location.$place) { place in
+                guard let place else { return }
+                place.apply(to: &profile, purpose: .current)
             }
+            .onDisappear { location.cancel() }
             .onChange(of: profile.birthTimeZoneID) { _, new in
                 birthZoneEdited = true
                 guard let oldZone = TimeZone(identifier: lastValidBirthZoneID), let newZone = TimeZone(identifier: new) else { return }
@@ -135,7 +131,11 @@ struct IntakeView: View {
             .onChange(of: profile.birthTimeKnown) { _, _ in birthTimeChoiceChanged = true }
             .onChange(of: profile.unknownFields.contains(.birthTimeZone)) { _, _ in birthZoneEdited = true }
             .onChange(of: profile.currentPlace) { _, value in
+                if location.isLocating { location.cancel() }
                 if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { profile.unknownFields.remove(.currentLocation) }
+            }
+            .onChange(of: profile.currentTimeZoneID) { _, _ in
+                if location.isLocating { location.cancel() }
             }
             .onChange(of: profile.currentLatitude) { _, _ in updateCurrentCoordinates() }
             .onChange(of: profile.currentLongitude) { _, _ in updateCurrentCoordinates() }
@@ -224,7 +224,7 @@ struct IntakeView: View {
                     Button { location.request() } label: {
                         if location.isLocating { ProgressView().controlSize(.small) }
                         else { Label("自动填写", systemImage: "location").font(.system(size: 12)) }
-                    }.tint(InkTheme.cinnabar).disabled(location.isLocating)
+                    }.tint(InkTheme.cinnabar).disabled(location.isLocating).accessibilityIdentifier("useCurrentLocation")
                 }
                 TextField("也可手动写下当前城市", text: $profile.currentPlace).font(.system(size: 13, design: .serif)).accessibilityIdentifier("profileCurrentPlace")
                 Text("当前时区").font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
@@ -244,7 +244,7 @@ struct IntakeView: View {
                 }.font(.system(size: 12)).keyboardType(.numbersAndPunctuation)
                 Toggle("当前所在地不确定", isOn: unknownBinding(.currentLocation)).font(.system(size: 12)).tint(InkTheme.sage)
                 if let message = location.message { Text(message).font(.system(size: 11)).foregroundStyle(InkTheme.secondary) }
-                Text("定位只填写当前所在地，出生地请另行确认。").font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
+                Text("此处定位只填写当前所在地。").font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
             }.foregroundStyle(InkTheme.ink)
         }
     }
@@ -261,10 +261,8 @@ struct IntakeView: View {
             profile.declaredUnknownFields = declared
         })
     }
-    private func distance(_ place: LocalPlace, _ latitude: Double, _ longitude: Double) -> Double {
-        pow(place.latitude - latitude, 2) + pow(place.longitude - longitude, 2)
-    }
     private func updateCurrentCoordinates() {
+        if location.isLocating { location.cancel() }
         if let latitude = profile.currentLatitude, let longitude = profile.currentLongitude,
            (-90...90).contains(latitude), (-180...180).contains(longitude) {
             profile.unknownFields.remove(.currentLocation)
@@ -338,6 +336,7 @@ struct IntakeView: View {
 
 struct PlaceFields: View {
     @Binding var profile: OracleProfile
+    @StateObject private var location = LocationService()
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
             HStack {
@@ -345,18 +344,38 @@ struct PlaceFields: View {
                 Menu {
                     ForEach(LocalPlace.catalog) { place in
                         Button(place.name) {
-                            profile.birthPlace = place.name; profile.birthLatitude = place.latitude; profile.birthLongitude = place.longitude; profile.birthTimeZoneID = place.timeZone
-                            profile.unknownFields.remove(.birthPlace); profile.unknownFields.remove(.birthCoordinates); profile.unknownFields.remove(.birthTimeZone)
+                            location.cancel()
+                            place.apply(to: &profile, purpose: .birth)
                         }
                     }
                 } label: { Label("常用城市", systemImage: "mappin.and.ellipse").font(.system(size: 11)).foregroundStyle(InkTheme.cinnabar) }
+            }
+            HStack(spacing: 8) {
+                Button { location.request() } label: {
+                    HStack(spacing: 5) {
+                        if location.isLocating { ProgressView().controlSize(.small) }
+                        else { Image(systemName: "location") }
+                        Text(location.isLocating ? "正在定位…" : "使用当前位置")
+                    }.font(.system(size: 12))
+                }.tint(InkTheme.cinnabar).disabled(location.isLocating)
+                    .accessibilityIdentifier("useCurrentLocationForBirthPlace")
+                Spacer(minLength: 0)
+            }
+            Text("若出生地就是当前位置，可一键填写地点、坐标和当地时区。")
+                .font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
+            if let message = location.message {
+                Text(message).font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                    .accessibilityIdentifier("birthLocationMessage")
             }
             HStack {
                 Text("出生地时区").font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
                 Spacer()
                 Menu {
                     ForEach(["Asia/Shanghai", "Asia/Hong_Kong", "Asia/Taipei", "Asia/Tokyo", "Asia/Singapore", "Asia/Urumqi", "Europe/London", "America/New_York", "America/Los_Angeles", "Australia/Sydney", "UTC"], id: \.self) { zone in
-                        Button(zone) { profile.birthTimeZoneID = zone; profile.unknownFields.remove(.birthTimeZone) }
+                        Button(zone) {
+                            location.cancel()
+                            profile.birthTimeZoneID = zone; profile.unknownFields.remove(.birthTimeZone)
+                        }
                     }
                 } label: { Text(profile.birthTimeZoneID).font(.system(size: 12)).foregroundStyle(InkTheme.ink) }
             }
@@ -377,14 +396,24 @@ struct PlaceFields: View {
                     Text("常用城市坐标来自内置表；不在列表的地点可手动填写。坐标未知时，相关宫位会留白。")
                         .font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
         }
+        .onReceive(location.$place) { place in
+            guard let place else { return }
+            place.apply(to: &profile, purpose: .birth)
+        }
+        .onDisappear { location.cancel() }
         .onChange(of: profile.birthPlace) { _, place in
+            if location.isLocating { location.cancel() }
             if !place.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { profile.unknownFields.remove(.birthPlace) }
+        }
+        .onChange(of: profile.birthTimeZoneID) { _, _ in
+            if location.isLocating { location.cancel() }
         }
         .onChange(of: profile.birthLatitude) { _, _ in updateCoordinates() }
         .onChange(of: profile.birthLongitude) { _, _ in updateCoordinates() }
     }
 
     private func updateCoordinates() {
+        if location.isLocating { location.cancel() }
         if let latitude = profile.birthLatitude, let longitude = profile.birthLongitude,
            (-90...90).contains(latitude), (-180...180).contains(longitude) {
             profile.unknownFields.remove(.birthCoordinates)

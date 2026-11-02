@@ -16,7 +16,7 @@ final class ProfileEditingUITests: XCTestCase {
         XCTAssertEqual(app.switches["birthDateKnown"].value as? String, "0")
         XCTAssertEqual(app.switches["birthTimeKnown"].value as? String, "0")
         capture("profile-flat-name-and-birth", in: app)
-        name.tap(); name.typeText("陈平")
+        name.tap(); name.typeText("陈平\n")
         for identifier in ["profileBirthPlace", "profileBirthTimeZone", "profileBirthLatitude", "profileBirthLongitude", "profileCurrentPlace", "profileCurrentTimeZone", "profileCurrentLatitude", "profileCurrentLongitude"] {
             let field = app.textFields[identifier]
             reveal(field, in: app)
@@ -48,7 +48,7 @@ final class ProfileEditingUITests: XCTestCase {
         XCTAssertEqual(app.switches["birthTimeKnown"].value as? String, "1")
         XCTAssertFalse(app.buttons["toggleBirthDetails"].exists)
         capture("saved-birthday-visible-on-entry", in: app)
-        name.tap(); name.typeText("安")
+        name.tap(); name.typeText("安\n")
         let renamed = try XCTUnwrap(name.value as? String)
         XCTAssertTrue(renamed.contains("陈平")); XCTAssertTrue(renamed.contains("安"))
         let save = app.buttons["confirmIntake"]
@@ -68,6 +68,61 @@ final class ProfileEditingUITests: XCTestCase {
         XCTAssertFalse(profileRow(renamed, in: app).label.contains("时辰未定"))
     }
 
+    @MainActor func testBirthPlaceShortcutFillsPlaceCoordinatesAndLocalTimezoneOnly() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-location-fixture"]
+        app.launch()
+        XCTAssertTrue(app.tabBars.buttons["数据"].waitForExistence(timeout: 15))
+        app.tabBars.buttons["数据"].tap()
+        app.buttons["addProfile"].tap()
+        let name = app.textFields["profileName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 10))
+        name.tap(); name.typeText("位置测试\n")
+        let currentPlace = app.textFields["profileCurrentPlace"]
+        reveal(currentPlace, in: app)
+        currentPlace.tap(); currentPlace.typeText("原所在地\n")
+        let currentZone = try XCTUnwrap(app.textFields["profileCurrentTimeZone"].value as? String)
+        // Reopen the saved profile at its top before testing the birth shortcut.
+        // Dragging down from a keyboard-focused field can dismiss an iOS sheet.
+        let initialSave = app.buttons["confirmIntake"]
+        reveal(initialSave, in: app); initialSave.tap()
+        let initialRow = profileRow("位置测试", in: app)
+        XCTAssertTrue(initialRow.waitForExistence(timeout: 10)); initialRow.tap()
+        XCTAssertTrue(app.textFields["profileName"].waitForExistence(timeout: 10))
+        let shortcut = app.buttons["useCurrentLocationForBirthPlace"]
+        reveal(shortcut, in: app)
+        XCTAssertTrue(shortcut.isHittable)
+        shortcut.tap()
+        let birthPlace = app.textFields["profileBirthPlace"]
+        let populated = NSPredicate(format: "value == %@", "日本东京都")
+        expectation(for: populated, evaluatedWith: birthPlace)
+        waitForExpectations(timeout: 10)
+        XCTAssertEqual(app.textFields["profileBirthTimeZone"].value as? String, "Asia/Tokyo")
+        XCTAssertTrue((app.textFields["profileBirthLatitude"].value as? String ?? "").contains("35.6762"))
+        XCTAssertTrue((app.textFields["profileBirthLongitude"].value as? String ?? "").contains("139.6503"))
+        capture("birthplace-current-location-shortcut", in: app)
+        reveal(currentPlace, in: app)
+        XCTAssertEqual(currentPlace.value as? String, "原所在地")
+        XCTAssertEqual(app.textFields["profileCurrentTimeZone"].value as? String, currentZone)
+        let save = app.buttons["confirmIntake"]
+        reveal(save, in: app); save.tap()
+        XCTAssertTrue(profileRow("位置测试", in: app).waitForExistence(timeout: 10))
+        app.terminate()
+        app.launchArguments = ["--ui-testing-local"]
+        app.launch()
+        XCTAssertTrue(app.tabBars.buttons["数据"].waitForExistence(timeout: 15))
+        app.tabBars.buttons["数据"].tap()
+        let row = profileRow("位置测试", in: app)
+        XCTAssertTrue(row.waitForExistence(timeout: 10)); row.tap()
+        XCTAssertTrue(app.textFields["profileName"].waitForExistence(timeout: 10))
+        reveal(app.textFields["profileBirthPlace"], in: app)
+        XCTAssertEqual(app.textFields["profileBirthPlace"].value as? String, "日本东京都")
+        XCTAssertEqual(app.textFields["profileBirthTimeZone"].value as? String, "Asia/Tokyo")
+        reveal(app.textFields["profileCurrentPlace"], in: app)
+        XCTAssertEqual(app.textFields["profileCurrentPlace"].value as? String, "原所在地")
+        XCTAssertEqual(app.textFields["profileCurrentTimeZone"].value as? String, currentZone)
+    }
+
     @MainActor private func launchFreshApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]
@@ -85,8 +140,31 @@ final class ProfileEditingUITests: XCTestCase {
     }
 
     @MainActor private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
-        for _ in 0..<16 where !element.isHittable { app.swipeUp() }
+        let editor = app.scrollViews.containing(.textField, identifier: "profileName").firstMatch
+        XCTAssertTrue(editor.exists)
+        for _ in 0..<18 {
+            if element.exists && element.isHittable { return }
+            let bounds = editor.frame.intersection(app.frame)
+            var bottom = bounds.maxY - 28
+            let keyboard = app.keyboards.firstMatch
+            if keyboard.exists { bottom = min(bottom, keyboard.frame.minY - 16) }
+            let top = bounds.minY + 28
+            let height = max(100, bottom - top)
+            let target = element.exists ? element.frame : .zero
+            // Short, held drags avoid flicking past a small text field. If a
+            // previous scroll passed it, recover upward within the form.
+            let towardEarlierFields = !target.isEmpty && target.midY < top + height * 0.2
+            let startY = top + height * (towardEarlierFields ? 0.3 : 0.72)
+            let endY = top + height * (towardEarlierFields ? 0.65 : 0.37)
+            let origin = editor.coordinate(withNormalizedOffset: .zero)
+            // The outer paper margin keeps the drag away from text fields,
+            // menus, and pickers, and from the sheet's dismissal handle.
+            let start = origin.withOffset(CGVector(dx: 12, dy: startY - bounds.minY))
+            let end = origin.withOffset(CGVector(dx: 12, dy: endY - bounds.minY))
+            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.15)
+        }
         XCTAssertTrue(element.exists)
+        XCTAssertTrue(element.isHittable, element.identifier)
     }
 
     @MainActor private func capture(_ name: String, in app: XCUIApplication) {

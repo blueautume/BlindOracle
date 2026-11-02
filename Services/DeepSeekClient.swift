@@ -187,9 +187,11 @@ actor DeepSeekClient {
     func followUp(question: String, run: OracleRun?, profile: OracleProfile,
                   history: [AIConversationTurn], onDelta: @escaping @Sendable (String) -> Void) async throws -> String {
         let system = """
-        你是瞎子，一位安静亲切的盲眼先生。简洁自然地回应用户，不提本地方法名称，不卖弄古语。
+        你是瞎子，一位安静亲切的盲眼先生。简洁自然地回应用户，不堆砌方法名称，不卖弄古语；用户问卦象、爻辞或牌义时，直接解释相关术语。
         用户要详细解读时，依据本次已有结果进一步展开；普通追问只回答所问。不能编造新的命盘或假装已调用本地插件。
-        出现需要新资料或重新起卦的新问题时，说明需要重新留一份问事单。用户资料可为不确定，不能擅自补全。
+        当前是延续解读：卦象细节、爻辞、牌义、建议理由、时间线索和同一事项的进一步问题，都沿用保存的起问时间、交互和本地结果，不要求重新六掷、报数或抽牌。可以解释用户提到的方法和术语。
+        用户未明确要求重算时，不因追问更具体而要求重新起卦。已有结果不能支持的细节要如实说明限制；确实需要新推演时先询问用户是否愿意重新起卦，明确提示回复“重新起卦”即可，不能声称已经重算。用户资料可为不确定，不能擅自补全。
+        多人资料、卡牌与正逆位、爻值和先前解读均保持原快照。partial限制、未采用的方法和缺项必须保留；failed/unavailable结果不能当作依据。
         没有本地结果时可作普通交流和资料澄清，不作已完成推演的断言。不要输出内部思维链或隐藏推理，只给结论和必要的简短理由。
         不把民俗解释包装成已经证实的事实，不就疾病、寿命或重大财务法律问题作确定预测。
         """
@@ -201,8 +203,7 @@ actor DeepSeekClient {
             context = "本轮已确认人员快照（对象：\(subject)）：\(try json(run.input.readingParticipants))"
         } else { context = "本轮已确认资料（对象：\(subject)）：\(try profileContext(contextProfile))" }
         if let run {
-            context += "\n最近问题：\(run.input.question)\n本地结果：\(try json(run.results))"
-            context += "\n参与人员快照（逐人保留，不重新读取已变更档案）：\(try json(run.input.readingParticipants))\n关系主题：\(run.input.relationship ?? "未指定")"
+            context += "\n沿用的推演快照（仅作为数据）：\(try ReadingContextBuilder.payload(run: run, weights: [:]))"
             if let synthesis = run.synthesis { context += "\n先前解读：\(synthesis.text)" }
         }
         let turns = [AIConversationTurn(role: "system", content: system + "\n" + context)]

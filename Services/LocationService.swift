@@ -1,8 +1,9 @@
 import Foundation
 import CoreLocation
 import Combine
+import MapKit
 
-struct LocalPlace: Identifiable {
+struct LocalPlace: Identifiable, Equatable {
     var id: String { name }
     let name: String
     let latitude: Double
@@ -38,30 +39,151 @@ struct LocalPlace: Identifiable {
     ]
 }
 
+enum LocationPurpose { case birth, current }
+
+extension LocalPlace {
+    /// A location is applied only after the user explicitly chooses its target.
+    /// Its timezone comes from the resolved place, never the device settings.
+    @discardableResult func apply(to profile: inout OracleProfile, purpose: LocationPurpose) -> Bool {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              latitude.isFinite, longitude.isFinite,
+              (-90...90).contains(latitude), (-180...180).contains(longitude),
+              TimeZone(identifier: timeZone) != nil else { return false }
+        let fields: Set<OracleField>
+        switch purpose {
+        case .birth:
+            profile.birthPlace = name; profile.birthLatitude = latitude; profile.birthLongitude = longitude
+            profile.birthTimeZoneID = timeZone
+            fields = [.birthPlace, .birthCoordinates, .birthTimeZone]
+        case .current:
+            profile.currentPlace = name; profile.currentLatitude = latitude; profile.currentLongitude = longitude
+            profile.currentTimeZoneID = timeZone
+            fields = [.currentLocation]
+        }
+        profile.unknownFields.subtract(fields)
+        profile.declaredUnknownFields?.subtract(fields)
+        return true
+    }
+}
+
 @MainActor final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocationManagerDelegate {
-    @Published var coordinate: CLLocationCoordinate2D?
-    @Published var message: String?
-    @Published var isLocating = false
+    @Published private(set) var place: LocalPlace?
+    @Published private(set) var message: String?
+    @Published private(set) var isLocating = false
     private let manager = CLLocationManager()
-    override init() { super.init(); manager.delegate = self; manager.desiredAccuracy = kCLLocationAccuracyKilometer }
+    private var requestID: UUID?
+    private var awaitingCoordinate = false
+    private var geocodingTask: Task<Void, Never>?
+    private var cancelGeocoding: (() -> Void)?
+
+    override init() {
+        super.init(); manager.delegate = self; manager.desiredAccuracy = kCLLocationAccuracyKilometer
+    }
+
     func request() {
-        message = nil
-        guard CLLocationManager.locationServicesEnabled() else { message = "定位未开启，可以手动填写。"; return }
+        guard !isLocating else { return }
+        cancel()
+        message = nil; place = nil; isLocating = true
+        let id = UUID(); requestID = id
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-testing-local"),
+           ProcessInfo.processInfo.arguments.contains("--ui-testing-location-fixture") {
+            // Deterministic, permission-free UI coverage; excluded from Release.
+            geocodingTask = Task { [weak self] in
+                await Task.yield()
+                guard let self, self.requestID == id, !Task.isCancelled else { return }
+                self.finish(.init(name: "日本东京都", latitude: 35.6762, longitude: 139.6503, timeZone: "Asia/Tokyo"), id: id)
+            }
+            return
+        }
+        #endif
+        guard CLLocationManager.locationServicesEnabled() else {
+            fail("定位未开启，可以在系统设置中开启后重试，或手动填写。", id: id); return
+        }
+        updateAuthorization()
+    }
+
+    func cancel() {
+        requestID = nil; awaitingCoordinate = false; isLocating = false
+        manager.stopUpdatingLocation()
+        geocodingTask?.cancel(); geocodingTask = nil
+        cancelGeocoding?(); cancelGeocoding = nil
+    }
+
+    private func updateAuthorization() {
+        guard let id = requestID, geocodingTask == nil, !awaitingCoordinate else { return }
         switch manager.authorizationStatus {
         case .notDetermined: manager.requestWhenInUseAuthorization()
-        case .authorizedAlways, .authorizedWhenInUse: isLocating = true; manager.requestLocation()
-        default: message = "未获得定位权限，可以手动填写。"
+        case .authorizedAlways, .authorizedWhenInUse:
+            awaitingCoordinate = true; manager.requestLocation()
+        default: fail("未获得定位权限，可以在系统设置中允许后重试，或手动填写。", id: id)
         }
     }
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        if manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways {
-            isLocating = true; manager.requestLocation()
-        }
-    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) { updateAuthorization() }
+
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        coordinate = locations.last?.coordinate; isLocating = false
+        guard let id = requestID, awaitingCoordinate else { return }
+        awaitingCoordinate = false
+        guard let location = locations.last, location.horizontalAccuracy >= 0,
+              CLLocationCoordinate2DIsValid(location.coordinate) else {
+            fail("暂时未能取得位置，请重试或手动填写。", id: id); return
+        }
+        geocodingTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let resolved = try await self.resolve(location)
+                guard !Task.isCancelled else { return }
+                self.finish(resolved, id: id)
+            } catch {
+                guard !Task.isCancelled else { return }
+                self.fail("暂时未能取得地名和时区，请重试或手动填写。", id: id)
+            }
+        }
     }
+
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        isLocating = false; message = "暂时未能取得位置，可以手动填写。"
+        guard let id = requestID, awaitingCoordinate else { return }
+        fail("暂时未能取得位置，请重试或手动填写。", id: id)
     }
+
+    private func resolve(_ location: CLLocation) async throws -> LocalPlace {
+        if #available(iOS 26.0, *) {
+            guard let request = MKReverseGeocodingRequest(location: location) else { throw LookupError.unavailable }
+            request.preferredLocale = Locale(identifier: "zh_CN")
+            cancelGeocoding = { request.cancel() }
+            let items = try await request.mapItems
+            guard let item = items.first,
+                  let name = item.addressRepresentations?.cityWithContext ?? item.address?.shortAddress ?? item.address?.fullAddress,
+                  !name.isEmpty, let zone = item.timeZone else { throw LookupError.unavailable }
+            return LocalPlace(name: name, latitude: location.coordinate.latitude, longitude: location.coordinate.longitude, timeZone: zone.identifier)
+        } else {
+            return try await resolveLegacy(location)
+        }
+    }
+
+    @available(iOS, introduced: 17.0, deprecated: 26.0, message: "Older iOS reverse-geocoding fallback")
+    private func resolveLegacy(_ location: CLLocation) async throws -> LocalPlace {
+        let geocoder = CLGeocoder()
+        cancelGeocoding = { geocoder.cancelGeocode() }
+        let values = try await geocoder.reverseGeocodeLocation(location, preferredLocale: Locale(identifier: "zh_CN"))
+        guard let placemark = values.first,
+              let name = placemark.locality ?? placemark.administrativeArea ?? placemark.name,
+              !name.isEmpty, let zone = placemark.timeZone else { throw LookupError.unavailable }
+        return LocalPlace(name: name, latitude: location.coordinate.latitude, longitude: location.coordinate.longitude, timeZone: zone.identifier)
+    }
+
+    private func finish(_ value: LocalPlace, id: UUID) {
+        guard requestID == id else { return }
+        requestID = nil; awaitingCoordinate = false; cancelGeocoding = nil; geocodingTask = nil
+        isLocating = false; place = value
+    }
+
+    private func fail(_ text: String, id: UUID) {
+        guard requestID == id else { return }
+        requestID = nil; awaitingCoordinate = false; cancelGeocoding = nil; geocodingTask = nil
+        message = text; isLocating = false
+    }
+
+    private enum LookupError: Error { case unavailable }
 }

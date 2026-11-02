@@ -34,9 +34,9 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     private var waitingPhase: OraclePhase { pendingInteraction != nil ? .awaitingInteraction : pendingPlan != nil ? .awaitingIntake : .idle }
     var profile: OracleProfile { profiles.first(where: { $0.id == selfProfileID }) ?? OracleProfile() }
     var latestRun: OracleRun? {
-        if messages.last(where: { $0.runID != nil || $0.deletedRunID != nil })?.deletedRunID != nil { return nil }
-        let referenced = Set(messages.compactMap(\.runID))
-        return runs.last { referenced.contains($0.id) }
+        guard let reference = messages.last(where: { $0.runID != nil || $0.deletedRunID != nil }),
+              reference.deletedRunID == nil, let id = reference.runID else { return nil }
+        return runs.first { $0.id == id }
     }
     var pendingIntakeMessageID: UUID? { pendingPlan == nil ? nil : messages.last(where: { $0.kind == .intake && $0.runID == nil })?.id }
     var localOnly: Bool {
@@ -510,14 +510,42 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
                 selfProfileID = own.ids.count == 1 ? own.ids[0] : nil
                 persist()
             }
-            let followup = latestRun != nil && (["再细说些", "详细解读", "继续说"].contains(text) || text.hasPrefix("请结合刚才的结果"))
-            let greeting = text.count < 20 && ["你好", "您好", "在吗", "你是谁", "你能做什么"].contains { text.contains($0) }
-            if (followup || greeting), hasCredential, !localOnly {
+            var plan = localPeoplePlan(question: text, collectedIDs: collected.appliedIDs)
+            let clauses = text.components(separatedBy: CharacterSet(charactersIn: "，,。；;\n")).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            let recastWithProfileUpdate = !explicitUpdates.isEmpty
+                && clauses.contains(where: ReadingContinuationPolicy.isBareRecastRequest)
+                && clauses.allSatisfy { ReadingContinuationPolicy.isBareRecastRequest($0)
+                    || (!ProfileDirectory.parseExplicitUpdates(in: $0, profiles: self.profiles).isEmpty && !$0.contains("？") && !$0.contains("?")) }
+            if previousPlan == nil, let original = latestRun,
+               ReadingContinuationPolicy.isBareRecastRequest(text) || recastWithProfileUpdate {
+                // A bare recast changes the draw, not the question being asked.
+                plan = OraclePlan(intent: original.plan.intent, subject: original.input.subject,
+                                  methods: original.plan.methods, requiredFields: original.plan.requiredFields,
+                                  note: "按原问题重新推演，请先核对这次资料。", question: original.input.question)
+                plan.action = "intake"; plan.interactions = original.plan.interactions
+                plan.participantIDs = original.input.readingParticipants.map(\.id)
+                plan.participantNames = original.input.readingParticipants.map(\.resolvedName)
+                plan.relationship = original.input.relationship
+                plan.mandatoryMethods = original.plan.mandatoryMethods
+                plan.collectionDeclined = original.plan.collectionDeclined
+                enforceRequestedMethods(&plan, text: text)
+                prepareConversation(plan); return
+            }
+            // Continue from the saved chart by default, before asking the planner
+            // to choose methods. A detail question must not create fresh casts.
+            let followup = ReadingContinuationPolicy.shouldReuse(question: text, run: latestRun, pendingPlan: previousPlan)
+            if followup, plan.action != "collect" {
+                if !collected.appliedIDs.isEmpty {
+                    messages.append(ChatMessage(role: .assistant, content: "资料已更新；这次追问仍沿用原推演保存的资料与结果。需要按新资料重算时，直接告诉我。", kind: .notice))
+                }
                 await answerFollowUp(text, history: history, operation: id); return
             }
-            var plan = localPeoplePlan(question: text, collectedIDs: collected.appliedIDs)
+            let greeting = text.count < 20 && ["你好", "您好", "在吗", "你是谁", "你能做什么"].contains { text.contains($0) }
+            if greeting, hasCredential, !localOnly {
+                await answerFollowUp(text, history: history, operation: id); return
+            }
             progress("选择适用方法与所需资料")
-            if hasCredential && !localOnly {
+            if hasCredential && !localOnly && !followup {
                 do { plan = try await client.plan(question: text, profile: profile, plugins: registry.descriptors, history: history, profiles: profiles, pendingPlan: pendingPlan) }
                 catch {
                     guard !Task.isCancelled else { return }
@@ -794,12 +822,19 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         return ReadingSynthesis(text: reason + "\n\n" + body + uncertainty, alternatives: [])
     }
     private func answerFollowUp(_ question: String, history: [AIConversationTurn], operation: UUID) async {
-        phase = .synthesizing; progress("结合已确认资料生成补充解读")
+        let run = latestRun
+        phase = .synthesizing; progress(run == nil ? "结合已确认资料生成回答" : "沿用已有卦象，解答追问")
         let messageID = UUID()
-        messages.append(ChatMessage(id: messageID, role: .assistant, content: "", runID: latestRun?.id))
+        messages.append(ChatMessage(id: messageID, role: .assistant, content: "", runID: run?.id))
         activityMessageID = messageID
+        if let run, !hasCredential || localOnly {
+            let reason = "沿用这次已保存的卦象，以下是本地规则摘要；" + (localOnly ? "详细追问需要开启 DeepSeek 解读。" : "设置解读密钥后可以继续细说。")
+            if let index = messages.firstIndex(where: { $0.id == messageID }) { messages[index].content = localReading(run, reason: reason).text }
+            progress("已有结果已保留", state: .completed)
+            phase = waitingPhase; operationID = nil; persist(); return
+        }
         do {
-            let text = try await client.followUp(question: question, run: latestRun, profile: profile, history: history) { [weak self] delta in
+            let text = try await client.followUp(question: question, run: run, profile: profile, history: history) { [weak self] delta in
                 Task { @MainActor [weak self] in
                     guard let self, self.operationID == operation, let index = self.messages.firstIndex(where: { $0.id == messageID }) else { return }
                     if self.activities.last?.text != "正在整理补充回答" { self.progress("正在整理补充回答") }
