@@ -323,4 +323,39 @@ final class ProfileDirectoryTests: XCTestCase {
         XCTAssertTrue(ProfileDirectory.groundedUpdates(proposed, in: "大概08:30", profiles: people, contextIDs: [first.id]).isEmpty)
         XCTAssertTrue(ProfileDirectory.groundedUpdates([ProfileUpdate(birthPlace: "北京")], in: "北京", profiles: people, contextIDs: [first.id]).isEmpty)
     }
+
+    func testExplicitSurnameAndGivenNameAreCollectedSeparatelyWithoutSplittingIdentity() throws {
+        var original = try person("张小明")
+        original.unknownFields.formUnion([.surname, .givenName])
+        original.declaredUnknownFields = [.surname, .givenName]
+        let guessed = ProfileDirectory.groundedUpdates([ProfileUpdate(name: "张小明", familyName: "张", givenName: "小明")], in: "张小明", profiles: [original])
+        XCTAssertNil(guessed.first?.familyName)
+        XCTAssertNil(guessed.first?.givenName)
+        let surnameText = "张小明姓氏：张"
+        let surname = ProfileDirectory.parseExplicitUpdates(in: surnameText, profiles: [original])
+        XCTAssertEqual(surname.first?.familyName, "张")
+        let familyGrounded = ProfileDirectory.groundedUpdates([ProfileUpdate(name: "张小明", familyName: "张", givenName: "小明")], in: surnameText, profiles: [original])
+        XCTAssertNil(familyGrounded.first?.givenName)
+        let withFamily = try XCTUnwrap(ProfileDirectory.applying(familyGrounded, to: [original]).profiles.first)
+        XCTAssertEqual(withFamily.familyName, "张")
+        XCTAssertFalse(withFamily.unknownFields.contains(.surname))
+        XCTAssertFalse(withFamily.declaredUnknownFields?.contains(.surname) == true)
+        let givenText = "张小明名字：小明"
+        let given = ProfileDirectory.parseExplicitUpdates(in: givenText, profiles: [withFamily])
+        XCTAssertEqual(given.count, 1)
+        XCTAssertEqual(given.first?.name, "张小明")
+        XCTAssertEqual(given.first?.givenName, "小明")
+        let complete = ProfileDirectory.applying(ProfileDirectory.groundedUpdates(given, in: givenText, profiles: [withFamily]), to: [withFamily])
+        XCTAssertEqual(complete.profiles.count, 1)
+        XCTAssertEqual(complete.profiles.first?.givenName, "小明")
+        XCTAssertFalse(complete.profiles.first?.unknownFields.contains(.givenName) == true)
+        XCTAssertFalse(complete.profiles.first?.declaredUnknownFields?.contains(.givenName) == true)
+        XCTAssertEqual(complete.profiles.first?.birthDate, original.birthDate)
+        let both = ProfileDirectory.parseExplicitUpdates(in: "张三姓氏：张，名字：三", profiles: [])
+        XCTAssertEqual(both.count, 1)
+        XCTAssertEqual(both.first?.familyName, "张")
+        XCTAssertEqual(both.first?.givenName, "三")
+        XCTAssertNil(ProfileDirectory.parseExplicitUpdates(in: "张小明出生时间8点半", profiles: [original]).first?.birthTime)
+        XCTAssertEqual(ProfileDirectory.parseExplicitUpdates(in: "张小明出生时间晚上8点半", profiles: [original]).first?.birthTime, "20:30")
+    }
 }

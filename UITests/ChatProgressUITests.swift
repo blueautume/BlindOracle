@@ -8,6 +8,12 @@ final class ChatProgressUITests: XCTestCase {
         XCTAssertEqual(toggle.value as? String, "已折叠")
         XCTAssertEqual(progressRows(in: app).count, 0)
         XCTAssertTrue(toggle.label.contains("综合解析"))
+        let spinner = app.descendants(matching: .any).matching(identifier: "progressRunningIndicator").firstMatch
+        XCTAssertTrue(spinner.waitForExistence(timeout: 5))
+        capture("spinner-running-a", in: app)
+        Thread.sleep(forTimeInterval: 0.4)
+        capture("spinner-running-b", in: app)
+        XCTAssertTrue(toggle.label.contains("综合解析"))
 
         toggle.tap()
         XCTAssertEqual(toggle.value as? String, "已展开")

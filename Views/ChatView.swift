@@ -50,7 +50,7 @@ struct ChatView: View {
                                     messageView(message).id(message.id)
                                 }
                             }
-                            if let session = store.pendingInteraction, let request = session.currentRequest {
+                            if let session = store.pendingInteraction, let request = session.currentRequest, request.kind != .numbers {
                                 interactionCard(request)
                             }
                             if let notice = store.notice {
@@ -133,17 +133,6 @@ struct ChatView: View {
             }
             .toolbarBackground(InkTheme.paper, for: .navigationBar).toolbarBackground(.visible, for: .navigationBar)
             .navigationBarTitleDisplayMode(.inline)
-            .sheet(isPresented: Binding(get: {
-                store.showIntake && !showHistory && selectedReading == nil
-            }, set: { store.showIntake = $0 }), onDismiss: {
-                if store.pendingInteraction != nil { store.showInteraction = true }
-            }) {
-                if let plan = store.pendingPlan {
-                    GroupIntakeView(plan: plan, profiles: store.defaultParticipants(for: plan)) { profiles, numbers, save in
-                        store.confirmGroupIntake(profiles: profiles, numbers: numbers, save: save)
-                    }
-                }
-            }
             .sheet(isPresented: Binding(get: {
                 store.showInteraction && !store.showIntake && !showHistory && selectedReading == nil
             }, set: { store.showInteraction = $0 })) {
@@ -235,7 +224,7 @@ struct ChatView: View {
                 }
                 if message.kind == .intake {
                     if message.id == store.pendingIntakeMessageID {
-                        intakeCard
+                        if store.canConfirmIntake { intakeCard }
                     } else if message.runID != nil {
                         Label("问事笺已确认", systemImage: "checkmark.seal").font(.system(size: 12)).foregroundStyle(InkTheme.sage)
                     }
@@ -270,18 +259,18 @@ struct ChatView: View {
     }
 
     private var intakeCard: some View {
-        Button { composing = false; store.showIntake = true } label: {
+        Button { composing = false; store.confirmPendingIntake() } label: {
             HStack(spacing: 15) {
                 Image(systemName: "doc.text").font(.system(size: 25, weight: .ultraLight)).foregroundStyle(InkTheme.cinnabar)
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("问事笺").font(.system(size: 19, design: .serif)).tracking(2).foregroundStyle(InkTheme.ink)
-                    Text("已有的资料替你留好，余下的慢慢补。").font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                    Text("资料无误，开始解析").font(.system(size: 17, design: .serif)).foregroundStyle(InkTheme.ink)
+                    Text("也可以直接回复确认，或告诉我需要更正的地方。").font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "arrow.right").font(.system(size: 13)).foregroundStyle(InkTheme.cinnabar)
             }.padding(19).background(.white.opacity(0.4), in: RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(InkTheme.line, lineWidth: 0.7))
-        }.buttonStyle(.plain).accessibilityIdentifier("intakeCard")
+        }.buttonStyle(.plain).accessibilityIdentifier("confirmIntake")
     }
 
     private func interactionCard(_ request: OracleInteractionRequest) -> some View {
@@ -355,7 +344,7 @@ struct ChatView: View {
     }
     private func submit() {
         guard !store.isBusy else { return }
-        guard store.pendingInteraction == nil else { composing = false; store.showInteraction = true; return }
+        guard store.pendingInteraction == nil || store.pendingInteraction?.currentRequest?.kind == .numbers else { composing = false; store.showInteraction = true; return }
         let text = draft; draft = ""; composing = false; store.send(text)
     }
 }

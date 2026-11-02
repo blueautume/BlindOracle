@@ -32,6 +32,7 @@ final class InteractionUITests: XCTestCase {
         XCTAssertTrue(input.waitForExistence(timeout: 15))
         input.tap(); input.typeText("用塔罗看看这次选择有哪些启发")
         app.buttons["sendQuestion"].tap()
+        confirmIntake(in: app)
         let shuffle = app.buttons["shuffleTarot"]
         XCTAssertTrue(shuffle.waitForExistence(timeout: 15))
         capture("tarot-shuffle", in: app)
@@ -74,15 +75,10 @@ final class InteractionUITests: XCTestCase {
         app.launch()
         send("用梅花报数，看看这次出行如何安排", in: app)
         confirmIntake(in: app)
-        XCTAssertTrue(app.pickerWheels.firstMatch.waitForExistence(timeout: 10))
-        XCTAssertEqual(app.pickerWheels.count, 3)
-        for (index, number) in [8, 8, 6].enumerated() {
-            let wheel = app.pickerWheels.element(boundBy: index)
-            wheel.adjust(toPickerWheelValue: String(number))
-            XCTAssertEqual(wheel.value as? String, String(number))
-        }
-        capture("numbers-selected", in: app)
-        app.buttons["confirmInteraction"].tap()
+        XCTAssertEqual(app.sheets.count, 0)
+        XCTAssertEqual(app.pickerWheels.count, 0)
+        capture("numbers-asked-in-chat", in: app)
+        send("8，8，6", in: app)
         let cast = app.buttons["castCoins"]
         XCTAssertTrue(cast.waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["confirmInteraction"].isEnabled)

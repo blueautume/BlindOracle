@@ -12,6 +12,7 @@ struct PluginRegistry: Sendable {
     }
     func plugin(_ method: OracleMethod) -> (any OraclePlugin)? { plugins.first { $0.descriptor.method == method } }
     func calculate(_ input: OracleInput, methods: [OracleMethod],
+                   omissions: [OracleMethodOmission] = [],
                    onMethodStart: (@Sendable (OracleMethod, Int, Int) async -> Void)? = nil,
                    onParticipantStart: (@Sendable (OracleMethod, OracleProfile?, Int, Int) async -> Void)? = nil,
                    onProgress: @escaping @Sendable (OracleResult) async -> Void) async -> [OracleResult] {
@@ -24,6 +25,13 @@ struct PluginRegistry: Sendable {
                 return people.isEmpty ? [(method, nil)] : people.map { (method, Optional($0)) }
             }
             return [(method, nil)]
+        }.filter { method, person in
+            !omissions.contains { $0.method == method && ($0.participantID == nil || $0.participantID == person?.id) }
+        }
+        for omission in omissions {
+            var result = OracleResult(method: omission.method, status: .unavailable, headline: "资料不足，本次未采用", rows: [], limitations: [omission.reason])
+            result.participantID = omission.participantID; result.participantName = omission.participantName
+            results.append(result); await onProgress(result)
         }
         for (index, item) in tasks.enumerated() {
             let (method, person) = item

@@ -13,15 +13,15 @@ struct IntakeView: View {
     @State private var birthClockEdited = false
     @State private var birthZoneEdited = false
     @State private var keepProfile = true
-    @State private var showBirthDetails = false
-    @State private var showNameParts = false
     @State private var error: String?
     @StateObject private var location = LocationService()
-    private var needsBirth: Bool { plan.requiredFields.contains { [.birthDate, .birthTime, .birthPlace, .birthTimeZone, .birthCoordinates].contains($0) } }
     private var isEditing: Bool { plan.intent == "编辑基础资料" }
 
     init(plan: OraclePlan, profile: OracleProfile, onConfirm: @escaping (OracleProfile, [Int], Bool) -> Void) {
         var editable = profile
+        // Preserve explicit markers from saved profiles before adding the
+        // editor's defaults for missing data on a new, empty profile.
+        editable.declaredUnknownFields = profile.declaredUnknownFields ?? profile.unknownFields
         let empty = [profile.name ?? "", profile.fullName, profile.displayName, profile.birthDateText ?? "", profile.birthTimeText ?? ""]
             .allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         if empty, profile.birthDate == nil, profile.birthPlace.isEmpty, profile.birthLatitude == nil, profile.birthLongitude == nil {
@@ -34,7 +34,6 @@ struct IntakeView: View {
         _birthDateKnown = State(initialValue: editable.birthDate != nil && !editable.unknownFields.contains(.birthDate))
         _birthDate = State(initialValue: Self.initialClockDate(for: editable))
         _lastValidBirthZoneID = State(initialValue: TimeZone(identifier: editable.birthTimeZoneID) == nil ? "UTC" : editable.birthTimeZoneID)
-        _showBirthDetails = State(initialValue: false)
     }
     static var initialBirthDate: Date {
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
@@ -80,29 +79,21 @@ struct IntakeView: View {
                                 SectionEyebrow(text: "姓名")
                                 TextField("填写姓名", text: nameBinding).textContentType(.name).autocorrectionDisabled()
                                     .accessibilityIdentifier("profileName")
-                                DisclosureGroup("姓名推演用字 · 选填", isExpanded: $showNameParts) {
-                                    VStack(alignment: .leading, spacing: 14) {
-                                        HStack(spacing: 16) {
-                                            TextField("姓氏", text: $profile.familyName).textContentType(.familyName)
+                                Divider()
+                                Text("姓名推演用字 · 选填").font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                                HStack(spacing: 16) {
+                                            TextField("姓氏", text: $profile.familyName).textContentType(.familyName).accessibilityIdentifier("profileSurname")
                                             Divider().frame(height: 24)
-                                            TextField("名字", text: $profile.givenName).textContentType(.givenName)
-                                        }
-                                        Toggle("姓与名的划分不确定", isOn: unknownBinding(.surname, also: .givenName)).font(.system(size: 12)).tint(InkTheme.sage)
-                                        Text("使用姓名五格时，可在这里核对姓与名的划分及繁体字形。暂不确定也可以保存。")
-                                            .font(.system(size: 10)).foregroundStyle(InkTheme.secondary).lineSpacing(4)
-                                    }.padding(.top, 12)
-                                }.font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
+                                            TextField("名字", text: $profile.givenName).textContentType(.givenName).accessibilityIdentifier("profileGivenName")
+                                }
+                                Toggle("姓与名的划分不确定", isOn: unknownBinding(.surname, also: .givenName)).font(.system(size: 12)).tint(InkTheme.sage)
+                                Text("使用姓名五格时，可在这里核对姓与名的划分及繁体字形。暂不确定也可以保存。")
+                                    .font(.system(size: 10)).foregroundStyle(InkTheme.secondary).lineSpacing(4)
                             }.font(.system(size: 15, design: .serif))
                         }
-                        if needsBirth || showBirthDetails { birthSection }
-                        if !isEditing { currentLocationSection }
-                        if !needsBirth {
-                            Button { withAnimation { showBirthDetails.toggle() } } label: {
-                                Label(showBirthDetails ? "收起生辰资料" : "补充生辰资料 · 可暂留未知", systemImage: showBirthDetails ? "minus.circle" : "plus.circle")
-                                    .font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
-                            }.accessibilityIdentifier("toggleBirthDetails")
-                        }
-                        if !isEditing { Toggle(isOn: $keepProfile) {
+                        birthSection
+                        currentLocationSection
+                if !isEditing { Toggle(isOn: $keepProfile) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("把这份基础资料留在本机").font(.system(size: 13, design: .serif))
                                 Text("以后问事可以直接取用，不随对话压缩。").font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
@@ -138,11 +129,16 @@ struct IntakeView: View {
                 profile.unknownFields.remove(.birthTimeZone)
             }
             .onChange(of: profile.fullName) { _, value in
-                if showNameParts, !value.isEmpty { profile.name = value }
+                if !value.isEmpty { profile.name = value }
             }
             .onChange(of: birthDateKnown) { _, _ in birthDateChoiceChanged = true }
             .onChange(of: profile.birthTimeKnown) { _, _ in birthTimeChoiceChanged = true }
             .onChange(of: profile.unknownFields.contains(.birthTimeZone)) { _, _ in birthZoneEdited = true }
+            .onChange(of: profile.currentPlace) { _, value in
+                if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { profile.unknownFields.remove(.currentLocation) }
+            }
+            .onChange(of: profile.currentLatitude) { _, _ in updateCurrentCoordinates() }
+            .onChange(of: profile.currentLongitude) { _, _ in updateCurrentCoordinates() }
         }.presentationDragIndicator(.visible)
     }
 
@@ -178,18 +174,20 @@ struct IntakeView: View {
             VStack(alignment: .leading, spacing: 17) {
                 SectionEyebrow(text: "生辰与来处")
                 Toggle("出生日期已知", isOn: $birthDateKnown).font(.system(size: 15, design: .serif)).tint(InkTheme.sage).accessibilityIdentifier("birthDateKnown")
-                if birthDateKnown {
-                    DatePicker("公历日期", selection: birthClockBinding, in: Self.allowedBirthDates, displayedComponents: .date)
+                DatePicker("公历日期", selection: birthClockBinding, in: Self.allowedBirthDates, displayedComponents: .date)
                         .font(.system(size: 14)).environment(\.timeZone, TimeZone(identifier: profile.birthTimeZoneID) ?? TimeZone(identifier: lastValidBirthZoneID)!)
-                } else {
-                    Text("先保留这份不确定，能推演的部分仍会继续。").font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
+                        .disabled(!birthDateKnown).opacity(birthDateKnown ? 1 : 0.45).accessibilityIdentifier("profileBirthDate")
+                if !birthDateKnown {
+                    Text("日期尚未填写。确认已知后，再选择公历日期。")
+                        .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                 }
                 Divider()
                 Toggle("出生时刻已知", isOn: $profile.birthTimeKnown)
                     .font(.system(size: 14, design: .serif)).tint(InkTheme.sage).accessibilityIdentifier("birthTimeKnown")
-                if profile.birthTimeKnown {
-                    DatePicker("当地钟表时间", selection: birthClockBinding, displayedComponents: .hourAndMinute)
+                DatePicker("当地钟表时间", selection: birthClockBinding, displayedComponents: .hourAndMinute)
                         .font(.system(size: 14)).environment(\.timeZone, TimeZone(identifier: profile.birthTimeZoneID) ?? TimeZone(identifier: lastValidBirthZoneID)!)
+                        .disabled(!profile.birthTimeKnown).opacity(profile.birthTimeKnown ? 1 : 0.45).accessibilityIdentifier("profileBirthTime")
+                if profile.birthTimeKnown {
                     if !birthDateKnown {
                         Text("先单独记下这个时刻，出生日期可以以后补充。")
                             .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
@@ -203,11 +201,12 @@ struct IntakeView: View {
                     Spacer()
                     Picker("排盘性别", selection: $profile.sex) {
                         Text("不确定").tag("未提供"); Text("男").tag("男"); Text("女").tag("女")
-                    }.labelsHidden().tint(InkTheme.ink)
+                    }.labelsHidden().tint(InkTheme.ink).accessibilityIdentifier("profileGender")
                 }
                 PlaceFields(profile: $profile)
                 Toggle("出生地不确定", isOn: unknownBinding(.birthPlace, also: .birthCoordinates)).font(.system(size: 12)).tint(InkTheme.sage)
                 Toggle("出生地时区不确定", isOn: unknownBinding(.birthTimeZone)).font(.system(size: 12)).tint(InkTheme.sage)
+                Toggle("出生坐标不确定", isOn: unknownBinding(.birthCoordinates)).font(.system(size: 12)).tint(InkTheme.sage)
             }.foregroundStyle(InkTheme.ink)
         }
     }
@@ -227,23 +226,49 @@ struct IntakeView: View {
                         else { Label("自动填写", systemImage: "location").font(.system(size: 12)) }
                     }.tint(InkTheme.cinnabar).disabled(location.isLocating)
                 }
-                TextField("也可手动写下当前城市", text: $profile.currentPlace).font(.system(size: 13, design: .serif))
-                DisclosureGroup("当前时区") {
+                TextField("也可手动写下当前城市", text: $profile.currentPlace).font(.system(size: 13, design: .serif)).accessibilityIdentifier("profileCurrentPlace")
+                Text("当前时区").font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                     TextField("IANA 时区", text: $profile.currentTimeZoneID).textInputAutocapitalization(.never).autocorrectionDisabled().font(.system(size: 12)).padding(.top, 10)
-                }.font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                    .accessibilityIdentifier("profileCurrentTimeZone")
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("当前纬度").font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
+                        TextField("纬度", value: $profile.currentLatitude, format: .number.precision(.fractionLength(0...6)))
+                            .accessibilityIdentifier("profileCurrentLatitude")
+                    }
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("当前经度").font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
+                        TextField("经度", value: $profile.currentLongitude, format: .number.precision(.fractionLength(0...6)))
+                            .accessibilityIdentifier("profileCurrentLongitude")
+                    }
+                }.font(.system(size: 12)).keyboardType(.numbersAndPunctuation)
+                Toggle("当前所在地不确定", isOn: unknownBinding(.currentLocation)).font(.system(size: 12)).tint(InkTheme.sage)
                 if let message = location.message { Text(message).font(.system(size: 11)).foregroundStyle(InkTheme.secondary) }
                 Text("定位只填写当前所在地，出生地请另行确认。").font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
             }.foregroundStyle(InkTheme.ink)
         }
     }
     private func unknownBinding(_ field: OracleField, also other: OracleField? = nil) -> Binding<Bool> {
-        Binding(get: { profile.unknownFields.contains(field) }, set: { value in
-            if value { profile.unknownFields.insert(field); if let other { profile.unknownFields.insert(other) } }
-            else { profile.unknownFields.remove(field); if let other { profile.unknownFields.remove(other) } }
+        Binding(get: { profile.declaredUnknownFields?.contains(field) == true }, set: { value in
+            var declared = profile.declaredUnknownFields ?? []
+            if value {
+                profile.unknownFields.insert(field); declared.insert(field)
+                if let other { profile.unknownFields.insert(other); declared.insert(other) }
+            } else {
+                profile.unknownFields.remove(field); declared.remove(field)
+                if let other { profile.unknownFields.remove(other); declared.remove(other) }
+            }
+            profile.declaredUnknownFields = declared
         })
     }
     private func distance(_ place: LocalPlace, _ latitude: Double, _ longitude: Double) -> Double {
         pow(place.latitude - latitude, 2) + pow(place.longitude - longitude, 2)
+    }
+    private func updateCurrentCoordinates() {
+        if let latitude = profile.currentLatitude, let longitude = profile.currentLongitude,
+           (-90...90).contains(latitude), (-180...180).contains(longitude) {
+            profile.unknownFields.remove(.currentLocation)
+        }
     }
     private func confirm() {
         // Numeric casting now has its own requested interaction after intake.
@@ -285,6 +310,8 @@ struct IntakeView: View {
         }
         if profile.sex == "未提供" { profile.unknownFields.insert(.gender) } else { profile.unknownFields.remove(.gender) }
         guard TimeZone(identifier: profile.currentTimeZoneID) != nil else { error = "当前时区名称无法识别，请填写有效的时区标识。"; return }
+        if let latitude = profile.currentLatitude, !(-90...90).contains(latitude) { error = "当前纬度应在 −90 到 90 之间。"; return }
+        if let longitude = profile.currentLongitude, !(-180...180).contains(longitude) { error = "当前经度应在 −180 到 180 之间。"; return }
         if profile.currentPlace.isEmpty && profile.currentLatitude == nil { profile.unknownFields.insert(.currentLocation) }
         if profile.birthPlace.isEmpty { profile.unknownFields.insert(.birthPlace) }
         if profile.unknownFields.contains(.birthCoordinates) { profile.birthLatitude = nil; profile.birthLongitude = nil }
@@ -292,6 +319,16 @@ struct IntakeView: View {
         else if !(-90...90).contains(profile.birthLatitude!) || !(-180...180).contains(profile.birthLongitude!) { error = "纬度范围为 −90 到 90，经度范围为 −180 到 180。"; return }
         else { profile.unknownFields.remove(.birthCoordinates) }
         if parsed.isEmpty { profile.unknownFields.insert(.numbers) } else { profile.unknownFields.remove(.numbers) }
+        var declared = profile.declaredUnknownFields ?? []
+        if birthDateChoiceChanged {
+            if birthDateKnown { declared.remove(.birthDate) } else { declared.insert(.birthDate) }
+        }
+        if birthTimeChoiceChanged {
+            if profile.birthTimeKnown { declared.remove(.birthTime) } else { declared.insert(.birthTime) }
+        }
+        // Filling a field resolves its old explicit-unknown marker. Merely
+        // leaving a default field blank does not create a new declaration.
+        profile.declaredUnknownFields = declared.intersection(profile.unknownFields)
         profile.updatedAt = Date(); onConfirm(profile, parsed, keepProfile)
     }
     private static var allowedBirthDates: ClosedRange<Date> {
@@ -301,12 +338,10 @@ struct IntakeView: View {
 
 struct PlaceFields: View {
     @Binding var profile: OracleProfile
-    @State private var showCoordinates = false
-    @State private var previousZone = ""
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
             HStack {
-                TextField("出生城市（不确定可留空）", text: $profile.birthPlace).font(.system(size: 14, design: .serif))
+                TextField("出生城市（不确定可留空）", text: $profile.birthPlace).font(.system(size: 14, design: .serif)).accessibilityIdentifier("profileBirthPlace")
                 Menu {
                     ForEach(LocalPlace.catalog) { place in
                         Button(place.name) {
@@ -325,17 +360,34 @@ struct PlaceFields: View {
                     }
                 } label: { Text(profile.birthTimeZoneID).font(.system(size: 12)).foregroundStyle(InkTheme.ink) }
             }
-            DisclosureGroup("其他时区与经纬度", isExpanded: $showCoordinates) {
-                VStack(alignment: .leading, spacing: 12) {
-                    TextField("IANA 时区，如 Asia/Shanghai", text: $profile.birthTimeZoneID).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    HStack {
+            TextField("IANA 时区，如 Asia/Shanghai", text: $profile.birthTimeZoneID).textInputAutocapitalization(.never).autocorrectionDisabled()
+                .font(.system(size: 12)).accessibilityIdentifier("profileBirthTimeZone")
+                    HStack(spacing: 16) {
+                      VStack(alignment: .leading, spacing: 7) {
+                        Text("出生纬度").font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
                         TextField("纬度", value: $profile.birthLatitude, format: .number.precision(.fractionLength(0...6)))
+                            .accessibilityIdentifier("profileBirthLatitude")
+                      }
+                      VStack(alignment: .leading, spacing: 7) {
+                        Text("出生经度").font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
                         TextField("经度", value: $profile.birthLongitude, format: .number.precision(.fractionLength(0...6)))
-                    }.keyboardType(.numbersAndPunctuation)
+                            .accessibilityIdentifier("profileBirthLongitude")
+                      }
+                    }.font(.system(size: 12)).keyboardType(.numbersAndPunctuation)
                     Text("常用城市坐标来自内置表；不在列表的地点可手动填写。坐标未知时，相关宫位会留白。")
                         .font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
-                }.font(.system(size: 12)).padding(.top, 12)
-            }.font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+        }
+        .onChange(of: profile.birthPlace) { _, place in
+            if !place.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { profile.unknownFields.remove(.birthPlace) }
+        }
+        .onChange(of: profile.birthLatitude) { _, _ in updateCoordinates() }
+        .onChange(of: profile.birthLongitude) { _, _ in updateCoordinates() }
+    }
+
+    private func updateCoordinates() {
+        if let latitude = profile.birthLatitude, let longitude = profile.birthLongitude,
+           (-90...90).contains(latitude), (-180...180).contains(longitude) {
+            profile.unknownFields.remove(.birthCoordinates)
         }
     }
 }

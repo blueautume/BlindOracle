@@ -14,11 +14,8 @@ struct OracleProcessingView: View {
     var body: some View {
         if let current {
             VStack(alignment: .leading, spacing: 0) {
-                Button {
-                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) { expanded.toggle() }
-                    onExpansionChanged(expanded)
-                } label: {
-                    VStack(alignment: .leading, spacing: 11) {
+                VStack(alignment: .leading, spacing: 11) {
+                    Button(action: toggleExpansion) {
                         HStack(spacing: 8) {
                             Text(summary(for: current)).font(.system(size: 10, weight: .medium)).tracking(1)
                             if completedCount > 0 {
@@ -28,9 +25,16 @@ struct OracleProcessingView: View {
                             Text(expanded ? "收起" : "展开").font(.system(size: 10))
                             Image(systemName: "chevron.down").font(.system(size: 9, weight: .medium))
                                 .rotationEffect(.degrees(expanded ? 180 : 0))
-                        }.foregroundStyle(InkTheme.secondary)
-                        HStack(alignment: .center, spacing: 10) {
-                            statusMark(current.status).frame(width: 17, height: 17)
+                        }.foregroundStyle(InkTheme.secondary).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("progressHeaderToggle")
+                    .accessibilityValue(expanded ? "已展开" : "已折叠")
+                    HStack(alignment: .center, spacing: 10) {
+                        statusMark(current.status).frame(width: 17, height: 17)
+                            .onTapGesture(perform: toggleExpansion)
+                        Button(action: toggleExpansion) {
+                          HStack(alignment: .center, spacing: 10) {
                             ZStack(alignment: .leading) {
                                 Text(current.text)
                                     .font(.system(size: 13, design: .serif)).foregroundStyle(InkTheme.ink)
@@ -46,13 +50,14 @@ struct OracleProcessingView: View {
                             .clipped()
                             .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: current.id)
                             elapsed(for: current).font(.system(size: 10)).monospacedDigit().foregroundStyle(InkTheme.secondary)
+                          }.contentShape(Rectangle())
                         }
-                    }.contentShape(Rectangle())
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("progressToggle")
+                        .accessibilityValue(expanded ? "已展开" : "已折叠")
+                        .accessibilityHint(expanded ? "收起完整任务步骤" : "查看完整任务步骤")
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("progressToggle")
-                .accessibilityValue(expanded ? "已展开" : "已折叠")
-                .accessibilityHint(expanded ? "收起完整任务步骤" : "查看完整任务步骤")
 
                 if expanded {
                     VStack(alignment: .leading, spacing: 0) {
@@ -73,6 +78,11 @@ struct OracleProcessingView: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("oracleProcessing")
         }
+    }
+
+    private func toggleExpansion() {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) { expanded.toggle() }
+        onExpansionChanged(expanded)
     }
 
     private func step(_ activity: OracleActivity, isLast: Bool) -> some View {
@@ -141,17 +151,24 @@ struct OracleProcessingView: View {
         }
     }
 
-    private func statusMark(_ status: OracleActivityStatus) -> some View {
-        let symbol: String
-        let color: Color
-        switch status {
-        case .running: symbol = "circle.dotted"; color = InkTheme.cinnabar
-        case .completed: symbol = "checkmark.circle.fill"; color = InkTheme.sage
-        case .waiting: symbol = "pause.circle"; color = InkTheme.secondary
-        case .failed: symbol = "exclamationmark.circle"; color = InkTheme.cinnabar
-        case .cancelled: symbol = "stop.circle"; color = InkTheme.secondary
+    @ViewBuilder private func statusMark(_ status: OracleActivityStatus) -> some View {
+        if status == .running {
+            // The spinner sits outside the task-title transition. Its native
+            // animation continues while title text and elapsed time update.
+            ProgressView().progressViewStyle(.circular).controlSize(.mini).tint(InkTheme.cinnabar)
+                .accessibilityElement()
+                .accessibilityLabel("进行中").accessibilityIdentifier("progressRunningIndicator")
+        } else {
+            let symbol: String = switch status {
+            case .running: "circle.dotted"
+            case .completed: "checkmark.circle.fill"
+            case .waiting: "pause.circle"
+            case .failed: "exclamationmark.circle"
+            case .cancelled: "stop.circle"
+            }
+            Image(systemName: symbol).font(.system(size: 13, weight: .regular))
+                .foregroundStyle(status == .completed ? InkTheme.sage : status == .failed ? InkTheme.cinnabar : InkTheme.secondary)
+                .accessibilityLabel(statusTitle(status))
         }
-        return Image(systemName: symbol).font(.system(size: 13, weight: .regular)).foregroundStyle(color)
-            .accessibilityLabel(statusTitle(status))
     }
 }

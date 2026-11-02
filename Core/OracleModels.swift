@@ -75,6 +75,7 @@ struct OracleProfile: Codable, Equatable, Identifiable, Sendable {
     var name: String? = nil
     var birthDateText: String? = nil
     var birthTimeText: String? = nil
+    var declaredUnknownFields: Set<OracleField>? = []
     var resolvedName: String {
         [name ?? "", fullName, displayName].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first(where: { !$0.isEmpty && !["我", "本人", "他人资料", "我的资料"].contains($0) }) ?? ""
@@ -185,6 +186,15 @@ struct OraclePlan: Codable, Sendable {
     var profileUpdates: [ProfileUpdate]? = nil
     var relationship: String? = nil
     var resumesPendingQuestion: Bool? = nil
+    var mandatoryMethods: [OracleMethod]? = nil
+    var preparationStage: OraclePreparationStage? = nil
+    var requestedProfileID: UUID? = nil
+    var requestedFields: [OracleField]? = nil
+    var reviewedParticipants: [OracleProfile]? = nil
+    var omittedMethods: [OracleMethodOmission]? = nil
+    var preparationNotes: [String]? = nil
+    var pendingAnswer: String? = nil
+    var collectionDeclined: Bool? = nil
 }
 
 enum ChatRole: String, Codable, Sendable { case user, assistant, system }

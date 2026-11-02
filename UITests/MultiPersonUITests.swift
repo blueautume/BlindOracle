@@ -11,17 +11,16 @@ final class MultiPersonUITests: XCTestCase {
         capture("named-profile-directory", in: app)
         app.tabBars.buttons["对话"].tap()
         send("张三和李四的合作关系如何安排？", in: app)
+        waitUntilReadyToSend(in: app)
+        XCTAssertEqual(app.sheets.count, 0)
+        XCTAssertFalse(app.buttons["confirmIntake"].exists)
+        capture("joint-reading-asks-in-chat", in: app)
+        send("张三，男，出生日期1995-01-02，出生时间08:00，出生时区Asia/Shanghai，出生地北京，出生地纬度39.9，出生地经度116.4；李四，女，出生日期1996-03-04，出生时间14:00，出生时区Asia/Shanghai，出生地上海，出生地纬度31.23，出生地经度121.47", in: app)
         let confirm = app.buttons["confirmIntake"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 15))
-        for name in ["张三", "李四"] {
-            let selection = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "selectProfile-", name)).firstMatch
-            for _ in 0..<8 where !selection.isHittable { app.swipeUp() }
-            XCTAssertTrue(selection.exists)
-            if !selection.label.contains("已选") { selection.tap() }
-        }
-        XCTAssertTrue(app.staticTexts["已选 2 人"].exists)
-        capture("joint-reading-two-people-selected", in: app)
-        for _ in 0..<10 where !confirm.isHittable { app.swipeUp() }
+        XCTAssertEqual(app.sheets.count, 0)
+        capture("joint-reading-chat-summary-awaiting-confirmation", in: app)
+        for _ in 0..<10 where !confirm.isHittable { app.scrollViews["chatTranscript"].swipeUp() }
         XCTAssertTrue(confirm.isHittable)
         confirm.tap()
         completeCoinsIfRequested(in: app)
@@ -102,8 +101,15 @@ final class MultiPersonUITests: XCTestCase {
     @MainActor private func send(_ text: String, in app: XCUIApplication) {
         let input = app.textFields["questionInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 15))
+        waitUntilReadyToSend(in: app)
         input.tap(); input.typeText(text)
         app.buttons["sendQuestion"].tap()
+    }
+
+    @MainActor private func waitUntilReadyToSend(in app: XCUIApplication) {
+        let send = app.buttons["sendQuestion"]
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "发送问题"), object: send)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
     }
 
     @MainActor private func completeCoinsIfRequested(in app: XCUIApplication) {

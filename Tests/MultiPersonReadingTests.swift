@@ -279,14 +279,16 @@ final class MultiPersonReadingTests: XCTestCase {
         XCTAssertEqual(store.profiles.first { $0.id == own.id }?.birthDate, updatedOwnDate)
     }
 
-    @MainActor func testGroupTarotWithoutTwoParticipantsOpensIntakeBeforeInteraction() async throws {
+    @MainActor func testGroupTarotWithoutTwoParticipantsAsksInChatBeforeInteraction() async throws {
         let vault = try temporaryVault()
         let store = OracleStore(vault: vault, bootstrapCredential: false)
         store.send("我们一起用塔罗看看友情")
         try await waitUntilIdle(store)
         XCTAssertEqual(store.pendingPlan?.subject, "多人")
         XCTAssertEqual(store.pendingPlan?.methods, [.tarot])
-        XCTAssertTrue(store.showIntake)
+        XCTAssertFalse(store.showIntake)
+        XCTAssertEqual(store.pendingPlan?.requestedFields, [.name])
+        XCTAssertFalse(store.canConfirmIntake)
         XCTAssertEqual(store.phase, .awaitingIntake)
         XCTAssertNil(store.pendingInteraction)
         XCTAssertFalse(store.showInteraction)

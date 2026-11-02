@@ -15,6 +15,8 @@ enum ReadingContextBuilder {
         参与人员（本次已确认快照） json：\(try json(run.input.readingParticipants))
         用户已完成的交互 json：\(try json(run.input.interactionResponses ?? []))
         全部可用结果 json：\(try json(eligible))
+        因资料限制而未采用的方法 json：\(try json(run.plan.omittedMethods ?? []))
+        本次资料说明 json：\(try json(run.plan.preparationNotes ?? []))
         偏好权重 json：\(try json(weights))
         """
     }
