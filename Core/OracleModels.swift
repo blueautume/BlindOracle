@@ -1,7 +1,7 @@
 import Foundation
 
 enum OracleMethod: String, Codable, CaseIterable, Identifiable, Sendable {
-    case bazi, ziwei, liuyao, meihua, qimen, xiaoliuren, chenggu, xingming, astrology
+    case bazi, ziwei, liuyao, meihua, qimen, xiaoliuren, chenggu, xingming, astrology, tarot
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -14,6 +14,7 @@ enum OracleMethod: String, Codable, CaseIterable, Identifiable, Sendable {
         case .chenggu: "称骨"
         case .xingming: "姓名五格"
         case .astrology: "西方占星"
+        case .tarot: "塔罗牌"
         }
     }
     var symbol: String {
@@ -27,6 +28,7 @@ enum OracleMethod: String, Codable, CaseIterable, Identifiable, Sendable {
         case .chenggu: "scalemass"
         case .xingming: "character.book.closed"
         case .astrology: "moon.stars"
+        case .tarot: "rectangle.on.rectangle.angled"
         }
     }
 }
@@ -80,6 +82,8 @@ struct OracleInput: Codable, Sendable {
     var seed: UInt64 = UInt64.random(in: 1...UInt64.max)
     var subject = "本人"
     var castingStyle: String? = nil
+    var tarotDraws: [TarotDraw]? = nil
+    var interactionResponses: [OracleInteractionResponse]? = nil
 }
 
 struct OracleRow: Codable, Identifiable, Sendable, Equatable {
@@ -116,6 +120,7 @@ struct OracleResult: Codable, Identifiable, Sendable {
     var generatedAt = Date()
     var durationMilliseconds: Double = 0
     var provenance: String
+    var tarotDraws: [TarotDraw]? = nil
     init(method: OracleMethod, version: String = "1.0.0", status: OracleResultStatus = .complete,
          headline: String, rows: [OracleRow], evidence: [OracleEvidence] = [],
          limitations: [String] = [], provenance: String = "本地计算") {
@@ -137,6 +142,7 @@ struct OraclePluginDescriptor: Codable, Identifiable, Sendable {
     var limitations: [String]
     var source: String
     var license: String
+    var interactionKinds: [OracleInteractionKind]? = nil
 }
 
 protocol OraclePlugin: Sendable {
@@ -153,6 +159,7 @@ struct OraclePlan: Codable, Sendable {
     var question: String
     var createdAt = Date()
     var action: String? = nil
+    var interactions: [OracleInteractionRequest]? = nil
 }
 
 enum ChatRole: String, Codable, Sendable { case user, assistant, system }

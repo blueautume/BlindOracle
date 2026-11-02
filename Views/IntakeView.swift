@@ -9,7 +9,6 @@ struct IntakeView: View {
     @State private var profile: OracleProfile
     @State private var birthDateKnown: Bool
     @State private var birthDate: Date
-    @State private var numbers = ""
     @State private var keepProfile = true
     @State private var showBirthDetails = false
     @State private var error: String?
@@ -77,13 +76,6 @@ struct IntakeView: View {
                         }
                         if needsBirth || showBirthDetails { birthSection }
                         currentLocationSection
-                        PaperCard {
-                            VStack(alignment: .leading, spacing: 14) {
-                                SectionEyebrow(text: "随心留数 · 选填")
-                                TextField("想到的数字，用空格隔开", text: $numbers).keyboardType(.numbersAndPunctuation).font(.system(size: 15, design: .serif)).accessibilityIdentifier("castingNumbers")
-                                Text("没有想到数字，也可以空着。起问的时间会如实记下。").font(.system(size: 11)).foregroundStyle(InkTheme.secondary).lineSpacing(4)
-                            }
-                        }
                         if !needsBirth {
                             Button { withAnimation { showBirthDetails.toggle() } } label: {
                                 Label(showBirthDetails ? "收起其他资料" : "补充其他基础资料", systemImage: showBirthDetails ? "minus.circle" : "plus.circle")
@@ -203,11 +195,8 @@ struct IntakeView: View {
         pow(place.latitude - latitude, 2) + pow(place.longitude - longitude, 2)
     }
     private func confirm() {
-        let tokens = numbers.split { $0.isWhitespace || ",，、;；".contains($0) }
-        let parsed = tokens.compactMap { Int($0) }
-        guard parsed.count == tokens.count else { error = "请用空格或逗号隔开非负整数。"; return }
-        guard parsed.count <= 6, parsed.allSatisfy({ $0 >= 0 && $0 <= 999_999 }) else { error = "数字最多留六个，每个在 0 到 999999 之间。"; return }
-        if !numbers.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && parsed.isEmpty { error = "请写下数字，或留空。"; return }
+        // Numeric casting now has its own requested interaction after intake.
+        let parsed: [Int] = []
         if needsName && !profile.unknownFields.contains(.surname) && (profile.familyName.trimmingCharacters(in: .whitespaces).isEmpty || profile.givenName.trimmingCharacters(in: .whitespaces).isEmpty) {
             error = "请补上姓氏和名字，或者勾选“姓名不确定”。"; return
         }

@@ -18,7 +18,9 @@ struct LiuyaoPlugin: OraclePlugin {
                 return NativeCalendar.unavailable(.liuyao, "手动爻值必须是6个6/7/8/9，自初爻至上爻。")
             }
             values = input.manualLines
-            style = "用户手动爻值"
+            if input.interactionResponses?.contains(where: { $0.requestID == OracleMethod.liuyao.rawValue }) == true {
+                style = input.castingStyle == "yarrow" ? "用户逐爻归奇 · 本地大衍蓍草三变概率模拟" : "用户逐次投掷 · 本地三枚铜钱模拟"
+            } else { style = "用户手动爻值" }
         } else {
             var rng = OracleSeededRandom(seed: input.seed)
             switch input.castingStyle?.lowercased() ?? "coins" {

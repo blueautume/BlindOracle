@@ -336,3 +336,73 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+=== Resources/Tarot/ThirdParty-Tarot-MIT.txt ===
+Copyright (c) 2012 Julien Duponchelle
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+=== Resources/Tarot/ThirdParty-Tarot-Sources.txt ===
+Tarot corpus and classic card images
+====================================
+
+Bundled corpus
+--------------
+Repository: https://github.com/LindseyB/tarot-api
+Pinned revision: 319ce18f1b583035e00c63854a2a405a0088bc73 (2026-06-09)
+Source: tarot.json
+Repository license: MIT, preserved in ThirdParty-Tarot-MIT.txt.
+The upstream README credits the initial tarot corpus to dariusk/corpora (CC0):
+https://github.com/dariusk/corpora
+
+BlindOracle adapts the data into a compact offline schema with stable suit/rank
+identifiers and Chinese card names. Original English upright/reversed keywords
+are retained. The source misspelling "The Charriot" is normalized to "The Chariot".
+These are reference interpretations, not observed facts or event probabilities.
+
+Classic Rider-Waite-Smith card illustrations
+------------------------------------------
+Original deck: Rider-Waite-Smith (1909), illustrations by Pamela Colman Smith.
+Source files: public/cards/*.png in the pinned repository above.
+The repository README identifies its source asset pack:
+https://luciellaes.itch.io/rider-waite-smith-tarot-cards-cc0
+Author/curator: Luciella Elisabeth Scarlett (luciellaes).
+
+The curator describes these as scans of the original Rider-Waite-Smith deck,
+sourced from Wikipedia, slightly cleaned, resized to 300x527 pixels and given a
+small black border. The source page identifies the original illustrations as
+public domain under the curator's assessment in Australia and asks users to
+assess their own jurisdictions. The curator explicitly releases the separate
+cardback design under CC0. BlindOracle bundles only the 78 classic card fronts;
+its on-screen card back is drawn in SwiftUI, not copied from a modern deck.
+
+Bundled images retain the source dimensions and were converted to JPEG at
+quality 82 to reduce app size. They are classic scans, not AI-generated or a
+modern commercial deck. Per-file original/bundled SHA256 hashes and exact
+source paths are recorded in source-manifest.json.
+
+Reproduction
+------------
+Run python3 Scripts/fetch_tarot_resources.py from the BlindOracle directory.
+This fetches the fixed upstream revision and recreates the JSON and JPEG files.
+The installed app loads all cards and images from its own bundle and makes no
+network request for tarot data or card artwork.

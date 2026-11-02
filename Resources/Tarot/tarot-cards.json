@@ -1,0 +1,1700 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "319ce18f1b583035e00c63854a2a405a0088bc73",
+  "cards": [
+    {
+      "id": "major-00",
+      "name": "The Fool",
+      "localizedName": "愚者",
+      "upright": [
+        "new beginnings",
+        "innocence",
+        "beginner's luck",
+        "improvisation",
+        "inexperience"
+      ],
+      "reversed": [
+        "recklessness",
+        "taken advantage of",
+        "inconsideration",
+        "naivety",
+        "lack of direction",
+        "chaos"
+      ],
+      "imageFilename": "major-00.jpg"
+    },
+    {
+      "id": "major-01",
+      "name": "The Magician",
+      "localizedName": "魔术师",
+      "upright": [
+        "determined",
+        "skillfulness",
+        "resourceful",
+        "confidence",
+        "potential",
+        "transformation"
+      ],
+      "reversed": [
+        "trickery",
+        "deception",
+        "illusions",
+        "out of touch",
+        "manipulative",
+        "poor planning",
+        "confusion"
+      ],
+      "imageFilename": "major-01.jpg"
+    },
+    {
+      "id": "major-02",
+      "name": "The High Priestess",
+      "localizedName": "女祭司",
+      "upright": [
+        "intuitive",
+        "unconscious",
+        "inner voice",
+        "spirituality",
+        "mystery",
+        "divine feminine"
+      ],
+      "reversed": [
+        "secrets",
+        "mystery",
+        "lack of understanding",
+        "selfishness",
+        "hidden agendas"
+      ],
+      "imageFilename": "major-02.jpg"
+    },
+    {
+      "id": "major-03",
+      "name": "The Empress",
+      "localizedName": "皇后",
+      "upright": [
+        "motherly",
+        "fertility",
+        "nature",
+        "beauty",
+        "abundance",
+        "compassion"
+      ],
+      "reversed": [
+        "dependence",
+        "smothering",
+        "neglectful",
+        "unhealthy relationships",
+        "creative block"
+      ],
+      "imageFilename": "major-03.jpg"
+    },
+    {
+      "id": "major-04",
+      "name": "The Emperor",
+      "localizedName": "皇帝",
+      "upright": [
+        "leadership",
+        "promotion",
+        "structure",
+        "law and order"
+      ],
+      "reversed": [
+        "tyranny",
+        "rigidity",
+        "coldness",
+        "abuse of power",
+        "loss of control"
+      ],
+      "imageFilename": "major-04.jpg"
+    },
+    {
+      "id": "major-05",
+      "name": "The Hierophant",
+      "localizedName": "教皇",
+      "upright": [
+        "tradition",
+        "conformity",
+        "morality",
+        "ethics",
+        "marriage"
+      ],
+      "reversed": [
+        "rebellion",
+        "subversiveness",
+        "new approaches",
+        "freethinking"
+      ],
+      "imageFilename": "major-05.jpg"
+    },
+    {
+      "id": "major-06",
+      "name": "The Lovers",
+      "localizedName": "恋人",
+      "upright": [
+        "partnerships",
+        "duality",
+        "union",
+        "choices",
+        "romance",
+        "sexuality"
+      ],
+      "reversed": [
+        "infidelity",
+        "separation",
+        "loss of balance",
+        "one-sidedness",
+        "disharmony",
+        "misalignment of values"
+      ],
+      "imageFilename": "major-06.jpg"
+    },
+    {
+      "id": "major-07",
+      "name": "The Chariot",
+      "localizedName": "战车",
+      "upright": [
+        "control",
+        "will power",
+        "victory",
+        "assertion",
+        "determination",
+        "journey",
+        "drive"
+      ],
+      "reversed": [
+        "travel issues",
+        "lack of control and direction",
+        "aggression",
+        "lack of willpower",
+        "distraction",
+        "lack of direction",
+        "failure"
+      ],
+      "imageFilename": "major-07.jpg"
+    },
+    {
+      "id": "major-08",
+      "name": "Strength",
+      "localizedName": "力量",
+      "upright": [
+        "courage",
+        "compassion",
+        "self-control",
+        "sacrifice",
+        "patience"
+      ],
+      "reversed": [
+        "selfishness",
+        "weakness",
+        "self-doubt",
+        "lack of self-discipline",
+        "dishonor"
+      ],
+      "imageFilename": "major-08.jpg"
+    },
+    {
+      "id": "major-09",
+      "name": "The Hermit",
+      "localizedName": "隐者",
+      "upright": [
+        "contemplation",
+        "searching",
+        "soul-searching",
+        "introspection",
+        "being alone",
+        "inner guidance"
+      ],
+      "reversed": [
+        "isolation",
+        "loneliness",
+        "withdrawal",
+        "lost your way",
+        "misguidance"
+      ],
+      "imageFilename": "major-09.jpg"
+    },
+    {
+      "id": "major-10",
+      "name": "Wheel of Fortune",
+      "localizedName": "命运之轮",
+      "upright": [
+        "change",
+        "cycles",
+        "inevitable fate",
+        "turning point",
+        "luck",
+        "destiny",
+        "chance"
+      ],
+      "reversed": [
+        "no control",
+        "clinging to control",
+        "bad luck",
+        "interruption",
+        "unexpected events",
+        "disappointment"
+      ],
+      "imageFilename": "major-10.jpg"
+    },
+    {
+      "id": "major-11",
+      "name": "Justice",
+      "localizedName": "正义",
+      "upright": [
+        "justice",
+        "responsibility",
+        "decisions",
+        "cause and effect",
+        "equity",
+        "truth"
+      ],
+      "reversed": [
+        "unfairness",
+        "lack of accountability",
+        "dishonesty",
+        "unaccountability",
+        "unintentional error",
+        "bias"
+      ],
+      "imageFilename": "major-11.jpg"
+    },
+    {
+      "id": "major-12",
+      "name": "The Hanged Man",
+      "localizedName": "倒吊人",
+      "upright": [
+        "sacrifice",
+        "release",
+        "martyrdom",
+        "surrendering",
+        "letting go",
+        "metamorphosis"
+      ],
+      "reversed": [
+        "stalling",
+        "needless sacrifice",
+        "fear of sacrifice",
+        "fear of change",
+        "immobilization",
+        "blockage",
+        "hesitation in decision making",
+        "egotism"
+      ],
+      "imageFilename": "major-12.jpg"
+    },
+    {
+      "id": "major-13",
+      "name": "Death",
+      "localizedName": "死神",
+      "upright": [
+        "rebirth",
+        "endings",
+        "change",
+        "transformation",
+        "transition",
+        "letting go",
+        "walking away from something",
+        "cyclicality",
+        "new beginnings"
+      ],
+      "reversed": [
+        "resistance to change",
+        "personal transformation",
+        "inner purging",
+        "fear of change",
+        "stagnation",
+        "decay",
+        "depression"
+      ],
+      "imageFilename": "major-13.jpg"
+    },
+    {
+      "id": "major-14",
+      "name": "Temperance",
+      "localizedName": "节制",
+      "upright": [
+        "balance",
+        "moderation",
+        "patience",
+        "purpose",
+        "meaning",
+        "combinations",
+        "harmony",
+        "alchemy"
+      ],
+      "reversed": [
+        "imbalance",
+        "excess",
+        "self-healing",
+        "re-alignment",
+        "extremes",
+        "disruption",
+        "chaos"
+      ],
+      "imageFilename": "major-14.jpg"
+    },
+    {
+      "id": "major-15",
+      "name": "The Devil",
+      "localizedName": "恶魔",
+      "upright": [
+        "excess",
+        "greed",
+        "shadow self",
+        "attachment",
+        "addiction",
+        "restriction",
+        "sexuality",
+        "fear",
+        "materialism"
+      ],
+      "reversed": [
+        "release",
+        "enlightenment",
+        "acceptance",
+        "inspiration",
+        "freedom",
+        "divorce",
+        "determination",
+        "restoring control"
+      ],
+      "imageFilename": "major-15.jpg"
+    },
+    {
+      "id": "major-16",
+      "name": "The Tower",
+      "localizedName": "高塔",
+      "upright": [
+        "sudden change",
+        "upheaval",
+        "disaster",
+        "overthrow of existing circumstances",
+        "destruction",
+        "ruin",
+        "revelation"
+      ],
+      "reversed": [
+        "avoidance of disaster",
+        "fear of suffering",
+        "manipulation",
+        "trapped in suffering",
+        "loss",
+        "illness"
+      ],
+      "imageFilename": "major-16.jpg"
+    },
+    {
+      "id": "major-17",
+      "name": "The Star",
+      "localizedName": "星星",
+      "upright": [
+        "hope",
+        "faith",
+        "rejuvenation",
+        "serenity",
+        "inspiration",
+        "calm",
+        "optimism",
+        "rebirth"
+      ],
+      "reversed": [
+        "faithlessness",
+        "discouragement",
+        "insecurity",
+        "hopelessness",
+        "disconnection",
+        "unrealistic expectations"
+      ],
+      "imageFilename": "major-17.jpg"
+    },
+    {
+      "id": "major-18",
+      "name": "The Moon",
+      "localizedName": "月亮",
+      "upright": [
+        "unconscious",
+        "illusions",
+        "intuition",
+        "dreams",
+        "fantasy",
+        "fears",
+        "mystery"
+      ],
+      "reversed": [
+        "confusion",
+        "fear",
+        "misinterpretation",
+        "deception",
+        "anxiety",
+        "unfounded fear",
+        "enlightenment"
+      ],
+      "imageFilename": "major-18.jpg"
+    },
+    {
+      "id": "major-19",
+      "name": "The Sun",
+      "localizedName": "太阳",
+      "upright": [
+        "joy",
+        "success",
+        "celebration",
+        "positivity",
+        "vitality",
+        "attainment",
+        "material happiness",
+        "achievement"
+      ],
+      "reversed": [
+        "negativity",
+        "depression",
+        "sadness",
+        "superficiality",
+        "excess",
+        "overindulgence"
+      ],
+      "imageFilename": "major-19.jpg"
+    },
+    {
+      "id": "major-20",
+      "name": "Judgment",
+      "localizedName": "审判",
+      "upright": [
+        "judgment",
+        "rebirth",
+        "inner calling",
+        "absolution",
+        "awakening",
+        "renewal",
+        "resurrection",
+        "reevaluation"
+      ],
+      "reversed": [
+        "lack of self awareness",
+        "doubt",
+        "self loathing",
+        "refusal of self-examination",
+        "stunted personal growth"
+      ],
+      "imageFilename": "major-20.jpg"
+    },
+    {
+      "id": "major-21",
+      "name": "The World",
+      "localizedName": "世界",
+      "upright": [
+        "completion",
+        "integration",
+        "accomplishment",
+        "travel",
+        "fulfillment",
+        "wholeness",
+        "harmony",
+        "achievement"
+      ],
+      "reversed": [
+        "incompletion",
+        "no closure",
+        "lack of harmony",
+        "lack of closure",
+        "lack of fulfillment",
+        "delayed success",
+        "failed plans",
+        "stagnation",
+        "emptiness"
+      ],
+      "imageFilename": "major-21.jpg"
+    },
+    {
+      "id": "wands-01",
+      "name": "Ace of Wands",
+      "localizedName": "权杖首牌",
+      "upright": [
+        "creation",
+        "willpower",
+        "inspiration",
+        "desire",
+        "vision",
+        "beginnings",
+        "potential"
+      ],
+      "reversed": [
+        "lack of energy",
+        "lack of passion",
+        "lack of direction",
+        "decreased libido",
+        "lack of creativity"
+      ],
+      "imageFilename": "wands-01.jpg"
+    },
+    {
+      "id": "wands-02",
+      "name": "Two of Wands",
+      "localizedName": "权杖二",
+      "upright": [
+        "discovery",
+        "future planning",
+        "making decisions",
+        "progress",
+        "entrepreneurship",
+        "having a long term vision",
+        "opportunity"
+      ],
+      "reversed": [
+        "personal goals",
+        "fear of change",
+        "playing safe",
+        "bad planning",
+        "lack of direction",
+        "personal goals are unclear"
+      ],
+      "imageFilename": "wands-02.jpg"
+    },
+    {
+      "id": "wands-03",
+      "name": "Three of Wands",
+      "localizedName": "权杖三",
+      "upright": [
+        "progress",
+        "expansion",
+        "preparation",
+        "forethought",
+        "enterprise",
+        "trade",
+        "negotiation",
+        "good things to come",
+        "rapid growth"
+      ],
+      "reversed": [
+        "obstacles",
+        "lack of progress",
+        "delays",
+        "frustration",
+        "lack of growth",
+        "lack of expansion",
+        "bad things to come"
+      ],
+      "imageFilename": "wands-03.jpg"
+    },
+    {
+      "id": "wands-04",
+      "name": "Four of Wands",
+      "localizedName": "权杖四",
+      "upright": [
+        "relaxation",
+        "celebration",
+        "harmony",
+        "marriage",
+        "home",
+        "community",
+        "peace",
+        "tranquility"
+      ],
+      "reversed": [
+        "lack of support",
+        "transient home",
+        "community conflict",
+        "domestic disharmony",
+        "inner harmony"
+      ],
+      "imageFilename": "wands-04.jpg"
+    },
+    {
+      "id": "wands-05",
+      "name": "Five of Wands",
+      "localizedName": "权杖五",
+      "upright": [
+        "competition",
+        "rivalry",
+        "conflict",
+        "strife",
+        "tension",
+        "disagreement",
+        "arguments"
+      ],
+      "reversed": [
+        "avoidance of conflict",
+        "respecting differences",
+        "conflict avoidance",
+        "conflict resolution",
+        "tension release"
+      ],
+      "imageFilename": "wands-05.jpg"
+    },
+    {
+      "id": "wands-06",
+      "name": "Six of Wands",
+      "localizedName": "权杖六",
+      "upright": [
+        "victory",
+        "success",
+        "public reward",
+        "progression",
+        "triumph",
+        "pride"
+      ],
+      "reversed": [
+        "excess pride",
+        "lack of recognition",
+        "punishment",
+        "lack of progress",
+        "opposition",
+        "fall from grace",
+        "egotism"
+      ],
+      "imageFilename": "wands-06.jpg"
+    },
+    {
+      "id": "wands-07",
+      "name": "Seven of Wands",
+      "localizedName": "权杖七",
+      "upright": [
+        "challenge",
+        "protection",
+        "perseverance",
+        "defensiveness",
+        "maintaining control",
+        "standing your ground",
+        "show of strength"
+      ],
+      "reversed": [
+        "give up",
+        "destruction",
+        "fatigue",
+        "overwhelmed",
+        "exhaustion",
+        "surrender",
+        "lack of confidence"
+      ],
+      "imageFilename": "wands-07.jpg"
+    },
+    {
+      "id": "wands-08",
+      "name": "Eight of Wands",
+      "localizedName": "权杖八",
+      "upright": [
+        "alignment",
+        "air travel",
+        "action",
+        "movement",
+        "quick decisions"
+      ],
+      "reversed": [
+        "panic",
+        "waiting",
+        "slowdown",
+        "frustration",
+        "miscommunication",
+        "resisting change"
+      ],
+      "imageFilename": "wands-08.jpg"
+    },
+    {
+      "id": "wands-09",
+      "name": "Nine of Wands",
+      "localizedName": "权杖九",
+      "upright": [
+        "resilience",
+        "courage",
+        "test of faith",
+        "persistence",
+        "boundaries",
+        "grit"
+      ],
+      "reversed": [
+        "hesitation",
+        "defensiveness",
+        "timidness",
+        "wounded",
+        "weariness",
+        "hesitation",
+        "feeling battered",
+        "paranoia"
+      ],
+      "imageFilename": "wands-09.jpg"
+    },
+    {
+      "id": "wands-10",
+      "name": "Ten of Wands",
+      "localizedName": "权杖十",
+      "upright": [
+        "accomplishment",
+        "responsibility",
+        "burden",
+        "hard work",
+        "stress",
+        "completion"
+      ],
+      "reversed": [
+        "inability to delegate",
+        "overwork",
+        "straining",
+        "taking on too much",
+        "avoiding responsibility",
+        "burnt out",
+        "overstressed",
+        "release"
+      ],
+      "imageFilename": "wands-10.jpg"
+    },
+    {
+      "id": "wands-11",
+      "name": "Page of Wands",
+      "localizedName": "权杖侍从",
+      "upright": [
+        "inspiration",
+        "ideas",
+        "discovery",
+        "free spirit",
+        "freedom",
+        "limitless potential",
+        "exploration"
+      ],
+      "reversed": [
+        "lack of direction",
+        "discovery",
+        "new approaches",
+        "procrastination",
+        "spiritual path"
+      ],
+      "imageFilename": "wands-11.jpg"
+    },
+    {
+      "id": "wands-12",
+      "name": "Knight of Wands",
+      "localizedName": "权杖骑士",
+      "upright": [
+        "energy",
+        "passion",
+        "inspired action",
+        "adventure",
+        "restlessness",
+        "lust",
+        "travel",
+        "impulsiveness",
+        "action"
+      ],
+      "reversed": [
+        "selfishness",
+        "no direction",
+        "panic",
+        "anger",
+        "lack of control",
+        "impulsiveness",
+        "haste",
+        "recklessness",
+        "delays"
+      ],
+      "imageFilename": "wands-12.jpg"
+    },
+    {
+      "id": "wands-13",
+      "name": "Queen of Wands",
+      "localizedName": "权杖王后",
+      "upright": [
+        "confidence",
+        "courage",
+        "determination",
+        "joy",
+        "energy",
+        "confidence",
+        "independence",
+        "cheer"
+      ],
+      "reversed": [
+        "frustration",
+        "introversion",
+        "insecurity",
+        "repressed energy",
+        "moodiness"
+      ],
+      "imageFilename": "wands-13.jpg"
+    },
+    {
+      "id": "wands-14",
+      "name": "King of Wands",
+      "localizedName": "权杖国王",
+      "upright": [
+        "natural-born leader",
+        "visionary",
+        "growth",
+        "success",
+        "entrepreneur",
+        "spirituality",
+        "motivation"
+      ],
+      "reversed": [
+        "impulsiveness",
+        "aggression",
+        "stubbornness",
+        "posessiveness",
+        "controlling"
+      ],
+      "imageFilename": "wands-14.jpg"
+    },
+    {
+      "id": "cups-01",
+      "name": "Ace of Cups",
+      "localizedName": "圣杯首牌",
+      "upright": [
+        "proposal",
+        "marriage",
+        "intuition",
+        "spirituality",
+        "new feelings",
+        "love"
+      ],
+      "reversed": [
+        "self-love",
+        "emotional loss",
+        "codependency",
+        "lack of trust",
+        "emptiness"
+      ],
+      "imageFilename": "cups-01.jpg"
+    },
+    {
+      "id": "cups-02",
+      "name": "Two of Cups",
+      "localizedName": "圣杯二",
+      "upright": [
+        "partnership",
+        "mutual attraction",
+        "compatibility",
+        "union",
+        "marriage",
+        "romantic love",
+        "unity",
+        "connection"
+      ],
+      "reversed": [
+        "imbalance",
+        "broken communication",
+        "clashing values",
+        "disconnection",
+        "tension"
+      ],
+      "imageFilename": "cups-02.jpg"
+    },
+    {
+      "id": "cups-03",
+      "name": "Three of Cups",
+      "localizedName": "圣杯三",
+      "upright": [
+        "friendship",
+        "community",
+        "happiness",
+        "forgiveness",
+        "reunion",
+        "celebration",
+        "joy",
+        "support"
+      ],
+      "reversed": [
+        "overindulgence",
+        "gossip",
+        "isolation",
+        "loneliness",
+        "party-crashing",
+        "disruption",
+        "conflict in community",
+        "an affair"
+      ],
+      "imageFilename": "cups-03.jpg"
+    },
+    {
+      "id": "cups-04",
+      "name": "Four of Cups",
+      "localizedName": "圣杯四",
+      "upright": [
+        "disillusioned",
+        "missed opportunities",
+        "regret",
+        "remorse",
+        "apathy",
+        "discontent",
+        "boredom",
+        "disconnectedness"
+      ],
+      "reversed": [
+        "sudden awareness",
+        "choosing happiness",
+        "acceptance",
+        "moving on"
+      ],
+      "imageFilename": "cups-04.jpg"
+    },
+    {
+      "id": "cups-05",
+      "name": "Five of Cups",
+      "localizedName": "圣杯五",
+      "upright": [
+        "loss",
+        "grief",
+        "self-pity",
+        "disappointment",
+        "regret",
+        "sadness",
+        "remorse",
+        "trauma",
+        "heartbreak"
+      ],
+      "reversed": [
+        "acceptance",
+        "moving on",
+        "finding peace",
+        "forgiveness",
+        "healing"
+      ],
+      "imageFilename": "cups-05.jpg"
+    },
+    {
+      "id": "cups-06",
+      "name": "Six of Cups",
+      "localizedName": "圣杯六",
+      "upright": [
+        "nostalgia",
+        "innocence",
+        "family",
+        "kindness",
+        "creativity",
+        "protection"
+      ],
+      "reversed": [
+        "boredom",
+        "stuck in the past",
+        "stagnation",
+        "leaving home"
+      ],
+      "imageFilename": "cups-06.jpg"
+    },
+    {
+      "id": "cups-07",
+      "name": "Seven of Cups",
+      "localizedName": "圣杯七",
+      "upright": [
+        "opportunities",
+        "new possibilities",
+        "fantasy",
+        "illusions",
+        "meditation",
+        "decisions"
+      ],
+      "reversed": [
+        "lack of purpose",
+        "diversion",
+        "confusion",
+        "lack of fulfillment",
+        "temptation",
+        "overwhelmed by choice"
+      ],
+      "imageFilename": "cups-07.jpg"
+    },
+    {
+      "id": "cups-08",
+      "name": "Eight of Cups",
+      "localizedName": "圣杯八",
+      "upright": [
+        "disappointment",
+        "abandonment",
+        "withdrawal",
+        "escapism",
+        "disillusionment"
+      ],
+      "reversed": [
+        "hopelessness",
+        "unfinished business",
+        "avoidance",
+        "fear of change",
+        "aimless drifting",
+        "stagnation"
+      ],
+      "imageFilename": "cups-08.jpg"
+    },
+    {
+      "id": "cups-09",
+      "name": "Nine of Cups",
+      "localizedName": "圣杯九",
+      "upright": [
+        "satisfaction",
+        "emotional stability",
+        "luxury",
+        "self-sufficiency",
+        "wish fulfillment",
+        "happiness",
+        "success",
+        "gratitude"
+      ],
+      "reversed": [
+        "lack of inner joy",
+        "smugness",
+        "self-satisfaction",
+        "indulgence",
+        "gloating",
+        "dissatisfaction",
+        "materialism"
+      ],
+      "imageFilename": "cups-09.jpg"
+    },
+    {
+      "id": "cups-10",
+      "name": "Ten of Cups",
+      "localizedName": "圣杯十",
+      "upright": [
+        "blessings",
+        "divine love",
+        "family",
+        "harmony",
+        "alignment",
+        "joy",
+        "bliss"
+      ],
+      "reversed": [
+        "domestic strife",
+        "broken home",
+        "shattered dreams",
+        "misalignment of values"
+      ],
+      "imageFilename": "cups-10.jpg"
+    },
+    {
+      "id": "cups-11",
+      "name": "Page of Cups",
+      "localizedName": "圣杯侍从",
+      "upright": [
+        "happy surprise",
+        "dreams",
+        "sensitivity",
+        "intuitive messages",
+        "creativity"
+      ],
+      "reversed": [
+        "emotional immaturity",
+        "insecurity",
+        "disappointment",
+        "creative block"
+      ],
+      "imageFilename": "cups-11.jpg"
+    },
+    {
+      "id": "cups-12",
+      "name": "Knight of Cups",
+      "localizedName": "圣杯骑士",
+      "upright": [
+        "idealist",
+        "romantic",
+        "emotional",
+        "imaginative",
+        "sensitive"
+      ],
+      "reversed": [
+        "moodiness",
+        "disappointment",
+        "heartbreak",
+        "sadness"
+      ],
+      "imageFilename": "cups-12.jpg"
+    },
+    {
+      "id": "cups-13",
+      "name": "Queen of Cups",
+      "localizedName": "圣杯王后",
+      "upright": [
+        "loving",
+        "empathic",
+        "intuitive",
+        "psychic",
+        "calm",
+        "spiritual",
+        "compassionate",
+        "tenderhearted"
+      ],
+      "reversed": [
+        "self-care",
+        "martyrdom",
+        "emotional manipulation",
+        "insecurity",
+        "dependency"
+      ],
+      "imageFilename": "cups-13.jpg"
+    },
+    {
+      "id": "cups-14",
+      "name": "King of Cups",
+      "localizedName": "圣杯国王",
+      "upright": [
+        "wisdom",
+        "understanding",
+        "focus",
+        "balance",
+        "peacefulness",
+        "diplomacy"
+      ],
+      "reversed": [
+        "coldness",
+        "moodiness",
+        "volatile",
+        "immature",
+        "overreaction",
+        "manipulative"
+      ],
+      "imageFilename": "cups-14.jpg"
+    },
+    {
+      "id": "swords-01",
+      "name": "Ace of Swords",
+      "localizedName": "宝剑首牌",
+      "upright": [
+        "breakthroughs",
+        "new ideas",
+        "clarity",
+        "success",
+        "sharp mind",
+        "cutting through confusion"
+      ],
+      "reversed": [
+        "confusion",
+        "brutality",
+        "chaos",
+        "clouded judgement"
+      ],
+      "imageFilename": "swords-01.jpg"
+    },
+    {
+      "id": "swords-02",
+      "name": "Two of Swords",
+      "localizedName": "宝剑二",
+      "upright": [
+        "indecision",
+        "stalemate",
+        "impasse",
+        "avoidance",
+        "weighing options"
+      ],
+      "reversed": [
+        "confusion",
+        "lesser of two evils",
+        "information overload",
+        "tension"
+      ],
+      "imageFilename": "swords-02.jpg"
+    },
+    {
+      "id": "swords-03",
+      "name": "Three of Swords",
+      "localizedName": "宝剑三",
+      "upright": [
+        "grief",
+        "suffering",
+        "heartbreak",
+        "sorrow",
+        "emotional pain"
+      ],
+      "reversed": [
+        "recovery",
+        "forgiveness",
+        "moving on",
+        "releasing baggage",
+        "optimism",
+        "legging go of pain"
+      ],
+      "imageFilename": "swords-03.jpg"
+    },
+    {
+      "id": "swords-04",
+      "name": "Four of Swords",
+      "localizedName": "宝剑四",
+      "upright": [
+        "rest",
+        "relaxation",
+        "restoration",
+        "contemplation",
+        "recuperation",
+        "meditation",
+        "recovery"
+      ],
+      "reversed": [
+        "restlessness",
+        "burnout",
+        "stress",
+        "exhaustion",
+        "repeating mistakes"
+      ],
+      "imageFilename": "swords-04.jpg"
+    },
+    {
+      "id": "swords-05",
+      "name": "Five of Swords",
+      "localizedName": "宝剑五",
+      "upright": [
+        "sneakiness",
+        "conflict",
+        "defeat",
+        "competition",
+        "ego",
+        "win at all costs"
+      ],
+      "reversed": [
+        "lingering resentment",
+        "desire to reconcile",
+        "forgiveness",
+        "moving on",
+        "releasing baggage"
+      ],
+      "imageFilename": "swords-05.jpg"
+    },
+    {
+      "id": "swords-06",
+      "name": "Six of Swords",
+      "localizedName": "宝剑六",
+      "upright": [
+        "transition",
+        "change",
+        "rite of passage",
+        "gradual movement",
+        "release"
+      ],
+      "reversed": [
+        "emotional baggage",
+        "unresolved issues",
+        "resistance to change",
+        "difficulty moving on"
+      ],
+      "imageFilename": "swords-06.jpg"
+    },
+    {
+      "id": "swords-07",
+      "name": "Seven of Swords",
+      "localizedName": "宝剑七",
+      "upright": [
+        "betrayal",
+        "deception",
+        "getting away with something",
+        "acting strategically",
+        "self-interest",
+        "sneaking around"
+      ],
+      "reversed": [
+        "imposter syndrome",
+        "deceit",
+        "coming clean",
+        "releasing guilt and shame",
+        "getting away with nothing",
+        "confrontation"
+      ],
+      "imageFilename": "swords-07.jpg"
+    },
+    {
+      "id": "swords-08",
+      "name": "Eight of Swords",
+      "localizedName": "宝剑八",
+      "upright": [
+        "imprisonment",
+        "entrapment",
+        "victim",
+        "negative thoughts"
+      ],
+      "reversed": [
+        "self-limiting beliefs",
+        "inner critic",
+        "open to new perspectives",
+        "freedom"
+      ],
+      "imageFilename": "swords-08.jpg"
+    },
+    {
+      "id": "swords-09",
+      "name": "Nine of Swords",
+      "localizedName": "宝剑九",
+      "upright": [
+        "hopelessness",
+        "anxiety",
+        "trauma",
+        "depression",
+        "worry",
+        "fear",
+        "nightmares"
+      ],
+      "reversed": [
+        "secrets",
+        "release of fear",
+        "deep-seated concern",
+        "inner turmoil"
+      ],
+      "imageFilename": "swords-09.jpg"
+    },
+    {
+      "id": "swords-10",
+      "name": "Ten of Swords",
+      "localizedName": "宝剑十",
+      "upright": [
+        "failure",
+        "defeat",
+        "deep wounds",
+        "loss",
+        "crisis",
+        "betrayal"
+      ],
+      "reversed": [
+        "recovery",
+        "rebirth",
+        "moving on",
+        "restoration"
+      ],
+      "imageFilename": "swords-10.jpg"
+    },
+    {
+      "id": "swords-11",
+      "name": "Page of Swords",
+      "localizedName": "宝剑侍从",
+      "upright": [
+        "curiosity",
+        "mental energy",
+        "innovation",
+        "thirst for knowledge"
+      ],
+      "reversed": [
+        "manipulation",
+        "deception",
+        "haste",
+        "haphazard action"
+      ],
+      "imageFilename": "swords-11.jpg"
+    },
+    {
+      "id": "swords-12",
+      "name": "Knight of Swords",
+      "localizedName": "宝剑骑士",
+      "upright": [
+        "action",
+        "impulse",
+        "defense of beliefs",
+        "ambitious"
+      ],
+      "reversed": [
+        "lack of direction",
+        "restless",
+        "unpredictability",
+        "impulsive"
+      ],
+      "imageFilename": "swords-12.jpg"
+    },
+    {
+      "id": "swords-13",
+      "name": "Queen of Swords",
+      "localizedName": "宝剑王后",
+      "upright": [
+        "complexity",
+        "perceptive",
+        "clear minded",
+        "impartial",
+        "independent"
+      ],
+      "reversed": [
+        "cold hearted",
+        "cruel",
+        "bitter",
+        "unforgiving",
+        "resentful",
+        "isolation"
+      ],
+      "imageFilename": "swords-13.jpg"
+    },
+    {
+      "id": "swords-14",
+      "name": "King of Swords",
+      "localizedName": "宝剑国王",
+      "upright": [
+        "head over heart",
+        "disciplined",
+        "truthful",
+        "just",
+        "mental clarity",
+        "authority",
+        "intellect"
+      ],
+      "reversed": [
+        "manipulative",
+        "cruel",
+        "weakness of character",
+        "abuse of power"
+      ],
+      "imageFilename": "swords-14.jpg"
+    },
+    {
+      "id": "pentacles-01",
+      "name": "Ace of Pentacles",
+      "localizedName": "星币首牌",
+      "upright": [
+        "opportunity",
+        "prosperity",
+        "manifestation",
+        "wealth",
+        "abundance",
+        "new venture"
+      ],
+      "reversed": [
+        "lost opportunity",
+        "missed chance",
+        "bad investment",
+        "lack of foresight"
+      ],
+      "imageFilename": "pentacles-01.jpg"
+    },
+    {
+      "id": "pentacles-02",
+      "name": "Two of Pentacles",
+      "localizedName": "星币二",
+      "upright": [
+        "balance",
+        "adaptability",
+        "time management",
+        "priorities"
+      ],
+      "reversed": [
+        "loss of balance",
+        "disorganized",
+        "overwhelmed",
+        "disarray",
+        "over-committed"
+      ],
+      "imageFilename": "pentacles-02.jpg"
+    },
+    {
+      "id": "pentacles-03",
+      "name": "Three of Pentacles",
+      "localizedName": "星币三",
+      "upright": [
+        "teamwork",
+        "collaboration",
+        "learning",
+        "implementation"
+      ],
+      "reversed": [
+        "disharmony",
+        "disorganization",
+        "group conflict",
+        "working alone"
+      ],
+      "imageFilename": "pentacles-03.jpg"
+    },
+    {
+      "id": "pentacles-04",
+      "name": "Four of Pentacles",
+      "localizedName": "星币四",
+      "upright": [
+        "conservativism",
+        "frugality",
+        "security",
+        "scarcity",
+        "control",
+        "restraint"
+      ],
+      "reversed": [
+        "over-spending",
+        "greed",
+        "materialism",
+        "selfishness",
+        "poverty",
+        "unstable"
+      ],
+      "imageFilename": "pentacles-04.jpg"
+    },
+    {
+      "id": "pentacles-05",
+      "name": "Five of Pentacles",
+      "localizedName": "星币五",
+      "upright": [
+        "isolation",
+        "insecurity",
+        "worry",
+        "financial loss",
+        "poverty"
+      ],
+      "reversed": [
+        "recovery",
+        "charity",
+        "improving health",
+        "spiritual poverty"
+      ],
+      "imageFilename": "pentacles-05.jpg"
+    },
+    {
+      "id": "pentacles-06",
+      "name": "Six of Pentacles",
+      "localizedName": "星币六",
+      "upright": [
+        "charity",
+        "sharing",
+        "giving",
+        "sharing wealth",
+        "generosity",
+        "receiving"
+      ],
+      "reversed": [
+        "power and domination",
+        "strings attached",
+        "stinginess",
+        "self-care"
+      ],
+      "imageFilename": "pentacles-06.jpg"
+    },
+    {
+      "id": "pentacles-07",
+      "name": "Seven of Pentacles",
+      "localizedName": "星币七",
+      "upright": [
+        "long-term view",
+        "sustainable results",
+        "perseverance",
+        "investment",
+        "diligence",
+        "hard work"
+      ],
+      "reversed": [
+        "lack of rewards",
+        "distractions",
+        "disruption",
+        "questioned investments"
+      ],
+      "imageFilename": "pentacles-07.jpg"
+    },
+    {
+      "id": "pentacles-08",
+      "name": "Eight of Pentacles",
+      "localizedName": "星币八",
+      "upright": [
+        "mastery",
+        "skill development",
+        "diligence",
+        "passion",
+        "standards"
+      ],
+      "reversed": [
+        "lack of passion",
+        "uninspired",
+        "lack of ambition",
+        "no motivation"
+      ],
+      "imageFilename": "pentacles-08.jpg"
+    },
+    {
+      "id": "pentacles-09",
+      "name": "Nine of Pentacles",
+      "localizedName": "星币九",
+      "upright": [
+        "fruits of labor",
+        "rewards",
+        "luxury",
+        "self-sufficiency",
+        "financial independence"
+      ],
+      "reversed": [
+        "reckless spending",
+        "living beyond means",
+        "false success",
+        "living off others",
+        "termination"
+      ],
+      "imageFilename": "pentacles-09.jpg"
+    },
+    {
+      "id": "pentacles-10",
+      "name": "Ten of Pentacles",
+      "localizedName": "星币十",
+      "upright": [
+        "wealth",
+        "financial security",
+        "family",
+        "long-term success",
+        "legacy"
+      ],
+      "reversed": [
+        "fleeting success",
+        "financial failure",
+        "lack of stability",
+        "lack of resources"
+      ],
+      "imageFilename": "pentacles-10.jpg"
+    },
+    {
+      "id": "pentacles-11",
+      "name": "Page of Pentacles",
+      "localizedName": "星币侍从",
+      "upright": [
+        "manifestation",
+        "ambition",
+        "desire",
+        "financial opprotunity"
+      ],
+      "reversed": [
+        "procrastination",
+        "lack of progress",
+        "greediness",
+        "laziness"
+      ],
+      "imageFilename": "pentacles-11.jpg"
+    },
+    {
+      "id": "pentacles-12",
+      "name": "Knight of Pentacles",
+      "localizedName": "星币骑士",
+      "upright": [
+        "efficiency",
+        "hard work",
+        "responsibility",
+        "focus",
+        "determination",
+        "productivity",
+        "routine"
+      ],
+      "reversed": [
+        "boredom",
+        "laziness",
+        "obsession with work",
+        "work without reward",
+        "feeling overwhelmed"
+      ],
+      "imageFilename": "pentacles-12.jpg"
+    },
+    {
+      "id": "pentacles-13",
+      "name": "Queen of Pentacles",
+      "localizedName": "星币王后",
+      "upright": [
+        "practicality",
+        "creature comforts",
+        "financial security",
+        "generosity",
+        "matriarchal"
+      ],
+      "reversed": [
+        "jealousy",
+        "smothering",
+        "self care",
+        "financially dependent"
+      ],
+      "imageFilename": "pentacles-13.jpg"
+    },
+    {
+      "id": "pentacles-14",
+      "name": "King of Pentacles",
+      "localizedName": "星币国王",
+      "upright": [
+        "abundance",
+        "prosperity",
+        "security",
+        "wealth",
+        "leadership"
+      ],
+      "reversed": [
+        "financially inept",
+        "greed",
+        "spending problems",
+        "stubborn",
+        "indulgence"
+      ],
+      "imageFilename": "pentacles-14.jpg"
+    }
+  ]
+}

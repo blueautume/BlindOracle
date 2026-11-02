@@ -1,0 +1,477 @@
+{
+  "repository": "https://github.com/LindseyB/tarot-api",
+  "revision": "319ce18f1b583035e00c63854a2a405a0088bc73",
+  "sourceJSONSHA256": "279ab5e220316a6b9c540ef7f9441864d0a84c6b3dd2b367e5731916f4065610",
+  "imageOrigin": "https://luciellaes.itch.io/rider-waite-smith-tarot-cards-cc0",
+  "imageProcessing": "Original 300x527px scans converted to JPEG at quality 82; no generative imagery.",
+  "cards": [
+    {
+      "id": "major-00",
+      "sourcePath": "public/cards/TheFool.png",
+      "sourceSHA256": "6390bdc08c0c70a5126e3d0feae4e90d962ea5afab5e9c175ecbb78574dcfdae",
+      "bundledSHA256": "cbc465a1a72c95483f64200acc73de67ba155c11bd2fe31f62c6eb01f67344b8"
+    },
+    {
+      "id": "major-01",
+      "sourcePath": "public/cards/TheMagician.png",
+      "sourceSHA256": "b2685cc4591e348136f8c8cb1318a346e03ae536fb081ed3986464a993c5b2cf",
+      "bundledSHA256": "30a9266d1382090aab7ad3c30a6b31a1e09b73505c38f0c0c53e215e2e3c6623"
+    },
+    {
+      "id": "major-02",
+      "sourcePath": "public/cards/TheHighPriestess.png",
+      "sourceSHA256": "92db7b0fc9746105423b9862aed76a00ee2930fcb1341a4dd5e18ac6cf2b7d63",
+      "bundledSHA256": "ee31e8b6ab218df695eaa0d2d7519d908cc39d3d470ebe5844f4a14976068187"
+    },
+    {
+      "id": "major-03",
+      "sourcePath": "public/cards/TheEmpress.png",
+      "sourceSHA256": "a4293ecf234a9d1814a5cbc470e11dae6a7ba255a968d9953bf66da2f4a9a32c",
+      "bundledSHA256": "db741740114ebe33e3176f8bf9a46cec53fff37ade387abe99eab8595a8631cc"
+    },
+    {
+      "id": "major-04",
+      "sourcePath": "public/cards/TheEmperor.png",
+      "sourceSHA256": "f4e651f950bf8d273a79e7cfaa26ba4e7365ee986d1997efff0bbd71cba5ec48",
+      "bundledSHA256": "424a28223a2baf46c7a02b877195eff3347342e6ce8e0840cd32dc239e171f53"
+    },
+    {
+      "id": "major-05",
+      "sourcePath": "public/cards/TheHierophant.png",
+      "sourceSHA256": "bd3f7a9b640848950330e1f534831b5a3d9ff54d7024ad77daeac7d75186eec2",
+      "bundledSHA256": "04bc84a2e1c2bbf0d27e1ac137d3d2d9bd0d3bba7f04a2ce2ad874ca948997eb"
+    },
+    {
+      "id": "major-06",
+      "sourcePath": "public/cards/TheLovers.png",
+      "sourceSHA256": "1eaf94a82a6ede0116ef996c78c58202cba1d2c07b3612901c4343e055d45db1",
+      "bundledSHA256": "e0284464baa002a815d788e004f63cbe40302bb64db94994c5e3169f37042576"
+    },
+    {
+      "id": "major-07",
+      "sourcePath": "public/cards/TheChariot.png",
+      "sourceSHA256": "83c5bc4e106664d02360f2e748c4fecce68a0b736aa8c2efa5b5886530a9e104",
+      "bundledSHA256": "66ea1e5b0770602ea2f1ef3b827d78c565eced56a5805308032410918aaaccc6"
+    },
+    {
+      "id": "major-08",
+      "sourcePath": "public/cards/Strength.png",
+      "sourceSHA256": "d988b9f83c799c3b28a53cb3711fd44e5d51c59288db4348aac94612a554592b",
+      "bundledSHA256": "65b3dad92fd401f07238fd523485bc066e663f49ccb902adea0e7fa26ba16730"
+    },
+    {
+      "id": "major-09",
+      "sourcePath": "public/cards/TheHermit.png",
+      "sourceSHA256": "724030230829da0d714cf2e1de59da4957a46b226e17de21464a7adf50611f19",
+      "bundledSHA256": "4b93f389ebb9496c2922491116a6aebab9da5f4d9a7e2e0504035265ba3ac6e2"
+    },
+    {
+      "id": "major-10",
+      "sourcePath": "public/cards/WheelOfFortune.png",
+      "sourceSHA256": "62507acae9589072694378f8ffd5b8a4201ad839e62391814c7900c3f80dcc54",
+      "bundledSHA256": "e1b173146f13b6c4614f0d219f6670c6facc6721e2a44d757f59c7505407e027"
+    },
+    {
+      "id": "major-11",
+      "sourcePath": "public/cards/Justice.png",
+      "sourceSHA256": "1ba84ea4ab8c93bde7898c43e037e0373e54538ce2767c01666b11944e56ae48",
+      "bundledSHA256": "92022d887d383197389636029035000c5db4c9a1778395eac73391e5551deedc"
+    },
+    {
+      "id": "major-12",
+      "sourcePath": "public/cards/TheHangedMan.png",
+      "sourceSHA256": "f276f707d1e650c99a4c6e938e6deccb70d70b50ef17ba0209c03da84f21b8c2",
+      "bundledSHA256": "7ed942314ffe345aaa47e5925bd0e730caf2d5a7419c5bea8d945a034185b0c3"
+    },
+    {
+      "id": "major-13",
+      "sourcePath": "public/cards/Death.png",
+      "sourceSHA256": "9773b204550f183129832ff028e805686d6e0ec42de6359a6cf167c41f5b627f",
+      "bundledSHA256": "95ce152f1a2385a99cca52f161e81954919393363e30d73d6a3d7d0197c871ba"
+    },
+    {
+      "id": "major-14",
+      "sourcePath": "public/cards/Temperance.png",
+      "sourceSHA256": "8b6b17ebf8418ff55e2e9ddc4eb1ee5bdff6491c3c535f09b74ed301d2813369",
+      "bundledSHA256": "0fb94d13550dea89ab8d376f6df0bd5c14f6c8f5d6f3e861f65b2a1923a47094"
+    },
+    {
+      "id": "major-15",
+      "sourcePath": "public/cards/TheDevil.png",
+      "sourceSHA256": "ac9f2007edda1f2d232c972fb5d099246ae34d506500ca815083532e980475e3",
+      "bundledSHA256": "c9d77d8ac8738dd9a5cd0ab412cdc75efeea9b870e7d7fc25c19568c5f6d0c9a"
+    },
+    {
+      "id": "major-16",
+      "sourcePath": "public/cards/TheTower.png",
+      "sourceSHA256": "c0316f89c03d8735aba4dbcf2883a2ce587b00616ebd26d2a169e6773cf2bf51",
+      "bundledSHA256": "3e24150895812d753dcffc33c401d3d8550e141a696a07855e721866f42682d9"
+    },
+    {
+      "id": "major-17",
+      "sourcePath": "public/cards/TheStar.png",
+      "sourceSHA256": "996e587ce49a3939893f9668eb85239434e1ac8d42e06ef5720d275fa4e1f9b6",
+      "bundledSHA256": "5937b6b5f3f6702a01953da34c5491452b0f9a59b8e5e815bc7f394dac9211dd"
+    },
+    {
+      "id": "major-18",
+      "sourcePath": "public/cards/TheMoon.png",
+      "sourceSHA256": "26dd877210adf88d8f7a98dc1f7131cc1b6521e8caff7f4d87f1170ce9a78be2",
+      "bundledSHA256": "b733d715250117ecf9c743ce4f9f8bbcaff832a488b7deecde2e8c1584e98179"
+    },
+    {
+      "id": "major-19",
+      "sourcePath": "public/cards/TheSun.png",
+      "sourceSHA256": "9b103a89ea91f005a6901df353c9918badffd8b6584337669763c6aee677d01e",
+      "bundledSHA256": "cc375a1f5e42ecb16966b3a75fbdf9cff71fc76d475db8c82958a63c8d41f82f"
+    },
+    {
+      "id": "major-20",
+      "sourcePath": "public/cards/Judgement.png",
+      "sourceSHA256": "52d022e5937bec9d965c63273405d2ed642b75e254d04160a998cc055c37581e",
+      "bundledSHA256": "d1e00c0a5cdc125eab0907c1d1461b02cbb0d78039fbbb0166c02a57757d5f18"
+    },
+    {
+      "id": "major-21",
+      "sourcePath": "public/cards/TheWorld.png",
+      "sourceSHA256": "9fb445164dfe0b7036c59cba69b2af0314a9451a1dda08513ee16d32d172bc6c",
+      "bundledSHA256": "6f460d04693b514ad14f9574f978e9e808d8abda3034908870138aa889c0a620"
+    },
+    {
+      "id": "wands-01",
+      "sourcePath": "public/cards/Wands01.png",
+      "sourceSHA256": "a29727a0c7780f7758544f01c4b03403c1efddfc524e83a95e5f0060a118a585",
+      "bundledSHA256": "2c5f6fb0c2aecd533d22400ec113cb1adabdae47c605e88889969c636a0fc499"
+    },
+    {
+      "id": "wands-02",
+      "sourcePath": "public/cards/Wands02.png",
+      "sourceSHA256": "134823b9a9eb27444335af3b1e0da076b869149193ee146119e086fedad3f924",
+      "bundledSHA256": "d58e8041c16c0d9f5e850b61e1d9f07682741d5b914c1ce357484ae62e3cb58c"
+    },
+    {
+      "id": "wands-03",
+      "sourcePath": "public/cards/Wands03.png",
+      "sourceSHA256": "144d4102edd131af2a0fa405f171d0a15574df3a374aa9989bc29891fb82ac55",
+      "bundledSHA256": "0b3fd518aec0052505d0d1486395e374bcfacaff10e2dda7dd49b2fa82fc8f22"
+    },
+    {
+      "id": "wands-04",
+      "sourcePath": "public/cards/Wands04.png",
+      "sourceSHA256": "6a87ddc59eac02b26fc608e3aef5a153080a233179548086e0678aacce4a914f",
+      "bundledSHA256": "27d87ccc2d07bcce29739ce71050a181e465955cdcadd069a98ef09ec7d68d26"
+    },
+    {
+      "id": "wands-05",
+      "sourcePath": "public/cards/Wands05.png",
+      "sourceSHA256": "b197cc28b0237abb01bf6a4cdcf36508545b2524b71ce0e4ce9d4a41680d61fe",
+      "bundledSHA256": "5010dfcd563244f0e1ad51d93d359c2fc75f8ded5fa42073ffb01e9b1d0cf22c"
+    },
+    {
+      "id": "wands-06",
+      "sourcePath": "public/cards/Wands06.png",
+      "sourceSHA256": "fba2c676c22858abefe1cc2f9911a50c86d0db0dee1980bd25f42744c3f761c8",
+      "bundledSHA256": "3f99a9de052ff54ced3e6d035ddcb07e7244ad03ffda70273713e66c33875723"
+    },
+    {
+      "id": "wands-07",
+      "sourcePath": "public/cards/Wands07.png",
+      "sourceSHA256": "6338449a0938285635dd678f69bc1dbae0e8d28c6729da9f9ce9b52a0b1e2dad",
+      "bundledSHA256": "5add558b8c992effb54c0486cc69acd42ff0ff20cc832160a00b3ccfbffbd35d"
+    },
+    {
+      "id": "wands-08",
+      "sourcePath": "public/cards/Wands08.png",
+      "sourceSHA256": "ebf9b9f0458e2aca75e66ee161c5940282611da069dee2447f16d59ffc0c34af",
+      "bundledSHA256": "faec18ce044024cf53c666391ff512615a4fea2a834ec3b9139a015439fef3a7"
+    },
+    {
+      "id": "wands-09",
+      "sourcePath": "public/cards/Wands09.png",
+      "sourceSHA256": "821b5017f24915cc40a4ea600ac76389e4c5dd0dff1493cf675711e688cf4ead",
+      "bundledSHA256": "2c3664bd3ed6a812e8f4106319cab46eb468112397f8dcf9f48c536fb8a67ee7"
+    },
+    {
+      "id": "wands-10",
+      "sourcePath": "public/cards/Wands10.png",
+      "sourceSHA256": "9302318e808c215189949275b66dfa54f6aa88b885dd52a78b3ff1365a9ee5cc",
+      "bundledSHA256": "fc501e10637e21af908bf706f5c9d3645fbd4711dc0e74a9a0737b739627fae4"
+    },
+    {
+      "id": "wands-11",
+      "sourcePath": "public/cards/Wands11.png",
+      "sourceSHA256": "61d8defeed5ecf14ad1624543f9317d046283db0048217e9e6c534cc5e3a920e",
+      "bundledSHA256": "7b19abb0705f31d96bc47435234281608245b13b51ea3b2909073fa0d23d80fd"
+    },
+    {
+      "id": "wands-12",
+      "sourcePath": "public/cards/Wands12.png",
+      "sourceSHA256": "2a7ebfd6edf9193d470189d5af3c4be84475e2afc8d172397b1d62c542346700",
+      "bundledSHA256": "a8138bee55e694221ad6704f6cb23739eb9b9a55bcecc1943b0990a8c68e54d1"
+    },
+    {
+      "id": "wands-13",
+      "sourcePath": "public/cards/Wands13.png",
+      "sourceSHA256": "3517b7596a31708c6c9ceb0a2d2da5a6930cfcccc171bdb0c71db75271d635f3",
+      "bundledSHA256": "961c98587bc267d263c61cbf03e8ee35a691407fcdbde451208c3acb0fa9bc85"
+    },
+    {
+      "id": "wands-14",
+      "sourcePath": "public/cards/Wands14.png",
+      "sourceSHA256": "daedc4d43711e2ac4cc18a1ed83a43503e4925efb2187764af79b30207c7ab6c",
+      "bundledSHA256": "420a8b484e1f31e619ef4d9296005f4061b52a5bf1fa5931205b09388dc2ac8e"
+    },
+    {
+      "id": "cups-01",
+      "sourcePath": "public/cards/Cups01.png",
+      "sourceSHA256": "1ba114a999099ac3457b3628cd2d21c50b8f5695e8553a5da16a0d16712bd00f",
+      "bundledSHA256": "0fb4a606d8cee982f7dc1c3c217bd2a13b9d1a3c217f0c000cb5f36688c575e8"
+    },
+    {
+      "id": "cups-02",
+      "sourcePath": "public/cards/Cups02.png",
+      "sourceSHA256": "e43111dcc4f08cb63e3f8a461d20d7510e80169e62ed5f1c47dc1c5c708108e1",
+      "bundledSHA256": "8afd635746713f4dce01519c49fe83f80843378f8258d999e65f317caee3ad26"
+    },
+    {
+      "id": "cups-03",
+      "sourcePath": "public/cards/Cups03.png",
+      "sourceSHA256": "6b28eedcffd5cb206a8f901e817a3223a12f2265a575a34e90d4971e1c6e65d9",
+      "bundledSHA256": "dc1c26af51141df0b0edc56b393c341a3ec0c3f8eb106827d528ba421ed672d1"
+    },
+    {
+      "id": "cups-04",
+      "sourcePath": "public/cards/Cups04.png",
+      "sourceSHA256": "9fc6a6a147bd2c661044c97669cd2983a830d9f24c15f7450cdb0615aaab7c54",
+      "bundledSHA256": "1d63966613a8e027e90804b0790097e34982c93ba0214c9441126604405b4b45"
+    },
+    {
+      "id": "cups-05",
+      "sourcePath": "public/cards/Cups05.png",
+      "sourceSHA256": "d5f269b376bbc24676b5ef12da430025ed3de4a7f881bbf758b8cdc1d2b8bbf3",
+      "bundledSHA256": "f07c0976783c33ca316381d7b10d47b377a086ca5514d7cc6ec72e5c9cb08e42"
+    },
+    {
+      "id": "cups-06",
+      "sourcePath": "public/cards/Cups06.png",
+      "sourceSHA256": "a18afd4e93535a9f29d1492bd441d48f0844071b1778dfa65d3377b02d234696",
+      "bundledSHA256": "9881b98dfafdf80a3dfd537a9fb9d1f483ea3f7f3d01bb516cd40c5a5be4655b"
+    },
+    {
+      "id": "cups-07",
+      "sourcePath": "public/cards/Cups07.png",
+      "sourceSHA256": "fc5d122bdf6a16d7870b7589cc437c7de223e1803ac0d8cc740d13da1bb108d8",
+      "bundledSHA256": "99f1252cb49b5480b32e0bfac722fbb0056020546f21485c23f17d794ef5970f"
+    },
+    {
+      "id": "cups-08",
+      "sourcePath": "public/cards/Cups08.png",
+      "sourceSHA256": "108f16b723431566620acb01704a038821d7e3ac16d1050755644f2f18cccf7b",
+      "bundledSHA256": "937271acff7f1ceeb9e4cf22da117cd223e8e5fc05ad874587f8b3a922fd7651"
+    },
+    {
+      "id": "cups-09",
+      "sourcePath": "public/cards/Cups09.png",
+      "sourceSHA256": "beaf0a530e7a1f94ac23ada5e26f55cde5c928d3853dae81eff00d8e5a748b98",
+      "bundledSHA256": "535596bfb00a1a3303cf27379273e41a369488655c1c95e13b5b967194cd16d2"
+    },
+    {
+      "id": "cups-10",
+      "sourcePath": "public/cards/Cups10.png",
+      "sourceSHA256": "f9be5023cfbecdbd66d05edee9de77dc0d1203157c091161d8db87d21a33bd9a",
+      "bundledSHA256": "de84a79f67c470ae37bd3b0d159639cb6ec24ec1bdc28e393ad028cccd7c43e2"
+    },
+    {
+      "id": "cups-11",
+      "sourcePath": "public/cards/Cups11.png",
+      "sourceSHA256": "db5d9723c04cbffd556ea668a452f7838815d3aa036f63041ee8b6188cf3ee66",
+      "bundledSHA256": "33397a56b881545e1ccf372ffcd4c369cddf924530d10f3a9a1c933eeec01a71"
+    },
+    {
+      "id": "cups-12",
+      "sourcePath": "public/cards/Cups12.png",
+      "sourceSHA256": "6dcf00c63d0922f271c063c7bdd8e7ac571a4498df349d168f696f22c0dd55a0",
+      "bundledSHA256": "7e990e979f815e4831d760098f78f9943c8b8d3eac8e35f0624860002daa1848"
+    },
+    {
+      "id": "cups-13",
+      "sourcePath": "public/cards/Cups13.png",
+      "sourceSHA256": "2225c4c34302b59a54819b33543f906c4765f10fa4f07cc6526805d044f4e6fd",
+      "bundledSHA256": "a179074e1bdcfc50d114cbe6ec288049d4d4dc4769e12a811ab734034e407a30"
+    },
+    {
+      "id": "cups-14",
+      "sourcePath": "public/cards/Cups14.png",
+      "sourceSHA256": "3913de1b92ebb985d25cdd05cc3ee394d0beed3d7c54d77641256679b0626d1d",
+      "bundledSHA256": "13d6e131fc6b9b1f6d26d8bcd8e415b40a1de78f3975fe213bd23f6a10c1a443"
+    },
+    {
+      "id": "swords-01",
+      "sourcePath": "public/cards/Swords01.png",
+      "sourceSHA256": "0e5d191992242792ac51e4f15d5f9ea5fb47ea1ebb18b8c5a05b279ba0e32d42",
+      "bundledSHA256": "3f3b0574cf088d9bf6f8385ee3f917bb7bce1160b51ffd4e0e0cb44b4df9aa39"
+    },
+    {
+      "id": "swords-02",
+      "sourcePath": "public/cards/Swords02.png",
+      "sourceSHA256": "a46795d2971a48cd04e4530f7c058725efba7aebe3a6b863254d6f980d923217",
+      "bundledSHA256": "f949b3847fe5c8339ccc814318d07408365355a4df2783bb63c34c5ee592397c"
+    },
+    {
+      "id": "swords-03",
+      "sourcePath": "public/cards/Swords03.png",
+      "sourceSHA256": "76a404ebbade0d4483fc58ec4cc6cab467076d35d94456a116f3a45751bd67f1",
+      "bundledSHA256": "e45aeaebd0662a8d7c11698bbba7afb44ea1e38445fb9b21dd95279fc308b34f"
+    },
+    {
+      "id": "swords-04",
+      "sourcePath": "public/cards/Swords04.png",
+      "sourceSHA256": "b29222589a59ce749d0254d651df2c3874c7d958aeea221613456b0e1b8eb7e4",
+      "bundledSHA256": "8d5dbdd8cf9bcd887a86c390b4b65177d673ac562d97f03f0882c9df2d757eb9"
+    },
+    {
+      "id": "swords-05",
+      "sourcePath": "public/cards/Swords05.png",
+      "sourceSHA256": "51ff9ce465f9adc2b1d26c19e1de1aec30b0d08c771b2cd971e081c944b03aba",
+      "bundledSHA256": "e153fd514ba25fa510072900923fb1e0991da5b853ecb9c19284aa340db3b3f7"
+    },
+    {
+      "id": "swords-06",
+      "sourcePath": "public/cards/Swords06.png",
+      "sourceSHA256": "254f236f7fb6415636aee7b376147846ef9af81c4be57dc2c0b330b68c47b41d",
+      "bundledSHA256": "f74c9cd4d4b7d9d371704c938417b61c68123e67ec286f040ae944a131321552"
+    },
+    {
+      "id": "swords-07",
+      "sourcePath": "public/cards/Swords07.png",
+      "sourceSHA256": "9f1d812d40c2fc30a51e93b9bc94733d0f58c9a52130c4f26c5075cb03b6bde5",
+      "bundledSHA256": "d916ba8dbb219239fd9b27b45427c189fb4262da17fb4f438abfc31747d5fccf"
+    },
+    {
+      "id": "swords-08",
+      "sourcePath": "public/cards/Swords08.png",
+      "sourceSHA256": "0fd6e51db183ad2d396b3232ee1500007b9851d5ac62ff4c226851b298f82770",
+      "bundledSHA256": "1029332755890d264980f24eabe72da632de38fb4f56607c57ec30a0e8b8f755"
+    },
+    {
+      "id": "swords-09",
+      "sourcePath": "public/cards/Swords09.png",
+      "sourceSHA256": "11ac33c1b4430f7bbcbdd49c44ed1ba8083cd44650239e7c0adb282012d97302",
+      "bundledSHA256": "3fd046688501911452ef2f1e47b73c5c5ffabb77af64cf2805d84596529650fc"
+    },
+    {
+      "id": "swords-10",
+      "sourcePath": "public/cards/Swords10.png",
+      "sourceSHA256": "8b93563df8652473c61af05f221463449f96bc81be34a615e1599155fc5fa565",
+      "bundledSHA256": "5b2f049aa89c1d58e7833a861dffb471f4129418e5d1bdd3cc01fa97ef1ee981"
+    },
+    {
+      "id": "swords-11",
+      "sourcePath": "public/cards/Swords11.png",
+      "sourceSHA256": "d606703af06b0c100654e0a6f9a539496e9a9922212450b0f5a47695b1a85946",
+      "bundledSHA256": "803c8d3fda10dd0022c9512a4e675d36cf4c16e002e27ff115b7defdbfadb67f"
+    },
+    {
+      "id": "swords-12",
+      "sourcePath": "public/cards/Swords12.png",
+      "sourceSHA256": "e2058063524a5eef660c430a1028d3224afc99d3805d34f0f6428081009cbe3c",
+      "bundledSHA256": "72dd8aa9529ccbd99d3c67f57c6d3717b231071dd976003db3aad0e4b42d7577"
+    },
+    {
+      "id": "swords-13",
+      "sourcePath": "public/cards/Swords13.png",
+      "sourceSHA256": "149687a9d828cabf280b65d2349966eb194f0cfec735741bb0b62204ff7ad08c",
+      "bundledSHA256": "9632352d8bbcbe4d9e6e3342dfc3ec9799bd1e0297c6f96ca7eb47e1d0d086f1"
+    },
+    {
+      "id": "swords-14",
+      "sourcePath": "public/cards/Swords14.png",
+      "sourceSHA256": "f3f1e6fc175a0bd7c7397ef0629f63926732548021761f38e01b0ce5f0263304",
+      "bundledSHA256": "b361e5a9b6ddcf09e2e5d715d50779b5541e9bce60978d245921ef1f26e052cf"
+    },
+    {
+      "id": "pentacles-01",
+      "sourcePath": "public/cards/Pentacles01.png",
+      "sourceSHA256": "ee726dd47b6e6c37c96a14a1e5554dc4ee35f6f117e0d37e1477307d2b5a660d",
+      "bundledSHA256": "ee03117b0f6483e758fd4785d96a77cc3c3269aa6106a5bbf56f1afc26f6be0c"
+    },
+    {
+      "id": "pentacles-02",
+      "sourcePath": "public/cards/Pentacles02.png",
+      "sourceSHA256": "242fc6e3a8917af3d941d49ae794d3a88b2c88c799150411824b5e943000c2fb",
+      "bundledSHA256": "7ebdab95a77a2b05048be61c32470823af258cb7f5f4970212b73d847309a4cc"
+    },
+    {
+      "id": "pentacles-03",
+      "sourcePath": "public/cards/Pentacles03.png",
+      "sourceSHA256": "a0aabc2dd03958227400d4edddebee5fba6b440bcf8578a9d3c25ce74745b628",
+      "bundledSHA256": "fa19c59ec29e36a3855f11ca1b4a37183c47039788089e1533d67f113e415c1e"
+    },
+    {
+      "id": "pentacles-04",
+      "sourcePath": "public/cards/Pentacles04.png",
+      "sourceSHA256": "eae2734d711abffc7e0dca6e5df92555cd093792b0c1f1e8b76cb9275263d317",
+      "bundledSHA256": "109dcf1560e9ae5bd79039178192842a7baaffaf359b7353997044ee53a5f3f0"
+    },
+    {
+      "id": "pentacles-05",
+      "sourcePath": "public/cards/Pentacles05.png",
+      "sourceSHA256": "9be883c342e8cb15a0258cf823fe157181b07d7df42f86e2dc31a7bed02ffbee",
+      "bundledSHA256": "a07081667266e249d9b08891e1633756bbfac1b69c547fc17dee04ea74cf165a"
+    },
+    {
+      "id": "pentacles-06",
+      "sourcePath": "public/cards/Pentacles06.png",
+      "sourceSHA256": "d01938029cdbec26cf819b3e46bf8d6053d88075373bca16ea5fe7f8011c6428",
+      "bundledSHA256": "09da50aa147f95ad5a6b17a16b874cc45ed790ff813a9719ad9b0dc2b8942536"
+    },
+    {
+      "id": "pentacles-07",
+      "sourcePath": "public/cards/Pentacles07.png",
+      "sourceSHA256": "662bf83c9cb27dfa9170ec3c4f210bd6621fe4b86631b0a4f99eeba440ebd145",
+      "bundledSHA256": "9b57b282dac5acc743ae69ca8da6f4fe1a641df1e687153921d1ee3ab45253da"
+    },
+    {
+      "id": "pentacles-08",
+      "sourcePath": "public/cards/Pentacles08.png",
+      "sourceSHA256": "438b41a741e8e1dea594c0405c341156f3c0502c43826c208e9e69994a142ccc",
+      "bundledSHA256": "4592c10a1a8fc0decf2f217c7556fdb4fa6b1c8a3e7a7eb5eb5641b24eec10ea"
+    },
+    {
+      "id": "pentacles-09",
+      "sourcePath": "public/cards/Pentacles09.png",
+      "sourceSHA256": "0aab3cdfb7b5f15d7f718dfdb0c243dc89a7d9aaf9b322e5d2de426d40890e06",
+      "bundledSHA256": "812fe99a433f794230898ea5631addcfea9104718bb887462981eb45e057595b"
+    },
+    {
+      "id": "pentacles-10",
+      "sourcePath": "public/cards/Pentacles10.png",
+      "sourceSHA256": "eda3c1111cc45e168128da158428cea8b65a80a4517c4817d124efb64772f533",
+      "bundledSHA256": "88dac0cd5c8d2fb7a4b67f2fc353e32b2324acd00816e82aed830016f40a29d9"
+    },
+    {
+      "id": "pentacles-11",
+      "sourcePath": "public/cards/Pentacles11.png",
+      "sourceSHA256": "293abb94fa9fde0cee5cb35dfee66ab2ca3ef713a1790dff85e133603d8557a3",
+      "bundledSHA256": "9089163d87d99a5c15019780105365f1f9615656946b1330c618eed6f59a36c4"
+    },
+    {
+      "id": "pentacles-12",
+      "sourcePath": "public/cards/Pentacles12.png",
+      "sourceSHA256": "82abebc99ab610d6d0677f8444e447c42aa039e43a3094b61b56b27d05905a80",
+      "bundledSHA256": "48c507e9a738451db8e1e3eb6c7fdd72550f0ae95c46f01bec8794ae9938efff"
+    },
+    {
+      "id": "pentacles-13",
+      "sourcePath": "public/cards/Pentacles13.png",
+      "sourceSHA256": "647b40da3ad6c9dfb3f3e12b51c13e59499bd12d12472d9d661add5468c0d475",
+      "bundledSHA256": "7b61ed18405082895a968b7a82312560e10d4ed064cbc87152f5ea93a668506b"
+    },
+    {
+      "id": "pentacles-14",
+      "sourcePath": "public/cards/Pentacles14.png",
+      "sourceSHA256": "a066b17995a2c7a02e299e6359a513ce16e1b85229734a8b3973c84ca7f132a8",
+      "bundledSHA256": "94ba294f28c8ffa7c3c332c75a9713295ebd9f2c605cb60a95062d24ca5a230c"
+    }
+  ]
+}

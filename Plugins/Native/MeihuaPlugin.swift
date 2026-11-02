@@ -46,6 +46,9 @@ struct MeihuaPlugin: OraclePlugin {
             .init("用卦", "\(NativeHexagrams.trigramNames[use]) · \(NativeCalendar.elements[NativeHexagrams.trigramElements[use]])"),
             .init("体用关系", relation.0)
         ]
+        if !input.profile.unknownFields.contains(.numbers), input.numbers.count >= 2 {
+            rows.insert(.init("所留数字", input.numbers.map(String.init).joined(separator: "、")), at: 1)
+        }
         let classical = NativeHexagrams.classicalReading(original: original, changed: changed, moving: [moving])
         rows += classical.rows
         return OracleResult(method: .meihua, status: classical.available && NativeCalendar.timezoneLimit(input.profile.currentTimeZoneID, date: input.castingDate).isEmpty ? .complete : .partial, headline: "\(NativeHexagrams.name(original)) · \(moving)爻动 · \(relation.0)", rows: rows,

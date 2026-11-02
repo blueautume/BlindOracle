@@ -128,6 +128,8 @@ private struct ReadingResultReferenceCard: View {
                     .lineSpacing(5)
                     .textSelection(.enabled)
 
+                if let draws = result.tarotDraws, !draws.isEmpty { TarotSpreadView(draws: draws) }
+
                 if !result.rows.isEmpty {
                     Divider().overlay(InkTheme.line.opacity(0.6))
                     rows(Array(result.rows.prefix(previewRowCount)), startingAt: 0)

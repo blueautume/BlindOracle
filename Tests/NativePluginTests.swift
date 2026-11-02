@@ -150,7 +150,7 @@ final class NativePluginTests: XCTestCase {
         let outside = ISO8601DateFormatter().date(from: "1800-01-01T00:00:00+08:00")!
         request.profile.birthDate = outside
         request.castingDate = outside
-        for plugin in NativePlugins.all where plugin.descriptor.method != .xingming {
+        for plugin in NativePlugins.all where ![OracleMethod.xingming, .tarot].contains(plugin.descriptor.method) {
             let result = try await plugin.calculate(request)
             XCTAssertEqual(result.status, .unavailable, "\(plugin.descriptor.method)")
         }

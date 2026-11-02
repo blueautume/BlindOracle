@@ -75,14 +75,25 @@ final class LocalVault {
 
 enum PreferenceLearning {
     static var initial: [String: Double] { Dictionary(uniqueKeysWithValues: OracleMethod.allCases.map { ($0.rawValue, 1.0 / Double(OracleMethod.allCases.count)) }) }
+    static func normalized(_ previous: [String: Double]) -> [String: Double] {
+        var values = initial
+        for method in OracleMethod.allCases {
+            if let value = previous[method.rawValue], value.isFinite, value > 0 { values[method.rawValue] = value }
+        }
+        return project(values)
+    }
     /// Small multiplicative steps track personal resonance, never statistical accuracy.
     static func updated(_ previous: [String: Double], chosen: Set<OracleMethod>, opposing: Set<OracleMethod>) -> [String: Double] {
         guard !chosen.isEmpty, chosen.isDisjoint(with: opposing) else { return previous }
-        var values = initial.merging(previous) { _, new in new }
+        var values = normalized(previous)
         for method in OracleMethod.allCases {
             let direction: Double = chosen.contains(method) ? 1 : opposing.contains(method) ? -1 : 0
-            values[method.rawValue] = max(0.04, min(0.25, (values[method.rawValue] ?? 1 / 9) * exp(0.035 * direction)))
+            values[method.rawValue] = max(0.04, min(0.25, (values[method.rawValue] ?? initial[method.rawValue]!) * exp(0.035 * direction)))
         }
+        return project(values)
+    }
+    private static func project(_ previous: [String: Double]) -> [String: Double] {
+        var values = previous.mapValues { max(0.04, min(0.25, $0)) }
         // Projection onto a bounded simplex prevents repeated votes from excluding a method.
         for _ in 0..<30 {
             let total = values.values.reduce(0, +)

@@ -2,7 +2,7 @@ import Foundation
 
 enum NativePlugins {
     static var all: [any OraclePlugin] {
-        [BaziPlugin(), LiuyaoPlugin(), MeihuaPlugin(), QimenPlugin(), XiaoliurenPlugin(), ChengguPlugin(), XingmingPlugin()]
+        [BaziPlugin(), LiuyaoPlugin(), MeihuaPlugin(), QimenPlugin(), XiaoliurenPlugin(), ChengguPlugin(), XingmingPlugin(), TarotPlugin()]
     }
 }
 

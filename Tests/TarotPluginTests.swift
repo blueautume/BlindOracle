@@ -1,0 +1,80 @@
+import XCTest
+@testable import BlindOracle
+
+final class TarotPluginTests: XCTestCase {
+    private func request(draws: [TarotDraw]? = nil) -> OracleInput {
+        var input = OracleInput(question: "接下来如何安排？", profile: OracleProfile(), seed: 42)
+        input.tarotDraws = draws
+        return input
+    }
+
+    private var validDraws: [TarotDraw] {
+        [
+            .init(cardID: "major-00", isReversed: false, position: TarotDeck.positions[0]),
+            .init(cardID: "cups-02", isReversed: true, position: TarotDeck.positions[1]),
+            .init(cardID: "swords-14", isReversed: false, position: TarotDeck.positions[2])
+        ]
+    }
+
+    func testCompleteOfflineDeckHasUniqueCardsMeaningsAndBundledJPEGImages() throws {
+        XCTAssertEqual(TarotDeck.cards.count, 78)
+        XCTAssertEqual(Set(TarotDeck.cards.map(\.id)).count, 78)
+        XCTAssertEqual(TarotDeck.cards.filter { $0.id.hasPrefix("major-") }.count, 22)
+        for suit in ["wands", "cups", "swords", "pentacles"] {
+            XCTAssertEqual(TarotDeck.cards.filter { $0.id.hasPrefix(suit + "-") }.count, 14)
+        }
+        for card in TarotDeck.cards {
+            XCTAssertFalse(card.upright.isEmpty, card.id)
+            XCTAssertFalse(card.reversed.isEmpty, card.id)
+            let url = try XCTUnwrap(TarotDeck.imageURL(for: card), card.id)
+            let data = try Data(contentsOf: url)
+            XCTAssertEqual(Array(data.prefix(3)), [0xFF, 0xD8, 0xFF], card.id)
+        }
+    }
+
+    func testSeededShuffleIsRepeatablePermutationAndChangesWithSeed() {
+        let first = TarotDeck.shuffled(seed: 42).map(\.id)
+        XCTAssertEqual(first, TarotDeck.shuffled(seed: 42).map(\.id))
+        XCTAssertEqual(Set(first), Set(TarotDeck.cards.map(\.id)))
+        XCTAssertNotEqual(first, TarotDeck.shuffled(seed: 43).map(\.id))
+    }
+
+    func testMissingOrIncompleteSelectionDoesNotSilentlyDrawCards() async throws {
+        for draws in [nil, [], Array(validDraws.prefix(2))] as [[TarotDraw]?] {
+            let result = try await TarotPlugin().calculate(request(draws: draws))
+            XCTAssertEqual(result.status, .unavailable)
+            XCTAssertTrue(result.rows.isEmpty)
+            XCTAssertNil(result.tarotDraws)
+        }
+    }
+
+    func testSavedSelectionControlsCardsOrientationAndReferenceKeywords() async throws {
+        let result = try await TarotPlugin().calculate(request(draws: validDraws))
+        XCTAssertEqual(result.status, .complete)
+        XCTAssertEqual(result.tarotDraws, validDraws)
+        let reversedCard = try XCTUnwrap(TarotDeck.card(id: "cups-02"))
+        XCTAssertEqual(result.rows.first { $0.label == "第2张牌义 · Reversed" }?.value,
+                       reversedCard.reversed.joined(separator: "; "))
+        XCTAssertTrue(result.evidence[1].statement.contains("Card: \(reversedCard.name). Orientation: Reversed."))
+        XCTAssertTrue(result.evidence.allSatisfy { $0.polarity == 0 })
+    }
+
+    func testDuplicateUnknownAndMisorderedCardsAreRejected() async throws {
+        var duplicate = validDraws
+        duplicate[1].cardID = duplicate[0].cardID
+        var unknown = validDraws
+        unknown[1].cardID = "missing-card"
+        var misplaced = validDraws
+        misplaced[1].position = TarotDeck.positions[0]
+        for draws in [duplicate, unknown, misplaced] {
+            let result = try await TarotPlugin().calculate(request(draws: draws))
+            XCTAssertEqual(result.status, .unavailable)
+            XCTAssertNil(result.tarotDraws)
+        }
+    }
+
+    func testDrawRecordsRoundTripWithoutChangingSelection() throws {
+        let data = try JSONEncoder().encode(validDraws)
+        XCTAssertEqual(try JSONDecoder().decode([TarotDraw].self, from: data), validDraws)
+    }
+}

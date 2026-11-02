@@ -40,6 +40,7 @@ final class BlindOracleUITests: XCTestCase {
         for _ in 0..<5 where !confirm.isHittable { app.swipeUp() }
         XCTAssertTrue(confirm.isHittable)
         confirm.tap()
+        completeCoinInteraction(in: app)
         let localSummary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "当前为本地试算")).firstMatch
         XCTAssertTrue(localSummary.waitForExistence(timeout: 30))
         let reference = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "readingData-")).firstMatch
@@ -135,6 +136,24 @@ final class BlindOracleUITests: XCTestCase {
         XCTAssertTrue(confirm.waitForExistence(timeout: 15))
         for _ in 0..<7 where !confirm.isHittable { app.swipeUp() }
         XCTAssertTrue(confirm.isHittable); confirm.tap()
+        completeCoinInteraction(in: app)
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "当前为本地试算")).firstMatch.waitForExistence(timeout: 30))
+    }
+
+    @MainActor private func completeCoinInteraction(in app: XCUIApplication) {
+        let cast = app.buttons["castCoins"]
+        XCTAssertTrue(cast.waitForExistence(timeout: 15))
+        for _ in 0..<6 {
+            let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: cast)
+            XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
+            XCTAssertTrue(cast.isHittable)
+            cast.tap()
+        }
+        let confirm = app.buttons["confirmInteraction"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10))
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: confirm)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
+        XCTAssertTrue(confirm.isHittable)
+        confirm.tap()
     }
 }

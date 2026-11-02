@@ -30,6 +30,9 @@ struct ChatView: View {
                                     messageView(message).id(message.id)
                                 }
                             }
+                            if let session = store.pendingInteraction, let request = session.currentRequest {
+                                interactionCard(request)
+                            }
                             if !store.status.isEmpty { activityLine }
                             if let notice = store.notice {
                                 HStack(alignment: .top, spacing: 8) {
@@ -45,6 +48,9 @@ struct ChatView: View {
                             .accessibilityHidden(showHistory)
                     }
                     .scrollDismissesKeyboard(.interactively)
+                    .contentShape(Rectangle())
+                    .simultaneousGesture(TapGesture().onEnded { composing = false })
+                    .accessibilityIdentifier("chatTranscript")
                     .onChange(of: store.messages.last?.content) { _, _ in
                         withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
                     }
@@ -76,10 +82,13 @@ struct ChatView: View {
                         Text("问").font(.system(size: 10, weight: .medium, design: .serif)).foregroundStyle(InkTheme.cinnabar)
                             .padding(5).overlay(RoundedRectangle(cornerRadius: 2).stroke(InkTheme.cinnabar.opacity(0.55), lineWidth: 0.8))
                     }.foregroundStyle(InkTheme.ink)
+                        .contentShape(Rectangle())
+                        .onTapGesture { composing = false }
+                        .accessibilityIdentifier("chatTitle")
                         .accessibilityHidden(showHistory)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { confirmNew = true } label: { Image(systemName: "square.and.pencil").font(.system(size: 17)).foregroundStyle(InkTheme.secondary) }
+                    Button { composing = false; confirmNew = true } label: { Image(systemName: "square.and.pencil").font(.system(size: 17)).foregroundStyle(InkTheme.secondary) }
                         .disabled(store.isBusy || store.messages.isEmpty).accessibilityLabel("开启新对话")
                         .accessibilityIdentifier("newConversationButton")
                         .accessibilityHidden(showHistory)
@@ -90,11 +99,26 @@ struct ChatView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) { composer.accessibilityHidden(showHistory) }
             .sheet(isPresented: Binding(get: {
                 store.showIntake && !showHistory && selectedReading == nil
-            }, set: { store.showIntake = $0 })) {
+            }, set: { store.showIntake = $0 }), onDismiss: {
+                if store.pendingInteraction != nil { store.showInteraction = true }
+            }) {
                 if let plan = store.pendingPlan {
                     IntakeView(plan: plan, profile: plan.subject == "他人" ? OracleProfile() : store.profile) { profile, numbers, save in
                         store.confirmIntake(profile: profile, numbers: numbers, save: save)
                     }
+                }
+            }
+            .sheet(isPresented: Binding(get: {
+                store.showInteraction && !store.showIntake && !showHistory && selectedReading == nil
+            }, set: { store.showInteraction = $0 })) {
+                if let session = store.pendingInteraction {
+                    OracleInteractionView(session: session, onProgress: { response in
+                        store.saveInteractionProgress(response, sessionID: session.id)
+                    }, onComplete: { response in
+                        store.completeInteraction(response, sessionID: session.id)
+                    })
+                    .id(session.currentRequest?.id)
+                    .interactiveDismissDisabled(false)
                 }
             }
             .sheet(item: $selectedReading) { reference in
@@ -106,6 +130,7 @@ struct ChatView: View {
             } message: { Text("当前对话归档，基础资料、推演和偏好仍保留。") }
         }
         .toolbar(showHistory ? .hidden : .visible, for: .tabBar)
+        .onChange(of: store.selectedTab) { _, _ in composing = false }
         .accessibilityHidden(showHistory)
         .overlay {
             if showHistory {
@@ -179,7 +204,12 @@ struct ChatView: View {
                             .accessibilityIdentifier("readingData-\(message.id.uuidString)")
                             .disabled(store.phase == .planning)
                         if !store.isBusy {
-                            Button { draft = "请结合刚才的结果再详细解释一下，给我更具体的建议。"; submit() } label: { Label("再细说些", systemImage: "text.bubble") }
+                            if let run = store.runs.first(where: { $0.id == runID }), run.synthesis == nil {
+                                Button { store.retrySynthesis(run) } label: { Label("重试解读", systemImage: "arrow.clockwise") }
+                                    .accessibilityIdentifier("retryReading-\(runID.uuidString)")
+                            } else {
+                                Button { draft = "请结合刚才的结果再详细解释一下，给我更具体的建议。"; submit() } label: { Label("再细说些", systemImage: "text.bubble") }
+                            }
                         }
                     }.font(.system(size: 11)).foregroundStyle(InkTheme.secondary).padding(.top, 6)
                 }
@@ -207,6 +237,23 @@ struct ChatView: View {
             }.padding(19).background(.white.opacity(0.4), in: RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(InkTheme.line, lineWidth: 0.7))
         }.buttonStyle(.plain).accessibilityIdentifier("intakeCard")
+    }
+
+    private func interactionCard(_ request: OracleInteractionRequest) -> some View {
+        Button { composing = false; store.showInteraction = true } label: {
+            HStack(spacing: 15) {
+                Image(systemName: request.kind == .tarot ? "rectangle.on.rectangle.angled" : request.kind == .coins ? "circle.grid.2x2" : "number")
+                    .font(.system(size: 25, weight: .ultraLight)).foregroundStyle(InkTheme.cinnabar)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(request.kind == .coins && store.pendingInteraction?.input.castingStyle == "yarrow" ? "蓍草成卦" : request.title)
+                        .font(.system(size: 19, design: .serif)).tracking(2).foregroundStyle(InkTheme.ink)
+                    Text("慢慢来，已有的进度替你留着。").font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.right").font(.system(size: 13)).foregroundStyle(InkTheme.cinnabar)
+            }.padding(19).background(.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(InkTheme.line, lineWidth: 0.7))
+        }.buttonStyle(.plain).accessibilityIdentifier("interactionCard")
     }
 
     private var activityLine: some View {
@@ -274,10 +321,12 @@ struct ChatView: View {
                 .background(.white.opacity(0.5), in: RoundedRectangle(cornerRadius: 22))
                 .overlay(RoundedRectangle(cornerRadius: 22).stroke(InkTheme.line, lineWidth: 0.8))
             if store.messages.isEmpty { Text("本地推演 · AI 协助解读").font(.system(size: 9)).tracking(1).foregroundStyle(InkTheme.secondary.opacity(0.75)) }
-        }.frame(maxWidth: 720).padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 8).frame(maxWidth: .infinity).background(InkTheme.paper)
+        }.frame(maxWidth: 720).padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 8).frame(maxWidth: .infinity)
+            .background { InkTheme.paper.contentShape(Rectangle()).onTapGesture { composing = false } }
     }
     private func submit() {
         guard !store.isBusy else { return }
+        guard store.pendingInteraction == nil else { composing = false; store.showInteraction = true; return }
         let text = draft; draft = ""; composing = false; store.send(text)
     }
 }

@@ -77,6 +77,17 @@
 		F858321910B4E380FCC73483 /* Vendor/LunarSwift/Lunar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FEC68C7279139775AAA7301 /* Vendor/LunarSwift/Lunar.swift */; };
 		FC11462A1D5F39B071C88226 /* Plugins/Sky/SkyPlugins.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8476580A3DAFCDE4BA2067A1 /* Plugins/Sky/SkyPlugins.swift */; };
 		FE6A393A73586051011EBA03 /* Vendor/LunarSwift/JieQi.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04CAD42427C269F9F760AFBA /* Vendor/LunarSwift/JieQi.swift */; };
+		07DD1792BAF6420599BEE707 = { isa = PBXBuildFile; fileRef = F5D0CE4657728878EA583034; };
+		51042322101E35BFD7ECDE75 = { isa = PBXBuildFile; fileRef = 4719657E3D6D78337DEF2B8D; };
+		6A56EDB92AE3740F0502585C = { isa = PBXBuildFile; fileRef = F37A3DE18E78597A11D647FB; };
+		6FCF72462B41723578A32165 = { isa = PBXBuildFile; fileRef = 0E670E294D71DD409935A98E; };
+		7EAFFA1B1D2E5CD03A97C8D2 = { isa = PBXBuildFile; fileRef = 27B31E0553E504ABA8D2B310; };
+		99A23049938EF439DD00FEE2 = { isa = PBXBuildFile; fileRef = FBA3BC5E25A6B996FC1BD91A; };
+		9A009DCC2D6BEAA937A5DE5E = { isa = PBXBuildFile; fileRef = 55C384363A8589207F9DFF18; };
+		9C79F323EE8960ED9D06526C = { isa = PBXBuildFile; fileRef = 2660E297A06FA807B423590F; };
+		B05D8A18785590E6F0C86505 = { isa = PBXBuildFile; fileRef = 4C0C7F2D19EE90C70F7DE3E6; };
+		B2A6A36FECF092F3FAE05A71 = { isa = PBXBuildFile; fileRef = B19802EFAFD481A88DEA4571; };
+		D4AE0C2971C14BECBD0ECE6E = { isa = PBXBuildFile; fileRef = E08983289BED6FB7BB35C08E; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -170,6 +181,17 @@
 		F704CBB7A9003610B62AE67B /* Vendor/LunarSwift/Fu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/Fu.swift; sourceTree = "<group>"; };
 		F986D4BB1FCD3D58BD853930 /* Vendor/LunarSwift/SolarMonth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/SolarMonth.swift; sourceTree = "<group>"; };
 		FDE748B901BA0D0C243217BB /* Vendor/LunarSwift/LiuNian.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/LiuNian.swift; sourceTree = "<group>"; };
+		0E670E294D71DD409935A98E = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/OracleInteractionTests.swift"; sourceTree = "<group>"; };
+		2660E297A06FA807B423590F = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/TarotPluginTests.swift"; sourceTree = "<group>"; };
+		27B31E0553E504ABA8D2B310 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/OracleInteraction.swift"; sourceTree = "<group>"; };
+		4719657E3D6D78337DEF2B8D = { isa = PBXFileReference; lastKnownFileType = "folder"; path = "Resources/Tarot"; sourceTree = "<group>"; };
+		4C0C7F2D19EE90C70F7DE3E6 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/TarotSpreadView.swift"; sourceTree = "<group>"; };
+		55C384363A8589207F9DFF18 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/DeepSeekConfiguration.swift"; sourceTree = "<group>"; };
+		B19802EFAFD481A88DEA4571 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/InteractionUITests.swift"; sourceTree = "<group>"; };
+		E08983289BED6FB7BB35C08E = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/OracleInteractionView.swift"; sourceTree = "<group>"; };
+		F37A3DE18E78597A11D647FB = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/TarotDeck.swift"; sourceTree = "<group>"; };
+		F5D0CE4657728878EA583034 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/DeepSeekConfigurationTests.swift"; sourceTree = "<group>"; };
+		FBA3BC5E25A6B996FC1BD91A = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Plugins/Native/TarotPlugin.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -191,6 +213,7 @@
 				88538569096914C7E497DEFF /* Resources/Native */,
 				398169473CB0E42EACE9C08D /* Resources/Sky */,
 				25F162EE31CC2A073312F9DC /* Resources/ThirdPartyNotices.txt */,
+				4719657E3D6D78337DEF2B8D,
 			);
 			name = Resources;
 			sourceTree = "<group>";
@@ -256,6 +279,12 @@
 				8C2D6782D5487BC856F682EB /* Views/InkTheme.swift */,
 				DBC60C2872AB143498164C85 /* Views/IntakeView.swift */,
 				E9658E6981BE22FFEDA80B6C /* Views/ReadingResultsSheet.swift */,
+				27B31E0553E504ABA8D2B310,
+				F37A3DE18E78597A11D647FB,
+				FBA3BC5E25A6B996FC1BD91A,
+				55C384363A8589207F9DFF18,
+				E08983289BED6FB7BB35C08E,
+				4C0C7F2D19EE90C70F7DE3E6,
 			);
 			name = Sources;
 			sourceTree = "<group>";
@@ -269,6 +298,9 @@
 				1CFFDCE87BF4D13203DA3447 /* Tests/NativePluginTests.swift */,
 				CAF993DB33533D4B616777C5 /* Tests/PersistenceAndPreferenceTests.swift */,
 				BE55F98D9D3E05A5FF30160D /* Tests/SkyPluginTests.swift */,
+				F5D0CE4657728878EA583034,
+				0E670E294D71DD409935A98E,
+				2660E297A06FA807B423590F,
 			);
 			name = Tests;
 			sourceTree = "<group>";
@@ -277,6 +309,7 @@
 			isa = PBXGroup;
 			children = (
 				E272884F9DD5FF8215160095 /* UITests/BlindOracleUITests.swift */,
+				B19802EFAFD481A88DEA4571,
 			);
 			name = UITests;
 			sourceTree = "<group>";
@@ -395,6 +428,7 @@
 				E20E43DF0EF623694FA77290 /* Resources/Native in Resources */,
 				F39B1118CA2E5AD9282000D7 /* Resources/Sky in Resources */,
 				039183FC04B9E630ADB31B62 /* Resources/ThirdPartyNotices.txt in Resources */,
+				51042322101E35BFD7ECDE75,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -424,6 +458,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				67D503817DF9FD0B0CAC3EA1 /* UITests/BlindOracleUITests.swift in Sources */,
+				B2A6A36FECF092F3FAE05A71,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -489,6 +524,12 @@
 				A610D2D8AFAD6041D279FAAC /* Views/InkTheme.swift in Sources */,
 				5DA2F73375E50353D155104C /* Views/IntakeView.swift in Sources */,
 				033C56C418649AA9917F4B19 /* Views/ReadingResultsSheet.swift in Sources */,
+				7EAFFA1B1D2E5CD03A97C8D2,
+				6A56EDB92AE3740F0502585C,
+				99A23049938EF439DD00FEE2,
+				9A009DCC2D6BEAA937A5DE5E,
+				D4AE0C2971C14BECBD0ECE6E,
+				B05D8A18785590E6F0C86505,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -502,6 +543,9 @@
 				8A2E3806BC4E3818DC60623B /* Tests/NativePluginTests.swift in Sources */,
 				04A45B0CCBAB6E71A5D7654C /* Tests/PersistenceAndPreferenceTests.swift in Sources */,
 				C336DE80D20BB10B10D16E05 /* Tests/SkyPluginTests.swift in Sources */,
+				07DD1792BAF6420599BEE707,
+				6FCF72462B41723578A32165,
+				9C79F323EE8960ED9D06526C,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

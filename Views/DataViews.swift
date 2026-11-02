@@ -196,10 +196,11 @@ struct ReadingRecordView: View {
                                 }
                             }.buttonStyle(.plain)
                         }
-                        if run.completedAt != nil && !store.isBusy {
+                        if run.results.contains(where: { $0.status == .complete || $0.status == .partial }) {
                             Button { store.retrySynthesis(run) } label: {
                                 Label("请先知再解读一次", systemImage: "arrow.clockwise").font(.system(size: 14, design: .serif))
                             }.tint(InkTheme.cinnabar).frame(maxWidth: .infinity).padding(.top, 4)
+                                .disabled(store.isBusy || store.pendingInteraction != nil)
                         }
                         Text("此处逐项展示本地结果，资料不确定的部分会明确留白。")
                             .font(.system(size: 12)).foregroundStyle(InkTheme.secondary).lineSpacing(5)
@@ -223,6 +224,7 @@ struct OracleResultDetailView: View {
                         Text("版本 \(result.version) · 本地耗时 \(String(format: "%.0f", result.durationMilliseconds)) ms")
                             .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                     }
+                    if let draws = result.tarotDraws, !draws.isEmpty { TarotSpreadView(draws: draws) }
                     if !result.rows.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
                             SectionEyebrow(text: "原始盘面")
@@ -385,7 +387,7 @@ private struct PluginDocumentView: View {
 private struct OracleSettingsView: View {
     @EnvironmentObject private var store: OracleStore
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("deepseek.model") private var model = "deepseek-flash"
+    @AppStorage("deepseek.model") private var model = DeepSeekConfiguration.defaultModel
     @AppStorage("oracle.localOnly") private var localOnly = false
     @State private var draftKey = ""
     @State private var feedback = ""

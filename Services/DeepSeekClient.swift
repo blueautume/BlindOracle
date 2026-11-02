@@ -34,19 +34,20 @@ actor DeepSeekClient {
     private let endpoint = URL(string: "https://api.deepseek.com/chat/completions")!
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    private let credential: String?
 
-    init() {
+    init(apiKey: String? = nil) {
+        credential = apiKey
         let configuration = URLSessionConfiguration.ephemeral
         configuration.urlCache = nil
         configuration.httpCookieStorage = nil
-        configuration.timeoutIntervalForRequest = 90
-        configuration.timeoutIntervalForResource = 240
+        configuration.timeoutIntervalForRequest = 300
+        configuration.timeoutIntervalForResource = 900
         session = URLSession(configuration: configuration)
     }
 
     private var model: String {
-        let value = UserDefaults.standard.string(forKey: "deepseek.model") ?? "deepseek-flash"
-        return value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "deepseek-flash" : value
+        DeepSeekConfiguration.model()
     }
 
     func plan(question: String, profile: OracleProfile, plugins: [OraclePluginDescriptor],
@@ -63,6 +64,10 @@ actor DeepSeekClient {
         回复和澄清也保持盲眼先知安静亲切的口吻，不讲工程术语，不提插件名字。
         对于 intake，你的工作是根据具体问题选择适用的本地插件，并列出所需资料；禁止自己心算或编造命盘。
         只能选择目录里存在的方法。尽可能充分利用互补且与问题相关的方法，但不能为了凑数量调用不适用方法。
+        用户明确指定塔罗或其他单一方法时，尊重其选择，不额外索取不相关的生辰资料。
+        需要用户参与时，在 interactions 数组发起本地交互，交互完成前不作解读、不编造抽牌或投掷结果。
+        交互白名单：tarot方法用kind=tarot（三张牌：现状、影响、建议）；liuyao用kind=coins（逐次六爻）；meihua需要报数时用kind=numbers（选三个1到999的整数），不需要报数可按时间起卦。
+        每项交互为 {"method":"tarot","kind":"tarot","prompt":"静下心，选出三张牌。"}。method必须在本次methods中，只能使用该方法声明的interactionKinds，不指定牌ID、朝向或随机结果。reply/clarify的interactions为空。
         若问的是本人，可选出生资料类和即时起卦类；若是他人，不能把本人的档案套到他人身上；若是具体事件，优先即时起卦。
         从对话中保持询问对象的连续性：前文说的是朋友、伴侣或家人，后续“他/她/再说详细点”仍属于该对象；不得改成本人。确实无法确定对象时用 clarify 询问。
         用户可以对资料回答“不确定”。已明确不确定的项目不要反复追问，不得用现在的时间或当前位置冒充出生时间或出生地。
@@ -78,7 +83,7 @@ actor DeepSeekClient {
         let turns = [AIConversationTurn(role: "system", content: system)]
             + sanitizedHistory(history)
             + [AIConversationTurn(role: "user", content: user)]
-        let payload: PlanPayload = try await structured(turns, maxTokens: 1800)
+        let payload: PlanPayload = try await structured(turns, maxTokens: 2400)
         let available = Set(plugins.map(\.method))
         let action = AIPlanRouting.normalizedAction(payload.action)
         let methods = AIPlanRouting.selectedMethods(action: action, requested: payload.methods ?? [], available: available)
@@ -92,6 +97,12 @@ actor DeepSeekClient {
                               methods: methods, requiredFields: fields,
                               note: String(payload.note.prefix(180)), question: question)
         plan.action = action
+        let requests = (payload.interactions ?? []).compactMap { item -> OracleInteractionRequest? in
+            guard let method = OracleMethod(rawValue: item.method), let kind = OracleInteractionKind(rawValue: item.kind) else { return nil }
+            return OracleInteractionRequest(method: method, kind: kind, prompt: item.prompt ?? "")
+        }
+        plan.interactions = requests
+        plan.interactions = action == "intake" ? OracleInteractionPolicy.requests(for: plan) : []
         return plan
     }
 
@@ -106,6 +117,7 @@ actor DeepSeekClient {
         依据提供的本地计算结果回应具体问题，主要解读约400个汉字，可按问题需要略作增减。先给明确倾向，再给2到3项具体可行的行动建议。
         对话中不透露用了哪些方法、不列插件名称、不输出盘面推演步骤。详细原始结果由应用的数据页独立展示。
         只能使用提供的事实和规则结果。partial 结果的 limitations 必须在解释中保留其不确定性，unavailable/failed 不得参与判断。
+        塔罗数据保留英文原文。按保存的牌位、牌名与正逆位理解对应英文牌义，结合用户问题用中文自然解读；不得重新抽牌、改变朝向、补造卡牌或声称读取了未提供的牌面细节。
         weights 是用户历史选择形成的偏好权重，不是准确率、概率或经科学验证的可信度。不得把方法数量或权重当作事实证明；不得编造百分比。
         多种解读有显著分歧时，把相近观点归成两组，恰好输出两个简短选项；每个选项各说明一种倾向和适合观察的现实线索。轻微差异自行整合，alternatives 返回空数组。
         同一方法不应同时支持两个互斥选项；支持者必须来自本次可用结果。不得凭空制造冲突。
@@ -115,7 +127,7 @@ actor DeepSeekClient {
         {"text":"约400字的解读正文","alternatives":[]}
         或 {"text":"主体解读","alternatives":[{"id":"a","title":"更像第一种处境","body":"精炼说明","supportingMethods":["bazi"]},{"id":"b","title":"更像第二种处境","body":"精炼说明","supportingMethods":["meihua"]}]}
         """
-        let payload = "用户问题：\(run.input.question)\n选定对象：\(run.input.subject)\n本地结果 json：\(try json(eligible))\n偏好权重 json：\(try json(weights))"
+        let payload = "用户问题：\(run.input.question)\n选定对象：\(run.input.subject)\n用户已完成的交互 json：\(try json(run.input.interactionResponses ?? []))\n本地结果 json：\(try json(eligible))\n偏好权重 json：\(try json(weights))"
         let turns = [AIConversationTurn(role: "system", content: system)]
             + sanitizedHistory(history)
             + [AIConversationTurn(role: "user", content: payload)]
@@ -167,14 +179,14 @@ actor DeepSeekClient {
     // MARK: - Transport
 
     private func request(_ messages: [AIConversationTurn], jsonMode: Bool, streaming: Bool, maxTokens: Int) throws -> URLRequest {
-        guard let key = KeychainStore.shared.string(), !key.isEmpty else { throw DeepSeekError.missingKey }
+        guard let key = credential ?? KeychainStore.shared.string(), !key.isEmpty else { throw DeepSeekError.missingKey }
         var body: [String: Any] = [
             "model": model,
             "messages": messages.map { ["role": $0.role, "content": $0.content] },
             "stream": streaming,
-            "max_tokens": maxTokens,
-            "temperature": jsonMode ? 0.25 : 0.65,
-            "thinking": ["type": "disabled"]
+            "max_tokens": max(65_536, maxTokens),
+            "thinking": ["type": "enabled"],
+            "reasoning_effort": "max"
         ]
         if jsonMode { body["response_format"] = ["type": "json_object"] }
         var request = URLRequest(url: endpoint)
@@ -293,7 +305,9 @@ actor DeepSeekClient {
         var methods: [String]?
         var requiredFields: [String]?
         var note: String
+        var interactions: [InteractionPayload]?
     }
+    private struct InteractionPayload: Decodable { var method: String; var kind: String; var prompt: String? }
     private struct SynthesisPayload: Decodable { var text: String; var alternatives: [AIReadingAlternative]? }
     private struct CompletionEnvelope: Decodable {
         var choices: [Choice]
