@@ -1,3 +1,8 @@
+Current app icon and OraclePortrait: user-supplied artwork, selected 2026-11-02.
+The supplied square opaque PNG was resized from 1254x1254 to 1024x1024 for the asset catalog, without cropping or regenerating the artwork.
+Both installed PNGs are identical. SHA-256: 53c62e518559c33bee053b4c31a2ef69de880d0b7457f4b3ec350f56200e51bd.
+
+Historical prompt for the previous illustration (replaced):
 Tool: built-in imagegen. Original generated asset preserved and copied into Resources/Assets.xcassets. App icon exported at 1024×1024; avatar uses the original raster with a native SwiftUI circular/radial mask.
 
 Final prompt:

@@ -30,7 +30,7 @@ enum NativeCalendar {
     static func unavailable(_ method: OracleMethod, _ reason: String) -> OracleResult {
         OracleResult(method: method, status: .unavailable, headline: "资料不足，暂不推算", rows: [], limitations: [reason])
     }
-    static func descriptor(_ method: OracleMethod, summary: String, required: [OracleField] = [], optional: [OracleField] = [], questions: [String], output: String, limitations: [String] = [], source: String = "盲眼先知独立 Swift 实现；历法：6tail/lunar-swift", license: String = "原创实现；LunarSwift MIT") -> OraclePluginDescriptor {
+    static func descriptor(_ method: OracleMethod, summary: String, required: [OracleField] = [], optional: [OracleField] = [], questions: [String], output: String, limitations: [String] = [], source: String = "瞎子独立 Swift 实现；历法：6tail/lunar-swift", license: String = "原创实现；LunarSwift MIT") -> OraclePluginDescriptor {
         OraclePluginDescriptor(method: method, version: "1.0.0", summary: summary, requiredFields: required,
                                optionalFields: optional, supportedQuestions: questions, outputDescription: output,
                                limitations: ["传统规则的结构化演算，不代表经验证的事件概率。"] + limitations,

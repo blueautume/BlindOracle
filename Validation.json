@@ -2,17 +2,18 @@
   "date": "2026-11-02",
   "xcode": "27.1 (27A9275)",
   "minimum_iOS": "17.0",
-  "release_arm64_bundle_bytes": 16366643,
+  "release_arm64_bundle_bytes": 16609336,
   "release_contains_development_key_resource": false,
   "source_credential_matches": [],
   "release_credential_matches": [],
   "unit_tests_passed": 163,
-  "ui_tests_passed": 6,
+  "ui_tests_passed": 1,
   "live_api_tests_passed": 1,
   "default_live_test_skipped_intentionally": 3,
   "local_plugin_count": 10,
   "release_is_signed": false,
   "notes": [
+    "Branding-only update: supplied artwork installed as opaque 1024px app icon and matching avatar; display name, in-app identity and export title use 瞎子. Debug and Release product bundle identifiers remain com.lihao.BlindOracle. One UI regression and Release archive passed with zero warnings; the last full unit suite and broader interaction results below are retained evidence.",
     "Release measured from the stripped unsigned arm64 archive .app, not App Store compressed download size.",
     "163 non-live unit tests passed in the final run; three opt-in live tests were skipped there.",
     "Six distinct UI regressions passed in complete result bundles: collapsed/expanded native loading indicator, history restoration, chat numbers followed by coin casts, two-person conversational intake and confirmed reading, flat profile fields, and preserving a saved birthday/time across editing and restart.",
@@ -27,7 +28,7 @@
     "Changing the requested method while supplying data preserves the original question, applies the new method, and requires a new summary confirmation. A clock correction alone cannot change methods; ambiguous questions or negative replies cannot act as confirmation."
   ],
   "unit_test_result": "build-conversation/reviewed.xcresult",
-  "final_ui_result": "build-conversation/ui-closed.xcresult",
+  "final_ui_result": "build-branding/branding-ui.xcresult",
   "live_api_result": "build-conversation/live-verified.xcresult",
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
@@ -57,7 +58,7 @@
   "build_warning_cleanup": {
     "debug_clean_build_warning_count": 0,
     "release_archive_warning_count": 0,
-    "release_archive_path": "build-conversation-release/BlindOracle-reviewed.xcarchive",
+    "release_archive_path": "build-branding/BlindOracle.xcarchive",
     "archive_signed": false,
     "store_upload_performed": false,
     "ipad_orientations": [
@@ -86,5 +87,20 @@
   "chat_forms_removed": true,
   "explicit_summary_confirmation_required": true,
   "numbers_collected_in_chat": true,
-  "profile_editor_fields_flat": true
+  "profile_editor_fields_flat": true,
+  "app_display_name": "瞎子",
+  "bundle_identifier": "com.lihao.BlindOracle",
+  "branding": {
+    "app_name": "瞎子",
+    "bundle_identifier_unchanged": true,
+    "icon_dimensions": [
+      1024,
+      1024
+    ],
+    "icon_has_alpha": false,
+    "icon_sha256": "53c62e518559c33bee053b4c31a2ef69de880d0b7457f4b3ec350f56200e51bd",
+    "icon_and_avatar_match": true,
+    "debug_and_release_metadata_verified": true,
+    "ui_result": "build-branding/branding-ui.xcresult"
+  }
 }

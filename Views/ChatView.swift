@@ -115,7 +115,7 @@ struct ChatView: View {
                 }
                 ToolbarItem(placement: .principal) {
                     HStack(spacing: 10) {
-                        Text("盲眼先知").font(.system(size: 20, weight: .medium, design: .serif)).tracking(3)
+                        Text("瞎子").font(.system(size: 20, weight: .medium, design: .serif)).tracking(3)
                         Text("问").font(.system(size: 10, weight: .medium, design: .serif)).foregroundStyle(InkTheme.cinnabar)
                             .padding(5).overlay(RoundedRectangle(cornerRadius: 2).stroke(InkTheme.cinnabar.opacity(0.55), lineWidth: 0.8))
                     }.foregroundStyle(InkTheme.ink)
@@ -173,11 +173,11 @@ struct ChatView: View {
 
     private var welcome: some View {
         VStack(spacing: 0) {
-            Text("B L I N D  O R A C L E").font(.system(size: 10, weight: .medium)).tracking(2).foregroundStyle(InkTheme.secondary.opacity(0.8)).padding(.top, 35)
+            Text("X I A  Z I").font(.system(size: 10, weight: .medium)).tracking(2).foregroundStyle(InkTheme.secondary.opacity(0.8)).padding(.top, 35)
             Image("OraclePortrait").resizable().scaledToFit().frame(width: 220, height: 220)
                 .blendMode(.multiply)
                 .mask { RadialGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.68), .init(color: .clear, location: 1)], center: .center, startRadius: 0, endRadius: 120) }
-                .padding(.top, 18).accessibilityLabel("水墨绘制的盲眼先知")
+                .padding(.top, 18).accessibilityLabel("水墨绘制的瞎子")
             Text("问一事，听一言。").font(.system(size: 27, weight: .regular, design: .serif)).tracking(3).foregroundStyle(InkTheme.ink).padding(.top, 10)
             Text("坐吧。把心里那件事，说给我听。").font(.system(size: 14, design: .serif)).foregroundStyle(InkTheme.secondary).padding(.top, 14)
             HStack(spacing: 12) {

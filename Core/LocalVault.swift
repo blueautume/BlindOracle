@@ -69,7 +69,7 @@ final class LocalVault {
     }
     func export(profiles: [OracleProfile], runs: [OracleRun], weights: [String: Double]) throws -> URL {
         struct Export: Encodable { var schemaVersion = 1; var exportedAt = Date(); var profiles: [OracleProfile]; var runs: [OracleRun]; var weights: [String: Double] }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("BlindOracle-本地档案.json")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("瞎子-本地档案.json")
         try encoder.encode(Export(profiles: profiles, runs: runs, weights: weights)).write(to: url, options: .atomic)
         return url
     }

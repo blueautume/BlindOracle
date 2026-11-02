@@ -478,7 +478,7 @@ private struct OracleSettingsView: View {
                         }
                         VStack(spacing: 9) {
                             OracleMark(size: 38)
-                            Text("盲眼先知 · BlindOracle").font(.system(size: 15, design: .serif)).foregroundStyle(InkTheme.ink)
+                            Text("瞎子").font(.system(size: 15, design: .serif)).foregroundStyle(InkTheme.ink)
                             Text("版本 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")（\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—")）")
                                 .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                             Text("慢听一问，静观其变。")
