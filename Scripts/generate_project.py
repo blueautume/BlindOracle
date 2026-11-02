@@ -33,6 +33,7 @@ common = dict(SWIFT_VERSION=q('5.0'), IPHONEOS_DEPLOYMENT_TARGET=q('17.0'), SDKR
     SUPPORTED_PLATFORMS=q('iphoneos iphonesimulator'),
     HEADER_SEARCH_PATHS=array([q('$(inherited)'),q('$(SRCROOT)/Vendor/Astronomy')]))
 appsettings=dict(common, PRODUCT_BUNDLE_IDENTIFIER=q('com.lihao.BlindOracle'),
+    DEVELOPMENT_TEAM=q(os.environ.get('DEVELOPMENT_TEAM', 'A82X46N3WS')),
     INFOPLIST_FILE=q('App/Info.plist'), CURRENT_PROJECT_VERSION=2, MARKETING_VERSION=q('0.1.1'),
     ASSETCATALOG_COMPILER_APPICON_NAME=q('AppIcon'),
     SWIFT_OBJC_BRIDGING_HEADER=q('App/BlindOracle-Bridging-Header.h'),
@@ -93,7 +94,8 @@ for label,folder,product,ui in [('BlindOracleTests','Tests',testproduct,False),(
     targets.append(target)
 
 main=add('main',obj(isa='PBXGroup',children=array([sourcegroup,resourcegroup]+testgroups+[products]),sourceTree=q('<group>')))
-projectconfig=configs('projectconfig',dict(CLANG_ENABLE_MODULES='YES',CLANG_WARN_DOCUMENTATION_COMMENTS='NO',GCC_WARN_INHIBIT_ALL_WARNINGS='NO'))
+# No App Intents or Shortcuts are declared; skip their unused metadata task.
+projectconfig=configs('projectconfig',dict(CLANG_ENABLE_MODULES='YES',CLANG_WARN_DOCUMENTATION_COMMENTS='NO',GCC_WARN_INHIBIT_ALL_WARNINGS='NO',LM_SKIP_METADATA_EXTRACTION='YES'))
 project=add('project',obj(isa='PBXProject',attributes=obj(BuildIndependentTargetsInParallel='YES',LastUpgradeCheck=2710),buildConfigurationList=projectconfig,compatibilityVersion=q('Xcode 14.0'),developmentRegion=q('zh-Hans'),hasScannedForEncodings=0,knownRegions=array([q('zh-Hans'),q('en'),q('Base')]),mainGroup=main,productRefGroup=products,projectDirPath=q(''),projectRoot=q(''),targets=array(targets)))
 directory=ROOT/'BlindOracle.xcodeproj';directory.mkdir(exist_ok=True)
 (directory/'project.pbxproj').write_text('// !$*UTF8*$!\n{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {\n'+''.join(k+' = '+v+';\n' for k,v in objects.items())+'}; rootObject = '+project+'; }\n')

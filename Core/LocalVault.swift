@@ -14,7 +14,9 @@ final class LocalVault {
         uiTesting = false
         #endif
         self.directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(uiTesting ? "BlindOracle-UITest" : "BlindOracle", isDirectory: true)
+        #if DEBUG
         if uiTesting, ProcessInfo.processInfo.arguments.contains("--ui-testing-reset") { try? FileManager.default.removeItem(at: self.directory) }
+        #endif
         encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601

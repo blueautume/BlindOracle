@@ -71,6 +71,8 @@ UITests/         两标签与完整本地问事流程
 
 新增文件后运行 `python3 Scripts/generate_project.py` 更新工程；脚本不依赖第三方库。新增插件的方式见架构文档。
 
+iPad 按 [Apple 的方向要求](https://developer.apple.com/documentation/uikit/uiviewcontroller/supportedinterfaceorientations)保留四个界面方向以支持多任务，iPhone 保持竖屏；修改归档配置后须重新 Archive 再上传。项目未使用 App Intents，Debug/Release 均用 `LM_SKIP_METADATA_EXTRACTION=YES` 跳过该[元数据任务](https://github.com/swiftlang/swift-build/blob/12ac09ae1e3e344ce4dc085ee79306b2ccecb3e9/Sources/SWBApplePlatform/AppIntentsMetadataTaskProducer.swift#L55-L57)；以后接入 App Intents 或快捷指令时应移除此设置。工程生成脚本保留当前开发 Team 默认值，也可通过 `DEVELOPMENT_TEAM` 环境变量覆盖。
+
 ## 测试
 
 ```sh

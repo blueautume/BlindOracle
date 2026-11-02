@@ -2,21 +2,24 @@
   "date": "2026-11-02",
   "xcode": "27.1 (27A9275)",
   "minimum_iOS": "17.0",
-  "release_arm64_bundle_bytes": 22020676,
+  "release_arm64_bundle_bytes": 16162898,
   "release_contains_development_key_resource": false,
   "source_credential_matches": [],
   "release_credential_matches": [],
   "unit_tests_passed": 130,
-  "ui_tests_passed": 5,
+  "ui_tests_passed": 1,
   "live_api_tests_passed": 1,
   "default_live_test_skipped_intentionally": 3,
   "local_plugin_count": 10,
   "release_is_signed": false,
   "notes": [
-    "Release measured as arm64 .app bytes, not App Store compressed download size.",
+    "Release measured from the stripped unsigned arm64 archive .app, not App Store compressed download size.",
+    "Warning cleanup: fresh Debug build/test and fresh Release archive succeeded with zero warning diagnostics. 130 non-live unit tests and the profile-save/relaunch UI regression passed; three opt-in live tests were skipped.",
+    "Archive Info.plist was inspected directly: all four iPad orientations, portrait-only iPhone, device families 1 and 2, and no forced-fullscreen workaround. The local unsigned archive was not submitted to App Store Connect.",
+    "Unused App Intents extraction is skipped through the build system LM_SKIP_METADATA_EXTRACTION switch; general compiler warnings remain enabled. Release excludes the Debug-only UI reset branch.",
     "130 non-live unit tests passed in the final source run; three opt-in live tests were intentionally skipped there.",
     "The separate live Pro/max test passed all four remote requests: collect two named people, supplement their birth facts, select both for an eight-character reading, then stream a Chinese synthesis retaining both names and independent results. Synthetic inputs only; no credential logged.",
-    "Five distinct UI tests passed: named profile persistence, two-person selection and independent result ownership, incremental chat updates and restart, ordinary reading, and tarot selection/reveal restoration.",
+    "Prior multi-person update: Five distinct UI tests passed: named profile persistence, two-person selection and independent result ownership, incremental chat updates and restart, ordinary reading, and tarot selection/reveal restoration.",
     "The 22 profile-directory tests cover explicit field grounding, per-name updates, duplicate names, partial birth facts, timezone changes, the supplement-prefix regression, and bare clock answers only for one confirmed person.",
     "The 13 multi-person reading tests cover personal methods per person, shared event methods once, historical snapshots, all-person AI evidence, single preference votes per method, legacy migration, explicit self/other isolation, and group tarot intake before interaction.",
     "Permanent profiles require a name but no relationship label. Model-suggested fields are checked against the current user message before storage; missing fields do not erase existing facts.",
@@ -24,8 +27,8 @@
     "Progress summaries continue to record application tasks only. No reasoning_content is decoded, displayed, or persisted.",
     "Earlier progress, keyboard, tarot asset/hash, broader interaction and history UI evidence remains at the retained result paths."
   ],
-  "unit_test_result": "build-interactions/multi-person-closed.xcresult",
-  "final_ui_result": "build-interactions/multi-person-final.xcresult",
+  "unit_test_result": "build-warning-final/warnings-tests.xcresult",
+  "final_ui_result": "build-warning-final/warnings-tests.xcresult",
   "live_api_result": "build-interactions/multi-person-live-final.xcresult",
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
@@ -50,5 +53,30 @@
   "multi_person_ui_result": "build-interactions/multi-person-final.xcresult",
   "tarot_live_api_result": "build-interactions/chat-progress-live.xcresult",
   "multi_person_live_api_tests_passed": 1,
-  "multi_person_live_api_requests": 4
+  "multi_person_live_api_requests": 4,
+  "release_bundle_kind": "stripped unsigned arm64 archive app",
+  "build_warning_cleanup": {
+    "debug_clean_build_warning_count": 0,
+    "release_archive_warning_count": 0,
+    "release_archive_path": "build-warning-release/BlindOracle.xcarchive",
+    "archive_signed": false,
+    "store_upload_performed": false,
+    "ipad_orientations": [
+      "UIInterfaceOrientationPortrait",
+      "UIInterfaceOrientationPortraitUpsideDown",
+      "UIInterfaceOrientationLandscapeLeft",
+      "UIInterfaceOrientationLandscapeRight"
+    ],
+    "iphone_orientations": [
+      "UIInterfaceOrientationPortrait"
+    ],
+    "device_families": [
+      1,
+      2
+    ],
+    "multitasking_retained": true,
+    "dsym_present": true,
+    "metadata_extraction_skipped_for_unused_app_intents": true,
+    "project_generator_default_and_override_team_verified": true
+  }
 }
