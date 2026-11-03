@@ -53,6 +53,7 @@ final class SkyPluginTests: XCTestCase {
         input.profile.birthTimeKnown = false
         let result = try await WesternAstrologyPlugin().calculate(input)
         XCTAssertEqual(result.status, .partial)
+        XCTAssertEqual(result.version, WesternAstrologyPlugin().descriptor.version)
         XCTAssertEqual(result.rows.count, 11)
         XCTAssertTrue(result.evidence.isEmpty)
         XCTAssertFalse(result.rows.contains { $0.label.contains("上升") || $0.label.contains("宫头") })

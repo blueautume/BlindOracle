@@ -29,12 +29,13 @@ final class FormIntakeUITests: XCTestCase {
         send("只用八字看看我的事业", in: app)
         let form = app.scrollViews["intakeFormScroll"]
         XCTAssertTrue(form.waitForExistence(timeout: 15))
-        let name = app.textFields["profileName"]
+        let name = app.textFields["profileAlias"]
         reveal(name, in: app)
         name.tap(); name.typeText("陈平\n")
         XCTAssertTrue(element("profileBirthDate", in: app).exists)
         XCTAssertTrue(element("profileBirthTime", in: app).exists)
-        XCTAssertTrue(app.buttons["profileBirthTimeZone"].exists)
+        XCTAssertTrue(app.buttons["profileBirthPlace"].exists)
+        XCTAssertFalse(app.buttons["profileBirthTimeZone"].exists)
         XCTAssertFalse(app.buttons["editParticipant"].exists)
         let confirm = app.buttons["confirmIntake"]
         reveal(confirm, in: app)
@@ -43,12 +44,55 @@ final class FormIntakeUITests: XCTestCase {
         let error = app.staticTexts["intakeValidationError"]
         XCTAssertTrue(error.waitForExistence(timeout: 5))
         XCTAssertTrue(error.label.contains("出生日期"))
-        XCTAssertTrue(error.label.contains("时区"))
         XCTAssertTrue(form.exists)
         XCTAssertEqual(app.scrollViews.matching(identifier: "intakeFormScroll").count, 1)
         XCTAssertFalse(app.buttons["castCoins"].exists)
         XCTAssertFalse(app.buttons["shuffleTarot"].exists)
         capture("strict-method-all-missing-fields", in: app)
+        let fallback = app.buttons["confirmIntakeWithLocalFallback"]
+        reveal(fallback, in: app)
+        fallback.tap()
+        let summary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "当前为本地试算")).firstMatch
+        XCTAssertTrue(summary.waitForExistence(timeout: 30))
+        XCTAssertTrue(form.waitForNonExistence(timeout: 5))
+    }
+
+    @MainActor func testSwitchingThePendingMethodKeepsUnsubmittedPersonAcrossRelaunch() {
+        let app = launchFreshApp()
+        let question = "只用八字看看我的事业"
+        send(question, in: app)
+        let form = app.scrollViews["intakeFormScroll"]
+        XCTAssertTrue(form.waitForExistence(timeout: 15))
+        let name = form.textFields["profileAlias"]
+        reveal(name, in: app)
+        name.tap(); name.typeText("陈平\n")
+        XCTAssertEqual(name.value as? String, "陈平")
+        app.buttons["cancelIntake"].tap()
+        XCTAssertTrue(form.waitForNonExistence(timeout: 5))
+
+        send("改用塔罗", in: app)
+        XCTAssertTrue(form.waitForExistence(timeout: 15))
+        XCTAssertTrue(form.staticTexts[question].exists)
+        XCTAssertTrue(form.staticTexts["本次方法：塔罗牌"].exists)
+        XCTAssertEqual(name.value as? String, "陈平")
+        XCTAssertFalse(app.buttons["shuffleTarot"].exists)
+
+        let clearAlias = form.buttons["clear-profileAlias"]
+        reveal(clearAlias, in: app)
+        clearAlias.tap()
+        XCTAssertEqual(name.value as? String, name.placeholderValue)
+        reveal(name, in: app)
+        name.tap(); name.typeText("陈平宁\n")
+        XCTAssertEqual(name.value as? String, "陈平宁")
+        XCUIDevice.shared.press(.home)
+        XCTAssertTrue(app.wait(for: .runningBackground, timeout: 5) || app.state == .runningBackgroundSuspended)
+        app.terminate()
+        app.launchArguments = ["--ui-testing-local"]
+        app.launch()
+        XCTAssertTrue(form.waitForExistence(timeout: 15))
+        XCTAssertTrue(form.staticTexts[question].exists)
+        XCTAssertTrue(form.staticTexts["本次方法：塔罗牌"].exists)
+        XCTAssertEqual(name.value as? String, "陈平宁")
     }
 
     @MainActor func testBothParticipantsCanBeEditedInlineBeforeOneConfirmation() throws {
@@ -59,22 +103,20 @@ final class FormIntakeUITests: XCTestCase {
         send("陈平和王安的合作关系如何安排？", in: app)
         XCTAssertTrue(app.scrollViews["intakeFormScroll"].waitForExistence(timeout: 15))
         XCTAssertEqual(app.scrollViews.matching(identifier: "intakeFormScroll").count, 1)
-        XCTAssertEqual(app.textFields.matching(identifier: "profileName").count, 2)
+        XCTAssertEqual(app.textFields.matching(identifier: "profileAlias").count, 2)
         XCTAssertEqual(app.buttons.matching(identifier: "confirmIntake").count, 1)
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "editParticipant-")).count, 0)
 
         let first = try participantForm(named: "陈平", in: app)
         let second = try participantForm(named: "王安", in: app)
-        let firstPlace = first.textFields["profileCurrentPlace"]
-        reveal(firstPlace, in: app)
-        firstPlace.tap(); firstPlace.typeText("北京\n")
-        let secondPlace = second.textFields["profileCurrentPlace"]
-        reveal(secondPlace, in: app)
-        secondPlace.tap(); secondPlace.typeText("上海\n")
-        XCTAssertEqual(firstPlace.value as? String, "北京")
-        XCTAssertEqual(secondPlace.value as? String, "上海")
-        XCTAssertEqual(first.textFields["profileName"].value as? String, "陈平")
-        XCTAssertEqual(second.textFields["profileName"].value as? String, "王安")
+        let firstAlias = first.textFields["profileAlias"]
+        reveal(firstAlias, in: app)
+        firstAlias.tap(); firstAlias.typeText("工作甲\n")
+        let secondAlias = second.textFields["profileAlias"]
+        reveal(secondAlias, in: app)
+        secondAlias.tap(); secondAlias.typeText("工作乙\n")
+        XCTAssertEqual(firstAlias.value as? String, "工作甲")
+        XCTAssertEqual(secondAlias.value as? String, "工作乙")
         XCTAssertEqual(app.scrollViews.matching(identifier: "intakeFormScroll").count, 1)
         capture("two-participants-inline-one-form", in: app)
         let confirm = app.buttons["confirmIntake"]

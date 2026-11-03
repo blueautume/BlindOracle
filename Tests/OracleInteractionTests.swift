@@ -131,6 +131,27 @@ final class OracleInteractionTests: XCTestCase {
         XCTAssertFalse(pending.complete(coins))
     }
 
+    func testSupplementInteractionPreservesOtherMethodsSavedResponses() throws {
+        let numbers = OracleInteractionResponse(requestID: "meihua", numbers: [8, 8, 6])
+        let coins = OracleInteractionResponse(requestID: "liuyao", lines: [6, 7, 8, 9, 7, 8])
+        var original = OracleInput(question: "原问题", profile: OracleProfile(), seed: 42)
+        original.numbers = numbers.numbers; original.manualLines = coins.lines
+        original.interactionResponses = [numbers, coins]
+        let request = OracleInteractionRequest(method: .tarot, kind: .tarot)
+        let pending = OracleInteractionSession(input: original, plan: plan(methods: [.meihua, .liuyao, .tarot]), requests: [request])
+        var restored = try JSONDecoder().decode(OracleInteractionSession.self, from: JSONEncoder().encode(pending))
+        let cards = OracleInteractionResponse(requestID: "tarot", tarotDraws: draws(), revealedCount: 3)
+
+        XCTAssertTrue(restored.complete(cards))
+        XCTAssertEqual(restored.responses, [cards])
+        XCTAssertEqual(restored.input.interactionResponses, [numbers, coins, cards])
+        XCTAssertEqual(restored.input.numbers, original.numbers)
+        XCTAssertEqual(restored.input.manualLines, original.manualLines)
+        XCTAssertEqual(restored.input.castingDate, original.castingDate)
+        XCTAssertEqual(restored.input.seed, original.seed)
+        XCTAssertEqual(original.interactionResponses, [numbers, coins])
+    }
+
     func testInteractiveNumbersOverrideEarlierUnknownFlag() async throws {
         var pending = session([.init(method: .meihua, kind: .numbers)])
         pending.input.profile.unknownFields.insert(.numbers)
@@ -175,6 +196,73 @@ final class OracleInteractionTests: XCTestCase {
         XCTAssertFalse(pending.saveProgress(response))
         XCTAssertNil(pending.draft)
         XCTAssertTrue(pending.responses.isEmpty)
+    }
+
+    func testClarificationRestoresTheSameSelectionAndPreservesOriginalCards() throws {
+        let clarification = TarotClarificationRequest(focus: "具体行动", originalPosition: TarotDeck.positions[2], question: "下一步先做什么？")
+        let request = OracleInteractionRequest(method: .tarot, kind: .tarot, tarotClarification: clarification)
+        var pending = session([request])
+        let initial = OracleInteractionResponse(requestID: "tarot", tarotDraws: draws(), revealedCount: 3)
+        pending.input.tarotDraws = initial.tarotDraws
+        pending.input.interactionResponses = [initial]
+
+        let deck = pending.availableTarotCards
+        XCTAssertEqual(deck.count, 75)
+        XCTAssertTrue(Set(deck.map(\.id)).isDisjoint(with: initial.tarotDraws.map(\.cardID)))
+        let card = try XCTUnwrap(deck.first)
+        let selection = TarotDraw(cardID: card.id, isReversed: TarotDeck.isReversed(seed: pending.seed, cardID: card.id), position: TarotDeck.clarificationPosition)
+        var wrongOrientation = selection
+        wrongOrientation.isReversed.toggle()
+        XCTAssertFalse(pending.saveProgress(.init(requestID: request.id, tarotDraws: [wrongOrientation])))
+        var response = OracleInteractionResponse(requestID: request.id, tarotDraws: [selection])
+        XCTAssertTrue(pending.saveProgress(response))
+        XCTAssertFalse(pending.complete(response))
+
+        var restored = try JSONDecoder().decode(OracleInteractionSession.self, from: JSONEncoder().encode(pending))
+        XCTAssertEqual(restored.currentRequest?.id, request.id)
+        XCTAssertEqual(restored.availableTarotCards, deck)
+        XCTAssertEqual(restored.draft, response)
+        let replacement = TarotDraw(cardID: deck[1].id, isReversed: TarotDeck.isReversed(seed: restored.seed, cardID: deck[1].id), position: TarotDeck.clarificationPosition)
+        XCTAssertFalse(restored.saveProgress(.init(requestID: request.id, tarotDraws: [replacement])))
+        XCTAssertFalse(restored.complete(.init(requestID: request.id, tarotDraws: [replacement], revealedCount: 1)))
+
+        response.revealedCount = 1
+        XCTAssertTrue(restored.complete(response))
+        XCTAssertEqual(restored.input.tarotDraws, initial.tarotDraws)
+        XCTAssertEqual(restored.input.interactionResponses, [initial, response])
+        XCTAssertEqual(restored.input.tarotClarificationRounds, [.init(request: clarification, draw: selection)])
+        XCTAssertFalse(restored.complete(response))
+    }
+
+    func testClarificationRejectsEarlierCardsAndStopsAtTheRoundLimit() throws {
+        let first = TarotClarificationRequest(focus: "现状")
+        let second = TarotClarificationRequest(focus: "下一步")
+        let third = TarotClarificationRequest(focus: "再次确认")
+        let requests = [first, second, third].map {
+            OracleInteractionRequest(method: .tarot, kind: .tarot, tarotClarification: $0)
+        }
+        var pending = session(requests)
+        pending.input.tarotDraws = draws()
+        let seed = pending.seed
+        func response(for request: OracleInteractionRequest, cardID: String) -> OracleInteractionResponse {
+            let draw = TarotDraw(cardID: cardID, isReversed: TarotDeck.isReversed(seed: seed, cardID: cardID), position: TarotDeck.clarificationPosition)
+            return .init(requestID: request.id, tarotDraws: [draw], revealedCount: 1)
+        }
+
+        XCTAssertFalse(pending.complete(response(for: requests[0], cardID: draws()[0].cardID)))
+        let firstCard = try XCTUnwrap(pending.availableTarotCards.first)
+        let firstResponse = response(for: requests[0], cardID: firstCard.id)
+        XCTAssertTrue(pending.complete(firstResponse))
+        XCTAssertFalse(pending.complete(firstResponse))
+        XCTAssertFalse(pending.availableTarotCards.contains(firstCard))
+        XCTAssertFalse(pending.complete(response(for: requests[1], cardID: firstCard.id)))
+
+        let secondCard = try XCTUnwrap(pending.availableTarotCards.first)
+        XCTAssertTrue(pending.complete(response(for: requests[1], cardID: secondCard.id)))
+        XCTAssertEqual(pending.input.tarotClarificationRounds?.map(\.id), [first.id, second.id])
+        XCTAssertFalse(TarotDeck.canAppendClarification(to: pending.input))
+        XCTAssertTrue(pending.availableTarotCards.isEmpty)
+        XCTAssertFalse(pending.complete(response(for: requests[2], cardID: "major-21")))
     }
 
     @MainActor func testPendingInteractionSurvivesChatSwitchAndRestartWithItsOriginalDraft() throws {

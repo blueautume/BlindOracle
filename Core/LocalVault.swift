@@ -6,6 +6,8 @@ final class LocalVault {
     let directory: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private var unreadableFiles: Set<String> = []
+    private var recoveryCopies: [String: URL] = [:]
     init(directory: URL? = nil) {
         let uiTesting: Bool
         #if DEBUG
@@ -38,19 +40,34 @@ final class LocalVault {
     func save<T: Encodable>(_ value: T, as name: String) throws {
         let url = directory.appendingPathComponent(name + ".json")
         let data = try encoder.encode(value)
+        // A fallback returned by load must not destroy the only copy of data
+        // when the recovery copy could not be written (for example, low space).
+        if unreadableFiles.contains(name), !preserveRecoveryCopy(name) {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
         #if os(iOS)
         try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         #else
         try data.write(to: url, options: .atomic)
         #endif
+        unreadableFiles.remove(name)
     }
     func contains(_ name: String) -> Bool {
         FileManager.default.fileExists(atPath: directory.appendingPathComponent(name + ".json").path)
     }
-    func preserveRecoveryCopy(_ name: String) {
+    @discardableResult func preserveRecoveryCopy(_ name: String) -> Bool {
         let source = directory.appendingPathComponent(name + ".json")
+        unreadableFiles.insert(name)
+        if let existing = recoveryCopies[name],
+           FileManager.default.contentsEqual(atPath: source.path, andPath: existing.path) {
+            return true
+        }
         let backup = directory.appendingPathComponent(name + ".recovery-" + UUID().uuidString + ".json")
-        try? FileManager.default.copyItem(at: source, to: backup)
+        do {
+            try FileManager.default.copyItem(at: source, to: backup)
+            recoveryCopies[name] = backup
+            return true
+        } catch { return false }
     }
     func legacyConversationArchiveNames() -> [String] {
         let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []

@@ -21,7 +21,7 @@ final class MultiPersonUITests: XCTestCase {
             XCTAssertTrue(selected.exists)
             XCTAssertTrue(selected.label.contains("已选"))
         }
-        XCTAssertEqual(app.textFields.matching(identifier: "profileName").count, 2)
+        XCTAssertEqual(app.textFields.matching(identifier: "profileAlias").count, 2)
         capture("joint-reading-all-data-in-one-form", in: app)
         for _ in 0..<36 where !confirm.isHittable { form.swipeUp() }
         XCTAssertTrue(confirm.isHittable)

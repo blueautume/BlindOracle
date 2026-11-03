@@ -37,4 +37,43 @@ final class PersistenceAndPreferenceTests: XCTestCase {
         let messages = (0..<30).map { _ in ChatMessage(role: .user, content: "一个很短的问题") }
         XCTAssertFalse(LocalContextPolicy.shouldCompact(messages: messages, summary: ConversationSummary()))
     }
+
+    func testUnreadableDataIsBackedUpOnceBeforeFallbackCanBeSaved() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = LocalVault(directory: directory)
+        let source = directory.appendingPathComponent("profiles.json")
+        let original = Data("unreadable profile data".utf8)
+        try original.write(to: source)
+
+        for _ in 0..<3 {
+            XCTAssertEqual(vault.load([String].self, from: "profiles", fallback: []), [])
+        }
+        let copies = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasPrefix("profiles.recovery-") }
+        XCTAssertEqual(copies.count, 1)
+        XCTAssertEqual(try Data(contentsOf: XCTUnwrap(copies.first)), original)
+
+        try vault.save(["new profile"], as: "profiles")
+        XCTAssertEqual(vault.load([String].self, from: "profiles", fallback: []), ["new profile"])
+        XCTAssertEqual(try Data(contentsOf: XCTUnwrap(copies.first)), original)
+    }
+
+    func testFailedRecoveryCopyPreventsReplacingUnreadableOriginal() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = LocalVault(directory: directory)
+        // The canonical file fits the filesystem's component limit, while the
+        // longer recovery filename does not. This makes copy failure repeatable
+        // without relying on device storage pressure or permission races.
+        let name = String(repeating: "a", count: 240)
+        let source = directory.appendingPathComponent(name + ".json")
+        let original = Data("unreadable original".utf8)
+        try original.write(to: source)
+        XCTAssertEqual(vault.load([String].self, from: name, fallback: []), [])
+        XCTAssertFalse(vault.preserveRecoveryCopy(name))
+
+        XCTAssertThrowsError(try vault.save(["fallback"], as: name))
+        XCTAssertEqual(try Data(contentsOf: source), original)
+    }
 }

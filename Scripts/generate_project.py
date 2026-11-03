@@ -71,7 +71,7 @@ resourcegroup=add('resourcesgroup',obj(isa='PBXGroup',children=array(resourceids
 sources=add('sourcesphase',obj(isa='PBXSourcesBuildPhase',buildActionMask=2147483647,files=array(appbuild),runOnlyForDeploymentPostprocessing=0))
 resources=add('resourcesphase',obj(isa='PBXResourcesBuildPhase',buildActionMask=2147483647,files=array(resourcebuild),runOnlyForDeploymentPostprocessing=0))
 frameworks=add('frameworksphase',obj(isa='PBXFrameworksBuildPhase',buildActionMask=2147483647,files='()',runOnlyForDeploymentPostprocessing=0))
-credentialphase=add('credentialphase',obj(isa='PBXShellScriptBuildPhase',alwaysOutOfDate=1,buildActionMask=2147483647,files='()',inputPaths='()',name=q('Development credential (Debug only)'),outputPaths='()',runOnlyForDeploymentPostprocessing=0,shellPath=q('/bin/sh'),shellScript=q('/usr/bin/python3 "${SRCROOT}/Scripts/development_key.py"')))
+credentialphase=add('credentialphase',obj(isa='PBXShellScriptBuildPhase',alwaysOutOfDate=1,buildActionMask=2147483647,files='()',inputPaths='()',name=q('Bundled service credential'),outputPaths='()',runOnlyForDeploymentPostprocessing=0,shellPath=q('/bin/sh'),shellScript=q('/usr/bin/python3 "${SRCROOT}/Scripts/development_key.py"')))
 appconfig=configs('appconfig',appsettings)
 apptarget=add('apptarget',obj(isa='PBXNativeTarget',buildConfigurationList=appconfig,buildPhases=array([sources,frameworks,resources,credentialphase]),buildRules='()',dependencies='()',name=q('BlindOracle'),productName=q('BlindOracle'),productReference=appproduct,productType=q('com.apple.product-type.application')))
 

@@ -142,16 +142,19 @@ struct ChatView: View {
                     let sessionID = store.intakeSessionID
                     GroupIntakeView(plan: plan, profiles: store.intakeParticipants, numbers: store.intakeNumbers, onDraftChange: { profiles, numbers in
                         store.saveIntakeDraft(profiles: profiles, numbers: numbers, sessionID: sessionID)
-                    }, onConfirm: { profiles, numbers, save in
-                        store.confirmGroupIntake(profiles: profiles, numbers: numbers, save: save, sessionID: sessionID)
+                    }, onConfirm: { profiles, numbers, save, useLocalFallback in
+                        store.confirmGroupIntake(profiles: profiles, numbers: numbers, save: save, sessionID: sessionID,
+                                                 useLocalFallback: useLocalFallback)
                     }).id(sessionID)
                 } else if let session = store.pendingInteraction {
                     OracleInteractionView(session: session, onProgress: { response in
                         store.saveInteractionProgress(response, sessionID: session.id)
                     }, onComplete: { response in
                         store.completeInteraction(response, sessionID: session.id)
+                    }, onCancelClarification: {
+                        store.cancelTarotClarification(sessionID: session.id)
                     })
-                    .id(session.currentRequest?.id)
+                    .id("\(session.id.uuidString)-\(session.currentIndex)")
                     .interactiveDismissDisabled(false)
                 }
             }
@@ -243,6 +246,9 @@ struct ChatView: View {
                         .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                         .accessibilityIdentifier("deletedReading-\(deletedID.uuidString)")
                 }
+                if message.role == .assistant, let suggestion = store.tarotClarificationOffer(for: message) {
+                    tarotClarificationButton(suggestion, messageID: message.id)
+                }
                 if message.kind != .intake, let runID = message.runID, !message.content.isEmpty,
                    store.runs.contains(where: { $0.id == runID }) {
                     if let run = store.runs.first(where: { $0.id == runID }), let synthesis = run.synthesis, message.kind == .reading, synthesis.hasSignificantConflict {
@@ -273,6 +279,25 @@ struct ChatView: View {
         }
     }
 
+    private func tarotClarificationButton(_ suggestion: TarotClarificationSuggestion, messageID: UUID) -> some View {
+        Button {
+            composing = false
+            store.acceptTarotClarification(messageID: messageID)
+        } label: {
+            Label("补抽 1 张 · \(suggestion.focus)", systemImage: "rectangle.on.rectangle.angled")
+                .font(.system(size: 13, weight: .medium, design: .serif))
+                .multilineTextAlignment(.leading)
+                .foregroundStyle(InkTheme.cinnabar)
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .frame(minHeight: 44, alignment: .leading)
+                .background(InkTheme.cinnabar.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("补抽一张塔罗牌，澄清\(suggestion.focus)")
+        .accessibilityHint("打开补牌界面，选牌并翻开后确认。")
+        .accessibilityIdentifier("offerTarotClarification")
+    }
+
     private var intakeCard: some View {
         Button { composing = false; store.confirmPendingIntake() } label: {
             HStack(spacing: 15) {
@@ -294,9 +319,16 @@ struct ChatView: View {
                 Image(systemName: request.kind == .tarot ? "rectangle.on.rectangle.angled" : request.kind == .coins ? "circle.grid.2x2" : "number")
                     .font(.system(size: 25, weight: .ultraLight)).foregroundStyle(InkTheme.cinnabar)
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(request.kind == .coins && store.pendingInteraction?.input.castingStyle == "yarrow" ? "蓍草成卦" : request.title)
-                        .font(.system(size: 19, design: .serif)).tracking(2).foregroundStyle(InkTheme.ink)
-                    Text("慢慢来，已有的进度替你留着。").font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                    if let clarification = request.tarotClarification {
+                        Text("继续补牌")
+                            .font(.system(size: 19, design: .serif)).tracking(2).foregroundStyle(InkTheme.ink)
+                        Text(clarification.focus)
+                            .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                    } else {
+                        Text(request.kind == .coins && store.pendingInteraction?.input.castingStyle == "yarrow" ? "蓍草成卦" : request.title)
+                            .font(.system(size: 19, design: .serif)).tracking(2).foregroundStyle(InkTheme.ink)
+                        Text("慢慢来，已有的进度替你留着。").font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                    }
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "arrow.right").font(.system(size: 13)).foregroundStyle(InkTheme.cinnabar)
@@ -347,7 +379,9 @@ struct ChatView: View {
             }.padding(.horizontal, 13).padding(.vertical, 8)
                 .background(Color(red: 0.982, green: 0.975, blue: 0.959), in: RoundedRectangle(cornerRadius: 22))
                 .overlay(RoundedRectangle(cornerRadius: 22).stroke(InkTheme.line, lineWidth: 0.8))
-            if store.messages.isEmpty { Text("本地推演 · AI 协助解读").font(.system(size: 9)).tracking(1).foregroundStyle(InkTheme.secondary.opacity(0.75)) }
+            Text(store.connectionStatus).font(.system(size: 10))
+                .foregroundStyle(store.localOnly || !store.hasCredential ? InkTheme.cinnabar : InkTheme.secondary)
+                .accessibilityIdentifier("aiConnectionStatus")
         }.frame(maxWidth: 720).padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 8).frame(maxWidth: .infinity)
             .background {
                 InkTheme.paper.ignoresSafeArea(.container, edges: .bottom)
@@ -359,7 +393,11 @@ struct ChatView: View {
     }
     private func submit() {
         guard !store.isBusy else { return }
-        guard store.pendingInteraction == nil || store.pendingInteraction?.currentRequest?.kind == .numbers else { composing = false; store.showInteraction = true; return }
+        if store.pendingInteraction != nil, !store.canSendWhileAwaitingInteraction(draft) {
+            composing = false
+            store.showInteraction = true
+            return
+        }
         let text = draft; draft = ""; composing = false; store.send(text)
     }
 }

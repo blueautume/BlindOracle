@@ -71,7 +71,12 @@ enum ConversationalIntake {
                 case .givenName: label = "名字"
                 default: label = field.title
                 }
-                updates += ProfileDirectory.parseExplicitUpdates(in: "姓名：\(person.resolvedName)，\(label)：\(content)", profiles: profiles)
+                let fact = "\(label)：\(content)"
+                if person.resolvedName.isEmpty {
+                    updates += ProfileDirectory.parseContextualFields(in: fact, for: id)
+                } else {
+                    updates += ProfileDirectory.parseExplicitUpdates(in: "姓名：\(person.resolvedName)，\(fact)", profiles: profiles)
+                }
             }
             if patch.birthTime != nil || patch.birthTimeZoneID != nil || patch.birthLatitude != nil { updates.append(patch) }
         }
@@ -84,7 +89,7 @@ enum ConversationalIntake {
         if participants.isEmpty { lines.append("对象：这件事本身，不附个人生辰资料。") }
         for person in participants {
             lines.append("")
-            lines.append("姓名：\(person.resolvedName)")
+            lines.append("档案：\(person.participantLabel)")
             if !person.familyName.isEmpty || !person.givenName.isEmpty { lines.append("姓氏：\(person.familyName.isEmpty ? "未确定" : person.familyName)；名字：\(person.givenName.isEmpty ? "未确定" : person.givenName)") }
             let date: String
             if person.unknownFields.contains(.birthDate) { date = "未确定" }

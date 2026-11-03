@@ -64,6 +64,24 @@ final class ChatProgressUITests: XCTestCase {
         capture("chat-opaque-composer-after-scroll", in: app)
     }
 
+    @MainActor func testBackgroundCheckpointRestoresInterruptedReplyAfterTermination() {
+        let app = launchProgressFixture(paused: true)
+        XCTAssertTrue(app.buttons["progressToggle"].waitForExistence(timeout: 15))
+        XCTAssertEqual(app.buttons["sendQuestion"].label, "停止回答")
+
+        XCUIDevice.shared.press(.home)
+        XCTAssertTrue(app.wait(for: .runningBackground, timeout: 10))
+        app.terminate()
+        app.launchArguments = ["--ui-testing-local"]
+        app.launch()
+
+        let reply = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "上次回答中断")).firstMatch
+        XCTAssertTrue(reply.waitForExistence(timeout: 15))
+        XCTAssertEqual(app.buttons["sendQuestion"].label, "发送问题")
+        XCTAssertFalse(app.descendants(matching: .any).matching(identifier: "progressRunningIndicator").firstMatch.exists)
+        capture("background-checkpoint-interrupted-reply", in: app)
+    }
+
     @MainActor private func launchProgressFixture(paused: Bool) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset",

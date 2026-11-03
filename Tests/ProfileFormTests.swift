@@ -2,16 +2,15 @@ import XCTest
 @testable import BlindOracle
 
 final class ProfileFormTests: XCTestCase {
-    func testEverySystemTimezoneCanBeSelectedAndChineseCitiesCanBeSearched() {
-        let ids = Set(TimeZoneCatalog.options.map(\.id))
-        XCTAssertTrue(Set(TimeZone.knownTimeZoneIdentifiers).isSubset(of: ids))
-        XCTAssertTrue(ids.contains("UTC"))
-        XCTAssertTrue(TimeZoneCatalog.matching("巴黎").contains { $0.id == "Europe/Paris" })
-        XCTAssertTrue(TimeZoneCatalog.matching("东京").contains { $0.id == "Asia/Tokyo" })
-        XCTAssertTrue(TimeZoneCatalog.matching("洛杉矶").contains { $0.id == "America/Los_Angeles" })
-        XCTAssertEqual(TimeZoneCatalog.matching("america/new_york").map(\.id), ["America/New_York"])
-        XCTAssertTrue(TimeZoneCatalog.matching("不存在的城市xyz").isEmpty)
-        XCTAssertFalse(TimeZoneCatalog.label(for: "UTC").contains("未知"))
+    func testLegacyProfileWithoutRecordedClockDoesNotDisplayOrSaveNoon() throws {
+        var profile = OracleProfile()
+        profile.name = "陈平"
+        let draft = ProfileFormDraft(profile: profile)
+        XCTAssertFalse(draft.profile.birthTimeKnown)
+        let saved = try draft.validatedProfile()
+        XCTAssertNil(saved.birthDate)
+        XCTAssertNil(saved.birthTimeText)
+        XCTAssertTrue(saved.unknownFields.contains(.birthTime))
     }
 
     func testNameOnlyValidationPreservesPreciseBirthdayAndDoesNotInventMissingFacts() throws {
@@ -64,7 +63,6 @@ final class ProfileFormTests: XCTestCase {
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "Asia/Tokyo")!
         draft.birthDate = calendar.date(from: DateComponents(year: 1992, month: 6, day: 15, hour: 8, minute: 30))!
         XCTAssertThrowsError(try draft.validatedProfile())
-        XCTAssertThrowsError(try draft.validatedProfile(requireName: false))
         let snapshot = draft.draftProfile
         XCTAssertEqual(snapshot.birthDateText, "1992-06-15")
         XCTAssertEqual(snapshot.birthTimeText, "08:30")
@@ -81,9 +79,11 @@ final class ProfileFormTests: XCTestCase {
         XCTAssertTrue(restored.profile.birthTimeKnown)
     }
 
-    func testInvalidCoordinatesAndMissingNamePreventFinalSubmission() {
+    func testMissingNameIsAcceptedAndInvalidCoordinatesPreventFinalSubmission() throws {
         var draft = ProfileFormDraft(profile: OracleProfile())
-        XCTAssertThrowsError(try draft.validatedProfile())
+        let anonymous = try draft.validatedProfile()
+        XCTAssertNil(anonymous.name)
+        XCTAssertNil(anonymous.alias)
         draft.profile.name = "甲"; draft.profile.currentLatitude = 91
         XCTAssertThrowsError(try draft.validatedProfile())
         draft.profile.currentLatitude = nil; draft.profile.currentTimeZoneID = "Invalid/Timezone"

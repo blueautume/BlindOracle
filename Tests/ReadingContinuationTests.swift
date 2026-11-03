@@ -52,6 +52,17 @@ final class ReadingContinuationTests: XCTestCase {
         }
     }
 
+    func testShortRedrawCommandsKeepTheQuestionButChangeTheDraw() {
+        for question in ["重新抽", "重抽", "请重新抽吧", "再抽一次"] {
+            XCTAssertTrue(ReadingContinuationPolicy.explicitlyRequestsNewReading(question), question)
+            XCTAssertTrue(ReadingContinuationPolicy.isBareRecastRequest(question), question)
+        }
+        for question in ["不要重新抽", "先别重抽", "重新抽象描述一下"] {
+            XCTAssertFalse(ReadingContinuationPolicy.explicitlyRequestsNewReading(question), question)
+            XCTAssertTrue(ReadingContinuationPolicy.shouldReuse(question: question, run: reading(), pendingPlan: nil), question)
+        }
+    }
+
     func testAnAffirmativeNewRequestInAnotherClauseStillStartsNewPreparation() {
         for question in ["不要只解释，我要重新起卦", "不用旧卦了，重新算一次", "无需重新起卦，改用塔罗抽牌看看"] {
             XCTAssertTrue(ReadingContinuationPolicy.explicitlyRequestsNewReading(question), question)
@@ -85,5 +96,288 @@ final class ReadingContinuationTests: XCTestCase {
             XCTAssertEqual(restored.input.seed, saved.input.seed)
             XCTAssertEqual(restored.input.manualLines, saved.input.manualLines)
         }
+    }
+
+    func testExplicitAdditionalMethodsRequirePreparationWithoutAuthorizingAFreshDraw() {
+        let cases: [(String, [OracleMethod])] = [
+            ("加上八字和紫微一起看看", [.bazi, .ziwei]),
+            ("帮我补算占星", [.astrology]),
+            ("再用八字看看", [.bazi]),
+            ("再用小六壬算一下", [.xiaoliuren]),
+            ("用八字看看", [.bazi]),
+            ("请用占星排盘分析", [.astrology]),
+            ("姓名五格也算一下", [.xingming]),
+            ("加上姓名学", [.xingming]),
+            ("加上塔罗", [.tarot]),
+            ("加上塔罗抽牌看看", [.tarot]),
+            ("不要补算八字，加上称骨", [.chenggu]),
+            ("加上八字但不要紫微", [.bazi])
+        ]
+        for (question, expected) in cases {
+            XCTAssertEqual(ReadingContinuationPolicy.requestedAdditionalMethods(in: question), expected, question)
+            XCTAssertFalse(ReadingContinuationPolicy.explicitlyRequestsNewReading(question), question)
+            XCTAssertFalse(ReadingContinuationPolicy.shouldReuse(question: question, run: reading(), pendingPlan: nil), question)
+        }
+    }
+
+    func testMentioningExplainingOrRejectingAdditionalMethodsDoesNotCalculateThem() {
+        for question in ["解释八字是什么", "八字和紫微有什么区别", "不要补算八字", "不要补算", "不用再用占星算一下", "不用八字看看", "不要用占星排盘分析", "用六爻解释一下这卦", "用八字排盘的原理是什么", "加上张三的姓名资料", "为什么要补算八字？", "补算八字是什么意思", "我想了解补算紫微的步骤", "再用六爻起一卦", "改用塔罗抽牌看看", "再用TAROT抽三张牌"] {
+            XCTAssertTrue(ReadingContinuationPolicy.requestedAdditionalMethods(in: question).isEmpty, question)
+        }
+    }
+
+    func testMixedSupplementCommandsRecognizeLaterNamedCalculations() {
+        for question in ["补算八字，再帮我算一下占星", "加上八字，然后也算一下占星", "用八字看看，再帮我算一下占星", "不用重新起卦，补算八字，再帮我算一下占星"] {
+            XCTAssertEqual(ReadingContinuationPolicy.requestedAdditionalMethods(in: question), [.bazi, .astrology], question)
+            XCTAssertFalse(ReadingContinuationPolicy.shouldReuse(question: question, run: reading(), pendingPlan: nil), question)
+        }
+        for question in ["重新起卦，再加上八字", "重抽三张牌，再用占星算一下", "换个问题，加上八字", "加上八字，再用塔罗抽三张牌"] {
+            XCTAssertTrue(ReadingContinuationPolicy.requestedAdditionalMethods(in: question).isEmpty, question)
+            XCTAssertTrue(ReadingContinuationPolicy.explicitlyRequestsNewReading(question), question)
+        }
+    }
+
+    func testMethodSelectionAndExistingReadingAdditionsHaveDifferentScopes() {
+        let newTopic = "不用八字，用塔罗看看我下周的面试会不会顺利"
+        XCTAssertEqual(ReadingContinuationPolicy.requestedAdditionalMethods(in: newTopic), [.tarot])
+        XCTAssertTrue(ReadingContinuationPolicy.requestedAdditionalMethods(in: newTopic, requiresAdditiveWording: true).isEmpty)
+        XCTAssertFalse(ReadingContinuationPolicy.isMethodOnlyRequest(newTopic))
+        XCTAssertTrue(ReadingContinuationPolicy.isMethodOnlyRequest("请用塔罗看看吧"))
+        XCTAssertFalse(ReadingContinuationPolicy.isMethodOnlyRequest("不用塔罗看看"))
+        let supplement = "不用八字，加上塔罗，再帮我算一下占星"
+        XCTAssertEqual(ReadingContinuationPolicy.requestedAdditionalMethods(in: supplement, requiresAdditiveWording: true), [.tarot])
+        XCTAssertEqual(ReadingContinuationPolicy.requestedAdditionalMethods(in: supplement), [.astrology, .tarot])
+        XCTAssertEqual(ReadingContinuationPolicy.requestedAdditionalMethods(in: "解释这张牌并补算八字", requiresAdditiveWording: true), [.bazi])
+        XCTAssertTrue(ReadingContinuationPolicy.explicitlyRequestsNewReading("我想问一个新问题，看看面试"))
+        XCTAssertTrue(ReadingContinuationPolicy.requestedAdditionalMethods(in: "我想问一个新问题，加上塔罗").isEmpty)
+    }
+
+    func testBareMethodChangesRequireAnAffirmativeSwitchWithoutANewSubject() {
+        let commands: [(String, [OracleMethod])] = [
+            ("改用塔罗", [.tarot]), ("换成紫微", [.ziwei]), ("那就换成紫薇吧", [.ziwei]),
+            ("请把方法改用 Tarot。", [.tarot]), ("这次改用八字和占星看看", [.bazi, .astrology])
+        ]
+        for (question, methods) in commands {
+            XCTAssertEqual(ReadingContinuationPolicy.bareMethodChange(in: question), methods, question)
+        }
+        for question in ["不要改用塔罗", "不只换成塔罗", "不是只改用紫微", "换成塔罗，看看下周面试", "改用紫微看看她的事业", "换成李岚", "用塔罗看看", "换成塔罗或八字"] {
+            XCTAssertTrue(ReadingContinuationPolicy.bareMethodChange(in: question).isEmpty, question)
+        }
+    }
+
+    func testSavedTarotExplanationGuardLeavesNewAndMixedRequestsToPlanning() {
+        for question in ["第二张牌为什么是逆位？", "能解释一下建议牌和现状牌的关系吗？", "不用补牌，只解释建议牌。", "不用八字，继续解释原结果"] {
+            XCTAssertTrue(ReadingContinuationPolicy.isSavedTarotExplanation(question), question)
+        }
+        for question in ["用塔罗看看我下周的面试会不会顺利", "第二张牌为什么是逆位，我下周的面试会怎样？",
+                         "解释一下这张牌并加抽一张", "解释这张牌并补算八字", "不要解释这张牌", "换个新问题，解释一下这张牌"] {
+            XCTAssertFalse(ReadingContinuationPolicy.isSavedTarotExplanation(question), question)
+        }
+    }
+
+    func testPlainChangeOfTopicDoesNotFallBackToTheSavedReading() {
+        let saved = reading()
+        for question in ["我最近和对象总吵架，还能走下去吗？", "那感情呢？", "下周要出差，路上会顺利吗？"] {
+            XCTAssertFalse(ReadingContinuationPolicy.shouldReuse(question: question, run: saved, pendingPlan: nil), question)
+        }
+        for question in ["那我接下来该怎么做？", "面试那天该注意什么？", "这部分具体是什么意思？"] {
+            XCTAssertTrue(ReadingContinuationPolicy.shouldReuse(question: question, run: saved, pendingPlan: nil), question)
+        }
+    }
+
+    func testParticipantIntentKeepsTheReplacementAndExcludesNegatedNames() {
+        var chen = OracleProfile(); chen.name = "陈平"
+        var li = OracleProfile(); li.name = "李岚"
+        let directory = [chen, li]
+        let replacement = ReadingContinuationPolicy.participantIntent(in: "不看陈平了，换成李岚，看看她的工作", profiles: directory)
+        XCTAssertEqual(replacement.names, ["李岚"])
+        XCTAssertEqual(replacement.excludedNames, ["陈平"])
+        XCTAssertFalse(replacement.isGroup)
+        let negated = ReadingContinuationPolicy.participantIntent(in: "别换成李岚，继续看陈平", profiles: directory)
+        XCTAssertEqual(negated.names, ["陈平"])
+        XCTAssertEqual(negated.excludedNames, ["李岚"])
+        XCTAssertFalse(ReadingContinuationPolicy.explicitlyChangesScope("别换成李岚，继续看陈平", profiles: directory))
+        XCTAssertTrue(ReadingContinuationPolicy.explicitlyChangesScope("不看陈平了，换成李岚，看看她的工作", profiles: directory))
+    }
+
+    func testSelfAndOtherRequireAnExplicitJointEvaluationRatherThanAGroupEvent() {
+        var other = OracleProfile(); other.name = "李岚"
+        let directory = [other]
+        let couple = ReadingContinuationPolicy.participantIntent(in: "我和李岚合不合", profiles: directory)
+        XCTAssertEqual(couple.names, ["李岚"])
+        XCTAssertTrue(couple.includesSelf)
+        XCTAssertTrue(couple.isGroup)
+        XCTAssertFalse(ReadingContinuationPolicy.participantIntent(in: "我想问李岚的工作", profiles: directory).includesSelf)
+        XCTAssertFalse(ReadingContinuationPolicy.participantIntent(in: "我们两人周末出行，只用小六壬", profiles: directory).isGroup)
+        XCTAssertTrue(ReadingContinuationPolicy.participantIntent(in: "我和朋友的关系怎么样", profiles: directory).isGroup)
+    }
+
+    func testColloquialFriendshipAndPartnershipRemainGroupReadings() {
+        var other = OracleProfile(); other.name = "李岚"
+        XCTAssertTrue(ReadingContinuationPolicy.participantIntent(in: "我们一起用塔罗看看友情", profiles: []).isGroup)
+        XCTAssertTrue(ReadingContinuationPolicy.participantIntent(in: "想用塔罗看看我们两人的关系会怎么发展？", profiles: []).isGroup)
+        let partner = ReadingContinuationPolicy.participantIntent(in: "那我和李岚适合合伙吗？也只用八字。", profiles: [other])
+        XCTAssertEqual(partner.names, ["李岚"])
+        XCTAssertTrue(partner.includesSelf)
+        XCTAssertTrue(partner.isGroup)
+    }
+
+    func testNamedUnstoredColleagueStillRefersToAnotherPerson() {
+        let colleague = ReadingContinuationPolicy.participantIntent(in: "只用八字看看我同事王安的事业", profiles: [])
+        XCTAssertTrue(colleague.refersToOther)
+        XCTAssertFalse(colleague.includesSelf)
+        XCTAssertFalse(colleague.isGroup)
+        let ordinary = ReadingContinuationPolicy.participantIntent(in: "我想问这次出行如何", profiles: [])
+        XCTAssertFalse(ordinary.includesSelf)
+        XCTAssertFalse(ordinary.refersToOther)
+    }
+
+    func testOnlyExplicitScopeCommandsCanDisplaceAPendingDraw() {
+        var saved = reading()
+        var old = OracleProfile(); old.name = "陈平"
+        var other = OracleProfile(); other.name = "李岚"
+        saved.input.participants = [old]
+        let profiles = [old, other]
+        XCTAssertEqual(ReadingContinuationPolicy.scopeChange(question: "李岚最近工作怎么样？", run: saved, profiles: profiles), .inferred)
+        XCTAssertEqual(ReadingContinuationPolicy.scopeChange(question: "换成李岚", run: saved, profiles: profiles), .explicit)
+        XCTAssertEqual(ReadingContinuationPolicy.scopeChange(question: "换个话题，我想问恋爱", run: nil, profiles: profiles), .explicit)
+        XCTAssertEqual(ReadingContinuationPolicy.scopeChange(question: "换成我", run: nil, profiles: profiles), .explicit)
+        XCTAssertEqual(ReadingContinuationPolicy.scopeChange(question: "改看我同事", run: nil, profiles: profiles), .explicit)
+        XCTAssertEqual(ReadingContinuationPolicy.scopeChange(question: "另问个事", run: nil, profiles: profiles), .explicit)
+        XCTAssertEqual(ReadingContinuationPolicy.scopeChange(question: "那感情呢？", run: nil, profiles: profiles), .none)
+        XCTAssertEqual(ReadingContinuationPolicy.scopeChange(question: "不用换话题，继续讲刚才的", run: saved, profiles: profiles), .none)
+        XCTAssertEqual(ReadingContinuationPolicy.scopeChange(question: "不要换成李岚，陈平呢？", run: saved, profiles: profiles), .none)
+    }
+
+    private func completeReading() -> OracleRun {
+        var run = reading()
+        run.input.castingDate = ISO8601DateFormatter().date(from: "2026-11-03T04:00:00Z")!
+        run.input.numbers = [8, 8, 6]
+        run.input.profile.name = "王明"
+        run.input.profile.familyName = "王"; run.input.profile.givenName = "明"
+        run.input.profile.sex = "男"
+        run.input.profile.birthDate = ISO8601DateFormatter().date(from: "1990-05-17T04:00:00Z")!
+        run.input.profile.birthTimeZoneID = "Asia/Shanghai"
+        run.input.profile.currentTimeZoneID = "Asia/Shanghai"
+        run.input.profile.birthLatitude = 31.23; run.input.profile.birthLongitude = 121.47
+        run.input.tarotDraws = zip(["major-00", "cups-01", "swords-14"], TarotDeck.positions).map {
+            TarotDraw(cardID: $0.0, isReversed: false, position: $0.1)
+        }
+        run.plan.methods = OracleMethod.allCases
+        run.results = OracleMethod.allCases.map { method in
+            var result = OracleResult(method: method, headline: "\(method.rawValue)已保存", rows: [])
+            if method.usesPersonalProfile {
+                result.participantID = run.input.profile.id; result.participantName = "王明"
+            }
+            return result
+        }
+        return run
+    }
+
+    private func assertInvalidates(_ expected: Set<OracleMethod>, from run: OracleRun? = nil,
+                                  file: StaticString = #filePath, line: UInt = #line,
+                                  changing: (inout OracleInput) -> Void) {
+        let original = run ?? completeReading()
+        var candidate = original.input
+        changing(&candidate)
+        let reused = ReadingContinuationPolicy.reusableResults(from: original, for: candidate, methods: OracleMethod.allCases)
+        let previouslyAvailable = Set(original.results.filter { $0.status == .complete || $0.status == .partial }.map(\.method))
+        XCTAssertEqual(previouslyAvailable.subtracting(reused.map(\.method)), expected, file: file, line: line)
+        for result in reused {
+            XCTAssertTrue(original.results.contains { $0.id == result.id }, file: file, line: line)
+        }
+    }
+
+    func testUnrelatedProfileChangesKeepResultsAndRefreshParticipantNames() {
+        assertInvalidates([]) {
+            $0.profile.name = "新的显示姓名"; $0.profile.displayName = "备注"
+            $0.profile.birthPlace = "更新地点文字"; $0.profile.currentPlace = "更新当前地点文字"
+            $0.profile.currentDistrictCode = "310115"
+            $0.profile.currentLatitude = 31.22; $0.profile.currentLongitude = 121.53
+            $0.profile.updatedAt = Date(); $0.profile.unknownFields.insert(.birthPlace)
+        }
+        let original = completeReading()
+        var candidate = original.input; candidate.profile.name = "新的显示姓名"
+        let reused = ReadingContinuationPolicy.reusableResults(from: original, for: candidate, methods: [.bazi])
+        XCTAssertEqual(reused.first?.participantName, "新的显示姓名")
+        XCTAssertEqual(original.results.first?.participantName, "王明")
+    }
+
+    func testBirthEditsInvalidateOnlyMethodsThatUseThoseFields() {
+        assertInvalidates([.xingming]) { $0.profile.familyName = "李" }
+        assertInvalidates([.xingming]) { $0.profile.unknownFields.insert(.givenName) }
+        assertInvalidates([.bazi, .chenggu, .ziwei, .astrology]) { $0.profile.birthDate = $0.profile.birthDate?.addingTimeInterval(86400) }
+        assertInvalidates([.bazi, .chenggu, .ziwei, .astrology]) { $0.profile.birthTimeKnown = false }
+        assertInvalidates([.bazi, .chenggu, .ziwei, .astrology]) { $0.profile.unknownFields.insert(.birthTimeZone) }
+        assertInvalidates([.bazi, .ziwei]) { $0.profile.sex = "女" }
+        assertInvalidates([.astrology]) { $0.profile.birthLongitude = 120 }
+        assertInvalidates([.astrology]) { $0.profile.unknownFields.insert(.birthCoordinates) }
+    }
+
+    func testUnknownBirthTimeUsesTheCalendarDayAndIgnoresUnusedSexOrCoordinates() {
+        var original = completeReading(); original.input.profile.birthTimeKnown = false
+        // Ziwei cannot have a valid saved chart without a known time.
+        original.results.removeAll { $0.method == .ziwei }
+        assertInvalidates([], from: original) {
+            $0.profile.birthDate = $0.profile.birthDate?.addingTimeInterval(3600)
+            $0.profile.sex = "女"; $0.profile.birthLatitude = 40
+        }
+        assertInvalidates([.bazi, .chenggu, .astrology], from: original) {
+            $0.profile.birthDate = $0.profile.birthDate?.addingTimeInterval(86400)
+        }
+    }
+
+    func testCastingInputsInvalidateOnlyAffectedMethods() {
+        assertInvalidates([.ziwei, .liuyao, .meihua, .qimen, .xiaoliuren, .astrology]) { $0.castingDate.addTimeInterval(3600) }
+        assertInvalidates([.ziwei, .liuyao, .meihua, .qimen, .xiaoliuren]) { $0.profile.currentTimeZoneID = "Asia/Tokyo" }
+        assertInvalidates([.meihua]) { $0.numbers = [1, 2, 3] }
+        assertInvalidates([.liuyao]) { $0.manualLines = [7, 7, 7, 7, 7, 7] }
+        assertInvalidates([.tarot]) { $0.tarotDraws?[0].isReversed = true }
+        assertInvalidates([.tarot]) {
+            $0.tarotClarificationRounds = [.init(request: .init(focus: "进一步理解建议"),
+                draw: .init(cardID: "major-01", isReversed: true, position: TarotDeck.clarificationPosition))]
+        }
+        // Saved manual lines, selected cards and deterministic calendar methods do not use seed.
+        assertInvalidates([]) { $0.seed = 100 }
+        var simulated = completeReading(); simulated.input.manualLines = []
+        assertInvalidates([.liuyao], from: simulated) { $0.seed = 100 }
+        assertInvalidates([.liuyao], from: simulated) { $0.castingStyle = "yarrow" }
+    }
+
+    func testReuseIsPerParticipantAndCannotTransferChartsToANewUUID() {
+        var original = completeReading()
+        let first = original.input.profile
+        var second = first; second.id = UUID(); second.name = "李四"
+        original.input.participants = [first, second]
+        var secondResult = OracleResult(method: .bazi, headline: "李四的盘", rows: [])
+        secondResult.participantID = second.id; secondResult.participantName = second.resolvedName
+        original.results.append(secondResult)
+        var candidate = original.input
+        candidate.participants?[0].birthDate = first.birthDate?.addingTimeInterval(86400)
+        let reused = ReadingContinuationPolicy.reusableResults(from: original, for: candidate, methods: [.bazi])
+        XCTAssertEqual(reused.map(\.participantID), [second.id])
+        XCTAssertEqual(reused.map(\.id), [secondResult.id])
+        candidate.participants = [OracleProfile()]
+        XCTAssertTrue(ReadingContinuationPolicy.reusableResults(from: original, for: candidate, methods: [.bazi]).isEmpty)
+    }
+
+    func testLegacyUnlabelledResultRequiresExactlyOneOriginalParticipant() {
+        var original = completeReading()
+        original.results = [OracleResult(method: .bazi, headline: "旧版单人盘", rows: [])]
+        let reused = ReadingContinuationPolicy.reusableResults(from: original, for: original.input, methods: [.bazi])
+        XCTAssertEqual(reused.first?.participantID, original.input.profile.id)
+        XCTAssertEqual(reused.first?.id, original.results.first?.id)
+        var second = original.input.profile; second.id = UUID()
+        original.input.participants = [original.input.profile, second]
+        XCTAssertTrue(ReadingContinuationPolicy.reusableResults(from: original, for: original.input, methods: [.bazi]).isEmpty)
+    }
+
+    func testFailedUnavailableAndUnselectedMethodsNeverBecomeReusableResults() {
+        var original = completeReading()
+        original.results[0].status = .failed; original.results[1].status = .unavailable
+        original.results[2].status = .partial
+        let reused = ReadingContinuationPolicy.reusableResults(from: original, for: original.input, methods: [.bazi, .ziwei, .liuyao])
+        XCTAssertEqual(reused.map(\.method), [.liuyao])
+        XCTAssertTrue(ReadingContinuationPolicy.reusableResults(from: original, for: original.input, methods: []).isEmpty)
     }
 }

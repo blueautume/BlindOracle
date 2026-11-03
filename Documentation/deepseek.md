@@ -4,12 +4,22 @@
 
 ## 调用接口
 
-- `DeepSeekClient.plan(question:profile:plugins:history:)` 返回 `OraclePlan`。`action` 白名单为 `intake`（具体新问题）、`reply`（延续解释或普通对话）、`clarify`（先澄清事项/对象）。缺少或非法 action 按 intake 兼容；reply/clarify 强制清空方法、资料和交互要求，不能触发四方法兜底。模型只能提议目录中现有方法；客户端过滤未知 ID、去重并补上插件真实必需字段。`interactions` 只允许已选方法对应的塔罗、数字或六爻操作；全部必要交互完成并生成本地结果后，才调用解读。本人档案不能自动套用于他人，对话中的他人对象应连续保持。
+- `DeepSeekClient.plan(question:profile:plugins:history:profiles:pendingPlan:existingRun:)` 返回 `OraclePlan`。已有问事以 `reply / supplement / intake` 分流：`reply` 用于已有结果足以支持的解释或普通对话；`supplement` 用于确需尚未覆盖的能力，或相关资料、人员、条件变化后的局部更新；`intake` 用于具体新问题或明确重新起卦、重新抽牌。另有 `clarify`（先澄清事项/对象）与 `collect`（明确提供或更正人员资料）。缺少或非法 action 按 intake 兼容；reply/clarify/collect 不执行方法，不能触发四方法兜底。无已有记录时不接受 supplement。模型只能提议目录中现有方法；客户端过滤未知 ID、去重并补上插件真实必需字段。本人档案不能自动套用于他人，对话中的他人对象应连续保持。
 - `synthesize(run:weights:history:onDelta:)` 使用真实 SSE 流，实时提取 JSON 中的 `text` 字段；元数据和替代选项不会作为原始 JSON 出现在聊天中。模型的 `reasoning_content` 不解码、不保存、不展示。
 - `followUp(question:run:profile:history:onDelta:)` 对已有资料与结果补充解释，不假装执行新算法。
 - `summarize(transcript:previous:)` 专用于压缩过长的出站上下文。
 
+规划时传入已有记录的完整输入、已调用方法及人员归属、全部可用结果与限制，避免把普通追问当作新一轮推演。supplement只提议本条确需新增或更新的方法，最终是否计算由客户端按方法、人员UUID、实际相关输入和插件版本判断。complete/partial可复用，failed/unavailable可重试；资料未变时，partial、方法名称被提到或用户要求展开都不会自行触发重算。
+
+出生资料、坐标、时区等可定位的输入修正适合局部补算。事件的目标、所问时段、交易对象或关键约束发生实质变化，使原起卦所问不再成立时，规划为intake并确认新的问事；不能只在说明里宣称条件变化、却用相同输入要求重算。补充背景、情绪变化与自然过了一段时间本身不触发新起卦。
+
+补算缺必要资料时进入统一表单；已有输入有效时直接执行新增或变化部分。`interactions`只允许已选方法对应的塔罗、数字或六爻操作。同一问事保留原起问时刻、seed、已完成报数、牌面、爻值和交互响应，仅为新增方法缺少的必要操作建立新步骤；必要交互完成后再计算并汇总。明确重新抽取或换问题走intake，生成独立的新输入。
+
+补算生成新的`OracleRun`，完整复制仍有效的旧结果并合并新计算，保留原记录不变。`OraclePlan.baseRunID/followUpQuestion`记录来源及本条细化诉求，`OracleRun.reusedResultIDs`标记复用结果；综合上下文同时提供原问题和补充问题。删除源记录会取消尚未完成资料或交互的补算，已经完成的新记录因持有独立输入与完整结果仍可解读。
+
 API 使用 `https://api.deepseek.com/chat/completions`，默认模型为 DeepSeek Pro（`deepseek-v4-pro`）。`DeepSeekConfiguration` 在首次升级时，将旧的 `deepseek-flash`、`deepseek-v4-flash`、`deepseek-chat` 默认值迁移为 Pro；迁移完成后，用户在设置中主动选择的模型会保留。模型名存于 `UserDefaults` 的 `deepseek.model`。
+
+设置提供用户主动发起的连接检查，展示该设备实际请求模型、API 返回模型，以及 `thinking`、`reasoning_effort=max` 和 `max_tokens` 参数，用于区分请求配置与服务端响应。未连接真机并读取设备设置或检查报告时，不能将开发机的模型与密钥状态当作 iPhone 的诊断结论。
 
 所有请求显式设置 `thinking: {"type":"enabled"}` 与 `reasoning_effort: "max"`，统一使用 65,536 token 输出预算，包含推理与最终回答，而非最终正文的目标长度。`URLSession` 的请求超时为 300 秒、资源总超时为 900 秒，以容纳较长推理。模型的隐藏推理仍不解码、不保存、不展示，也不写入聊天历史或后续请求；应用只消费最终 `content`。
 
@@ -19,11 +29,19 @@ SSE 帧按每条完整 `data:` JSON 即时消费，不依赖 `AsyncBytes.lines` 
 
 塔罗原始数据保留本地英文牌名、牌位与对应正逆位牌义，按本次保存的抽牌结果送入综合和追问；DeepSeek 结合问题生成中文解读，不重新抽牌、不改变朝向，不声称读取未提供的图片细节。重新请求解读复用已有本地结果。
 
+## 解读口吻
+
+首次综合与后续追问共用 `interpretationStyle`：首句直接回答问题，有依据区分选项时明确表态，再用一至两条具体结果解释原因。建议只写与问题相关的对象、动作和推进或停止条件；主要解读通常250至400字，简单问题短答，不为了凑篇幅堆建议。
+
+“各有利弊”“顺其自然”“保持开放心态”等不能替代判断。真实分歧要说清分歧点和区分条件，选项标题直接写实质判断；资料不足则直接指出哪项问题无法判断、缺什么依据，其他已有依据的结论照常说明。保留 partial、缺项与未采用方法的真实限制，不为显得直接而编造具体日期、他人内心、概率或未来事实。追问先回答新问题，不重复整份旧解读，不模仿历史回复中的空泛措辞。
+
 ## 密钥
 
 `KeychainStore.shared.string()` / `save(_:)` / `delete()`。钥匙串使用 `AfterFirstUnlockThisDeviceOnly`，无 iCloud 同步，不进入档案、消息或日志。
 
-开发密钥由已忽略的 `Configuration/Secrets.local.json` 管理，仓库仅提交 `Secrets.example.json` 空白模板。Debug 构建生成私有 `dev-key.txt` 资源，启动时将变更同步到钥匙串；资源及构建目录均被忽略。Release 不生成该资源，也没有此导入路径。正式使用时由用户在设置中录入自己的密钥。
+按本次用户明确要求，Debug 与 Release 均从已忽略的 `Configuration/Secrets.local.json` 生成包内 `dev-key.txt`；仓库仅提交 `Secrets.example.json` 空白模板，生成资源与构建目录被忽略。空配置不生成密钥资源且不回退旧密钥，无效配置使构建失败并清理陈旧资源。密钥值不进入程序源码、Git、资料 JSON、导出备份或日志；包内密钥可被提取，本次内置仅面向已授权分发。
+
+启动时将随包密钥导入 ThisDeviceOnly 钥匙串。无有效凭据时导入；用户手工保存或来源不明的已有凭据均不覆盖。只有当前凭据仍匹配上次成功导入的 SHA-256 指纹，且未标记为手工保存时，才自动采用轮换后的 bundle key；写入成功后再更新指纹。`UserDefaults` 仅保存指纹与来源标记，空配置不会清除用户已有钥匙串凭据。设置仍允许用户录入自己的密钥。
 
 ## 冲突与偏好
 

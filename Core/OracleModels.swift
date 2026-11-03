@@ -54,6 +54,8 @@ enum OracleField: String, Codable, CaseIterable, Hashable, Sendable {
 }
 
 struct OracleProfile: Codable, Equatable, Identifiable, Sendable {
+    static let defaultChinaTimeZoneID = "Asia/Shanghai"
+
     var id = UUID()
     var displayName = ""
     var familyName = ""
@@ -61,14 +63,14 @@ struct OracleProfile: Codable, Equatable, Identifiable, Sendable {
     var sex = "未提供"
     var birthDate: Date?
     var birthTimeKnown = true
-    var birthTimeZoneID = "Asia/Shanghai"
+    var birthTimeZoneID = Self.defaultChinaTimeZoneID
     var birthPlace = ""
     var birthLatitude: Double?
     var birthLongitude: Double?
     var currentPlace = ""
     var currentLatitude: Double?
     var currentLongitude: Double?
-    var currentTimeZoneID = TimeZone.current.identifier
+    var currentTimeZoneID = Self.defaultChinaTimeZoneID
     var unknownFields: Set<OracleField> = []
     var updatedAt = Date()
     var fullName: String { familyName + givenName }
@@ -76,9 +78,23 @@ struct OracleProfile: Codable, Equatable, Identifiable, Sendable {
     var birthDateText: String? = nil
     var birthTimeText: String? = nil
     var declaredUnknownFields: Set<OracleField>? = []
+    var alias: String? = nil
+    var isAnonymousRecord: Bool? = nil
+    var birthDistrictCode: String? = nil
+    var currentDistrictCode: String? = nil
     var resolvedName: String {
         [name ?? "", fullName, displayName].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first(where: { !$0.isEmpty && !["我", "本人", "他人资料", "我的资料"].contains($0) }) ?? ""
+    }
+    var anonymousCode: String {
+        let bytes = id.uuid
+        let tail = UInt32(bytes.12) << 24 | UInt32(bytes.13) << 16 | UInt32(bytes.14) << 8 | UInt32(bytes.15)
+        return String(format: "%04u", tail % 10_000)
+    }
+    var participantLabel: String {
+        if let alias = alias?.trimmingCharacters(in: .whitespacesAndNewlines), !alias.isEmpty { return alias }
+        let name = resolvedName
+        return name.isEmpty ? anonymousCode : name
     }
 }
 
@@ -92,6 +108,7 @@ struct OracleInput: Codable, Sendable {
     var subject = "本人"
     var castingStyle: String? = nil
     var tarotDraws: [TarotDraw]? = nil
+    var tarotClarificationRounds: [TarotClarificationRound]? = nil
     var interactionResponses: [OracleInteractionResponse]? = nil
     var participants: [OracleProfile]? = nil
     var relationship: String? = nil
@@ -136,6 +153,7 @@ struct OracleResult: Codable, Identifiable, Sendable {
     var durationMilliseconds: Double = 0
     var provenance: String
     var tarotDraws: [TarotDraw]? = nil
+    var tarotClarificationRounds: [TarotClarificationRound]? = nil
     var participantID: UUID? = nil
     var participantName: String? = nil
     var displayTitle: String {
@@ -198,6 +216,10 @@ struct OraclePlan: Codable, Sendable {
     /// Unsubmitted form drafts are independent of the permanent people directory.
     var draftParticipants: [OracleProfile]? = nil
     var draftNumbers: [Int]? = nil
+    /// A pending supplement refers to a saved reading, never to a new random cast.
+    var baseRunID: UUID? = nil
+    var followUpQuestion: String? = nil
+    var tarotClarification: TarotClarificationSuggestion? = nil
 }
 
 enum ChatRole: String, Codable, Sendable { case user, assistant, system }
@@ -212,6 +234,7 @@ struct ChatMessage: Codable, Identifiable, Sendable {
     var activities: [OracleActivity]? = nil
     /// Keeps the transcript's deleted reference distinct from another reading.
     var deletedRunID: UUID? = nil
+    var tarotClarificationOffer: TarotClarificationSuggestion? = nil
 }
 
 struct ReadingAlternative: Codable, Identifiable, Sendable {
@@ -224,6 +247,7 @@ struct ReadingAlternative: Codable, Identifiable, Sendable {
 struct ReadingSynthesis: Codable, Sendable {
     var text: String
     var alternatives: [ReadingAlternative]
+    var tarotClarification: TarotClarificationSuggestion? = nil
     var hasSignificantConflict: Bool { alternatives.count == 2 }
 }
 
@@ -237,6 +261,8 @@ struct OracleRun: Codable, Identifiable, Sendable {
     var completedAt: Date?
     var weightsSnapshot: [String: Double] = [:]
     var activities: [OracleActivity]? = nil
+    /// The result objects themselves are copied into this run for independent recovery.
+    var reusedResultIDs: [UUID]? = nil
 }
 
 struct ConversationSummary: Codable, Sendable {

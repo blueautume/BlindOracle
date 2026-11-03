@@ -179,6 +179,84 @@ final class OracleProgressTests: XCTestCase {
         XCTAssertEqual(oldHistory.archive.conversations.first?.messages.last?.content, message.content)
     }
 
+    @MainActor func testBackgroundCheckpointKeepsPartialAnswerAndRestoresInterruptedWorkOnlyOnce() throws {
+        let vault = try temporaryVault()
+        let store = OracleStore(vault: vault, bootstrapCredential: false)
+        let plan = OraclePlan(intent: "后台恢复", subject: "事件", methods: [.xiaoliuren], requiredFields: [], note: "", question: "如何安排出行？")
+        var run = OracleRun(input: OracleInput(question: plan.question, profile: OracleProfile(), seed: 42), plan: plan)
+        run.results = [OracleResult(method: .xiaoliuren, headline: "已计算的结果", rows: [.init("时宫", "大安")])]
+        let step = OracleActivity(text: "正在整理中文解读", date: instant(10), status: .running)
+        run.activities = [step]
+        let reply = ChatMessage(role: .assistant, content: "先核对行程，再", kind: .reading, runID: run.id)
+        store.runs = [run]
+        store.messages = [ChatMessage(role: .user, content: plan.question), reply]
+        store.activities = [step]; store.activityMessageID = reply.id; store.phase = .synthesizing
+
+        store.checkpoint()
+
+        XCTAssertTrue(store.isBusy)
+        XCTAssertEqual(store.activities.last?.status, .running)
+        let restarted = OracleStore(vault: vault, bootstrapCredential: false)
+        XCTAssertFalse(restarted.isBusy)
+        XCTAssertEqual(restarted.messages.last?.content, reply.content)
+        XCTAssertEqual(restarted.activities.last?.status, .cancelled)
+        XCTAssertNotNil(restarted.activities.last?.finishedAt)
+        XCTAssertEqual(restarted.runs.first?.results.map(\.id), run.results.map(\.id))
+        XCTAssertEqual(restarted.runs.first?.input.seed, 42)
+        XCTAssertNil(restarted.runs.first?.synthesis)
+        XCTAssertNotNil(restarted.notice)
+        let saved = vault.load([OracleRun].self, from: "readings", fallback: [])
+        XCTAssertEqual(saved.first?.activities?.last?.status, .cancelled)
+
+        let nextRestart = OracleStore(vault: vault, bootstrapCredential: false)
+        XCTAssertEqual(nextRestart.messages.last?.content, reply.content)
+        XCTAssertEqual(nextRestart.activities.last?.id, step.id)
+        XCTAssertNil(nextRestart.notice)
+    }
+
+    @MainActor func testRelaunchReplacesInterruptedEmptyReplyWithoutChangingCompletedReplies() throws {
+        let vault = try temporaryVault()
+        let completed = ChatMessage(role: .assistant, content: "已完成的回答", activities: [
+            OracleActivity(text: "回答已完成", date: instant(1), finishedAt: instant(2), status: .completed)
+        ])
+        let interrupted = ChatMessage(role: .assistant, content: "", activities: [
+            OracleActivity(text: "正在生成补充回答", date: instant(3), status: .running)
+        ])
+        let conversation = OracleConversation(messages: [completed, interrupted])
+        try vault.save(OracleConversationArchive(activeConversationID: conversation.id, conversations: [conversation]), as: ConversationHistory.filename)
+
+        let store = OracleStore(vault: vault, bootstrapCredential: false)
+
+        XCTAssertEqual(store.messages.first?.content, completed.content)
+        XCTAssertEqual(store.messages.first?.activities, completed.activities)
+        XCTAssertFalse(store.messages.last?.content.isEmpty ?? true)
+        XCTAssertEqual(store.messages.last?.activities?.last?.status, .cancelled)
+        let persisted = ConversationHistory.load(from: vault).archive.conversations.first?.messages
+        XCTAssertEqual(persisted?.last?.content, store.messages.last?.content)
+        XCTAssertEqual(persisted?.last?.activities?.last?.status, .cancelled)
+    }
+
+    @MainActor func testRelaunchCancelsBothIntakeAndRunProgressDuringLocalCalculation() throws {
+        let vault = try temporaryVault()
+        let plan = OraclePlan(intent: "计算恢复", subject: "事件", methods: [.xiaoliuren], requiredFields: [], note: "", question: "出行如何安排？")
+        var run = OracleRun(input: OracleInput(question: plan.question, profile: OracleProfile(), seed: 73), plan: plan)
+        let step = OracleActivity(text: "正在推演小六壬", date: instant(1), status: .running, method: .xiaoliuren)
+        run.activities = [step]
+        let intake = ChatMessage(role: .assistant, content: "问事笺已收好。", kind: .intake, runID: run.id, activities: [step])
+        let conversation = OracleConversation(messages: [ChatMessage(role: .user, content: plan.question), intake])
+        try vault.save([run], as: "readings")
+        try vault.save(OracleConversationArchive(activeConversationID: conversation.id, conversations: [conversation]), as: ConversationHistory.filename)
+
+        let store = OracleStore(vault: vault, bootstrapCredential: false)
+
+        XCTAssertFalse(store.isBusy)
+        XCTAssertEqual(store.messages.last?.content, intake.content)
+        XCTAssertEqual(store.messages.last?.activities?.last?.status, .cancelled)
+        XCTAssertEqual(store.runs.first?.activities?.last?.status, .cancelled)
+        XCTAssertEqual(vault.load([OracleRun].self, from: "readings", fallback: []).first?.activities?.last?.status, .cancelled)
+        XCTAssertEqual(store.runs.first?.input.seed, 73)
+    }
+
     @MainActor func testCancelledQueuedSendCannotAppendCompressionProgressToRestoredLongChat() async throws {
         let vault = try temporaryVault()
         let store = OracleStore(vault: vault, bootstrapCredential: false)

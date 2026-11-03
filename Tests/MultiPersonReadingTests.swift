@@ -12,6 +12,21 @@ final class MultiPersonReadingTests: XCTestCase {
         func append(_ value: Call) { values.append(value) }
         func snapshot() -> [Call] { values }
     }
+    private struct MethodStart: Equatable, Sendable {
+        let method: OracleMethod
+        let participantID: UUID?
+        let index: Int
+        let total: Int
+    }
+    private actor RegistryEvents {
+        private var starts: [MethodStart] = []
+        private var resultIDs: [UUID] = []
+        func start(_ method: OracleMethod, person: OracleProfile?, index: Int, total: Int) {
+            starts.append(MethodStart(method: method, participantID: person?.id, index: index, total: total))
+        }
+        func progress(_ result: OracleResult) { resultIDs.append(result.id) }
+        func snapshot() -> ([MethodStart], [UUID]) { (starts, resultIDs) }
+    }
     private struct SnapshotPlugin: OraclePlugin {
         let method: OracleMethod
         let calls: Calls
@@ -161,6 +176,108 @@ final class MultiPersonReadingTests: XCTestCase {
         XCTAssertEqual(recorded.filter { $0.method == .meihua }.count, 1)
     }
 
+    func testRegistryReusesOnePersonWhileCalculatingAnotherAndANewMethod() async throws {
+        let first = person("张三"), second = person("李四")
+        let calls = Calls(), events = RegistryEvents()
+        let registry = PluginRegistry(plugins: [SnapshotPlugin(method: .bazi, calls: calls), SnapshotPlugin(method: .meihua, calls: calls)])
+        let request = input(people: [first, second])
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        let originalInput = try encoder.encode(request)
+        var cached = OracleResult(method: .bazi, status: .partial, headline: "沿用张三盘面", rows: [.init("原始值", "保留")])
+        cached.participantID = first.id; cached.participantName = first.resolvedName
+        var duplicate = cached; duplicate.id = UUID()
+        var unrelatedPerson = cached; unrelatedPerson.id = UUID(); unrelatedPerson.participantID = UUID()
+        let unrelatedMethod = OracleResult(method: .qimen, headline: "无关缓存", rows: [])
+        let failed = OracleResult(method: .meihua, status: .failed, headline: "上次失败", rows: [])
+
+        let results = await registry.calculate(request, methods: [.bazi, .meihua],
+            onParticipantStart: { method, person, index, total in
+                await events.start(method, person: person, index: index, total: total)
+            }, reusedResults: [cached, duplicate, unrelatedPerson, unrelatedMethod, failed]) { result in
+                await events.progress(result)
+            }
+
+        let recorded = await calls.snapshot()
+        XCTAssertEqual(recorded, [Call(method: .bazi, profileID: second.id, name: second.resolvedName),
+                                  Call(method: .meihua, profileID: request.profile.id, name: request.profile.resolvedName)])
+        XCTAssertEqual(results.count, 3)
+        XCTAssertEqual(results.first?.id, cached.id)
+        XCTAssertEqual(results.first?.rows, cached.rows)
+        XCTAssertEqual(results.filter { $0.method == .bazi }.compactMap(\.participantID), [first.id, second.id])
+        XCTAssertFalse(results.contains { [duplicate.id, unrelatedPerson.id, unrelatedMethod.id, failed.id].contains($0.id) })
+        let (starts, resultIDs) = await events.snapshot()
+        XCTAssertEqual(starts, [MethodStart(method: .bazi, participantID: second.id, index: 1, total: 2),
+                                MethodStart(method: .meihua, participantID: nil, index: 2, total: 2)])
+        XCTAssertEqual(resultIDs, Array(results.dropFirst()).map(\.id))
+        XCTAssertEqual(try encoder.encode(request), originalInput)
+        XCTAssertEqual(cached.rows, [.init("原始值", "保留")])
+    }
+
+    func testRegistryReusesEventMethodOnceWithoutReportingNewWork() async {
+        let calls = Calls(), events = RegistryEvents()
+        let registry = PluginRegistry(plugins: [SnapshotPlugin(method: .meihua, calls: calls)])
+        let cached = OracleResult(method: .meihua, headline: "已有梅花", rows: [])
+        let duplicate = OracleResult(method: .meihua, headline: "同方法重复缓存", rows: [])
+        let results = await registry.calculate(input(people: [person("张三")]), methods: [.meihua],
+            onParticipantStart: { method, person, index, total in
+                await events.start(method, person: person, index: index, total: total)
+            }, reusedResults: [cached, duplicate]) { result in
+                await events.progress(result)
+            }
+        let recorded = await calls.snapshot()
+        let (starts, resultIDs) = await events.snapshot()
+        XCTAssertTrue(recorded.isEmpty)
+        XCTAssertTrue(starts.isEmpty)
+        XCTAssertTrue(resultIDs.isEmpty)
+        XCTAssertEqual(results.map(\.id), [cached.id])
+    }
+
+    func testRegistryDoesNotReuseOmittedPairsOrEmitConflictingCachedEvidence() async {
+        let first = person("张三"), second = person("李四")
+        let calls = Calls(), events = RegistryEvents()
+        let registry = PluginRegistry(plugins: [SnapshotPlugin(method: .bazi, calls: calls), SnapshotPlugin(method: .meihua, calls: calls)])
+        var firstCached = OracleResult(method: .bazi, headline: "张三旧盘", rows: [])
+        firstCached.participantID = first.id
+        var secondCached = OracleResult(method: .bazi, headline: "李四旧盘", rows: [])
+        secondCached.participantID = second.id
+        let eventCached = OracleResult(method: .meihua, headline: "旧梅花", rows: [])
+        let omissions = [OracleMethodOmission(method: .bazi, reason: "张三本次不采用", participantID: first.id),
+                         OracleMethodOmission(method: .meihua, reason: "本次不采用梅花")]
+        let results = await registry.calculate(input(people: [first, second]), methods: [.bazi, .meihua], omissions: omissions,
+            onParticipantStart: { method, person, index, total in
+                await events.start(method, person: person, index: index, total: total)
+            }, reusedResults: [firstCached, secondCached, eventCached]) { result in
+                await events.progress(result)
+            }
+        let recorded = await calls.snapshot()
+        let (starts, resultIDs) = await events.snapshot()
+        XCTAssertTrue(recorded.isEmpty)
+        XCTAssertTrue(starts.isEmpty)
+        XCTAssertEqual(results.count, 3)
+        XCTAssertEqual(results.filter { $0.status == .complete }.map(\.id), [secondCached.id])
+        XCTAssertEqual(results.filter { $0.status == .unavailable }.count, 2)
+        XCTAssertEqual(resultIDs, Array(results.dropFirst()).map(\.id))
+        XCTAssertFalse(results.contains { $0.id == firstCached.id || $0.id == eventCached.id })
+    }
+
+    func testRegistryRetriesFailedAndUnavailableResultsWithoutGuessingLegacyOwners() async {
+        let first = person("张三"), second = person("李四")
+        let calls = Calls()
+        let registry = PluginRegistry(plugins: [SnapshotPlugin(method: .bazi, calls: calls)])
+        var failed = OracleResult(method: .bazi, status: .failed, headline: "失败", rows: [])
+        failed.participantID = first.id
+        var unavailable = OracleResult(method: .bazi, status: .unavailable, headline: "不可用", rows: [])
+        unavailable.participantID = second.id
+        let legacy = OracleResult(method: .bazi, headline: "未归属的旧结果", rows: [])
+        let results = await registry.calculate(input(people: [first, second]), methods: [.bazi],
+                                               reusedResults: [failed, unavailable, legacy]) { _ in }
+        let recorded = await calls.snapshot()
+        XCTAssertEqual(recorded.map(\.profileID), [first.id, second.id])
+        XCTAssertEqual(results.count, 2)
+        XCTAssertTrue(results.allSatisfy { $0.status == .complete })
+        XCTAssertFalse(results.contains { [failed.id, unavailable.id, legacy.id].contains($0.id) })
+    }
+
     @MainActor func testSavingAndUpdatingNamedPeoplePreservesSeparateIDsAndHistoricalInputs() throws {
         let vault = try temporaryVault()
         let store = OracleStore(vault: vault, bootstrapCredential: false)
@@ -294,7 +411,7 @@ final class MultiPersonReadingTests: XCTestCase {
         XCTAssertTrue(store.runs.isEmpty)
     }
 
-    @MainActor func testGroupIntakeRequiresTwoDistinctNamedPeopleAndKeepsBothSnapshots() async throws {
+    @MainActor func testGroupIntakeRequiresTwoDistinctPeopleAndKeepsAnonymousSnapshot() async throws {
         let vault = try temporaryVault()
         let store = OracleStore(vault: vault, bootstrapCredential: false)
         let first = person("张三"), second = person("李四")
@@ -305,12 +422,10 @@ final class MultiPersonReadingTests: XCTestCase {
         var unnamed = second
         unnamed.name = ""; unnamed.familyName = ""; unnamed.givenName = ""; unnamed.displayName = ""
         store.confirmGroupIntake(profiles: [first, unnamed], numbers: [], save: false)
-        XCTAssertTrue(store.runs.isEmpty)
-        XCTAssertNotNil(store.pendingPlan)
-        store.confirmGroupIntake(profiles: [first, second], numbers: [], save: false)
         try await waitUntilIdle(store)
         let run = try XCTUnwrap(store.runs.first)
         XCTAssertEqual(run.input.participants?.map(\.id), [first.id, second.id])
+        XCTAssertEqual(run.input.participants?.last?.participantLabel, unnamed.anonymousCode)
         XCTAssertEqual(run.input.relationship, "合作")
         XCTAssertEqual(Set(run.results.compactMap(\.participantID)), [first.id, second.id])
     }

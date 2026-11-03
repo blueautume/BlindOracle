@@ -2,6 +2,114 @@ import XCTest
 @testable import BlindOracle
 
 final class AIServiceTests: XCTestCase {
+    func testModelVerificationAcceptsVersionSuffixesAndRejectsOtherModelFamilies() {
+        XCTAssertTrue(DeepSeekClient.modelsMatch(requested: "deepseek-v4-pro", returned: "deepseek-v4-pro"))
+        XCTAssertTrue(DeepSeekClient.modelsMatch(requested: "deepseek-v4-pro", returned: "deepseek-v4-pro-0813"))
+        XCTAssertTrue(DeepSeekClient.modelsMatch(requested: "deepseek-v4-pro", returned: " deepseek-v4-pro-2026-08-13\n"))
+        XCTAssertFalse(DeepSeekClient.modelsMatch(requested: "deepseek-v4-pro", returned: "deepseek-v4-flash"))
+        XCTAssertFalse(DeepSeekClient.modelsMatch(requested: "deepseek-v4-pro", returned: "deepseek-v4-professional"))
+        XCTAssertFalse(DeepSeekClient.modelsMatch(requested: "deepseek-v4-pro-0813", returned: "deepseek-v4-pro"))
+        XCTAssertFalse(DeepSeekClient.modelsMatch(requested: "", returned: "-0813"))
+    }
+
+    func testConnectionProbeKeepsModelAndTokenEvidenceWithoutSavingResponseOrReasoningText() throws {
+        let data = Data(#"{"model":"deepseek-v4-pro-0813","choices":[{"message":{"content":"synthetic-response-marker","reasoning_content":"private-reasoning-marker"},"finish_reason":"stop"}],"usage":{"prompt_tokens":12,"completion_tokens":8,"total_tokens":20,"completion_tokens_details":{"reasoning_tokens":5}}}"#.utf8)
+        let checkedAt = Date(timeIntervalSince1970: 1_730_000_000)
+        let report = try DeepSeekClient.connectionReport(from: data, requestedModel: "deepseek-v4-pro",
+            host: "api.deepseek.com", elapsed: 1.25, checkedAt: checkedAt)
+        XCTAssertEqual(report.requestedModel, "deepseek-v4-pro")
+        XCTAssertEqual(report.actualModel, "deepseek-v4-pro-0813")
+        XCTAssertEqual(report.host, "api.deepseek.com")
+        XCTAssertEqual(report.elapsed, 1.25)
+        XCTAssertEqual(report.checkedAt, checkedAt)
+        XCTAssertEqual(report.finishReason, "stop")
+        XCTAssertEqual(report.promptTokens, 12)
+        XCTAssertEqual(report.completionTokens, 8)
+        XCTAssertEqual(report.totalTokens, 20)
+        XCTAssertEqual(report.reasoningTokens, 5)
+        let stored = String(decoding: try JSONEncoder().encode(report), as: UTF8.self)
+        XCTAssertFalse(stored.contains("synthetic-response-marker"))
+        XCTAssertFalse(stored.contains("private-reasoning-marker"))
+        XCTAssertFalse(stored.contains("reasoning_content"))
+    }
+
+    func testConnectionProbeRejectsMissingModelsEmptyAnswersAndNonStopFinishes() {
+        let invalidResponses = [
+            #"{"choices":[{"message":{"content":"OK"},"finish_reason":"stop"}]}"#,
+            #"{"model":" ","choices":[{"message":{"content":"OK"},"finish_reason":"stop"}]}"#,
+            #"{"model":"deepseek-v4-pro","choices":[{"message":{"content":"OK"},"finish_reason":"length"}]}"#,
+            #"{"model":"deepseek-v4-pro","choices":[{"message":{"content":"OK"},"finish_reason":"content_filter"}]}"#,
+            #"{"model":"deepseek-v4-pro","choices":[{"message":{"content":"OK"},"finish_reason":null}]}"#,
+            #"{"model":"deepseek-v4-pro","choices":[{"message":{"content":" \n\t"},"finish_reason":"stop"}]}"#,
+            #"{"model":"deepseek-v4-pro","choices":[{"message":{"reasoning_content":"not-an-answer"},"finish_reason":"stop"}]}"#,
+            #"{"model":"deepseek-v4-pro","choices":[]}"#
+        ]
+        for response in invalidResponses {
+            XCTAssertThrowsError(try DeepSeekClient.connectionReport(from: Data(response.utf8), requestedModel: "deepseek-v4-pro",
+                host: "api.deepseek.com", elapsed: 0))
+        }
+        let mismatch = Data(#"{"model":"deepseek-v4-flash","choices":[{"message":{"content":"OK"},"finish_reason":"stop"}]}"#.utf8)
+        XCTAssertThrowsError(try DeepSeekClient.connectionReport(from: mismatch, requestedModel: "deepseek-v4-pro",
+            host: "api.deepseek.com", elapsed: 0)) { error in
+            guard case DeepSeekError.unexpectedModel(let requested, let actual) = error else {
+                return XCTFail("Expected a model mismatch, received \(error)")
+            }
+            XCTAssertEqual(requested, "deepseek-v4-pro")
+            XCTAssertEqual(actual, "deepseek-v4-flash")
+        }
+    }
+
+    func testStreamingUsageOnlyEventsPreserveMetadataWithoutInventingContent() throws {
+        let chunk = try DeepSeekSSEChunk.decode(#"{"model":"deepseek-v4-pro-0813","choices":[],"usage":{"prompt_tokens":4,"completion_tokens":6,"total_tokens":10,"completion_tokens_details":{"reasoning_tokens":3}}}"#)
+        XCTAssertEqual(chunk.model, "deepseek-v4-pro-0813")
+        XCTAssertEqual(chunk.content, "")
+        XCTAssertFalse(chunk.isDone)
+        XCTAssertNil(chunk.finishReason)
+        XCTAssertEqual(chunk.usage?.promptTokens, 4)
+        XCTAssertEqual(chunk.usage?.completionTokens, 6)
+        XCTAssertEqual(chunk.usage?.totalTokens, 10)
+        XCTAssertEqual(chunk.usage?.reasoningTokens, 3)
+        let legacy = try DeepSeekSSEChunk.decode(#"{"choices":[{"delta":{"content":"继续"},"finish_reason":"stop"}]}"#)
+        XCTAssertEqual(legacy.content, "继续")
+        XCTAssertNil(legacy.model)
+        XCTAssertNil(legacy.usage)
+    }
+
+    func testUsageMergesPartialMetadataAndAcceptsZeroWithoutKeepingNegativeCounts() throws {
+        let decoder = JSONDecoder()
+        var usage = try decoder.decode(DeepSeekTokenUsage.self,
+            from: Data(#"{"prompt_tokens":12,"completion_tokens":8,"total_tokens":20,"reasoning_tokens":5}"#.utf8))
+        let update = try decoder.decode(DeepSeekTokenUsage.self,
+            from: Data(#"{"prompt_tokens":-1,"completion_tokens":0,"total_tokens":12}"#.utf8))
+        usage.merge(update)
+        XCTAssertEqual(usage.promptTokens, 12)
+        XCTAssertEqual(usage.completionTokens, 0)
+        XCTAssertEqual(usage.totalTokens, 12)
+        XCTAssertEqual(usage.reasoningTokens, 5)
+        let invalid = try decoder.decode(DeepSeekTokenUsage.self,
+            from: Data(#"{"prompt_tokens":-1,"completion_tokens_details":{"reasoning_tokens":-2}}"#.utf8))
+        XCTAssertNil(invalid.promptTokens)
+        XCTAssertNil(invalid.reasoningTokens)
+    }
+
+    func testPlanningAndStreamingRequestsKeepTheSameProThinkingAndOutputBudget() {
+        let messages = [AIConversationTurn(role: "user", content: "synthetic check")]
+        for streaming in [false, true] {
+            let body = DeepSeekClient.requestBody(messages, model: DeepSeekConfiguration.defaultModel,
+                jsonMode: true, streaming: streaming, maxTokens: 2400)
+            XCTAssertEqual(body["model"] as? String, "deepseek-v4-pro")
+            XCTAssertEqual((body["thinking"] as? [String: String])?["type"], "enabled")
+            XCTAssertEqual(body["reasoning_effort"] as? String, "max")
+            XCTAssertEqual(body["max_tokens"] as? Int, 65_536)
+            XCTAssertEqual(body["stream"] as? Bool, streaming)
+            XCTAssertEqual((body["response_format"] as? [String: String])?["type"], "json_object")
+        }
+        let plain = DeepSeekClient.requestBody(messages, model: DeepSeekConfiguration.defaultModel,
+            jsonMode: false, streaming: false, maxTokens: 128)
+        XCTAssertNil(plain["response_format"])
+        XCTAssertEqual(plain["max_tokens"] as? Int, 65_536)
+    }
+
     func testSavedProfileFieldQuestionsUseTheFormInsteadOfRepeatingChatPrompts() {
         XCTAssertTrue(AIPlanRouting.shouldOpenFormForProfileRequest(action: "clarify", note: "这次要看的姓名是什么？", question: "看一下财运明年", hasPendingQuestion: false))
         XCTAssertTrue(AIPlanRouting.shouldOpenFormForProfileRequest(action: "reply", note: "请明确出生地时区。", question: "李浩的事业", hasPendingQuestion: false))
@@ -22,6 +130,32 @@ final class AIServiceTests: XCTestCase {
         XCTAssertTrue(AIPlanRouting.selectedMethods(action: "clarify", requested: [], available: available).isEmpty)
         XCTAssertEqual(AIPlanRouting.selectedMethods(action: "intake", requested: ["not_a_plugin"], available: [.meihua]), [.meihua])
         XCTAssertEqual(AIPlanRouting.selectedMethods(action: "intake", requested: ["bazi", "bazi", "unknown"], available: available), [.bazi])
+        for action in ["reply", "clarify"] {
+            XCTAssertTrue(AIPlanRouting.selectedMethods(action: action, requested: ["tarot", "meihua", "bazi"], available: available).isEmpty)
+        }
+    }
+
+    func testSupplementNeverFallsBackToUnrequestedMethods() {
+        let available = Set(OracleMethod.allCases)
+        XCTAssertEqual(AIPlanRouting.normalizedAction("supplement"), "supplement")
+        XCTAssertTrue(AIPlanRouting.selectedMethods(action: "supplement", requested: [], available: available).isEmpty)
+        XCTAssertTrue(AIPlanRouting.selectedMethods(action: "supplement", requested: ["unknown", "not_a_plugin"], available: available).isEmpty)
+        XCTAssertTrue(AIPlanRouting.selectedMethods(action: "supplement", requested: ["bazi"], available: [.meihua, .tarot]).isEmpty)
+        XCTAssertTrue(AIPlanRouting.selectedMethods(action: "supplement", requested: ["bazi", "meihua"], available: []).isEmpty)
+    }
+
+    func testSupplementKeepsOnlyAvailableMethodsOnceInRequestedOrder() {
+        let methods = AIPlanRouting.selectedMethods(action: "supplement",
+            requested: ["unknown", "meihua", "bazi", "meihua", "liuyao", "tarot", "bazi", "tarot"],
+            available: [.bazi, .meihua, .tarot])
+        XCTAssertEqual(methods, [.meihua, .bazi, .tarot])
+    }
+
+    func testSupplementMissingProfileDataDoesNotBecomeANewIntake() {
+        XCTAssertFalse(AIPlanRouting.shouldOpenFormForProfileRequest(action: "supplement",
+            note: "请补充出生日期与出生时区，才能增加这项参考。", question: "补充看看长期事业选择", hasPendingQuestion: false))
+        XCTAssertFalse(AIPlanRouting.shouldOpenFormForProfileRequest(action: "supplement",
+            note: "请在资料表确认姓名和生日。", question: "继续", hasPendingQuestion: true))
     }
 
     func testStreamingJSONShowsOnlyTextAndPreservesEscapes() {
@@ -37,6 +171,38 @@ final class AIServiceTests: XCTestCase {
         var extractor = JSONTextStreamExtractor()
         let pieces = ["{\"text\":\"静候", "\\uD83D", "\\uDC41", "，再行动。\"}"]
         XCTAssertEqual(pieces.compactMap { extractor.append($0) }.joined(), "静候👁，再行动。")
+    }
+
+    func testStreamingJSONPreservesGraphemesSplitAcrossProviderChunks() {
+        var extractor = JSONTextStreamExtractor()
+        let pieces = ["{\"text\":\"e", "\u{301}，👩", "\u{200D}", "💻，🇨", "🇳继续。\"}"]
+        let output = pieces.compactMap { extractor.append($0) }.joined()
+        XCTAssertEqual(output, "e\u{301}，👩‍💻，🇨🇳继续。")
+    }
+
+    func testStreamingJSONFindsOnlyTheTopLevelTextProperty() {
+        var extractor = JSONTextStreamExtractor()
+        let pieces = [
+            #"{"metadata":{"text":"不应展示","values":[{"text":"也不应展示"}]},"note":"提到 \"text\": 的说明","t\u0065xt":"#,
+            #""实际正文","alternatives":[{"text":"不得混入"}]}"#
+        ]
+        XCTAssertEqual(pieces.compactMap { extractor.append($0) }.joined(), "实际正文")
+        XCTAssertNil(extractor.append(#"{"text":"已结束后不得重复展示"}"#))
+    }
+
+    func testStreamingJSONHandlesEveryScalarBoundaryAndAllJSONEscapes() throws {
+        let expected = "含引号\"、斜线/、反斜线\\、换行\n制表\t回车\r\u{8}\u{C}e\u{301}👨‍👩‍👧‍👦🇨🇳"
+        let encoded = String(decoding: try JSONEncoder().encode(["text": expected]), as: UTF8.self)
+        let scalars = Array(encoded.unicodeScalars)
+        for split in 0...scalars.count {
+            var extractor = JSONTextStreamExtractor()
+            let first = String(String.UnicodeScalarView(scalars.prefix(split)))
+            let second = String(String.UnicodeScalarView(scalars.dropFirst(split)))
+            XCTAssertEqual([first, second].compactMap { extractor.append($0) }.joined(), expected, "split=\(split)")
+        }
+        var extractor = JSONTextStreamExtractor()
+        let escaped = #"{"text":"\u4F60\u597D\uD83D\uDC41\/\b\f\n\r\t\"\\"}"#
+        XCTAssertEqual(escaped.unicodeScalars.compactMap { extractor.append(String($0)) }.joined(), "你好👁/\u{8}\u{C}\n\r\t\"\\")
     }
 
     func testSSEIgnoresReasoningAndAcceptsCompletion() throws {

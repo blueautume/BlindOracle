@@ -85,7 +85,7 @@ enum ReadingPreparationPolicy {
             for person in targets {
                 let interaction = method == .tarot || method == .liuyao || (plan.interactions ?? []).contains { $0.method == method }
                 var assessment = ReadingMethodAssessment(method: method, participantID: person?.id,
-                    participantName: person.flatMap { $0.resolvedName.isEmpty ? nil : $0.resolvedName },
+                    participantName: person?.participantLabel,
                     blocking: [], optionalGaps: [], limitations: [], requiresUserInteraction: interaction)
                 guard let descriptor else {
                     assessment.unavailableReason = "\(method.progressName)尚未加载，本次不能调用。"
@@ -101,9 +101,6 @@ enum ReadingPreparationPolicy {
                 let declared = explicitlyUnknownFields[person.id] ?? person.declaredUnknownFields ?? person.unknownFields
                 var required = hardRequirements(for: method)
                 if mandatory.contains(method) { required.formUnion(descriptor.requiredFields) }
-                // Named selection is an application-level identity requirement;
-                // an anonymous placeholder is never substituted for a person.
-                required.insert(.name)
                 for field in orderedFields where required.contains(field) {
                     if let gap = gap(for: field, person: person, declaredUnknown: declared) { assessment.blocking.append(gap) }
                 }
@@ -118,7 +115,12 @@ enum ReadingPreparationPolicy {
         let blockedMandatory = methods.filter { method in
             mandatory.contains(method) && assessments.contains { $0.method == method && !$0.canExecute }
         }
-        let available = methods.filter { method in assessments.contains { $0.method == method && $0.canExecute } }
+        var available = methods.filter { method in assessments.contains { $0.method == method && $0.canExecute } }
+        if mandatory.isEmpty, available.isEmpty, descriptors.contains(where: { $0.method == .xiaoliuren }) {
+            available.append(.xiaoliuren)
+            assessments.append(.init(method: .xiaoliuren, participantID: nil, participantName: nil,
+                blocking: [], optionalGaps: [], limitations: [], requiresUserInteraction: false))
+        }
         let runnable = blockedMandatory.isEmpty ? available : []
         let omissions = assessments.filter { !$0.canExecute && !mandatory.contains($0.method) }.map { assessment in
             OracleMethodOmission(method: assessment.method,
@@ -255,7 +257,7 @@ enum ReadingPreparationPolicy {
     private static func question(for gap: PreparationGap, name: String?) -> String {
         let subject = name.map { $0 + "的" } ?? "这次要使用资料的人的"
         switch gap.field {
-        case .name: return "这次要为谁问事？请先告诉我姓名。"
+        case .name: return "这次要使用谁的资料？可以选用匿名档案。"
         case .birthDate: return "\(subject)公历出生日期是哪一天？"
         case .birthTimeZone: return "\(subject)出生地采用哪个时区？请明确时区；不确定也可以直接说明。"
         case .birthTime: return "\(subject)当地出生时间是几点？不记得具体时刻也可以说明。"
@@ -279,7 +281,7 @@ enum ReadingPreparationPolicy {
             let zone = person.unknownFields.contains(.birthTimeZone) || unavailableFields.contains(.birthTimeZone) ? "出生时区未确定" : person.birthTimeZoneID
             let gender = ["男", "女"].contains(person.sex) && !person.unknownFields.contains(.gender) && !unavailableFields.contains(.gender) ? person.sex : "排盘性别未确定"
             let place = person.birthPlace.isEmpty || person.unknownFields.contains(.birthPlace) || unavailableFields.contains(.birthPlace) ? "" : "，出生地\(person.birthPlace)"
-            lines.append("\(person.resolvedName.isEmpty ? "姓名未确认" : person.resolvedName)：\(date)，\(time)，\(zone)，\(gender)\(place)。")
+            lines.append("\(person.participantLabel)：\(date)，\(time)，\(zone)，\(gender)\(place)。")
         }
         if !blockedMandatory.isEmpty { lines.append("指定的\(blockedMandatory.map(\.progressName).joined(separator: "、"))资料尚未齐全，暂不开始，也不改用其他方法。") }
         else if !runnable.isEmpty { lines.append("可使用：\(runnable.map(\.progressName).joined(separator: "、"))。") }

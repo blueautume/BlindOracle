@@ -69,6 +69,124 @@ final class InteractionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "当前为本地试算")).firstMatch.waitForExistence(timeout: 30))
     }
 
+    @MainActor func testChangingTopicDuringTarotKeepsThePendingSelectionInHistory() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]
+        app.launch()
+        let original = "用塔罗看看这次选择有哪些启发"
+        send(original, in: app)
+        confirmIntake(in: app)
+        let shuffle = app.buttons["shuffleTarot"]
+        XCTAssertTrue(shuffle.waitForExistence(timeout: 15)); shuffle.tap()
+        XCTAssertTrue(app.buttons["tarotCard-0"].waitForExistence(timeout: 5))
+        for index in 0..<3 { app.buttons["tarotCard-\(index)"].tap() }
+        let first = app.buttons["revealTarot-0"]
+        let second = app.buttons["revealTarot-1"]
+        XCTAssertTrue(first.waitForExistence(timeout: 5))
+        waitUntilEnabled(first); first.tap()
+        waitUntilEnabled(second)
+        let originalCard = first.label
+        app.buttons["deferInteraction"].tap()
+        XCTAssertTrue(first.waitForNonExistence(timeout: 5))
+
+        let next = "换个问题，只用八字看看我同事王安的事业"
+        send(next, in: app)
+        let form = app.scrollViews["intakeFormScroll"]
+        XCTAssertTrue(form.waitForExistence(timeout: 15))
+        XCTAssertTrue(form.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "王安的事业")).firstMatch.exists)
+        XCTAssertFalse(form.staticTexts[original].exists)
+        XCTAssertFalse(app.buttons["interactionCard"].exists)
+        app.terminate()
+        app.launchArguments = ["--ui-testing-local"]
+        app.launch()
+        XCTAssertTrue(form.waitForExistence(timeout: 15))
+        XCTAssertTrue(form.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "王安的事业")).firstMatch.exists)
+        app.buttons["cancelIntake"].tap()
+        XCTAssertTrue(form.waitForNonExistence(timeout: 5))
+
+        app.buttons["historyButton"].tap()
+        let history = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "historyRow-", original)).firstMatch
+        XCTAssertTrue(history.waitForExistence(timeout: 10)); history.tap()
+        let resume = app.buttons["interactionCard"]
+        XCTAssertTrue(resume.waitForExistence(timeout: 10)); resume.tap()
+        XCTAssertTrue(first.waitForExistence(timeout: 5))
+        XCTAssertEqual(first.label, originalCard)
+        XCTAssertFalse(first.isEnabled)
+        XCTAssertTrue(second.isEnabled)
+        XCTAssertFalse(app.buttons["confirmInteraction"].isEnabled)
+        XCTAssertFalse(shuffle.exists)
+    }
+
+    @MainActor func testTarotClarificationResumesTheFourthCardAndKeepsTheOriginalSpread() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]
+        app.launch()
+        send("用塔罗看看这次选择有哪些启发", in: app)
+        confirmIntake(in: app)
+        let shuffle = app.buttons["shuffleTarot"]
+        XCTAssertTrue(shuffle.waitForExistence(timeout: 15)); shuffle.tap()
+        XCTAssertTrue(app.buttons["tarotCard-0"].waitForExistence(timeout: 5))
+        for index in 0..<3 { app.buttons["tarotCard-\(index)"].tap() }
+        for index in 0..<3 {
+            let card = app.buttons["revealTarot-\(index)"]
+            XCTAssertTrue(card.waitForExistence(timeout: 5))
+            waitUntilEnabled(card); card.tap()
+        }
+        let confirm = app.buttons["confirmInteraction"]
+        waitUntilEnabled(confirm)
+        let initialCards = (0..<3).map { app.buttons["revealTarot-\($0)"].label }
+        confirm.tap()
+        let originalReference = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "readingData-")).firstMatch
+        XCTAssertTrue(originalReference.waitForExistence(timeout: 30))
+        let originalID = originalReference.identifier
+
+        let focus = "行动前最值得核实的条件"
+        send("补抽一张，\(focus)", in: app)
+        XCTAssertTrue(app.staticTexts["tarotClarificationFocus"].waitForExistence(timeout: 15))
+        XCTAssertEqual(app.staticTexts["tarotClarificationFocus"].label, focus)
+        XCTAssertTrue(app.buttons["cancelTarotClarification"].exists)
+        XCTAssertFalse(app.buttons["confirmIntake"].exists)
+        shuffle.tap()
+        XCTAssertTrue(app.buttons["tarotCard-0"].waitForExistence(timeout: 5)); app.buttons["tarotCard-0"].tap()
+        let clarificationCard = app.buttons["revealTarot-0"]
+        XCTAssertTrue(clarificationCard.waitForExistence(timeout: 5))
+        waitUntilEnabled(clarificationCard)
+        XCTAssertFalse(app.buttons["revealTarot-1"].exists)
+        clarificationCard.tap()
+        waitUntilEnabled(confirm)
+        XCTAssertFalse(app.buttons["cancelTarotClarification"].exists)
+        let revealedLabel = clarificationCard.label
+        let revealedName = try XCTUnwrap(revealedLabel.split(separator: "，").dropFirst().first)
+        XCTAssertFalse(initialCards.contains { $0.split(separator: "，").dropFirst().first == revealedName })
+        app.buttons["deferInteraction"].tap()
+        app.terminate()
+        app.launchArguments = ["--ui-testing-local"]
+        app.launch()
+
+        let resume = app.buttons["interactionCard"]
+        XCTAssertTrue(resume.waitForExistence(timeout: 15)); resume.tap()
+        XCTAssertTrue(clarificationCard.waitForExistence(timeout: 5))
+        XCTAssertEqual(clarificationCard.label, revealedLabel)
+        XCTAssertFalse(clarificationCard.isEnabled)
+        XCTAssertFalse(app.buttons["shuffleTarot"].exists)
+        waitUntilEnabled(confirm); confirm.tap()
+
+        let newReference = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND identifier != %@",
+            "readingData-", originalID)).firstMatch
+        XCTAssertTrue(newReference.waitForExistence(timeout: 30))
+        for _ in 0..<5 where !newReference.isHittable { app.scrollViews["chatTranscript"].swipeUp() }
+        XCTAssertTrue(newReference.isHittable); newReference.tap()
+        let results = app.scrollViews["runResultsSheet"]
+        XCTAssertTrue(results.waitForExistence(timeout: 10))
+        for label in initialCards {
+            XCTAssertTrue(results.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch.exists)
+        }
+        let savedFocus = app.staticTexts["savedTarotClarificationFocus-0"]
+        for _ in 0..<5 where !savedFocus.isHittable { results.swipeUp() }
+        XCTAssertEqual(savedFocus.label, focus)
+        XCTAssertTrue(results.descendants(matching: .any).matching(NSPredicate(format: "label == %@", revealedLabel)).firstMatch.exists)
+    }
+
     @MainActor func testSelectedNumbersReachMeihuaAfterSixCoinCasts() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]

@@ -16,8 +16,8 @@ final class SavedProfileReuseUITests: XCTestCase {
         let form = app.scrollViews["intakeFormScroll"]
         XCTAssertTrue(form.waitForExistence(timeout: 15))
         XCTAssertEqual(app.scrollViews.matching(identifier: "intakeFormScroll").count, 1)
-        XCTAssertEqual(app.textFields.matching(identifier: "profileName").count, 1)
-        XCTAssertEqual(app.textFields["profileName"].value as? String, "陈平")
+        XCTAssertEqual(app.textFields.matching(identifier: "profileAlias").count, 1)
+        XCTAssertTrue(accessibilityContents(of: element("legacyProfileName", in: app)).contains("陈平"))
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "removeParticipant-")).count, 1)
         let savedPerson = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "selectProfile-", "陈平，已选")).firstMatch
         XCTAssertTrue(savedPerson.exists)
@@ -25,25 +25,20 @@ final class SavedProfileReuseUITests: XCTestCase {
 
         let date = element("profileBirthDate", in: app)
         reveal(date, in: app)
-        XCTAssertEqual(app.switches["birthDateKnown"].value as? String, "1")
         XCTAssertTrue(date.isEnabled)
         let dateContents = accessibilityContents(of: date)
         XCTAssertTrue(dateContents.contains("1992"), "Date picker contents: " + dateContents)
         let time = element("profileBirthTime", in: app)
         reveal(time, in: app)
-        XCTAssertEqual(app.switches["birthTimeKnown"].value as? String, "1")
         XCTAssertTrue(time.isEnabled)
         let timeContents = accessibilityContents(of: time)
         let hasSavedTime = timeContents.range(of: #"(?:^|[^\d])0?8[^\d]+30(?:[^\d]|$)"#,
                                               options: .regularExpression) != nil
         XCTAssertTrue(hasSavedTime, "Time picker contents: " + timeContents)
-        let birthPlace = app.textFields["profileBirthPlace"]
+        let birthPlace = app.buttons["profileBirthPlace"]
         reveal(birthPlace, in: app)
         XCTAssertEqual(birthPlace.value as? String, "甘肃省武威市民勤县")
-        let birthZone = app.buttons["profileBirthTimeZone"]
-        reveal(birthZone, in: app)
-        XCTAssertEqual(birthZone.value as? String, "Asia/Shanghai")
-        XCTAssertFalse(birthZone.label.contains("尚未确认"))
+        XCTAssertFalse(app.buttons["profileBirthTimeZone"].exists)
         capture("saved-profile-prefills-unqualified-fortune-question", in: app)
 
         // No profile field is edited and there is only one confirmation.

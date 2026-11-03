@@ -39,6 +39,26 @@ struct ProfileResolution: Sendable {
 }
 
 enum ProfileDirectory {
+    /// Apply the app's default to an unconfirmed zone for an editable or fresh
+    /// calculation snapshot. Preserve the birth clock in the old local zone.
+    static func assigningDefaultBirthTimeZone(to profile: OracleProfile) -> OracleProfile {
+        guard profile.unknownFields.contains(.birthTimeZone)
+            || profile.declaredUnknownFields?.contains(.birthTimeZone) == true
+            || TimeZone(identifier: profile.birthTimeZoneID) == nil else { return profile }
+        var value = profile
+        var issues: [ProfileDirectoryIssue] = []
+        applyFields(ProfileUpdate(birthTimeZoneID: OracleProfile.defaultChinaTimeZoneID), to: &value, issues: &issues)
+        return value
+    }
+
+    static func clearingFields(_ fields: Set<OracleField>, in profile: OracleProfile) -> OracleProfile {
+        guard !fields.isEmpty else { return profile }
+        var value = profile
+        var issues: [ProfileDirectoryIssue] = []
+        applyFields(ProfileUpdate(unknownFields: Array(fields)), to: &value, issues: &issues)
+        return value
+    }
+
     /// An incomplete cached form must not hide facts subsequently saved for
     /// the same UUID. Explicit unknowns and edited known values remain intact.
     static func restoringKnownFields(in draft: OracleProfile, from saved: OracleProfile) -> OracleProfile {
@@ -50,6 +70,8 @@ enum ProfileDirectory {
                 && !saved.unknownFields.contains(field) && saved.declaredUnknownFields?.contains(field) != true
         }
         if canRestore(.name, missing: draft.resolvedName.isEmpty), !saved.resolvedName.isEmpty { patch.name = saved.resolvedName }
+        if canRestore(.surname, missing: draft.familyName.isEmpty), !saved.familyName.isEmpty { patch.familyName = saved.familyName }
+        if canRestore(.givenName, missing: draft.givenName.isEmpty), !saved.givenName.isEmpty { patch.givenName = saved.givenName }
         if canRestore(.birthDate, missing: draft.birthDate == nil), let date = saved.birthDate {
             patch.birthDate = saved.birthDateText ?? format(date, zone: saved.birthTimeZoneID, pattern: "yyyy-MM-dd")
         }
@@ -61,15 +83,32 @@ enum ProfileDirectory {
             patch.birthTimeZoneID = saved.birthTimeZoneID
         }
         if canRestore(.gender, missing: draft.sex == "未提供"), ["男", "女"].contains(saved.sex) { patch.sex = saved.sex }
-        if canRestore(.birthPlace, missing: draft.birthPlace.isEmpty), !saved.birthPlace.isEmpty { patch.birthPlace = saved.birthPlace }
-        if canRestore(.birthCoordinates, missing: draft.birthLatitude == nil || draft.birthLongitude == nil),
+        let draftPlace = draft.birthPlace.trimmingCharacters(in: .whitespacesAndNewlines)
+        let savedPlace = saved.birthPlace.trimmingCharacters(in: .whitespacesAndNewlines)
+        let noDraftCoordinates = draft.birthLatitude == nil && draft.birthLongitude == nil
+        let restorePlace = draftPlace.isEmpty && draft.birthDistrictCode == nil && noDraftCoordinates && !savedPlace.isEmpty
+            && canRestore(.birthPlace, missing: true)
+        if restorePlace { patch.birthPlace = saved.birthPlace }
+        let samePlace: Bool
+        if let draftDistrict = draft.birthDistrictCode {
+            samePlace = draftDistrict == saved.birthDistrictCode
+        } else if saved.birthDistrictCode != nil {
+            samePlace = false
+        } else {
+            samePlace = draftPlace == savedPlace && (!draftPlace.isEmpty || (noDraftCoordinates && !declared.contains(.birthPlace)))
+        }
+        if (restorePlace || samePlace), canRestore(.birthCoordinates, missing: draft.birthLatitude == nil || draft.birthLongitude == nil),
            let latitude = saved.birthLatitude, let longitude = saved.birthLongitude,
            (-90...90).contains(latitude), (-180...180).contains(longitude) {
             patch.birthLatitude = latitude; patch.birthLongitude = longitude
         }
-        guard patch != ProfileUpdate(id: draft.id) else { return draft }
-        var value = applying([patch], to: [draft]).profiles.first ?? draft
-        if patch.name != nil { value.unknownFields.remove(.name) }
+        var value = draft
+        value.alias = draft.alias ?? saved.alias
+        value.isAnonymousRecord = draft.isAnonymousRecord ?? saved.isAnonymousRecord
+        if patch != ProfileUpdate(id: draft.id) {
+            value = applying([patch], to: [value]).profiles.first ?? value
+            if patch.birthPlace != nil { value.birthDistrictCode = saved.birthDistrictCode }
+        }
         return value
     }
 
@@ -112,16 +151,14 @@ enum ProfileDirectory {
             }
 
             var profile = result.profiles[index]
-            guard suppliedName != nil || normalizedName(profile.resolvedName) != nil else {
-                result.issues.append(.init(kind: .missingName, name: nil, message: "档案仍没有姓名，未写入这次补充。"))
-                continue
-            }
             if let suppliedName {
                 if let oldName = normalizedName(profile.resolvedName), oldName != suppliedName {
                     profile.familyName = ""; profile.givenName = ""
                     profile.unknownFields.formUnion([.surname, .givenName])
                 }
                 profile.name = suppliedName
+                profile.unknownFields.remove(.name)
+                profile.declaredUnknownFields?.remove(.name)
             }
             applyFields(update, to: &profile, issues: &result.issues)
             profile.updatedAt = Date()
@@ -155,9 +192,64 @@ enum ProfileDirectory {
     static func referencedNames(in text: String, profiles: [OracleProfile]) -> [String] {
         let knownNames = Set(profiles.compactMap { normalizedName($0.resolvedName) })
         var seen = Set<String>()
-        return nameAnchors(in: text, profiles: profiles).compactMap { anchor in
+        return nameAnchors(in: text, profiles: profiles, routing: true).compactMap { anchor in
             guard knownNames.contains(anchor.name), seen.insert(anchor.name).inserted else { return nil }
             return anchor.name
+        }
+    }
+
+    private static let possessivePersonPattern = #"^\s*的\s*(?:同事|同学|朋友|对象|伴侣|家人|爸爸|妈妈|父亲|母亲|孩子|儿子|女儿)(?!关系|缘|运|圈|们|气)"#
+
+    /// A name mentioned while excluding or replacing somebody is not a target.
+    static func participantReferences(in text: String, profiles: [OracleProfile]) -> (included: [String], excluded: [String]) {
+        let knownNames = Set(profiles.compactMap { normalizedName($0.resolvedName) })
+        let source = text as NSString
+        let boundaries = CharacterSet(charactersIn: "，,；;。！？!?\n\r")
+        var order: [String] = []
+        var included: [String: Bool] = [:]
+        for anchor in nameAnchors(in: text, profiles: profiles, routing: true) where knownNames.contains(anchor.name) {
+            let before = source.substring(to: anchor.range.location).components(separatedBy: boundaries).last ?? ""
+            let after = source.substring(from: NSMaxRange(anchor.range)).components(separatedBy: boundaries).first ?? ""
+            let prefix = String(before.suffix(20)).filter { !$0.isWhitespace }
+            let suffix = String(after.prefix(16)).filter { !$0.isWhitespace }
+            let selected = matchesPattern(#"(?:换成|改成|改看|改问|改算|转而看|只看|单独看)$"#, in: prefix)
+            let negatedSwitch = matchesPattern(#"(?:不要|不用|不想|先不|暂不|别|不是要|并非要|不)(?:(?:把|将)[^，,；;。！？!?]{1,12})?(?:再)?(?:换成|改成|改看|改问|改算|转而看|只看|单独看)$"#, in: prefix)
+            let notOnly = matchesPattern(#"(?:不只|不止|不只是|不是只|不是仅)(?:看|问|算)$"#, in: prefix)
+            let negativePrefix = matchesPattern(#"(?:不要|不用|不想|先不|暂不|不看|不算|不问|别|不是|并非).{0,6}$"#, in: prefix)
+            let negativeSuffix = matchesPattern(#"^(?:就|先)?(?:不看|不算|不问|别看|暂不看)(?:了|吧|$)"#, in: suffix)
+            let replaced = matchesPattern(#"(?:把|将)$"#, in: prefix) && matchesPattern(#"^(?:换成|改成|换掉|替换为)"#, in: suffix)
+            let describesAnotherPerson = matchesPattern(possessivePersonPattern, in: suffix)
+            if included[anchor.name] == nil { order.append(anchor.name) }
+            included[anchor.name] = !negativeSuffix && !replaced && !describesAnotherPerson && !negatedSwitch
+                && (selected || notOnly || !negativePrefix)
+        }
+        return (order.filter { included[$0] == true }, order.filter { included[$0] == false })
+    }
+
+    /// A planner can propose a new name. Require the exact literal as a
+    /// positive question target before turning it into a saved participant.
+    static func isAffirmativeParticipantReference(_ rawName: String, in text: String, profiles: [OracleProfile]) -> Bool {
+        guard let name = normalizedName(rawName), isPlausibleName(name) else { return false }
+        var candidates = profiles
+        if !candidates.contains(where: { normalizedName($0.resolvedName) == name }) {
+            var temporary = OracleProfile(); temporary.name = name
+            candidates.append(temporary)
+        }
+        let asks = matchesPattern(#"[？?]|(?:想问|想看|看看|呢|怎么样|如何|怎样|合不合|能不能|会不会)"#, in: text)
+        let targetPrefix = #"(?:看看|看一下|看|替|给|问一下|问|算一下|算|换成|改看|改问|改算)(?:我(?:的)?(?:朋友|同事|同学|对象|伴侣|家人|爸爸|妈妈))?\s*$"#
+        let targetSuffix = #"^\s*(?:的)?(?:工作|事业|感情|运势|财运|婚姻|学业|关系|合作|合不合|相处|呢|最近|下周|这周|今年|明年|怎么样|如何|这个名字|这个笔名|当笔名|作为笔名)"#
+        let boundaries = CharacterSet(charactersIn: "，,；;。！？!?\n\r")
+        return text.components(separatedBy: boundaries).contains { clause in
+            guard participantReferences(in: clause, profiles: candidates).included.contains(name) else { return false }
+            let source = clause as NSString
+            return nameAnchors(in: clause, profiles: candidates, routing: true).contains { anchor in
+                guard anchor.name == name else { return false }
+                let before = source.substring(to: anchor.range.location)
+                let after = source.substring(from: NSMaxRange(anchor.range))
+                guard !matchesPattern(possessivePersonPattern, in: after),
+                      !matchesPattern(#"^\s*的(?:资料|档案)"#, in: after) else { return false }
+                return matchesPattern(targetPrefix, in: before) || asks && matchesPattern(targetSuffix, in: after)
+            }
         }
     }
 
@@ -166,82 +258,119 @@ enum ProfileDirectory {
     static func parseExplicitUpdates(in text: String, profiles: [OracleProfile]) -> [ProfileUpdate] {
         let source = text as NSString
         let anchors = nameAnchors(in: text, profiles: profiles)
+        let speaker = explicitSelfName(in: text, profiles: profiles)
         var updates: [ProfileUpdate] = []
         for (index, anchor) in anchors.enumerated() {
             let end = index + 1 < anchors.count ? anchors[index + 1].range.location : source.length
-            let segment = source.substring(with: NSRange(location: NSMaxRange(anchor.range), length: max(0, end - NSMaxRange(anchor.range))))
-            var patch = ProfileUpdate(name: anchor.name)
+            var segment = source.substring(with: NSRange(location: NSMaxRange(anchor.range), length: max(0, end - NSMaxRange(anchor.range))))
+            if matchesPattern(possessivePersonPattern, in: segment) { continue }
+            if let questionBoundary = segment.firstIndex(where: { $0 == "？" || $0 == "?" }) {
+                let preceding = segment[..<questionBoundary]
+                let breakIndex = preceding.lastIndex(where: { "，,；;。！!\n\r".contains($0) })
+                let clauseStart = breakIndex.map { preceding.index(after: $0) } ?? preceding.startIndex
+                let clause = String(preceding[clauseStart...])
+                let uncertain = matchesPattern(#"(?:是不是|是否|可能是|好像是|大概是|对不对|[吗么]\s*$)"#, in: clause)
+                segment = String(preceding[..<(uncertain ? clauseStart : preceding.endIndex)])
+            }
+            if speaker != anchor.name,
+               let selfFacts = segment.range(of: #"(?:^|[，,；;。！!\n\r])\s*(?:我(?:自己)?(?:的)?|本人(?:的)?)\s*(?:出生|生日|性别|时区|姓氏|名字)"#, options: .regularExpression) {
+                segment = String(segment[..<selfFacts.lowerBound])
+            }
+            var patch = parseFields(in: segment)
+            patch.name = anchor.name
             let matches = profiles.filter { normalizedName($0.resolvedName) == anchor.name }
             if matches.count == 1 { patch.id = matches.first?.id }
-            var unknown: [OracleField] = []
-
-            if let family = capture(#"姓氏\s*(?:是|为)?\s*[:：]?\s*([^，,；;。\n\s]+)"#, in: segment) {
-                if matchesPattern(#"^(?:未知|不详|不确定|不知道|不清楚)$"#, in: family) { unknown.append(.surname) }
-                else { patch.familyName = family }
-            }
-            if let given = capture(#"名字\s*(?:是|为)?\s*[:：]?\s*([^，,；;。\n\s]+)"#, in: segment) {
-                if matchesPattern(#"^(?:未知|不详|不确定|不知道|不清楚)$"#, in: given) { unknown.append(.givenName) }
-                else { patch.givenName = given }
-            }
-
-            if let sex = capture(#"(?:性别\s*(?:是|为)?\s*[:：]?\s*|(?:^|[，,；;\s]))(男|女)(?:性|生)?(?=$|[，,；;。\s]|\d{4})"#, in: segment) { patch.sex = sex }
-            if matchesPattern(#"(?:性别|性别是|性别为)\s*[:：]?\s*(?:未知|不详|不确定|不知道|不清楚)"#, in: segment) { unknown.append(.gender) }
-
-            if let match = firstMatch(#"(\d{4})[年./-](\d{1,2})[月./-](\d{1,2})(?:日|号)?"#, in: segment) {
-                let ns = segment as NSString
-                let before = ns.substring(to: match.range.location)
-                let after = ns.substring(from: NSMaxRange(match.range))
-                let hasBirthCue = matchesPattern(#"(?:出生|生日|生于)"#, in: before) || matchesPattern(#"^\s*(?:出生|生)"#, in: after)
-                let directDate = matchesPattern(#"^[\s，,:：]*(?:(?:性别\s*[:：]?\s*)?[男女](?:性|生)?[\s，,:：]*)?$"#, in: before)
-                if hasBirthCue || directDate {
-                    let pieces = (1...3).map { ns.substring(with: match.range(at: $0)) }
-                    if let year = Int(pieces[0]), let month = Int(pieces[1]), let day = Int(pieces[2]) {
-                        patch.birthDate = String(format: "%04d-%02d-%02d", year, month, day)
-                    }
-                }
-            }
-            if matchesPattern(#"(?:出生日期|生日|出生年月日)\s*(?:是|为|也)?\s*[:：]?\s*(?:未知|不详|不确定|不知道|不清楚|不记得)"#, in: segment) { unknown.append(.birthDate) }
-
-            if let value = capture(#"(?:出生时间|出生时辰|生于|出生于|时间|时辰)\s*(?:是|为)?\s*[:：]?\s*((?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?)"#, in: segment) {
-                patch.birthTime = value
-            } else if patch.birthDate != nil,
-                      let value = capture(#"(?:日|号|\d{4}[-/]\d{1,2}[-/]\d{1,2})\s*((?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?)"#, in: segment) {
-                patch.birthTime = value
-            } else if let match = firstMatch(#"(?:出生时间|出生时辰|时间|时辰)\s*(?:是|为)?\s*[:：]?\s*(上午|早上|凌晨|中午|下午|晚上)?\s*(\d{1,2})[点时](半|\d{1,2}分?)?"#, in: segment) {
-                let ns = segment as NSString
-                let period = match.range(at: 1).location == NSNotFound ? "" : ns.substring(with: match.range(at: 1))
-                if var hour = Int(ns.substring(with: match.range(at: 2))) {
-                    let minuteText = match.range(at: 3).location == NSNotFound ? "" : ns.substring(with: match.range(at: 3))
-                    let minute = minuteText == "半" ? 30 : Int(minuteText.replacingOccurrences(of: "分", with: "")) ?? 0
-                    // A 1–12 clock without a period is ambiguous. Keep it for
-                    // conversational clarification instead of assuming morning.
-                    if !period.isEmpty || hour == 0 || hour >= 13 {
-                        if ["下午", "晚上"].contains(period), hour < 12 { hour += 12 }
-                        if ["凌晨", "晚上"].contains(period), hour == 12 { hour = 0 }
-                        if period == "中午", hour < 11 { hour += 12 }
-                        if hour < 24, minute < 60 { patch.birthTime = String(format: "%02d:%02d", hour, minute) }
-                    }
-                }
-            }
-            if matchesPattern(#"(?:出生时间|出生时辰|时辰|具体时间|时间|几点)\s*(?:是|为|也)?\s*[:：]?\s*(?:未知|不详|不确定|不知道|不清楚|不记得|没记住)"#, in: segment) {
-                patch.birthTimeKnown = false; unknown.append(.birthTime)
-            }
-
-            if let value = capture(#"(?:出生时区|时区)\s*(?:是|为)?\s*[:：]?\s*([A-Za-z_]+/[A-Za-z_+/-]+|(?:UTC|GMT)(?:[+-]\d{1,2}(?::?\d{2})?)?|东八区|北京时间)"#, in: segment) { patch.birthTimeZoneID = value }
-            if matchesPattern(#"(?:出生时区|时区)\s*(?:是|为|也)?\s*[:：]?\s*(?:未知|不详|不确定|不知道|不清楚|不记得)"#, in: segment) { unknown.append(.birthTimeZone) }
-            if let value = capture(#"(?:出生地|出生地点|出生于|出生在)\s*(?:是|为|在)?\s*[:：]?\s*([^，,；;。\n]+)"#, in: segment) {
-                let place = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                if matchesPattern(#"^(?:未知|不详|不确定|不知道|不清楚|不记得)$"#, in: place) { unknown.append(.birthPlace) }
-                else if !matchesPattern(#"^(?:经纬度|纬度|经度|坐标|\d|上午|下午|早上|晚上|凌晨|中午)"#, in: place) { patch.birthPlace = place }
-            }
-            if let latitude = capture(#"(?:出生地)?纬度\s*[:：]?\s*([+-]?\d{1,2}(?:\.\d+)?)"#, in: segment) { patch.birthLatitude = Double(latitude) }
-            if let longitude = capture(#"(?:出生地)?经度\s*[:：]?\s*([+-]?\d{1,3}(?:\.\d+)?)"#, in: segment) { patch.birthLongitude = Double(longitude) }
-            if !unknown.isEmpty { patch.unknownFields = Array(Set(unknown)).sorted { $0.rawValue < $1.rawValue } }
-            if anchor.explicitName || hasFacts(patch) {
-                updates.append(patch)
-            }
+            if anchor.explicitName || hasFacts(patch) { updates.append(patch) }
         }
         return updates
+    }
+
+    /// Intake already bound to a UUID may accept a field statement without
+    /// requiring the profile to contain a real name.
+    static func parseContextualFields(in text: String, for id: UUID) -> [ProfileUpdate] {
+        guard !text.contains("？"), !text.contains("?") else { return [] }
+        var patch = parseFields(in: text)
+        guard hasFacts(patch) else { return [] }
+        patch.id = id
+        return [patch]
+    }
+
+    private static func parseFields(in segment: String) -> ProfileUpdate {
+        var patch = ProfileUpdate()
+        var unknown: [OracleField] = []
+
+        if let family = capture(#"姓氏\s*(?:是|为)?\s*[:：]?\s*([^，,；;。\n\s]+)"#, in: segment) {
+            if matchesPattern(#"^(?:未知|不详|不确定|不知道|不清楚)$"#, in: family) { unknown.append(.surname) }
+            else { patch.familyName = family }
+        }
+        if let given = capture(#"名字\s*(?:是|为)?\s*[:：]?\s*([^，,；;。\n\s]+)"#, in: segment) {
+            if matchesPattern(#"^(?:未知|不详|不确定|不知道|不清楚)$"#, in: given) { unknown.append(.givenName) }
+            else { patch.givenName = given }
+        }
+
+        if let sex = capture(#"(?:性别\s*(?:是|为)?\s*[:：]?\s*|(?:^|[，,；;\s]))(男|女)(?:性|生)?(?=$|[，,；;。\s]|\d{4})"#, in: segment) { patch.sex = sex }
+        if matchesPattern(#"(?:性别|性别是|性别为)\s*[:：]?\s*(?:未知|不详|不确定|不知道|不清楚)"#, in: segment) { unknown.append(.gender) }
+
+        var expectsBirthCorrection = false
+        for match in allMatches(#"(\d{4})[年./-](\d{1,2})[月./-](\d{1,2})(?:日|号)?"#, in: segment) {
+            let ns = segment as NSString
+            let before = ns.substring(to: match.range.location)
+            let after = ns.substring(from: NSMaxRange(match.range))
+            let clause = before.components(separatedBy: CharacterSet(charactersIn: "，,；;。！!\n\r")).last ?? ""
+            let hasBirthCue = matchesPattern(#"(?:出生|生日|生于)"#, in: clause) || matchesPattern(#"^\s*(?:出生|生)"#, in: after)
+            if matchesPattern(#"(?:不是(?:在|于)?|并非|不在|不于|误写成)\s*(?:公历|农历|阴历|阳历)?\s*[:：]?\s*$"#, in: clause) {
+                expectsBirthCorrection = hasBirthCue
+                continue
+            }
+            let directDate = matchesPattern(#"^[\s，,:：]*(?:(?:性别\s*[:：]?\s*)?[男女](?:性|生)?[\s，,:：]*)?$"#, in: before)
+            let isCorrection = expectsBirthCorrection && matchesPattern(#"^\s*(?:是|为|实际是|应该是|正确的是|改成|更正为)\s*[:：]?\s*$"#, in: clause)
+            if hasBirthCue || directDate || isCorrection {
+                let pieces = (1...3).map { ns.substring(with: match.range(at: $0)) }
+                if let year = Int(pieces[0]), let month = Int(pieces[1]), let day = Int(pieces[2]) {
+                    patch.birthDate = String(format: "%04d-%02d-%02d", year, month, day)
+                    break
+                }
+            }
+            expectsBirthCorrection = false
+        }
+        if matchesPattern(#"(?:出生日期|生日|出生年月日)\s*(?:是|为|也)?\s*[:：]?\s*(?:未知|不详|不确定|不知道|不清楚|不记得)"#, in: segment) { unknown.append(.birthDate) }
+
+        if let value = capture(#"(?:出生时间|出生时辰|生于|出生于|时间|时辰)\s*(?:是|为)?\s*[:：]?\s*((?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?)"#, in: segment) {
+            patch.birthTime = value
+        } else if patch.birthDate != nil,
+                  let value = capture(#"(?:日|号|\d{4}[-/]\d{1,2}[-/]\d{1,2})\s*((?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?)"#, in: segment) {
+            patch.birthTime = value
+        } else if let match = firstMatch(#"(?:出生时间|出生时辰|时间|时辰)\s*(?:是|为)?\s*[:：]?\s*(上午|早上|凌晨|中午|下午|晚上)?\s*(\d{1,2})[点时](半|\d{1,2}分?)?"#, in: segment) {
+            let ns = segment as NSString
+            let period = match.range(at: 1).location == NSNotFound ? "" : ns.substring(with: match.range(at: 1))
+            if var hour = Int(ns.substring(with: match.range(at: 2))) {
+                let minuteText = match.range(at: 3).location == NSNotFound ? "" : ns.substring(with: match.range(at: 3))
+                let minute = minuteText == "半" ? 30 : Int(minuteText.replacingOccurrences(of: "分", with: "")) ?? 0
+                // A 1–12 clock without a period is ambiguous. Keep it for
+                // conversational clarification instead of assuming morning.
+                if !period.isEmpty || hour == 0 || hour >= 13 {
+                    if ["下午", "晚上"].contains(period), hour < 12 { hour += 12 }
+                    if ["凌晨", "晚上"].contains(period), hour == 12 { hour = 0 }
+                    if period == "中午", hour < 11 { hour += 12 }
+                    if hour < 24, minute < 60 { patch.birthTime = String(format: "%02d:%02d", hour, minute) }
+                }
+            }
+        }
+        if matchesPattern(#"(?:出生时间|出生时辰|时辰|具体时间|时间|几点)\s*(?:是|为|也)?\s*[:：]?\s*(?:未知|不详|不确定|不知道|不清楚|不记得|没记住)"#, in: segment) {
+            patch.birthTimeKnown = false; unknown.append(.birthTime)
+        }
+
+        if let value = capture(#"(?:出生时区|时区)\s*(?:是|为)?\s*[:：]?\s*([A-Za-z_]+/[A-Za-z_+/-]+|(?:UTC|GMT)(?:[+-]\d{1,2}(?::?\d{2})?)?|东八区|北京时间)"#, in: segment) { patch.birthTimeZoneID = value }
+        if matchesPattern(#"(?:出生时区|时区)\s*(?:是|为|也)?\s*[:：]?\s*(?:未知|不详|不确定|不知道|不清楚|不记得)"#, in: segment) { unknown.append(.birthTimeZone) }
+        if let value = capture(#"(?:出生地|出生地点|出生于|出生在)\s*(?:是|为|在)?\s*[:：]?\s*([^，,；;。\n]+)"#, in: segment) {
+            let place = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if matchesPattern(#"^(?:未知|不详|不确定|不知道|不清楚|不记得)$"#, in: place) { unknown.append(.birthPlace) }
+            else if !matchesPattern(#"^(?:经纬度|纬度|经度|坐标|\d|上午|下午|早上|晚上|凌晨|中午)"#, in: place) { patch.birthPlace = place }
+        }
+        if let latitude = capture(#"(?:出生地)?纬度\s*[:：]?\s*([+-]?\d{1,2}(?:\.\d+)?)"#, in: segment) { patch.birthLatitude = Double(latitude) }
+        if let longitude = capture(#"(?:出生地)?经度\s*[:：]?\s*([+-]?\d{1,3}(?:\.\d+)?)"#, in: segment) { patch.birthLongitude = Double(longitude) }
+        if !unknown.isEmpty { patch.unknownFields = Array(Set(unknown)).sorted { $0.rawValue < $1.rawValue } }
+        return patch
     }
 
     /// A self binding requires a direct declaration and a name boundary. In
@@ -252,6 +381,37 @@ enum ProfileDirectory {
               matchesPattern(#"^(?:[\p{Han}]{2,6}|[A-Za-z][A-Za-z' -]{0,47})$"#, in: name),
               !name.contains("的"), !name.hasSuffix("呀"), !name.hasSuffix("啊") else { return nil }
         return name
+    }
+
+    private static let selfFactPrefix = #"^\s*(?:我(?:自己)?(?:的)?|本人(?:的)?)\s*(?=出生|生日|性别|时区|姓氏|名字)"#
+
+    static func hasExplicitSelfFacts(in text: String) -> Bool {
+        text.components(separatedBy: CharacterSet(charactersIn: "，,；;。！？!?\n\r")).contains {
+            matchesPattern(selfFactPrefix, in: $0)
+        }
+    }
+
+    /// A bound speaker may supply their own facts in a separate clause. Do not
+    /// apply the clause to a previous named person or to an unbound profile.
+    static func explicitSelfUpdates(in text: String, profiles: [OracleProfile], selfProfileID: UUID?) -> [ProfileUpdate] {
+        guard let id = selfProfileID, let selfProfile = profiles.first(where: { $0.id == id }) else { return [] }
+        let name = normalizedName(selfProfile.resolvedName)
+        if let declaration = explicitSelfName(in: text, profiles: profiles), declaration != name { return [] }
+        let source = text as NSString
+        return allMatches(#"[^，,；;。！？!?\n\r]+[，,；;。！？!?]?"#, in: text).flatMap { range -> [ProfileUpdate] in
+            let clause = source.substring(with: range.range)
+            guard !clause.hasSuffix("？"), !clause.hasSuffix("?"),
+                  !matchesPattern(#"(?:是不是|是否|可能是|好像是|大概是|对不对)"#, in: clause) else { return [] }
+            guard let match = clause.range(of: selfFactPrefix, options: .regularExpression) else { return [] }
+            let fact = String(clause[match.upperBound...])
+            guard let name else { return parseContextualFields(in: fact, for: id) }
+            return parseExplicitUpdates(in: "\(name)，\(fact)", profiles: [selfProfile]).compactMap { update in
+                guard update.name == name, hasFacts(update) else { return nil }
+                var scoped = update
+                scoped.id = id
+                return scoped
+            }
+        }
     }
 
     /// Grounds model patches in this message, one named person at a time. An AI
@@ -285,7 +445,11 @@ enum ProfileDirectory {
             var evidence = contextBound
                 ? parseExplicitUpdates(in: name + "，" + text, profiles: profiles).filter { $0.name == name }
                 : local.filter { $0.name == name }
-            if contextBound {
+            if contextBound, let singleContext {
+                // The caller has identified the owner of this otherwise unbound
+                // response. Keep an explicit self-owned clause separate from
+                // the synthetic name used to parse ordinary field answers.
+                evidence += explicitSelfUpdates(in: text, profiles: profiles, selfProfileID: singleContext.id)
                 let bare = text.trimmingCharacters(in: .whitespacesAndNewlines)
                 if matchesPattern(#"^\d{2}:[0-5]\d(?::[0-5]\d)?$"#, in: bare), let time = normalizedTime(bare) {
                     evidence.append(ProfileUpdate(name: name, birthTime: time))
@@ -330,11 +494,12 @@ enum ProfileDirectory {
 
     private static func applyFields(_ update: ProfileUpdate, to profile: inout OracleProfile, issues: inout [ProfileDirectoryIssue]) {
         let original = profile
-        let explicitUnknown = Set(update.unknownFields ?? [])
+        var explicitUnknown = Set(update.unknownFields ?? [])
+        if explicitUnknown.contains(.birthPlace) { explicitUnknown.insert(.birthCoordinates) }
         let birthFields: Set<OracleField> = [.birthDate, .birthTime, .birthTimeZone]
         var patchesBirth = !explicitUnknown.isDisjoint(with: birthFields)
         func invalid(_ field: String) {
-            issues.append(.init(kind: .invalidValue, name: normalizedName(profile.resolvedName), message: "\(profile.resolvedName)的\(field)格式无效，已保留原资料。"))
+            issues.append(.init(kind: .invalidValue, name: normalizedName(profile.resolvedName), message: "\(profile.participantLabel)的\(field)格式无效，已保留原资料。"))
         }
         // Preserve wall-clock text from old archives before changing any zone.
         var dateText = profile.birthDateText ?? profile.birthDate.map { format($0, zone: profile.birthTimeZoneID, pattern: "yyyy-MM-dd") }
@@ -377,6 +542,11 @@ enum ProfileDirectory {
             else { invalid("出生时区") }
         }
         if let place = update.birthPlace?.trimmingCharacters(in: .whitespacesAndNewlines), !place.isEmpty {
+            if profile.birthDistrictCode != nil, profile.birthPlace != place {
+                profile.birthDistrictCode = nil
+                profile.birthLatitude = nil; profile.birthLongitude = nil
+                profile.unknownFields.insert(.birthCoordinates)
+            }
             profile.birthPlace = place; profile.unknownFields.remove(.birthPlace)
         }
         if let latitude = update.birthLatitude {
@@ -395,17 +565,23 @@ enum ProfileDirectory {
         if appliedGivenName && !explicitUnknown.contains(.givenName) { declared.remove(.givenName) }
         if update.sex != nil && !explicitUnknown.contains(.gender) { declared.remove(.gender) }
         if update.birthDate != nil && !explicitUnknown.contains(.birthDate) { declared.remove(.birthDate) }
-        if update.birthTime != nil && !explicitUnknown.contains(.birthTime) { declared.remove(.birthTime) }
+        if profile.birthTimeKnown, timeText != nil, !profile.unknownFields.contains(.birthTime) { declared.remove(.birthTime) }
         if update.birthTimeKnown == false { declared.insert(.birthTime) }
         if update.birthTimeZoneID != nil && !explicitUnknown.contains(.birthTimeZone) { declared.remove(.birthTimeZone) }
         if update.birthPlace != nil && !explicitUnknown.contains(.birthPlace) { declared.remove(.birthPlace) }
         if update.birthLatitude != nil && update.birthLongitude != nil && !explicitUnknown.contains(.birthCoordinates) { declared.remove(.birthCoordinates) }
-        profile.declaredUnknownFields = declared
+        if explicitUnknown.contains(.name) { profile.name = nil; profile.displayName = "" }
         if explicitUnknown.contains(.surname) { profile.familyName = "" }
         if explicitUnknown.contains(.givenName) { profile.givenName = "" }
         if explicitUnknown.contains(.gender) { profile.sex = "未提供" }
-        if explicitUnknown.contains(.birthPlace) { profile.birthPlace = "" }
+        if explicitUnknown.contains(.birthPlace) { profile.birthPlace = ""; profile.birthDistrictCode = nil }
         if explicitUnknown.contains(.birthCoordinates) { profile.birthLatitude = nil; profile.birthLongitude = nil }
+        if explicitUnknown.contains(.currentLocation) {
+            profile.currentPlace = ""
+            profile.currentDistrictCode = nil
+            profile.currentLatitude = nil; profile.currentLongitude = nil
+            profile.currentTimeZoneID = OracleProfile.defaultChinaTimeZoneID
+        }
         if patchesBirth {
             if profile.unknownFields.contains(.birthDate) { dateText = nil }
             // Older empty profiles defaulted birthTimeKnown to true even when
@@ -415,7 +591,7 @@ enum ProfileDirectory {
                 profile.birthTimeKnown = false; profile.unknownFields.insert(.birthTime)
             }
             if profile.unknownFields.contains(.birthTime) { timeText = nil; profile.birthTimeKnown = false }
-            if profile.unknownFields.contains(.birthTimeZone) { profile.birthTimeZoneID = "UTC" }
+            if explicitUnknown.contains(.birthTimeZone) { profile.birthTimeZoneID = OracleProfile.defaultChinaTimeZoneID }
             profile.birthDateText = dateText
             profile.birthTimeText = timeText
             if let dateText {
@@ -428,26 +604,29 @@ enum ProfileDirectory {
                     profile.birthTimeZoneID = original.birthTimeZoneID
                     profile.unknownFields.subtract(birthFields)
                     profile.unknownFields.formUnion(original.unknownFields.intersection(birthFields))
+                    declared.subtract(birthFields)
+                    declared.formUnion((original.declaredUnknownFields ?? original.unknownFields).intersection(birthFields))
                 }
             } else { profile.birthDate = nil }
         }
+        profile.declaredUnknownFields = declared
     }
 
     private struct NameAnchor { var name: String; var range: NSRange; var explicitName: Bool }
 
-    private static func nameAnchors(in text: String, profiles: [OracleProfile]) -> [NameAnchor] {
+    private static func nameAnchors(in text: String, profiles: [OracleProfile], routing: Bool = false) -> [NameAnchor] {
         var anchors: [NameAnchor] = []
         let ns = text as NSString
         for name in Set(profiles.compactMap { normalizedName($0.resolvedName) }) {
             for match in allMatches(NSRegularExpression.escapedPattern(for: name), in: text) {
-                guard knownNameHasBoundaries(match.range, in: text) else { continue }
+                guard knownNameHasBoundaries(match.range, in: text, routing: routing) else { continue }
                 anchors.append(.init(name: name, range: match.range, explicitName: false))
             }
         }
         let name = #"([\p{Han}]{2,6}?|[A-Za-z][A-Za-z' -]{0,47}?)"#
         let boundary = #"(?=$|[，,；;。！？\n\r\s0-9]|(?:的)?(?:出生|生日|性别|时区|姓氏|名字))"#
         let patterns: [(String, Bool)] = [
-            (#"(?:姓名|名字|名叫|我叫|他叫|她叫|叫做|我是|记住|记下|记录|保存|新增|添加|补充|更新)\s*(?:是|为)?\s*[:：]?\s*"# + name + boundary, true),
+            (#"(?:姓名(?!\s*五格)|名字|名叫|我叫|他叫|她叫|叫做|我是|记住|记下|记录|保存|新增|添加|补充|更新)\s*(?:是|为)?\s*[:：]?\s*"# + name + boundary, true),
             (#"(?:^|[，,；;。\n\r]|和|与|及)\s*"# + name + #"(?=\s*[，,:：\s]*(?:(?:的)?(?:出生|生日|性别|时区|姓氏|名字)|[男女](?:性|生)?(?:[，,；;。\s]|\d)|\d{4}[年./-]))"#, false)
         ]
         for (pattern, explicitName) in patterns {
@@ -481,16 +660,18 @@ enum ProfileDirectory {
         return accepted
     }
 
-    private static func knownNameHasBoundaries(_ range: NSRange, in text: String) -> Bool {
+    private static func knownNameHasBoundaries(_ range: NSRange, in text: String, routing: Bool) -> Bool {
         let source = text as NSString
         let before = source.substring(to: range.location)
         let after = source.substring(from: NSMaxRange(range))
         if let next = after.first, matchesPattern(#"^\p{Han}$"#, in: String(next)) {
-            let cues = ["的", "和", "与", "及", "跟", "同", "出生", "生日", "生于", "性别", "时区", "时间", "工作", "事业", "感情", "婚姻", "财运", "运势", "健康", "姓名", "姓氏", "名字", "关系", "合盘", "合婚", "最近", "今年", "明年", "未来", "接下来", "能否", "是否", "怎么样", "如何", "情况", "一起", "共同", "想", "要", "是", "为"]
+            var cues = ["的", "和", "与", "及", "跟", "同", "出生", "生日", "生于", "性别", "时区", "时间", "工作", "事业", "感情", "婚姻", "财运", "运势", "健康", "姓名", "姓氏", "名字", "关系", "合盘", "合婚", "最近", "今年", "明年", "未来", "接下来", "能否", "是否", "怎么样", "如何", "情况", "一起", "共同", "想", "要", "是", "为", "不是", "并非"]
+            if routing { cues += ["了", "呢", "下周", "这周", "下个月", "这几天", "能不能", "会不会", "合不合", "合适", "适合", "适不适合", "合伙", "相处", "这个名字", "这个笔名", "当笔名", "作为笔名", "换成", "改成", "换掉", "替换为", "先不看", "不看", "不算", "不问"] }
             guard cues.contains(where: after.hasPrefix) else { return false }
         } else if let next = after.first, next.isLetter { return false }
         if let previous = before.last, matchesPattern(#"^\p{Han}$"#, in: String(previous)) {
-            let cues = ["我叫", "我是", "名叫", "他叫", "她叫", "叫做", "姓名", "名字", "请看", "看看", "关于", "补充", "更新", "记录", "记住", "记下", "保存", "新增", "添加", "还有", "以及", "和", "与", "及", "跟", "同", "给", "为", "替", "对", "问", "是", "叫", "让"]
+            var cues = ["我叫", "我是", "名叫", "他叫", "她叫", "叫做", "姓名", "名字", "请看", "看看", "关于", "补充", "更新", "记录", "记住", "记下", "保存", "新增", "添加", "还有", "以及", "和", "与", "及", "跟", "同", "给", "为", "替", "对", "问", "是", "叫", "让"]
+            if routing { cues += ["换成", "改成", "改看", "改问", "改算", "换", "看", "算", "看一下", "问一下", "算一下", "把", "将", "并非", "不用", "不要", "朋友", "同事", "同学", "对象", "伴侣", "家人", "爸爸", "妈妈", "父亲", "母亲", "孩子", "儿子", "女儿"] }
             guard cues.contains(where: before.hasSuffix) else { return false }
         } else if let previous = before.last, previous.isLetter { return false }
         return true
@@ -499,9 +680,9 @@ enum ProfileDirectory {
     private static func isPlausibleName(_ name: String) -> Bool {
         guard (2...48).contains(name.count), !name.contains("的"),
               !["资料", "信息", "档案", "数据"].contains(name),
-              !["在", "于", "是", "为", "要", "想", "会", "将"].contains(where: name.hasSuffix),
+              !["在", "于", "是", "为", "要", "想", "会", "将", "这个", "那个"].contains(where: name.hasSuffix),
               !["补充", "更新", "新增", "添加"].contains(where: name.hasPrefix) else { return false }
-        let excluded = ["本人", "自己", "朋友", "家人", "对象", "父亲", "母亲", "爸爸", "妈妈", "孩子", "同事", "同学", "老师", "先生", "女士", "小姐", "出生", "生日", "时间", "日期", "性别", "姓名", "姓氏", "名字", "时区", "不确定", "不知道", "不详", "未知", "请", "帮我", "今年", "现在", "住在", "来自", "记住", "记录", "保存", "我叫", "我是", "他的", "她的", "我的"]
+        let excluded = ["本人", "自己", "朋友", "家人", "对象", "父亲", "母亲", "爸爸", "妈妈", "孩子", "同事", "同学", "老师", "先生", "女士", "小姐", "出生", "生日", "时间", "日期", "性别", "姓名", "姓氏", "名字", "笔名", "时区", "不确定", "不知道", "不详", "未知", "请", "帮我", "今年", "现在", "住在", "来自", "记住", "记录", "保存", "我叫", "我是", "他的", "她的", "我的"]
         return !excluded.contains(where: name.contains)
     }
 

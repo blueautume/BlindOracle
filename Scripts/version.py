@@ -73,10 +73,13 @@ def check_staged():
     return version, build
 
 
-def bump():
+def bump(major=False):
     version, build = check()
     parts = list(map(int, version.split('.')))
-    parts[-1] += 1
+    if major:
+        parts = [parts[0] + 1, 0, 0]
+    else:
+        parts[-1] += 1
     updated, next_build = '.'.join(map(str, parts)), build + 1
     project = re.sub(VERSION_PATTERN, f'MARKETING_VERSION = {updated};', read(PROJECT))
     project = re.sub(BUILD_PATTERN, f'CURRENT_PROJECT_VERSION = {next_build};', project)
@@ -99,9 +102,10 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--check', action='store_true', help='Check the working tree without changing files.')
     mode.add_argument('--check-staged', action='store_true', help='Check the Git index and require an increase over HEAD.')
+    mode.add_argument('--major', action='store_true', help='Increase the major version and Build number.')
     args = parser.parse_args()
     try:
-        version, build = check_staged() if args.check_staged else check() if args.check else bump()
+        version, build = check_staged() if args.check_staged else check() if args.check else bump(major=args.major)
     except (ValueError, OSError, KeyError) as error:
         print(f'Version check failed: {error}', file=sys.stderr)
         print('Run python3 Scripts/version.py once, then stage Version.json, project.pbxproj, README.md and Validation.json.', file=sys.stderr)

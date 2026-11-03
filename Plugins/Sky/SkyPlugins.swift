@@ -194,7 +194,7 @@ private actor SkyCalculator {
                 let last = try position(index, dayEnd)
                 rows.append(.init(name, "\(SkyMath.zodiac(first.longitude)) → \(SkyMath.zodiac(last.longitude))"))
             }
-            return OracleResult(method: .astrology, status: .partial,
+            return OracleResult(method: .astrology, version: "1.0.0+astronomy.865d3da", status: .partial,
                 headline: "出生时刻未确定 · 全天星位区间", rows: rows,
                 limitations: ["未选择任意时刻冒充出生时间；区间端点不代表已确定的出生星位。", "不输出宫位、上升点、本命精确相位和行运判词。"],
                 provenance: "Astronomy Engine C · 本地全天端点计算")

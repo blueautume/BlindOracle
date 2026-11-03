@@ -24,9 +24,12 @@ class DevelopmentKeyTests(unittest.TestCase):
         (self.root / 'Configuration').mkdir(parents=True)
         self.file = self.root / 'Configuration/Secrets.local.json'
         self.key = 'sk-' + 'x' * 32
+        self.private_values = [self.key, 'sk-' + 'y' * 32]
 
     def write_config(self, value):
         self.file.write_text(json.dumps({'deepseek_api_key': value}))
+        if isinstance(value, str) and value:
+            self.private_values.append(value)
 
     def legacy(self):
         folder = self.parent / 'key'; folder.mkdir(exist_ok=True)
@@ -54,14 +57,21 @@ class DevelopmentKeyTests(unittest.TestCase):
         self.file.write_text(json.dumps({'deepseek_api_key': 123}))
         with self.assertRaises(ValueError): read_key(self.root)
 
-    def build(self, configuration):
+    def build(self, configuration, succeeds=True):
         output = self.parent / 'products'
         environment = dict(os.environ, CONFIGURATION=configuration, SRCROOT=str(self.root),
                            TARGET_BUILD_DIR=str(output), UNLOCALIZED_RESOURCES_FOLDER_PATH='Test.app')
         result = subprocess.run([sys.executable, str(SCRIPTS / 'development_key.py')], env=environment,
                                 capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0)
-        self.assertNotIn(self.key, result.stdout + result.stderr)
+        if succeeds:
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout + result.stderr, '')
+        else:
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Bundled credential generation failed.', result.stderr)
+            self.assertNotIn('Traceback', result.stderr)
+        for value in self.private_values:
+            self.assertNotIn(value, result.stdout + result.stderr)
         return output / 'Test.app/dev-key.txt'
 
     def test_debug_build_reads_local_file_with_private_permissions(self):
@@ -70,16 +80,63 @@ class DevelopmentKeyTests(unittest.TestCase):
         self.assertEqual(target.read_text(), self.key)
         self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
 
+    def test_release_build_packages_the_local_credential_with_private_permissions(self):
+        self.legacy(); self.write_config(self.key)
+        target = self.build('Release')
+        self.assertEqual(target.read_text(), self.key)
+        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+
+    def test_rotation_updates_the_packaged_credential_across_build_configurations(self):
+        values = [self.key, 'sk-' + 'z' * 32, 'sk-' + 'w' * 32]
+        for configuration, value in zip(['Debug', 'Release', 'Debug'], values):
+            with self.subTest(configuration=configuration):
+                self.write_config(value)
+                target = self.build(configuration)
+                self.assertEqual(target.read_text(), value)
+                self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+                self.assertEqual(list(target.parent.iterdir()), [target])
+
     def test_debug_removes_stale_credential_after_empty_configuration(self):
         self.write_config(self.key); target = self.build('Debug')
         self.write_config(''); self.build('Debug')
         self.assertFalse(target.exists())
 
-    def test_release_removes_credential_without_reading_invalid_configuration(self):
+    def test_empty_local_configuration_clears_resource_without_legacy_fallback(self):
+        self.legacy()
+        for previous, current in [('Debug', 'Release'), ('Release', 'Debug'), ('Release', 'Release')]:
+            with self.subTest(previous=previous, current=current):
+                self.write_config(self.key); target = self.build(previous)
+                self.write_config('  '); self.build(current)
+                self.assertFalse(target.exists())
+
+    def test_missing_local_and_legacy_credentials_remove_stale_resource(self):
         self.write_config(self.key); target = self.build('Debug')
-        self.file.write_text('invalid-json')
+        self.file.unlink()
         self.build('Release')
         self.assertFalse(target.exists())
+
+    def test_invalid_json_fails_both_configurations_and_clears_previous_resource_without_logging(self):
+        self.legacy()
+        for previous, current in [('Debug', 'Release'), ('Release', 'Debug')]:
+            with self.subTest(previous=previous, current=current):
+                self.write_config(self.key); target = self.build(previous)
+                self.file.write_text(self.key + '{')
+                self.build(current, succeeds=False)
+                self.assertFalse(target.exists())
+
+    def test_invalid_schema_and_format_fail_without_printing_private_values(self):
+        values = [{'unexpected': self.key}, self.key + '\nnot-a-key']
+        for configuration in ['Debug', 'Release']:
+            for value in values:
+                with self.subTest(configuration=configuration, kind=type(value).__name__):
+                    self.write_config(self.key); target = self.build(configuration)
+                    self.write_config(value)
+                    self.build(configuration, succeeds=False)
+                    self.assertFalse(target.exists())
+
+    def test_non_file_local_configuration_fails_without_legacy_fallback(self):
+        self.legacy(); self.file.mkdir()
+        self.build('Release', succeeds=False)
 
     def test_staged_scan_rejects_private_file_and_embedded_value(self):
         self.assertIsNotNone(credential_issue('Configuration/Secrets.local.json', b'{}'))

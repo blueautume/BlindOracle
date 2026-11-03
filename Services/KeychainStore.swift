@@ -1,14 +1,30 @@
 import Foundation
 import Security
+import CryptoKit
 
 /// A single device-only credential. Never persisted in chat, profiles, logs or UserDefaults.
 final class KeychainStore: @unchecked Sendable {
     static let shared = KeychainStore()
     private let service = "com.blindoracle.deepseek"
     private let account = "api-key"
+    private let lock = NSLock()
+    private let defaults = UserDefaults.standard
+    private static let bundledFingerprintKey = "deepseek.bundled-key.sha256"
+    private static let manuallySavedKey = "deepseek.credential.manually-saved"
     private init() {}
 
     func string() -> String? {
+        try? load()
+    }
+
+    func load() throws -> String? {
+        lock.lock(); defer { lock.unlock() }
+        return try storedString()
+    }
+
+    /// An absent item is different from a locked or inaccessible keychain.
+    /// Bootstrap must not replace an unreadable user credential with another account.
+    private func storedString() throws -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -17,24 +33,30 @@ final class KeychainStore: @unchecked Sendable {
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
         var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data,
-              let value = String(data: data, encoding: .utf8), !value.isEmpty else { return nil }
-        return value
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess else { throw KeychainError.readStatus(status) }
+        guard let data = result as? Data, let value = String(data: data, encoding: .utf8) else {
+            throw KeychainError.unreadableValue
+        }
+        return try? BootstrapPolicy.normalizedKey(value)
     }
 
     func save(_ value: String) throws {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !trimmed.contains(where: { $0.isWhitespace }) else {
-            throw KeychainError.invalidValue
-        }
+        lock.lock(); defer { lock.unlock() }
+        try persist(BootstrapPolicy.normalizedKey(value))
+        // Settings is an explicit choice, including re-entering the same key.
+        defaults.set(true, forKey: Self.manuallySavedKey)
+    }
+
+    private func persist(_ key: String) throws {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
         let attributes: [String: Any] = [
-            kSecValueData as String: Data(trimmed.utf8),
+            kSecValueData as String: Data(key.utf8),
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
         let updated = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
@@ -49,6 +71,7 @@ final class KeychainStore: @unchecked Sendable {
     }
 
     func delete() throws {
+        lock.lock(); defer { lock.unlock() }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -58,27 +81,80 @@ final class KeychainStore: @unchecked Sendable {
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainError.status(status)
         }
+        defaults.removeObject(forKey: Self.bundledFingerprintKey)
+        defaults.removeObject(forKey: Self.manuallySavedKey)
     }
 
-    /// Only the development target may contain this untracked resource.
-    /// Release builds cannot import a credential from their app bundle.
-    func bootstrapDevelopmentKey() {
-        #if DEBUG
-        guard let url = Bundle.main.url(forResource: "dev-key", withExtension: "txt"),
-              let text = try? String(contentsOf: url, encoding: .utf8) else { return }
-        let key = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty, string() != key else { return }
-        try? save(key)
-        #endif
+    enum BootstrapResult: Equatable {
+        case missingResource, imported, updated, unchanged, preservedUserKey
+    }
+
+    /// Imports the application's bundled credential in both Debug and Release.
+    /// The historical method name remains compatible with existing callers.
+    @discardableResult func bootstrapDevelopmentKey() throws -> BootstrapResult {
+        lock.lock(); defer { lock.unlock() }
+        guard let url = Bundle.main.url(forResource: "dev-key", withExtension: "txt") else { return .missingResource }
+        let text: String
+        do { text = try String(contentsOf: url, encoding: .utf8) }
+        catch { throw KeychainError.bundledResourceUnreadable }
+        let key = try BootstrapPolicy.normalizedKey(text)
+        let result = try BootstrapPolicy.decision(
+            bundledKey: key, existingKey: storedString(),
+            previousBundledFingerprint: defaults.string(forKey: Self.bundledFingerprintKey),
+            manuallySaved: defaults.bool(forKey: Self.manuallySavedKey))
+        if result == .imported || result == .updated {
+            try persist(key)
+        }
+        if result == .imported || result == .updated || result == .unchanged {
+            // Commit ownership only after the keychain write succeeds.
+            // Matching legacy imports can acquire provenance without rewriting
+            // the key; explicit manual keys return preservedUserKey instead.
+            defaults.set(BootstrapPolicy.fingerprint(key), forKey: Self.bundledFingerprintKey)
+            defaults.set(false, forKey: Self.manuallySavedKey)
+        }
+        return result
+    }
+
+    /// Pure decisions are testable without accessing the user's real keychain.
+    enum BootstrapPolicy {
+        static func normalizedKey(_ value: String) throws -> String {
+            let key = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !key.isEmpty, !key.contains(where: { $0.isWhitespace || $0.isNewline }),
+                  !key.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
+                throw KeychainError.invalidValue
+            }
+            return key
+        }
+
+        static func fingerprint(_ key: String) -> String {
+            SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
+        }
+
+        static func decision(bundledKey: String, existingKey: String?, previousBundledFingerprint: String?,
+                             manuallySaved: Bool) throws -> BootstrapResult {
+            let bundled = try normalizedKey(bundledKey)
+            guard let existing = existingKey.flatMap({ try? normalizedKey($0) }) else { return .imported }
+            guard !manuallySaved else { return .preservedUserKey }
+            if existing == bundled { return .unchanged }
+            // Only replace a key that is still the last credential we imported.
+            // Unknown legacy ownership and external/manual replacements are preserved.
+            guard fingerprint(existing) == previousBundledFingerprint else { return .preservedUserKey }
+            return .updated
+        }
     }
 
     enum KeychainError: LocalizedError {
         case invalidValue
         case status(OSStatus)
+        case readStatus(OSStatus)
+        case unreadableValue
+        case bundledResourceUnreadable
         var errorDescription: String? {
             switch self {
             case .invalidValue: "请输入完整的 API 密钥。"
             case .status: "无法将密钥保存到本机钥匙串，请重试。"
+            case .readStatus, .unreadableValue: "无法读取本机钥匙串中的解读密钥，请解锁设备后重试。"
+            case .bundledResourceUnreadable: "随包解读密钥未能读取，请检查应用资源配置。"
             }
         }
     }

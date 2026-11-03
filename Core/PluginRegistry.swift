@@ -11,22 +11,44 @@ struct PluginRegistry: Sendable {
         }
     }
     func plugin(_ method: OracleMethod) -> (any OraclePlugin)? { plugins.first { $0.descriptor.method == method } }
+    private struct CalculationKey: Hashable {
+        let method: OracleMethod
+        let participantID: UUID?
+        init(method: OracleMethod, participantID: UUID?) {
+            self.method = method
+            self.participantID = method.usesPersonalProfile ? participantID : nil
+        }
+    }
     func calculate(_ input: OracleInput, methods: [OracleMethod],
                    omissions: [OracleMethodOmission] = [],
                    onMethodStart: (@Sendable (OracleMethod, Int, Int) async -> Void)? = nil,
                    onParticipantStart: (@Sendable (OracleMethod, OracleProfile?, Int, Int) async -> Void)? = nil,
+                   reusedResults: [OracleResult] = [],
                    onProgress: @escaping @Sendable (OracleResult) async -> Void) async -> [OracleResult] {
         // Each plugin gets a value snapshot; serial scheduling also protects vendored global tables.
-        var results: [OracleResult] = []
         let selected = OracleMethod.allCases.filter { methods.contains($0) }
-        let tasks: [(OracleMethod, OracleProfile?)] = selected.flatMap { method in
+        let requestedTasks: [(OracleMethod, OracleProfile?)] = selected.flatMap { method in
             if method.usesPersonalProfile {
                 let people = input.readingParticipants
                 return people.isEmpty ? [(method, nil)] : people.map { (method, Optional($0)) }
             }
             return [(method, nil)]
         }.filter { method, person in
-            !omissions.contains { $0.method == method && ($0.participantID == nil || $0.participantID == person?.id) }
+            !omissions.contains { $0.method == method && (!method.usesPersonalProfile || $0.participantID == nil || $0.participantID == person?.id) }
+        }
+        let requestedKeys = Set(requestedTasks.map { CalculationKey(method: $0.0, participantID: $0.1?.id) })
+        var reusedKeys = Set<CalculationKey>()
+        var reusedIDs = Set<UUID>()
+        var results = reusedResults.filter { result in
+            guard result.status == .complete || result.status == .partial,
+                  !result.method.usesPersonalProfile || result.participantID != nil else { return false }
+            let key = CalculationKey(method: result.method, participantID: result.participantID)
+            guard requestedKeys.contains(key), !reusedKeys.contains(key), !reusedIDs.contains(result.id) else { return false }
+            reusedKeys.insert(key); reusedIDs.insert(result.id)
+            return true
+        }
+        let tasks = requestedTasks.filter { method, person in
+            !reusedKeys.contains(CalculationKey(method: method, participantID: person?.id))
         }
         for omission in omissions {
             var result = OracleResult(method: omission.method, status: .unavailable, headline: "资料不足，本次未采用", rows: [], limitations: [omission.reason])
@@ -56,7 +78,7 @@ struct PluginRegistry: Sendable {
             catch { result = OracleResult(method: method, status: .failed, headline: "本项未能完成", rows: [], limitations: [error.localizedDescription]) }
             if Task.isCancelled { break }
             if input.participants != nil, let person {
-                result.participantID = person.id; result.participantName = person.resolvedName
+                result.participantID = person.id; result.participantName = person.participantLabel
             }
             result.durationMilliseconds = Date().timeIntervalSince(start) * 1000
             results.append(result); await onProgress(result)

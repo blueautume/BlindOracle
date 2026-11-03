@@ -66,9 +66,9 @@ final class ReadingPreparationTests: XCTestCase {
         person.birthPlace = "北京"; person.unknownFields.insert(.birthTimeZone)
         person.declaredUnknownFields = []
         let report = ReadingPreparationPolicy.evaluate(plan: plan([.bazi, .chenggu, .astrology]), participants: [person], descriptors: descriptors)
-        XCTAssertTrue(report.runnableMethods.isEmpty)
-        XCTAssertEqual(report.assessments.count, 3)
-        XCTAssertTrue(report.assessments.allSatisfy { $0.blocking.contains { $0.field == .birthTimeZone } })
+        XCTAssertEqual(report.runnableMethods, [.xiaoliuren])
+        XCTAssertEqual(report.omissions.map(\.method), [.bazi, .chenggu, .astrology])
+        XCTAssertTrue(report.assessments.filter { $0.method != .xiaoliuren }.allSatisfy { $0.blocking.contains { $0.field == .birthTimeZone } })
         XCTAssertEqual(report.questions.filter { $0.field == .birthTimeZone }.count, 1)
         XCTAssertTrue(report.summary.contains("出生时区未确定"))
     }
@@ -140,7 +140,7 @@ final class ReadingPreparationTests: XCTestCase {
         XCTAssertTrue(strict.runnableMethods.isEmpty)
     }
 
-    func testPersonalMethodsRequireSelectedNamedPersonWhileTarotNeedsOnlyLaterInteraction() {
+    func testPersonalMethodsRequireSelectedProfileWhileTarotNeedsOnlyLaterInteraction() {
         let personal = ReadingPreparationPolicy.evaluate(plan: plan([.bazi], mandatory: [.bazi]), participants: [], descriptors: descriptors)
         XCTAssertTrue(personal.strictBlocked)
         XCTAssertEqual(personal.questions.first?.field, .name)
@@ -150,8 +150,28 @@ final class ReadingPreparationTests: XCTestCase {
         XCTAssertTrue(tarot.missing.isEmpty)
         XCTAssertTrue(tarot.assessments.first?.requiresUserInteraction == true)
         var anonymous = profile(); anonymous.name = nil
-        let blocked = ReadingPreparationPolicy.evaluate(plan: plan([.bazi]), participants: [anonymous], descriptors: descriptors)
-        XCTAssertEqual(blocked.assessments.first?.blocking.map(\.field), [.name])
+        let ready = ReadingPreparationPolicy.evaluate(plan: plan([.bazi]), participants: [anonymous], descriptors: descriptors)
+        XCTAssertEqual(ready.runnableMethods, [.bazi])
+        XCTAssertEqual(ready.assessments.first?.participantName, anonymous.anonymousCode)
+        XCTAssertTrue(ready.assessments.first?.blocking.isEmpty == true)
+    }
+
+    func testBlankAnonymousProfileFallsBackOnlyToAvailableEventMethodForFlexiblePlans() {
+        let anonymous = OracleProfile(alias: "占问人")
+        let selected: [OracleMethod] = [.ziwei, .xingming]
+        let report = ReadingPreparationPolicy.evaluate(plan: plan(selected), participants: [anonymous], descriptors: descriptors)
+        XCTAssertTrue(report.canProceed)
+        XCTAssertEqual(report.runnableMethods, [.xiaoliuren])
+        XCTAssertEqual(report.omissions.map(\.method), selected)
+        XCTAssertTrue(report.omissions.allSatisfy { $0.participantID == anonymous.id && $0.participantName == "占问人" })
+        XCTAssertEqual(report.assessments.first { $0.method == .xingming }?.blocking.map(\.field), [.surname, .givenName])
+        let noFallback = ReadingPreparationPolicy.evaluate(plan: plan(selected), participants: [anonymous],
+            descriptors: descriptors.filter { $0.method != .xiaoliuren })
+        XCTAssertFalse(noFallback.canProceed)
+        let strict = ReadingPreparationPolicy.evaluate(plan: plan(selected, mandatory: [.xingming]),
+            participants: [anonymous], descriptors: descriptors)
+        XCTAssertTrue(strict.strictBlocked)
+        XCTAssertTrue(strict.runnableMethods.isEmpty)
     }
 
     func testMissingPluginIsExplicitlyUnavailableAndMandatoryMethodCannotDisappearFromPlan() {
@@ -168,7 +188,7 @@ final class ReadingPreparationTests: XCTestCase {
         var person = profile()
         person.birthDate = ISO8601DateFormatter().date(from: "1800-01-01T12:00:00Z")
         person.birthTimeZoneID = "Not/AZone"
-        let report = ReadingPreparationPolicy.evaluate(plan: plan([.bazi]), participants: [person], descriptors: descriptors)
+        let report = ReadingPreparationPolicy.evaluate(plan: plan([.bazi], mandatory: [.bazi]), participants: [person], descriptors: descriptors)
         XCTAssertFalse(report.canProceed)
         XCTAssertEqual(report.assessments.first?.blocking.map(\.state), [.invalid, .invalid])
         XCTAssertEqual(Set(report.questions.map(\.field)), Set([.birthDate, .birthTimeZone]))

@@ -1,6 +1,56 @@
 import XCTest
 
 final class BlindOracleUITests: XCTestCase {
+    /// Opt-in on a dedicated fresh simulator: exercises the shipped app and its
+    /// bundled credential without creating profiles or sending a reading.
+    @MainActor func testReleaseBundledCredentialConnectsToTheActualProModel() throws {
+        guard ProcessInfo.processInfo.environment["BLINDORACLE_RELEASE_CONNECTION_SMOKE"] == "1" else {
+            throw XCTSkip("Release connection smoke is opt-in")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = []
+        app.launch()
+        let data = app.tabBars.buttons["数据"]
+        XCTAssertTrue(data.waitForExistence(timeout: 15))
+        data.tap()
+        let settings = app.buttons["设置"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+
+        let savedKey = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "已保存密钥")).firstMatch
+        XCTAssertTrue(savedKey.waitForExistence(timeout: 10))
+        let status = app.staticTexts["settingsAIConnectionStatus"]
+        XCTAssertTrue(status.waitForExistence(timeout: 10))
+        XCTAssertTrue(status.label.contains("DeepSeek Pro"))
+        XCTAssertTrue(status.label.contains("max"))
+        XCTAssertFalse(status.label.contains("仅本地"))
+        let check = app.buttons["checkAIConnection"]
+        XCTAssertTrue(check.waitForExistence(timeout: 10))
+        XCTAssertTrue(check.isEnabled)
+        for _ in 0..<6 where !check.isHittable { app.swipeUp() }
+        XCTAssertTrue(check.isHittable)
+        check.tap()
+
+        let report = app.descendants(matching: .any).matching(identifier: "connectionCheckReport").firstMatch
+        XCTAssertTrue(report.waitForExistence(timeout: 120))
+        guard report.exists else { return }
+        // SwiftUI can propagate the group's identifier to its Text children;
+        // the first match may itself be a StaticText rather than a container.
+        let labels = app.staticTexts.matching(identifier: "connectionCheckReport").allElementsBoundByIndex.map(\.label).joined(separator: "\n")
+        XCTAssertTrue(labels.contains("请求模型：deepseek-v4-pro"))
+        XCTAssertTrue(labels.contains("实际模型：deepseek-v4-pro"))
+        XCTAssertTrue(labels.contains("深度思考") && labels.contains("max") && labels.contains("65,536"))
+        XCTAssertTrue(labels.contains("api.deepseek.com"))
+        let feedback = app.staticTexts["connectionCheckFeedback"]
+        XCTAssertTrue(feedback.exists)
+        XCTAssertTrue(feedback.label.contains("连接正常"))
+        for _ in 0..<6 where !report.isHittable { app.swipeUp() }
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "release-pro-connection-report"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     @MainActor func testProfilePersistsAcrossAppRelaunch() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]
@@ -9,7 +59,7 @@ final class BlindOracleUITests: XCTestCase {
         app.tabBars.buttons["数据"].tap()
         let profile = app.buttons["addProfile"]
         XCTAssertTrue(profile.waitForExistence(timeout: 10)); profile.tap()
-        let name = app.textFields["profileName"]
+        let name = app.textFields["profileAlias"]
         XCTAssertTrue(name.waitForExistence(timeout: 10)); name.tap(); name.typeText("张小明")
         let save = app.buttons["confirmIntake"]
         for _ in 0..<9 where !save.isHittable { app.swipeUp() }
@@ -57,12 +107,8 @@ final class BlindOracleUITests: XCTestCase {
         app.buttons["closeRunResults"].tap()
         XCTAssertTrue(app.tabBars.buttons["对话"].isSelected)
         app.tabBars.buttons["数据"].tap()
-        XCTAssertTrue(app.staticTexts["推演记录"].waitForExistence(timeout: 10))
-        let record = app.staticTexts["未来一周适合推进手头的计划吗？"].firstMatch
-        XCTAssertTrue(record.exists); record.tap()
-        XCTAssertTrue(app.staticTexts["原始推演"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["梅花易数"].exists)
-        let data = XCTAttachment(screenshot: app.screenshot()); data.name = "03-independent-results"; data.lifetime = .keepAlways; add(data)
+        XCTAssertTrue(app.buttons["addProfile"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["localMethodsDirectory"].exists)
     }
 
     @MainActor func testHistoryRestoresPendingIntakeAndDeletionSurvivesRestart() throws {

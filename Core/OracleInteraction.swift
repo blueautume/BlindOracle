@@ -18,17 +18,28 @@ struct OracleInteractionRequest: Codable, Identifiable, Equatable, Sendable {
     var method: OracleMethod
     var kind: OracleInteractionKind
     var prompt: String
-    var id: String { method.rawValue }
-    var title: String { kind.title }
+    var tarotClarification: TarotClarificationRequest?
+    var id: String {
+        guard kind == .tarot, let tarotClarification else { return method.rawValue }
+        return "\(method.rawValue):\(tarotClarification.id.uuidString)"
+    }
+    var title: String { kind == .tarot && tarotClarification != nil ? "抽取澄清牌" : kind.title }
+    var tarotPositions: [String] {
+        guard kind == .tarot else { return [] }
+        return tarotClarification == nil ? TarotDeck.positions : [TarotDeck.clarificationPosition]
+    }
+    var tarotPositionTitles: [String] { tarotPositions.map(TarotDeck.localizedTitle(for:)) }
 
-    init(method: OracleMethod, kind: OracleInteractionKind, prompt: String = "") {
+    init(method: OracleMethod, kind: OracleInteractionKind, prompt: String = "", tarotClarification: TarotClarificationRequest? = nil) {
         self.method = method; self.kind = kind
+        self.tarotClarification = tarotClarification
         let supplied = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let fallback: String
         switch kind {
         case .numbers: fallback = "凭着此刻的心意，留下三个数。"
         case .coins: fallback = "心中留一问，依次留下六爻。"
-        case .tarot: fallback = "静下心，选出属于此问的三张牌。"
+        case .tarot:
+            fallback = tarotClarification == nil ? "静下心，选出属于此问的三张牌。" : "围绕这个方向，从余下的牌中选出一张澄清牌。"
         }
         self.prompt = supplied.isEmpty ? fallback : String(supplied.prefix(180))
     }
@@ -64,25 +75,72 @@ struct OracleInteractionSession: Codable, Identifiable, Sendable {
         return input.seed ^ salt
     }
 
+    var availableTarotCards: [TarotCard] {
+        guard let request = currentRequest, request.kind == .tarot else { return [] }
+        let deck = TarotDeck.shuffled(seed: seed)
+        guard let clarification = request.tarotClarification else { return deck }
+        guard canStartClarification(clarification) else { return [] }
+        let drawnIDs = drawnTarotIDs
+        return deck.filter { !drawnIDs.contains($0.id) }
+    }
+
+    private var drawnTarotIDs: Set<String> {
+        Set((input.tarotDraws ?? []).map(\.cardID) + (input.tarotClarificationRounds ?? []).map(\.draw.cardID))
+    }
+
+    private func canStartClarification(_ request: TarotClarificationRequest) -> Bool {
+        request.isValid && TarotDeck.canAppendClarification(to: input)
+            && !(input.tarotClarificationRounds ?? []).contains { $0.id == request.id }
+    }
+
+    func isValid(_ response: OracleInteractionResponse, complete: Bool) -> Bool {
+        guard let request = currentRequest, OracleInteractionPolicy.isValid(response, for: request, complete: complete) else { return false }
+        guard request.kind == .tarot else { return true }
+        let savedDraft = draft.flatMap { OracleInteractionPolicy.isValid($0, for: request, complete: false) ? $0 : nil }
+        if let clarification = request.tarotClarification {
+            let drawnIDs = drawnTarotIDs
+            guard canStartClarification(clarification) else { return false }
+            if let draw = response.tarotDraws.first {
+                guard !drawnIDs.contains(draw.cardID) else { return false }
+                // New selections have a local orientation. A restored draw keeps
+                // the exact orientation saved with its identity and position.
+                guard savedDraft?.tarotDraws.first == draw
+                    || draw.isReversed == TarotDeck.isReversed(seed: seed, cardID: draw.cardID) else { return false }
+            }
+        } else if let draws = input.tarotDraws, TarotDeck.isValidInitialSpread(draws) {
+            return false
+        }
+        if let savedDraft {
+            return response.revealedCount >= savedDraft.revealedCount && response.tarotDraws.starts(with: savedDraft.tarotDraws)
+        }
+        return true
+    }
+
     mutating func saveProgress(_ response: OracleInteractionResponse) -> Bool {
-        guard let request = currentRequest,
-              OracleInteractionPolicy.isValid(response, for: request, complete: false) else { return false }
+        guard isValid(response, complete: false) else { return false }
         draft = response
         return true
     }
 
     mutating func complete(_ response: OracleInteractionResponse) -> Bool {
-        guard let request = currentRequest,
-              OracleInteractionPolicy.isValid(response, for: request, complete: true) else { return false }
+        guard let request = currentRequest, isValid(response, complete: true) else { return false }
         switch request.kind {
         case .numbers:
             input.numbers = response.numbers
             input.profile.unknownFields.remove(.numbers)
         case .coins: input.manualLines = response.lines
-        case .tarot: input.tarotDraws = response.tarotDraws
+        case .tarot:
+            if let clarification = request.tarotClarification {
+                guard let draw = response.tarotDraws.first else { return false }
+                let round = TarotClarificationRound(request: clarification, draw: draw)
+                input.tarotClarificationRounds = (input.tarotClarificationRounds ?? []) + [round]
+            } else {
+                input.tarotDraws = response.tarotDraws
+            }
         }
         responses.append(response); draft = nil
-        input.interactionResponses = responses
+        let completedIDs = Set(responses.map(\.requestID))
+        input.interactionResponses = (input.interactionResponses ?? []).filter { !completedIDs.contains($0.requestID) } + responses
         return true
     }
 }
@@ -100,7 +158,7 @@ enum OracleInteractionPolicy {
     static func requests(for plan: OraclePlan, numbers: [Int] = []) -> [OracleInteractionRequest] {
         var seen = Set<OracleMethod>()
         var requests = (plan.interactions ?? []).filter {
-            plan.methods.contains($0.method) && kind(for: $0.method) == $0.kind && seen.insert($0.method).inserted
+            $0.tarotClarification == nil && plan.methods.contains($0.method) && kind(for: $0.method) == $0.kind && seen.insert($0.method).inserted
         }.map { OracleInteractionRequest(method: $0.method, kind: $0.kind, prompt: $0.prompt) }
         // These methods require actual user interaction. Older/malformed plans
         // cannot bypass it by omitting a request from the model's response.
@@ -118,6 +176,7 @@ enum OracleInteractionPolicy {
 
     static func isValid(_ response: OracleInteractionResponse, for request: OracleInteractionRequest, complete: Bool) -> Bool {
         guard response.requestID == request.id, kind(for: request.method) == request.kind else { return false }
+        if let clarification = request.tarotClarification, request.kind != .tarot || !clarification.isValid { return false }
         switch request.kind {
         case .numbers:
             return response.lines.isEmpty && response.tarotDraws.isEmpty && response.revealedCount == 0
@@ -128,14 +187,15 @@ enum OracleInteractionPolicy {
                 && (complete ? response.lines.count == 6 : response.lines.count <= 6)
                 && response.lines.allSatisfy { (6...9).contains($0) }
         case .tarot:
+            let positions = request.tarotPositions
             guard response.numbers.isEmpty, response.lines.isEmpty,
-                  response.tarotDraws.count <= 3,
+                  response.tarotDraws.count <= positions.count,
                   (0...response.tarotDraws.count).contains(response.revealedCount),
                   Set(response.tarotDraws.map(\.cardID)).count == response.tarotDraws.count else { return false }
             for (index, draw) in response.tarotDraws.enumerated() {
-                guard TarotDeck.card(id: draw.cardID) != nil, draw.position == TarotDeck.positions[index] else { return false }
+                guard TarotDeck.card(id: draw.cardID) != nil, draw.position == positions[index] else { return false }
             }
-            return !complete || (response.tarotDraws.count == 3 && response.revealedCount == 3)
+            return !complete || (response.tarotDraws.count == positions.count && response.revealedCount == positions.count)
         }
     }
 }

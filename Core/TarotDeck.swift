@@ -17,9 +17,47 @@ struct TarotDraw: Codable, Equatable, Sendable {
     var position: String
 }
 
+/// A proposed focus is separate from the locally confirmed request and draw.
+struct TarotClarificationSuggestion: Codable, Equatable, Sendable {
+    var focus: String
+    var originalPosition: String? = nil
+
+    var isValid: Bool {
+        let text = focus.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !text.isEmpty && text.count <= 160
+            && (originalPosition.map(TarotDeck.positions.contains) ?? true)
+    }
+}
+
+struct TarotClarificationRequest: Codable, Equatable, Identifiable, Sendable {
+    static let maximumRounds = 2
+
+    var id: UUID = UUID()
+    var focus: String
+    var originalPosition: String? = nil
+    var question: String? = nil
+
+    var isValid: Bool {
+        TarotClarificationSuggestion(focus: focus, originalPosition: originalPosition).isValid
+    }
+}
+
+struct TarotClarificationRound: Codable, Equatable, Identifiable, Sendable {
+    let request: TarotClarificationRequest
+    let draw: TarotDraw
+    var id: UUID { request.id }
+}
+
 enum TarotDeck {
     static let positions = ["Current situation", "Influences", "Advice"]
     static let localizedPositions = ["现状", "影响", "建议"]
+    static let clarificationPosition = "Clarification"
+
+    static func localizedTitle(for position: String) -> String {
+        if position == clarificationPosition { return "澄清" }
+        guard let index = positions.firstIndex(of: position) else { return position }
+        return localizedPositions[index]
+    }
 
     private struct Archive: Decodable {
         let schemaVersion: Int
@@ -42,6 +80,31 @@ enum TarotDeck {
     }()
 
     static func card(id: String) -> TarotCard? { cards.first { $0.id == id } }
+
+    static func isValidInitialSpread(_ draws: [TarotDraw]) -> Bool {
+        draws.map(\.position) == positions
+            && Set(draws.map(\.cardID)).count == draws.count
+            && draws.allSatisfy { card(id: $0.cardID) != nil }
+    }
+
+    /// A saved clarification belongs to the same deck as the initial spread.
+    static func areValidClarificationRounds(_ rounds: [TarotClarificationRound], after initialDraws: [TarotDraw]) -> Bool {
+        guard rounds.count <= TarotClarificationRequest.maximumRounds else { return false }
+        var cardIDs = Set(initialDraws.map(\.cardID))
+        var roundIDs = Set<UUID>()
+        return rounds.allSatisfy { round in
+            round.request.isValid && roundIDs.insert(round.id).inserted
+                && round.draw.position == clarificationPosition && card(id: round.draw.cardID) != nil
+                && cardIDs.insert(round.draw.cardID).inserted
+        }
+    }
+
+    static func canAppendClarification(to input: OracleInput) -> Bool {
+        let rounds = input.tarotClarificationRounds ?? []
+        guard rounds.count < TarotClarificationRequest.maximumRounds,
+              let draws = input.tarotDraws, isValidInitialSpread(draws) else { return false }
+        return areValidClarificationRounds(rounds, after: draws)
+    }
 
     static func imageURL(for card: TarotCard) -> URL? {
         let path = card.imageFilename as NSString

@@ -67,6 +67,7 @@
 		D72496060A9C4AFB3638F798 /* Services/ContextCompressor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDBAA86F1747D4914A807631 /* Services/ContextCompressor.swift */; };
 		DF2C2CE6AA9AA823003CD183 /* Vendor/LunarSwift/TaoFestival.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FA034C5888B2339F7A89580 /* Vendor/LunarSwift/TaoFestival.swift */; };
 		E20E43DF0EF623694FA77290 /* Resources/Native in Resources */ = {isa = PBXBuildFile; fileRef = 88538569096914C7E497DEFF /* Resources/Native */; };
+		7C4185D044A69B70C0B2842D /* Resources/Locations in Resources */ = {isa = PBXBuildFile; fileRef = 7D0DC9BF96A9A9D45B2568DD /* Resources/Locations */; };
 		E66B5BD6F94E13A2AC0D3457 /* Plugins/Native/XiaoliurenPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E037D93B24FECDC028E88E9 /* Plugins/Native/XiaoliurenPlugin.swift */; };
 		E6C95734662DD72D49181038 /* Vendor/LunarSwift/Holiday.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92DFB59011F9A040BA8C93BC /* Vendor/LunarSwift/Holiday.swift */; };
 		E95EA32AA97461216CAF9193 /* Vendor/LunarSwift/ShouXingUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BE8C2BF27E99086C51BD47F /* Vendor/LunarSwift/ShouXingUtil.swift */; };
@@ -169,6 +170,7 @@
 		80AFF95D972AFBA6B05198E6 /* Vendor/LunarSwift/Solar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/Solar.swift; sourceTree = "<group>"; };
 		8476580A3DAFCDE4BA2067A1 /* Plugins/Sky/SkyPlugins.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Sky/SkyPlugins.swift; sourceTree = "<group>"; };
 		88538569096914C7E497DEFF /* Resources/Native */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources/Native; sourceTree = "<group>"; };
+		7D0DC9BF96A9A9D45B2568DD /* Resources/Locations */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources/Locations; sourceTree = "<group>"; };
 		8900E0A5CC06D22EE25BF707 /* Vendor/LunarSwift/ShuJiu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/ShuJiu.swift; sourceTree = "<group>"; };
 		8C2D6782D5487BC856F682EB /* Views/InkTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/InkTheme.swift; sourceTree = "<group>"; };
 		8E51DBF45614D11AA84C0EC5 /* Services/KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/KeychainStore.swift; sourceTree = "<group>"; };
@@ -236,7 +238,7 @@
 		205A6ED808200F169EFC5A3C = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ConversationalIntakeTests.swift"; sourceTree = "<group>"; };
 		33D171549E71AE201F2AD73B = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITests/ProfileEditingUITests.swift"; sourceTree = "<group>"; };
 		2C0ADB7AF00A0DC236719610 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ReadingDeletionTests.swift"; sourceTree = "<group>"; };
-		677A6D59D043E9D024B38A68 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITests/ReadingDeletionUITests.swift"; sourceTree = "<group>"; };
+		677A6D59D043E9D024B38A68 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITests/DataLibraryUITests.swift"; sourceTree = "<group>"; };
 		61A2541CC296E5BA7163C216 /* Core/ReadingContinuationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Core/ReadingContinuationPolicy.swift"; sourceTree = "<group>"; };
 		B3467F6498CE5DB51A8061C4 /* Tests/LocationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LocationServiceTests.swift"; sourceTree = "<group>"; };
 		ED5CAD6D2C0C6163099DC634 /* Tests/ReadingContinuationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ReadingContinuationTests.swift"; sourceTree = "<group>"; };
@@ -267,6 +269,7 @@
 				48759B6513A7FE260F577D41 /* Documentation */,
 				E0E27618A2D2A8FEBDD49F35 /* Resources/Assets.xcassets */,
 				88538569096914C7E497DEFF /* Resources/Native */,
+				7D0DC9BF96A9A9D45B2568DD /* Resources/Locations */,
 				398169473CB0E42EACE9C08D /* Resources/Sky */,
 				25F162EE31CC2A073312F9DC /* Resources/ThirdPartyNotices.txt */,
 				4719657E3D6D78337DEF2B8D,
@@ -429,7 +432,7 @@
 				72A8017E75795FC05F78F54C /* Sources */,
 				F01580CCB5F725E4E879D491 /* Frameworks */,
 				963488E8A773A44C9A5DC523 /* Resources */,
-				6AE714225C736D4ADBFFB751 /* Development credential (Debug only) */,
+				6AE714225C736D4ADBFFB751 /* Bundled service credential */,
 			);
 			buildRules = (
 			);
@@ -510,6 +513,7 @@
 				746C5639EB0CEC99AFBAF471 /* Documentation in Resources */,
 				627BBC9C62B0C159B656E415 /* Resources/Assets.xcassets in Resources */,
 				E20E43DF0EF623694FA77290 /* Resources/Native in Resources */,
+				7C4185D044A69B70C0B2842D /* Resources/Locations in Resources */,
 				F39B1118CA2E5AD9282000D7 /* Resources/Sky in Resources */,
 				039183FC04B9E630ADB31B62 /* Resources/ThirdPartyNotices.txt in Resources */,
 				51042322101E35BFD7ECDE75,
@@ -519,7 +523,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		6AE714225C736D4ADBFFB751 /* Development credential (Debug only) */ = {
+		6AE714225C736D4ADBFFB751 /* Bundled service credential */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -527,7 +531,7 @@
 			);
 			inputPaths = (
 			);
-			name = "Development credential (Debug only)";
+			name = "Bundled service credential";
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -729,7 +733,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 17;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = A82X46N3WS;
 				ENABLE_TESTABILITY = YES;
@@ -749,7 +753,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.6;
+				MARKETING_VERSION = 2.0.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lihao.BlindOracle;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -788,7 +792,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 17;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = A82X46N3WS;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -803,7 +807,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.6;
+				MARKETING_VERSION = 2.0.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lihao.BlindOracle;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;

@@ -18,8 +18,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>点击定位后，填写当前所在地的地名、坐标和时区；仅在你点击出生地的“使用当前位置”时，才将其填写为出生地。</string>
+	<string>点击“使用当前位置”后，自动填写你所选栏目中的国内地点和定位坐标。</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchScreen</key>

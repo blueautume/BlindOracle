@@ -2,6 +2,84 @@ import XCTest
 @testable import BlindOracle
 
 final class ProfileDirectoryTests: XCTestCase {
+    func testColloquialReplacementRecognizesTheExactSavedPerson() {
+        var person = OracleProfile(); person.name = "李岚"
+        XCTAssertEqual(ProfileDirectory.referencedNames(in: "换成李岚，看看她的工作", profiles: [person]), ["李岚"])
+        XCTAssertTrue(ProfileDirectory.referencedNames(in: "换成李岚青，看看她的工作", profiles: [person]).isEmpty)
+    }
+
+    func testUnknownPlannerNameNeedsAnExactAffirmativeQuestionTarget() {
+        XCTAssertTrue(ProfileDirectory.isAffirmativeParticipantReference("王安", in: "帮我看看我同事王安的事业", profiles: []))
+        XCTAssertTrue(ProfileDirectory.isAffirmativeParticipantReference("王安", in: "王安下周工作怎么样？", profiles: []))
+        XCTAssertFalse(ProfileDirectory.isAffirmativeParticipantReference("王安", in: "不要问王安，看看我自己的工作", profiles: []))
+        XCTAssertFalse(ProfileDirectory.isAffirmativeParticipantReference("王安", in: "帮我看看王安宁的事业", profiles: []))
+        XCTAssertFalse(ProfileDirectory.isAffirmativeParticipantReference("王安", in: "我的同事王安，出生日期是1990年1月2日", profiles: []))
+        XCTAssertFalse(ProfileDirectory.isAffirmativeParticipantReference("王安", in: "帮我看看王安的朋友最近怎么样", profiles: []))
+    }
+
+    func testPossessiveReferenceSelectsTheNamedColleagueInsteadOfTheOwner() {
+        var chen = OracleProfile(); chen.name = "陈平"
+        var colleague = OracleProfile(); colleague.name = "王安"
+        let text = "帮我看看陈平的同事王安的工作"
+        let references = ProfileDirectory.participantReferences(in: text, profiles: [chen, colleague])
+        XCTAssertEqual(references.included, ["王安"])
+        XCTAssertEqual(references.excluded, ["陈平"])
+        XCTAssertTrue(ProfileDirectory.parseExplicitUpdates(in: "陈平的同事1995年1月2日出生", profiles: [chen]).isEmpty)
+    }
+
+    func testNegatedBirthDateIsNotStoredAndActualCorrectionIsUsed() {
+        var person = OracleProfile(); person.name = "陈平"
+        let profiles = [person]
+        XCTAssertTrue(ProfileDirectory.parseExplicitUpdates(in: "陈平不是1995年1月2日出生的", profiles: profiles).isEmpty)
+        let updates = ProfileDirectory.parseExplicitUpdates(in: "陈平不是1995年1月2日出生，是1994年2月3日出生", profiles: profiles)
+        XCTAssertEqual(updates.first?.birthDate, "1994-02-03")
+    }
+
+    func testNamedReadingQuestionDoesNotAttachTheSpeakersBirthdayToThatPerson() {
+        var person = OracleProfile(); person.name = "陈平"
+        var speaker = OracleProfile(); speaker.name = "王安"
+        let text = "陈平工作怎么样？我的生日是1990年1月2日"
+        let profiles = [person, speaker]
+        XCTAssertTrue(ProfileDirectory.parseExplicitUpdates(in: text, profiles: profiles).isEmpty)
+        let misleading = ProfileUpdate(id: person.id, name: "陈平", birthDate: "1990-01-02")
+        XCTAssertTrue(ProfileDirectory.groundedUpdates([misleading], in: text, profiles: profiles, contextIDs: [person.id]).isEmpty)
+        let owned = ProfileDirectory.explicitSelfUpdates(in: text, profiles: profiles, selfProfileID: speaker.id)
+        XCTAssertEqual(owned.map(\.id), [speaker.id])
+        XCTAssertEqual(owned.first?.birthDate, "1990-01-02")
+        XCTAssertTrue(ProfileDirectory.explicitSelfUpdates(in: text, profiles: profiles, selfProfileID: nil).isEmpty)
+        XCTAssertTrue(ProfileDirectory.explicitSelfUpdates(in: "我的生日是1990年1月2日吗？", profiles: profiles, selfProfileID: speaker.id).isEmpty)
+        XCTAssertTrue(ProfileDirectory.parseExplicitUpdates(in: "陈平生日是1990年1月2日吗？", profiles: profiles).isEmpty)
+    }
+
+    func testContextGroundsSelfBirthdayOnlyToTheSuppliedOwner() {
+        var other = OracleProfile(); other.name = "张三"
+        var own = OracleProfile(); own.name = "李四"
+        let statement = "我的生日是1991年2月3日"
+        let profiles = [other, own]
+        XCTAssertTrue(ProfileDirectory.hasExplicitSelfFacts(in: statement))
+        XCTAssertTrue(ProfileDirectory.hasExplicitSelfFacts(in: "张三的工作怎么样？我的生日是1991年2月3日"))
+        XCTAssertFalse(ProfileDirectory.hasExplicitSelfFacts(in: "帮我补一下生日"))
+        XCTAssertFalse(ProfileDirectory.hasExplicitSelfFacts(in: "我朋友的生日是1991年2月3日"))
+        let wrong = ProfileUpdate(id: other.id, name: other.resolvedName, birthDate: "1991-02-03")
+        XCTAssertTrue(ProfileDirectory.groundedUpdates([wrong], in: statement, profiles: profiles, contextIDs: [own.id]).isEmpty)
+        let correct = ProfileDirectory.groundedUpdates([ProfileUpdate(birthDate: "1991-02-03")], in: statement, profiles: profiles, contextIDs: [own.id])
+        XCTAssertEqual(correct.map(\.id), [own.id])
+        XCTAssertEqual(correct.first?.birthDate, "1991-02-03")
+        XCTAssertTrue(ProfileDirectory.groundedUpdates([ProfileUpdate(birthDate: "1991-02-03")], in: statement, profiles: profiles).isEmpty)
+    }
+
+    func testPenNameQuestionReferencesTheExactSavedName() {
+        var profile = OracleProfile(); profile.name = "周文"
+        let question = "周文这个名字当笔名怎么样？只用姓名五格。"
+        XCTAssertEqual(ProfileDirectory.participantReferences(in: question, profiles: [profile]).included, ["周文"])
+        XCTAssertTrue(ProfileDirectory.isAffirmativeParticipantReference("周文", in: question, profiles: []))
+        XCTAssertTrue(ProfileDirectory.participantReferences(in: "周文涛这个名字当笔名怎么样？", profiles: [profile]).included.isEmpty)
+        XCTAssertTrue(ProfileDirectory.parseExplicitUpdates(in: question, profiles: [profile]).isEmpty)
+        XCTAssertTrue(ProfileDirectory.parseExplicitUpdates(in: "只用姓名五格", profiles: []).isEmpty)
+        for declaration in ["姓名周文", "姓名：周文"] {
+            XCTAssertEqual(ProfileDirectory.parseExplicitUpdates(in: declaration, profiles: []).map(\.name), ["周文"])
+        }
+    }
     private func person(_ name: String, date: String = "1990-01-02", time: String = "08:30", zone: String = "Asia/Shanghai", sex: String = "男") throws -> OracleProfile {
         let result = ProfileDirectory.applying([ProfileUpdate(name: name, sex: sex, birthDate: date, birthTime: time, birthTimeZoneID: zone, birthPlace: "北京")], to: [])
         XCTAssertTrue(result.issues.isEmpty)
@@ -92,6 +170,149 @@ final class ProfileDirectoryTests: XCTestCase {
         ], to: [])
         XCTAssertTrue(result.profiles.isEmpty)
         XCTAssertEqual(result.issues.map(\.kind), [.missingName, .missingName, .unknownID])
+    }
+
+    func testAnonymousLabelStaysStableAcrossEditsAndDecodingWithoutBecomingAName() throws {
+        let id = try XCTUnwrap(UUID(uuidString: "00000000-0000-0000-0000-00000000002A"))
+        var profile = OracleProfile(id: id, isAnonymousRecord: true)
+        XCTAssertEqual(profile.anonymousCode, "0042")
+        XCTAssertEqual(profile.participantLabel, "0042")
+        XCTAssertTrue(profile.resolvedName.isEmpty)
+        XCTAssertTrue(ProfileDirectory.resolve(names: ["0042"], in: [profile]).ids.isEmpty)
+        profile.alias = "  小满  "
+        XCTAssertEqual(profile.participantLabel, "小满")
+        XCTAssertTrue(profile.resolvedName.isEmpty)
+        profile.alias = ""
+        profile.displayName = "旧姓名"
+        let decoded = try JSONDecoder().decode(OracleProfile.self, from: JSONEncoder().encode(profile))
+        XCTAssertEqual(decoded.anonymousCode, "0042")
+        XCTAssertEqual(decoded.participantLabel, "旧姓名")
+        XCTAssertEqual(decoded.isAnonymousRecord, true)
+    }
+
+    func testChineseBirthZoneDefaultPreservesLegacyClockOnFreshSnapshot() throws {
+        let instant = try XCTUnwrap(ISO8601DateFormatter().date(from: "1990-01-02T00:05:17Z"))
+        var legacy = OracleProfile(birthDate: instant, birthTimeZoneID: "UTC")
+        legacy.unknownFields.insert(.birthTimeZone)
+        legacy.declaredUnknownFields = [.birthTimeZone]
+        let updated = ProfileDirectory.assigningDefaultBirthTimeZone(to: legacy)
+        XCTAssertEqual(updated.birthTimeZoneID, OracleProfile.defaultChinaTimeZoneID)
+        XCTAssertEqual(updated.birthDateText, "1990-01-02")
+        XCTAssertEqual(updated.birthTimeText, "00:05:17")
+        XCTAssertEqual(updated.birthDate, instant.addingTimeInterval(-8 * 3_600))
+        XCTAssertFalse(updated.unknownFields.contains(.birthTimeZone))
+        XCTAssertFalse(updated.declaredUnknownFields?.contains(.birthTimeZone) == true)
+        XCTAssertEqual(legacy.birthTimeZoneID, "UTC")
+        XCTAssertEqual(legacy.birthDate, instant)
+        legacy.unknownFields = []; legacy.declaredUnknownFields = []
+        legacy.birthTimeZoneID = "America/New_York"
+        XCTAssertEqual(ProfileDirectory.assigningDefaultBirthTimeZone(to: legacy), legacy)
+        XCTAssertEqual(OracleProfile().currentTimeZoneID, OracleProfile.defaultChinaTimeZoneID)
+    }
+
+    func testClearedOptionalFieldsStayClearedWhenRestoringCachedDraft() throws {
+        var saved = try person("张三")
+        saved.alias = "小满"
+        saved.familyName = "张"; saved.givenName = "三"
+        saved.birthDistrictCode = "110101"
+        saved.birthLatitude = 39.9; saved.birthLongitude = 116.4
+        var draft = ProfileDirectory.clearingFields([.birthDate, .birthPlace, .surname, .gender], in: saved)
+        draft.alias = ""
+        let restored = ProfileDirectory.restoringKnownFields(in: draft, from: saved)
+        XCTAssertNil(restored.birthDate)
+        XCTAssertNil(restored.birthDateText)
+        XCTAssertEqual(restored.birthTimeText, saved.birthTimeText)
+        XCTAssertTrue(restored.birthTimeKnown)
+        XCTAssertEqual(restored.birthPlace, "")
+        XCTAssertNil(restored.birthDistrictCode)
+        XCTAssertNil(restored.birthLatitude)
+        XCTAssertNil(restored.birthLongitude)
+        XCTAssertEqual(restored.familyName, "")
+        XCTAssertEqual(restored.givenName, "三")
+        XCTAssertEqual(restored.sex, "未提供")
+        XCTAssertEqual(restored.participantLabel, "张三")
+        XCTAssertTrue(restored.declaredUnknownFields?.isSuperset(of: [.birthDate, .birthPlace, .birthCoordinates, .surname, .gender]) == true)
+        let timeCleared = ProfileDirectory.clearingFields([.birthTime], in: saved)
+        XCTAssertEqual(timeCleared.birthDateText, saved.birthDateText)
+        XCTAssertNil(timeCleared.birthTimeText)
+        XCTAssertFalse(timeCleared.birthTimeKnown)
+    }
+
+    func testBoundAnonymousProfileAcceptsItsOwnFactsWithoutUsingAnInventedName() throws {
+        let person = OracleProfile(isAnonymousRecord: true)
+        let updates = ProfileDirectory.explicitSelfUpdates(in: "我的生日是1990年1月2日。陈平的生日是1992年8月3日。",
+            profiles: [person], selfProfileID: person.id)
+        XCTAssertEqual(updates.map(\.id), [person.id])
+        XCTAssertNil(updates.first?.name)
+        let merged = ProfileDirectory.applying(updates, to: [person])
+        let updated = try XCTUnwrap(merged.profiles.first)
+        XCTAssertTrue(merged.issues.isEmpty)
+        XCTAssertEqual(updated.birthDateText, "1990-01-02")
+        XCTAssertEqual(updated.participantLabel, person.anonymousCode)
+    }
+
+    func testDraftCoordinatesOnlyRestoreForSameBirthDistrictOrAnEntireMissingPlace() throws {
+        var saved = try person("张三")
+        saved.birthPlace = "北京市东城区"
+        saved.birthDistrictCode = "110101"
+        saved.birthLatitude = 39.93; saved.birthLongitude = 116.42
+        var draft = saved
+        draft.birthPlace = "北京市西城区"
+        draft.birthDistrictCode = "110102"
+        draft.birthLatitude = nil; draft.birthLongitude = nil
+        draft.unknownFields.insert(.birthCoordinates)
+        XCTAssertEqual(ProfileDirectory.restoringKnownFields(in: draft, from: saved), draft)
+        draft.birthDistrictCode = saved.birthDistrictCode
+        draft.birthPlace = saved.birthPlace
+        let sameDistrict = ProfileDirectory.restoringKnownFields(in: draft, from: saved)
+        XCTAssertEqual(sameDistrict.birthLatitude, saved.birthLatitude)
+        XCTAssertEqual(sameDistrict.birthLongitude, saved.birthLongitude)
+        draft.birthDistrictCode = nil; draft.birthPlace = ""
+        let missingPlace = ProfileDirectory.restoringKnownFields(in: draft, from: saved)
+        XCTAssertEqual(missingPlace.birthDistrictCode, saved.birthDistrictCode)
+        XCTAssertEqual(missingPlace.birthPlace, saved.birthPlace)
+        XCTAssertEqual(missingPlace.birthLatitude, saved.birthLatitude)
+        saved.birthDistrictCode = nil
+        draft.birthPlace = "上海市"
+        XCTAssertEqual(ProfileDirectory.restoringKnownFields(in: draft, from: saved), draft)
+    }
+
+    func testCurrentDistrictReplacementAndClearDoNotRestoreOldCoordinatesOrChangeBirthplace() throws {
+        var saved = try person("张三")
+        saved.birthDistrictCode = "110101"
+        saved.birthLatitude = 39.93; saved.birthLongitude = 116.42
+        saved.currentPlace = "上海市浦东新区"
+        saved.currentDistrictCode = "310115"
+        saved.currentLatitude = 31.22; saved.currentLongitude = 121.53
+
+        var draft = saved
+        draft.currentPlace = "重庆市沙坪坝区"
+        draft.currentDistrictCode = "500106"
+        draft.currentLatitude = nil; draft.currentLongitude = nil
+        XCTAssertEqual(ProfileDirectory.restoringKnownFields(in: draft, from: saved), draft)
+
+        saved.currentTimeZoneID = "America/New_York"
+        let cleared = ProfileDirectory.clearingFields([.currentLocation], in: saved)
+        XCTAssertEqual(cleared.currentPlace, "")
+        XCTAssertNil(cleared.currentDistrictCode)
+        XCTAssertNil(cleared.currentLatitude)
+        XCTAssertNil(cleared.currentLongitude)
+        XCTAssertEqual(cleared.currentTimeZoneID, OracleProfile.defaultChinaTimeZoneID)
+        XCTAssertTrue(cleared.unknownFields.contains(.currentLocation))
+        XCTAssertTrue(cleared.declaredUnknownFields?.contains(.currentLocation) == true)
+        XCTAssertEqual(cleared.birthDistrictCode, saved.birthDistrictCode)
+        XCTAssertEqual(cleared.birthPlace, saved.birthPlace)
+        XCTAssertEqual(cleared.birthLatitude, saved.birthLatitude)
+        XCTAssertEqual(cleared.birthLongitude, saved.birthLongitude)
+        XCTAssertEqual(cleared.birthTimeZoneID, saved.birthTimeZoneID)
+        XCTAssertEqual(ProfileDirectory.restoringKnownFields(in: cleared, from: saved), cleared)
+
+        saved.currentDistrictCode = nil
+        let legacy = try JSONDecoder().decode(OracleProfile.self, from: JSONEncoder().encode(saved))
+        XCTAssertNil(legacy.currentDistrictCode)
+        XCTAssertEqual(legacy.currentLatitude, saved.currentLatitude)
+        XCTAssertEqual(legacy.currentLongitude, saved.currentLongitude)
+        XCTAssertEqual(legacy.currentTimeZoneID, "America/New_York")
     }
 
     func testOfflineParserSeparatesTwoNamedPeopleAndDoesNotInferBirthTimeOrZone() throws {

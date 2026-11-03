@@ -210,4 +210,74 @@ final class ConversationHistoryTests: XCTestCase {
         let files = try FileManager.default.contentsOfDirectory(atPath: vault.directory.path)
         XCTAssertTrue(files.contains { $0.hasPrefix("conversation-history.recovery-") })
     }
+
+    func testMalformedConversationKeepsOtherChatsAndPreservesOriginalArchive() throws {
+        let vault = try temporaryVault()
+        let first = OracleConversation(messages: [message("第一卷", seconds: 1)])
+        let broken = OracleConversation(messages: [message("损坏的一卷", seconds: 2)])
+        let third = OracleConversation(messages: [message("第三卷", seconds: 3)])
+        let archive = OracleConversationArchive(activeConversationID: first.id, conversations: [first, broken, third])
+        try vault.save(archive, as: ConversationHistory.filename)
+        try vault.save([message("不应复活的旧归档")], as: "conversation-100")
+        let source = vault.directory.appendingPathComponent(ConversationHistory.filename + ".json")
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: source)) as? [String: Any])
+        var conversations = try XCTUnwrap(json["conversations"] as? [[String: Any]])
+        conversations[1]["messages"] = "malformed messages"
+        json["conversations"] = conversations
+        let damaged = try JSONSerialization.data(withJSONObject: json)
+        try damaged.write(to: source)
+
+        let result = ConversationHistory.load(from: vault)
+        XCTAssertEqual(result.archive.conversations.map(\.id), [third.id, first.id])
+        XCTAssertEqual(result.archive.activeConversationID, first.id)
+        XCTAssertTrue(result.recoveredUnreadableFile)
+        XCTAssertTrue(result.recoveryCopyPreserved)
+        XCTAssertFalse(result.needsInitialSave)
+        XCTAssertEqual(try Data(contentsOf: source), damaged)
+        let copies = try FileManager.default.contentsOfDirectory(at: vault.directory, includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasPrefix("conversation-history.recovery-") }
+        XCTAssertEqual(copies.count, 1)
+        XCTAssertEqual(try Data(contentsOf: XCTUnwrap(copies.first)), damaged)
+    }
+
+    func testInvalidActiveConversationIDDoesNotDiscardValidChats() throws {
+        let vault = try temporaryVault()
+        let conversation = OracleConversation(messages: [message("可恢复的一卷")])
+        try vault.save(OracleConversationArchive(activeConversationID: conversation.id, conversations: [conversation]),
+                       as: ConversationHistory.filename)
+        let source = vault.directory.appendingPathComponent(ConversationHistory.filename + ".json")
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: source)) as? [String: Any])
+        json["activeConversationID"] = "invalid UUID"
+        try JSONSerialization.data(withJSONObject: json).write(to: source)
+
+        let result = ConversationHistory.load(from: vault)
+        XCTAssertEqual(result.archive.conversations.map(\.id), [conversation.id])
+        XCTAssertTrue(result.recoveredUnreadableFile)
+        XCTAssertTrue(result.recoveryCopyPreserved)
+    }
+
+    func testUnknownSchemaAndNullHistoryDoNotReviveLegacyChats() throws {
+        let vault = try temporaryVault()
+        let conversation = OracleConversation(messages: [message("未来版本的一卷")])
+        try vault.save([message("不应复活的旧归档")], as: "conversation-100")
+        var future = OracleConversationArchive(activeConversationID: conversation.id, conversations: [conversation])
+        future.schemaVersion = 99
+        try vault.save(future, as: ConversationHistory.filename)
+
+        let unsupported = ConversationHistory.load(from: vault)
+        XCTAssertTrue(unsupported.archive.conversations.isEmpty)
+        XCTAssertTrue(unsupported.recoveredUnreadableFile)
+        XCTAssertTrue(unsupported.recoveryCopyPreserved)
+        XCTAssertFalse(unsupported.needsInitialSave)
+
+        let source = vault.directory.appendingPathComponent(ConversationHistory.filename + ".json")
+        try Data("null".utf8).write(to: source)
+        let empty = ConversationHistory.load(from: vault)
+        XCTAssertTrue(empty.archive.conversations.isEmpty)
+        XCTAssertTrue(empty.recoveredUnreadableFile)
+        XCTAssertTrue(empty.recoveryCopyPreserved)
+        let copies = try FileManager.default.contentsOfDirectory(at: vault.directory, includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasPrefix("conversation-history.recovery-") }
+        XCTAssertEqual(copies.count, 2)
+    }
 }

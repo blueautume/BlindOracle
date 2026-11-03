@@ -1,0 +1,38 @@
+BlindOracle offline China district catalog
+
+Mainland hierarchy
+modood/Administrative-divisions-of-China, WTFPL
+https://github.com/modood/Administrative-divisions-of-China/tree/c49d495b40ac73eb1a66f6eeae5f8fd10696f035
+Input: dist/pca-code.json, snapshot reported as 2023-06-30 by the project.
+Derived county-level and above picker. Synthetic parent groups, statistical-only
+development and management units, and township rows were removed. Directly
+administered counties and districts appear under the actual parent province or
+municipality. This is a dated snapshot of the statistical hierarchy.
+
+Coordinates and Hong Kong, Macao, and Taiwan hierarchy
+GeoNames geographical database, Creative Commons Attribution 4.0 International
+https://www.geonames.org/
+https://creativecommons.org/licenses/by/4.0/
+https://download.geonames.org/export/dump/
+Input: CN.zip, HK.zip, MO.zip, TW.zip, downloaded on 2026-11-03.
+GeoNames supplies WGS84 representative points for administrative regions,
+not exact birth or street addresses. This catalog extracts a subset, matches
+Mainland names and parent codes, and reorganizes the display hierarchy.
+The GeoNames record ID is preserved alongside each point. No coordinates are
+inferred from nearby places when the administrative record cannot be matched.
+
+Hong Kong covers all 18 districts. Macao covers seven parishes and Cotai,
+shown as a selectable area. Taiwan covers 22 counties/cities and 368
+townships, county-administered cities and districts.
+Hong Kong labels were checked against the Digital Policy Office:
+https://www.digitalpolicy.gov.hk/en/our_work/data_governance/policies_standards/interoperability_framework/code_lists/district_council_code_chi/index.html
+Macao parish labels were checked against the cadastral map:
+https://cadastre.gis.gov.mo/MGSP_Cad/chn/bak/main20150917.html
+
+Rebuild: python3 Scripts/generate_china_districts.py <directory with inputs>
+Input SHA-256:
+83b7536f853ad16beb4d37b92890a3fd7bb9d33d4f37e7c8885fb948749a9bc4  pca-code.json
+98e579048a4f930eb90411f0d7415551d5aa97996d6a5e92af1c68a5a1c2813a  CN.zip
+e521f37da2043cac45a4b5649b2b3672db7d1a383ba9f9858186364531f9829a  HK.zip
+1508943612c55514b5b7e49ce28d58286893b6440d7c22dbb95baae349e5489d  MO.zip
+9778036daf11637b0fb3105a3de3670a09f725ad812ea6a3bc02223d84e7c6d7  TW.zip

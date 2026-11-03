@@ -6,6 +6,7 @@ struct OracleInteractionView: View {
     let session: OracleInteractionSession
     let onProgress: (OracleInteractionResponse) -> Void
     let onComplete: (OracleInteractionResponse) -> Void
+    let onCancelClarification: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var response: OracleInteractionResponse
@@ -17,18 +18,25 @@ struct OracleInteractionView: View {
     @State private var flipping = false
     @State private var isCompleting = false
 
-    private let positions = ["Current situation", "Influences", "Advice"]
-    private let positionTitles = ["现状", "影响", "建议"]
     private var isYarrow: Bool { session.input.castingStyle?.lowercased() == "yarrow" }
+    private var clarificationNumber: Int { (session.input.tarotClarificationRounds?.count ?? 0) + 1 }
+    private var navigationTitle: String {
+        guard let request = session.currentRequest else { return "留一份心意" }
+        if request.tarotClarification != nil { return "第\(clarificationNumber)次补牌" }
+        if request.kind == .coins, isYarrow { return "蓍草成卦" }
+        return request.title
+    }
 
     init(session: OracleInteractionSession,
          onProgress: @escaping (OracleInteractionResponse) -> Void,
-         onComplete: @escaping (OracleInteractionResponse) -> Void) {
+         onComplete: @escaping (OracleInteractionResponse) -> Void,
+         onCancelClarification: (() -> Void)? = nil) {
         self.session = session
         self.onProgress = onProgress
         self.onComplete = onComplete
+        self.onCancelClarification = onCancelClarification
         let requestID = session.currentRequest?.id ?? ""
-        let restored = session.draft.flatMap { $0.requestID == requestID ? $0 : nil }
+        let restored = session.draft.flatMap { session.isValid($0, complete: false) ? $0 : nil }
             ?? OracleInteractionResponse(requestID: requestID)
         _response = State(initialValue: restored)
         _hasShuffled = State(initialValue: !restored.tarotDraws.isEmpty)
@@ -45,7 +53,7 @@ struct OracleInteractionView: View {
                             switch request.kind {
                             case .numbers: numberSelection
                             case .coins: coinCasting
-                            case .tarot: tarotReading
+                            case .tarot: tarotReading(request)
                             }
                         }
                         .frame(maxWidth: 650)
@@ -56,11 +64,18 @@ struct OracleInteractionView: View {
                     .safeAreaInset(edge: .bottom, spacing: 0) { footer(for: request) }
                 }
             }
-            .navigationTitle(session.currentRequest?.kind == .coins && isYarrow ? "蓍草成卦" : session.currentRequest?.title ?? "留一份心意")
+            .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                if session.currentRequest?.tarotClarification != nil, response.revealedCount == 0, let onCancelClarification {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("取消补牌", role: .cancel, action: onCancelClarification)
+                            .font(.system(size: 13)).foregroundStyle(InkTheme.secondary)
+                            .accessibilityIdentifier("cancelTarotClarification")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("稍后继续") { onProgress(response); dismiss() }
+                    Button("稍后继续") { dismiss() }
                         .font(.system(size: 13)).foregroundStyle(InkTheme.secondary)
                         .accessibilityIdentifier("deferInteraction")
                 }
@@ -71,10 +86,9 @@ struct OracleInteractionView: View {
         .tint(InkTheme.cinnabar)
         .onAppear {
             if session.currentRequest?.kind == .numbers, response.numbers.count != 3 {
-                response.numbers = [1, 1, 1]
+                updateResponse { $0.numbers = [1, 1, 1] }
             }
         }
-        .onChange(of: response) { _, value in onProgress(value) }
         .sensoryFeedback(.selection, trigger: response.numbers)
         .sensoryFeedback(.impact(weight: .light), trigger: response.lines.count)
         .sensoryFeedback(.selection, trigger: response.tarotDraws.count)
@@ -84,15 +98,30 @@ struct OracleInteractionView: View {
     private func heading(_ request: OracleInteractionRequest) -> some View {
         VStack(alignment: .leading, spacing: 13) {
             HStack {
-                SectionEyebrow(text: "此刻 · 此问")
+                SectionEyebrow(text: request.tarotClarification != nil ? "第\(clarificationNumber)次补牌 · 一张牌"
+                    : request.kind == .tarot ? "首轮 · 三张牌" : "此刻 · 此问")
+                    .accessibilityIdentifier(request.kind == .tarot ? "tarotRoundTitle" : "interactionStepTitle")
                 Spacer()
                 Text("\(session.currentIndex + 1) / \(session.requests.count)")
                     .font(.system(size: 11, weight: .medium)).monospacedDigit()
                     .foregroundStyle(InkTheme.secondary)
                     .accessibilityLabel("第\(session.currentIndex + 1)步，共\(session.requests.count)步")
             }
-            Text(request.prompt.isEmpty ? defaultPrompt(for: request.kind) : request.prompt).font(.system(size: 23, design: .serif)).lineSpacing(7)
-                .foregroundStyle(InkTheme.ink).fixedSize(horizontal: false, vertical: true)
+            if let clarification = request.tarotClarification {
+                Text(clarification.focus)
+                    .font(.system(size: 23, design: .serif)).lineSpacing(7)
+                    .foregroundStyle(InkTheme.ink).fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("tarotClarificationFocus")
+                if let position = clarification.originalPosition {
+                    Text("对应牌位 · \(TarotDeck.localizedTitle(for: position))")
+                        .font(.system(size: 12)).foregroundStyle(InkTheme.cinnabar)
+                }
+            } else {
+                Text(request.prompt.isEmpty ? defaultPrompt(for: request.kind) : request.prompt)
+                    .font(.system(size: 23, design: .serif)).lineSpacing(7)
+                    .foregroundStyle(InkTheme.ink).fixedSize(horizontal: false, vertical: true)
+            }
             Text(session.input.question).font(.system(size: 13, design: .serif)).lineSpacing(5)
                 .foregroundStyle(InkTheme.secondary).fixedSize(horizontal: false, vertical: true)
         }
@@ -131,9 +160,19 @@ struct OracleInteractionView: View {
 
     private func numberBinding(at index: Int) -> Binding<Int> {
         Binding(get: { response.numbers.indices.contains(index) ? response.numbers[index] : 1 }, set: { value in
-            if response.numbers.count != 3 { response.numbers = [1, 1, 1] }
-            response.numbers[index] = value
+            updateResponse {
+                if $0.numbers.count != 3 { $0.numbers = [1, 1, 1] }
+                $0.numbers[index] = value
+            }
         })
+    }
+
+    private func updateResponse(_ update: (inout OracleInteractionResponse) -> Void) {
+        var updated = response
+        update(&updated)
+        guard updated != response else { return }
+        response = updated
+        onProgress(updated)
     }
 
     private var coinCasting: some View {
@@ -261,7 +300,7 @@ struct OracleInteractionView: View {
         tossing = true
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.48)) { coinTurns += 1 }
         let value = isYarrow ? yarrowCasts[response.lines.count].value : coinFaces[response.lines.count].reduce(0, +)
-        response.lines.append(value)
+        updateResponse { $0.lines.append(value) }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(reduceMotion ? 80 : 480))
             tossing = false
@@ -288,19 +327,21 @@ struct OracleInteractionView: View {
         "这一爻为\(lineName(value))\(value == 6 || value == 9 ? "，记作动爻。" : "，已为你记下。")"
     }
 
-    private var tarotReading: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            if TarotDeck.cards.count != 78 {
+    private func tarotReading(_ request: OracleInteractionRequest) -> some View {
+        let cards = session.availableTarotCards
+        let drawCount = request.tarotPositions.count
+        return VStack(alignment: .leading, spacing: 24) {
+            if drawCount == 0 || cards.count < drawCount {
                 PaperCard {
                     Text("牌暂时没有备齐，请稍后再试。")
                         .font(.system(size: 14, design: .serif)).foregroundStyle(InkTheme.secondary)
                 }
             } else if !hasShuffled {
                 shuffleDeck
-            } else if response.tarotDraws.count < 3 {
-                cardSelection
+            } else if response.tarotDraws.count < drawCount {
+                cardSelection(for: request, cards: cards)
             } else {
-                cardRevelation
+                cardRevelation(for: request)
             }
         }
     }
@@ -320,7 +361,6 @@ struct OracleInteractionView: View {
                     .font(.system(size: 14, design: .serif)).foregroundStyle(InkTheme.secondary)
                 Button {
                     isShuffling = true
-                    onProgress(response)
                     withAnimation(reduceMotion ? nil : .spring(response: 0.55, dampingFraction: 0.7)) { shuffleTurns += 1 }
                     Task { @MainActor in
                         if !reduceMotion { try? await Task.sleep(for: .milliseconds(550)) }
@@ -336,18 +376,23 @@ struct OracleInteractionView: View {
         }
     }
 
-    private var cardSelection: some View {
-        VStack(alignment: .leading, spacing: 18) {
+    private func cardSelection(for request: OracleInteractionRequest, cards: [TarotCard]) -> some View {
+        let drawCount = request.tarotPositions.count
+        let isClarification = request.tarotClarification != nil
+        return VStack(alignment: .leading, spacing: 18) {
             HStack {
-                Text("从牌中，选出与你有缘的三张。")
+                Text(isClarification ? "从余下的牌中选一张。" : "从牌中，选出与你有缘的三张。")
                     .font(.system(size: 14, design: .serif)).foregroundStyle(InkTheme.ink)
                 Spacer(minLength: 4)
-                Text("\(response.tarotDraws.count) / 3").font(.system(size: 12)).monospacedDigit().foregroundStyle(InkTheme.cinnabar)
+                Text("\(response.tarotDraws.count) / \(drawCount)")
+                    .font(.system(size: 12)).monospacedDigit().foregroundStyle(InkTheme.cinnabar)
+                    .accessibilityLabel("已选\(response.tarotDraws.count)张，共\(drawCount)张")
+                    .accessibilityIdentifier("tarotSelectionCount")
             }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 9), count: 6), spacing: 12) {
-                ForEach(Array(TarotDeck.shuffled(seed: session.seed).enumerated()), id: \.element.id) { index, card in
+                ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
                     let selection = response.tarotDraws.firstIndex { $0.cardID == card.id }
-                    Button { selectCard(card) } label: {
+                    Button { selectCard(card, for: request) } label: {
                         TarotCardBack()
                             .aspectRatio(0.59, contentMode: .fit)
                             .overlay {
@@ -363,25 +408,35 @@ struct OracleInteractionView: View {
                         .accessibilityIdentifier("tarotCard-\(index)")
                 }
             }
-            Text("已选的牌会依次留在「现状、影响、建议」三个位置。")
+            Text(isClarification ? "这张牌用于澄清本轮的焦点。" : "已选的牌会依次留在「现状、影响、建议」三个位置。")
                 .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
         }
     }
 
-    private func selectCard(_ card: TarotCard) {
-        guard response.tarotDraws.count < 3, !response.tarotDraws.contains(where: { $0.cardID == card.id }) else { return }
-        let draw = TarotDraw(cardID: card.id, isReversed: TarotDeck.isReversed(seed: session.seed, cardID: card.id), position: positions[response.tarotDraws.count])
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { response.tarotDraws.append(draw) }
+    private func selectCard(_ card: TarotCard, for request: OracleInteractionRequest) {
+        let index = response.tarotDraws.count
+        guard request.tarotPositions.indices.contains(index),
+              !response.tarotDraws.contains(where: { $0.cardID == card.id }) else { return }
+        let draw = TarotDraw(cardID: card.id, isReversed: TarotDeck.isReversed(seed: session.seed, cardID: card.id),
+                             position: request.tarotPositions[index])
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
+            updateResponse { $0.tarotDraws.append(draw) }
+        }
     }
 
-    private var cardRevelation: some View {
-        VStack(alignment: .leading, spacing: 21) {
-            Text(response.revealedCount == 3 ? "三张牌已翻开，看看它们带来的线索。" : "按照顺序，一张一张翻开。")
+    private func cardRevelation(for request: OracleInteractionRequest) -> some View {
+        let allRevealed = response.revealedCount == request.tarotPositions.count
+        let isClarification = request.tarotClarification != nil
+        let instruction = isClarification ? (allRevealed ? "补牌已翻开。" : "轻触翻开这张补牌。")
+            : (allRevealed ? "三张牌已翻开，看看它们带来的线索。" : "按照顺序，一张一张翻开。")
+        return VStack(alignment: .leading, spacing: 21) {
+            Text(instruction)
                 .font(.system(size: 14, design: .serif)).foregroundStyle(InkTheme.secondary)
             HStack(alignment: .top, spacing: 12) {
                 ForEach(Array(response.tarotDraws.enumerated()), id: \.offset) { index, draw in
+                    let title = TarotDeck.localizedTitle(for: draw.position)
                     VStack(spacing: 12) {
-                        Text(positionTitles[index]).font(.system(size: 13, weight: .medium, design: .serif)).foregroundStyle(InkTheme.cinnabar)
+                        Text(title).font(.system(size: 13, weight: .medium, design: .serif)).foregroundStyle(InkTheme.cinnabar)
                         Button { revealCard(at: index) } label: {
                             let revealed = index < response.revealedCount
                             ZStack {
@@ -394,7 +449,7 @@ struct OracleInteractionView: View {
                                 }
                             }.aspectRatio(0.59, contentMode: .fit)
                         }.buttonStyle(.plain).disabled(index != response.revealedCount || flipping)
-                            .accessibilityLabel(index < response.revealedCount ? revealedLabel(draw, at: index) : "翻开第\(index + 1)张牌，\(positionTitles[index])")
+                            .accessibilityLabel(index < response.revealedCount ? revealedLabel(draw, title: title) : "翻开第\(index + 1)张牌，\(title)")
                             .accessibilityIdentifier("revealTarot-\(index)")
                         if index < response.revealedCount, let card = TarotDeck.card(id: draw.cardID) {
                             Text(card.name).font(.system(size: 12, weight: .medium, design: .serif)).multilineTextAlignment(.center).foregroundStyle(InkTheme.ink)
@@ -406,13 +461,15 @@ struct OracleInteractionView: View {
                     }.frame(maxWidth: .infinity)
                 }
             }
-            if response.revealedCount == 3 {
+            .frame(maxWidth: isClarification ? 158 : .infinity)
+            .frame(maxWidth: .infinity)
+            if allRevealed {
                 PaperCard {
                     VStack(alignment: .leading, spacing: 16) {
-                        ForEach(Array(response.tarotDraws.enumerated()), id: \.offset) { index, draw in
+                        ForEach(Array(response.tarotDraws.enumerated()), id: \.offset) { _, draw in
                             if let card = TarotDeck.card(id: draw.cardID) {
                                 VStack(alignment: .leading, spacing: 6) {
-                                    Text("\(positionTitles[index]) · \(card.name)")
+                                    Text("\(TarotDeck.localizedTitle(for: draw.position)) · \(card.name)")
                                         .font(.system(size: 13, weight: .medium, design: .serif)).foregroundStyle(InkTheme.ink)
                                     Text((draw.isReversed ? card.reversed : card.upright).joined(separator: " · "))
                                         .font(.system(size: 12, design: .serif)).lineSpacing(4).foregroundStyle(InkTheme.secondary)
@@ -425,18 +482,18 @@ struct OracleInteractionView: View {
         }
     }
 
-    private func revealedLabel(_ draw: TarotDraw, at index: Int) -> String {
-        "\(positionTitles[index])，\(TarotDeck.card(id: draw.cardID)?.name ?? draw.cardID)，\(draw.isReversed ? "逆位" : "正位")"
+    private func revealedLabel(_ draw: TarotDraw, title: String) -> String {
+        "\(title)，\(TarotDeck.card(id: draw.cardID)?.name ?? draw.cardID)，\(draw.isReversed ? "逆位" : "正位")"
     }
 
     private func revealCard(at index: Int) {
-        guard index == response.revealedCount, index < 3, !flipping else { return }
+        guard index == response.revealedCount, response.tarotDraws.indices.contains(index), !flipping else { return }
         if reduceMotion {
-            response.revealedCount += 1
+            updateResponse { $0.revealedCount += 1 }
         } else {
             flipping = true
             withAnimation(.easeInOut(duration: 0.48), completionCriteria: .removed) {
-                response.revealedCount += 1
+                updateResponse { $0.revealedCount += 1 }
             } completion: {
                 flipping = false
             }
@@ -444,19 +501,18 @@ struct OracleInteractionView: View {
     }
 
     private func footer(for request: OracleInteractionRequest) -> some View {
-        let ready: Bool = switch request.kind {
-        case .numbers: response.numbers.count == 3
-        case .coins: response.lines.count == 6 && !tossing
-        case .tarot: response.tarotDraws.count == 3 && response.revealedCount == 3 && !flipping
-        }
+        let ready = !tossing && !flipping && session.isValid(response, complete: true)
         return VStack(spacing: 8) {
             Button {
                 guard ready, !isCompleting else { return }
                 isCompleting = true
-                onProgress(response)
                 onComplete(response)
             } label: {
-                Text(session.currentIndex + 1 == session.requests.count ? "确认，听听解读" : "确认，继续下一步")
+                if request.tarotClarification != nil {
+                    Text("确认补牌，继续解读")
+                } else {
+                    Text(session.currentIndex + 1 == session.requests.count ? "确认，听听解读" : "确认，继续下一步")
+                }
             }.buttonStyle(InkPrimaryButton()).disabled(!ready || isCompleting).opacity(ready ? 1 : 0.4)
                 .accessibilityIdentifier("confirmInteraction")
             Text("暂时离开也没关系，已留好的会替你保留。")

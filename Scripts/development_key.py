@@ -4,11 +4,13 @@ import json
 import os
 import plistlib
 import re
+import sys
+import tempfile
 from pathlib import Path
 
 def read_key(root):
     local = Path(root) / 'Configuration' / 'Secrets.local.json'
-    if local.is_file():
+    if local.exists() or local.is_symlink():
         try:
             config = json.loads(local.read_text(encoding='utf-8'))
         except (ValueError, OSError):
@@ -45,19 +47,43 @@ def read_key(root):
                 return match.group(0)
     return None
 
-if __name__ == '__main__':
-    if os.environ.get('CONFIGURATION', '') != 'Debug':
-        # A preceding Debug build must not leave a secret in a reused output directory.
-        output = os.environ.get('TARGET_BUILD_DIR', '')
-        bundle = os.environ.get('UNLOCALIZED_RESOURCES_FOLDER_PATH', '')
-        if output and bundle:
-            (Path(output) / bundle / 'dev-key.txt').unlink(missing_ok=True)
-        raise SystemExit(0)
-    key = read_key(os.environ['SRCROOT'])
-    target = Path(os.environ['TARGET_BUILD_DIR']) / os.environ['UNLOCALIZED_RESOURCES_FOLDER_PATH'] / 'dev-key.txt'
-    if key:
+def bundle_key(root, target):
+    """Use the same ignored local configuration for Debug and Release builds."""
+    temporary = None
+    try:
+        key = read_key(root)
+        if not key:
+            target.unlink(missing_ok=True)
+            return
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(key, encoding='utf-8')
-        target.chmod(0o600)
-    else:
+        descriptor, filename = tempfile.mkstemp(prefix='.dev-key-', dir=target.parent)
+        temporary = Path(filename)
+        # mkstemp creates the file with mode 0600 before any credential is written.
+        with os.fdopen(descriptor, 'w', encoding='utf-8') as output:
+            output.write(key)
+        temporary.replace(target)
+    except (ValueError, OSError):
+        # A failed build must not leave a previous configuration's credential
+        # ready to be packaged by a later incremental build.
         target.unlink(missing_ok=True)
+        raise
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def main():
+    try:
+        root = os.environ['SRCROOT']
+        target = Path(os.environ['TARGET_BUILD_DIR']) / os.environ['UNLOCALIZED_RESOURCES_FOLDER_PATH'] / 'dev-key.txt'
+        bundle_key(root, target)
+    except (KeyError, ValueError, OSError):
+        # Never interpolate an exception: decoder and filesystem messages can
+        # include input data. A fixed diagnostic also keeps build logs private.
+        sys.stderr.write('Bundled credential generation failed. Check the local secrets file and build output permissions; credential values were not logged.\n')
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

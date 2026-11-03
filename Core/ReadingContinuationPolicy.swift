@@ -1,34 +1,349 @@
 import Foundation
 
-/// A saved chart remains the conversation's source until the user asks for a new reading.
+/// Keeps unchanged method/person calculations while allowing a reading to gain new methods.
 enum ReadingContinuationPolicy {
+    private static let methodNames: [(OracleMethod, String)] = [
+        (.bazi, "八字|四柱"), (.ziwei, "紫微斗数|紫微|紫薇"), (.liuyao, "六爻"),
+        (.meihua, "梅花易数|梅花"), (.qimen, "奇门遁甲|奇门"), (.xiaoliuren, "小六壬"),
+        (.chenggu, "称骨"), (.xingming, "姓名五格|五格|姓名"),
+        (.astrology, "西方占星|占星|星盘"), (.tarot, "塔罗牌|塔罗|塔羅|tarot")
+    ]
     private static let recastPatterns = [
-        #"(?:重算|重起一卦|重抽(?:(?:一次|一组|三张)牌?|牌))"#,
-        #"(?:重新|重来一次|从头)(?:再)?(?:起卦|算卦|算命|推演|占卜|抽(?:(?:一次|一组|三张)牌?|牌)|掷卦|(?:投掷|投|掷)(?:一次|六次)?|六掷(?:成卦)?|算(?:一遍|一次|一下|一卦|算)?)"#,
+        #"(?:重算|重起一卦|重抽(?:(?:一次|一组|三张|一下)牌?|牌|(?=(?:吧|吗|呢|好吗|可以吗|谢谢)?$)))"#,
+        #"(?:重新|重来一次|从头)(?:再)?(?:起卦|算卦|算命|推演|占卜|抽(?:(?:一次|一组|三张|一下)牌?|牌|(?=(?:吧|吗|呢|好吗|可以吗|谢谢)?$))|掷卦|(?:投掷|投|掷)(?:一次|六次)?|六掷(?:成卦)?|算(?:一遍|一次|一下|一卦|算)?)"#,
         #"(?:再|另外|另)(?:帮我|替我|给我)?(?:算(?:一卦|一次|一下|算)|起(?:一|个|一轮)?卦|占卜(?:一次|一下)?|抽(?:(?:一次|一组|三张)牌?|牌)|(?:投掷|投|掷)(?:一次|六次))"#,
         #"再来(?:一卦|一次占卜|一轮抽牌)"#
     ]
+    private static let newQuestionPattern = #"(?:换个新?|换一个新?|另一个|另外一个|另问(?:一件|一桩|个|一个)?|换一件|问(?:个|一个|一件)新)(?:问题|事|事情)"#
+    private static let personSwitch = #"(?:换(?:个|一个|一位|位|成另一个|成另一位|成别的|成其他)人|(?:换成|改看|改问|改算)(?:(?:我自己|本人|我|他|她|别人|其他人|另一个人|另一位)(?=$|[的呢吧了])|我(?:的)?(?:同事|同学|朋友|对象|家人|爸爸|妈妈)))"#
+
+    enum ScopeChange: Equatable { case none, explicit, inferred }
+
+    struct ParticipantIntent: Equatable {
+        let names: [String]
+        let excludedNames: [String]
+        let includesSelf: Bool
+        let isGroup: Bool
+        let refersToOther: Bool
+    }
+
+    static func participantIntent(in question: String, profiles: [OracleProfile]) -> ParticipantIntent {
+        let references = ProfileDirectory.participantReferences(in: question, profiles: profiles)
+        let selfWithAnother = hasAffirmativeMatch(in: question, patterns: [
+            #"(?:我(?:自己)?|本人)(?:和|跟|与|同)(?=[\p{Han}A-Za-z])"#,
+            #"(?:和|跟|与|同)(?:我(?:自己)?|本人)(?=$|的|合|适合|一起|相处|关系|沟通|合作)"#
+        ])
+        let selfTarget = hasAffirmativeMatch(in: question, patterns: [
+            #"(?:换成|改看|改问|改算|单独看|只看)(?:我自己|本人|我)(?=$|[的呢吧了])"#,
+            #"^(?:那|还有|至于)?(?:我|我自己|本人)(?:呢|怎么样|怎么说)$"#,
+            #"我(?:自己)?(?:的|最近的?|今年的?|明年的?|接下来的?)?(?:运势|事业|工作|感情|财运|婚姻|学业|面试)"#
+        ])
+        let groupWording = hasAffirmativeMatch(in: question, patterns: [#"(?:我们俩|我们两|我们|咱俩|我俩|他俩|她俩|两个人|两位|两人|双方|合婚|合盘)"#])
+        let comparesPeople = hasAffirmativeMatch(in: question, patterns: [
+            #"(?:关系|友情|姻缘|合不合|相处|沟通|合作|合伙|合婚|合盘|配不配|分别|各自|两个人都)"#,
+            #"(?:我们俩|我们两个人|我俩|双方)(?:到底|是不是)?合适(?:吗|呢)?$"#
+        ])
+        let group = references.included.count > 1 || selfWithAnother && (!references.included.isEmpty || comparesPeople)
+            || groupWording && comparesPeople
+        let otherTarget = hasAffirmativeMatch(in: question, patterns: [
+            #"(?:替|给|看|问|算|换成|改看|改问|改算)(?:我(?:的)?)?(?:朋友|同事|同学|家人|对象|伴侣|父亲|母亲|爸爸|妈妈|孩子|儿子|女儿|他|她|别人|另一位|另一(?:个)?人)(?=$|的|呢|吧|了|工作|事业|感情|运势|看看|怎么样)"#,
+            #"(?:^|替|给|看(?:看|一下)?|问(?:一下)?|算(?:一下)?)我(?:的)?(?:朋友|同事|同学|家人|对象|伴侣|父亲|母亲|爸爸|妈妈|孩子|儿子|女儿)(?!圈|关系|缘|运|们)(?=[\p{Han}]{2,6}(?:$|的|工作|事业|感情|运势|最近|下周|呢|怎么样))"#,
+            #"^(?:那|还有|至于)?(?:他|她|我(?:的)?(?:朋友|同事|同学|对象|爸爸|妈妈))(?:呢|怎么样|怎么说)$"#,
+            personSwitch
+        ])
+        return ParticipantIntent(names: references.included, excludedNames: references.excluded,
+                                 includesSelf: selfTarget || group && (selfWithAnother || question.contains("我们")),
+                                 isGroup: group, refersToOther: !selfTarget && (otherTarget || group && selfWithAnother))
+    }
+
+    /// Only clear instructions qualify here. A pending draw can use this
+    /// independently of the more conservative conversational inference.
+    static func explicitlyChangesScope(_ question: String, profiles: [OracleProfile] = []) -> Bool {
+        let topicSwitch = #"(?:换(?:个|一个)?(?:新)?话题|另起(?:个|一个)?话题|(?:聊|说|问)(?:点|些)?别的(?:问题|话题|事)?|改问(?:另一个|另一件|别的|其他)(?:问题|事|话题))"#
+        if hasAffirmativeMatch(in: question, patterns: [newQuestionPattern, topicSwitch, personSwitch]) { return true }
+        guard !profiles.isEmpty else { return false }
+        let targets = ProfileDirectory.participantReferences(in: question, profiles: profiles).included
+        return targets.contains { name in
+            let exactName = NSRegularExpression.escapedPattern(for: name.filter { !$0.isWhitespace })
+            return hasAffirmativeMatch(in: question, patterns: [#"(?:换成|改成|改看|改问|改算|转而看)"# + exactName + #"(?=$|[的呢吧了]|工作|事业|感情|运势|合不合|怎么样)"#])
+        }
+    }
+
+    static func scopeChange(question: String, run: OracleRun?, profiles: [OracleProfile], selfProfileID: UUID? = nil) -> ScopeChange {
+        var seen = Set<UUID>()
+        let savedPeople = run?.input.readingParticipants.filter { !$0.resolvedName.isEmpty } ?? []
+        let directory = (profiles + savedPeople).filter { seen.insert($0.id).inserted }
+        if explicitlyChangesScope(question, profiles: directory) { return .explicit }
+        guard let run, !isSavedTarotExplanation(question),
+              question.range(of: #"[？?]|(?:呢|吗|么)$|看看|想问|怎么|如何|怎样|能否|要不要|会不会|能不能|该不该|合不合|适不适合"#, options: .regularExpression) != nil else { return .none }
+
+        let people = participantIntent(in: question, profiles: directory)
+        let existingIDs = Set(savedPeople.map(\.id))
+        var requestedIDs = Set(ProfileDirectory.resolve(names: people.names, in: directory).ids)
+        if people.includesSelf, let selfProfileID { requestedIDs.insert(selfProfileID) }
+        let wasGroup = run.input.subject == "多人" || existingIDs.count > 1
+        if !requestedIDs.subtracting(existingIDs).isEmpty || people.isGroup && !wasGroup { return .inferred }
+        if wasGroup, !people.isGroup, requestedIDs.count == 1,
+           !people.excludedNames.isEmpty || hasAffirmativeMatch(in: question, patterns: [#"(?:只|仅|单独)(?:看|问|算)"#]) { return .inferred }
+        if !people.isGroup, (people.includesSelf && run.input.subject == "他人")
+            || (people.refersToOther && !people.includesSelf && run.input.subject == "本人") { return .inferred }
+
+        let oldTopics = topicCategories(in: run.input.question)
+        let newTopics = topicCategories(in: question)
+        return !oldTopics.isEmpty && !newTopics.isEmpty && oldTopics.isDisjoint(with: newTopics) ? .inferred : .none
+    }
+
+    private static func topicCategories(in text: String) -> Set<Int> {
+        let patterns = [
+            "工作|职场|事业|入职|离职|面试|求职|跳槽|升职|辞职|转行|转岗|上班|裁员",
+            "感情|对象|恋爱|婚姻|复合|分手|离婚|伴侣|男朋友|女朋友|相亲|前任|吵架|暧昧",
+            "出行|出差|旅游|旅行|飞机|航班|高铁|行程|路上|车票",
+            "钱财|财运|收入|存款|理财|投资|炒股|借钱|还钱|欠款|买卖|开店",
+            "学业|考试|考研|考公|升学|学习|分数|志愿|成绩",
+            "健康|身体|睡眠|失眠|生病|体检|医院|就医",
+            "搬家|买房|租房|装修|房子"
+        ]
+        let clauses = text.components(separatedBy: CharacterSet(charactersIn: "，,。；;！!？?\n")).filter {
+            $0.filter { !$0.isWhitespace }.range(of: #"^(?:我)?(?:先不|暂不|不再|不想|不要|不用|不|别)(?:聊|看|问|算|说|讨论|谈)"#, options: .regularExpression) == nil
+        }
+        return Set(patterns.indices.filter { index in clauses.contains { $0.range(of: patterns[index], options: .regularExpression) != nil } })
+    }
 
     static func shouldReuse(question: String, run: OracleRun?, pendingPlan: OraclePlan?) -> Bool {
         guard pendingPlan == nil, let run,
               run.results.contains(where: { $0.status == .complete || $0.status == .partial }),
               !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
-        return !explicitlyRequestsNewReading(question)
+        return !explicitlyRequestsNewReading(question) && requestedAdditionalMethods(in: question).isEmpty
+            && scopeChange(question: question, run: run, profiles: []) == .none
+    }
+
+    /// A method's numeric output depends on its own inputs, not unrelated profile edits.
+    /// The caller controls same-question scope and verifies the plugin version before reuse.
+    static func reusableResults(from run: OracleRun, for input: OracleInput, methods: [OracleMethod]) -> [OracleResult] {
+        let originalPeople = run.input.readingParticipants
+        let selected = Set(methods)
+        var reusable: [OracleResult] = []
+        for method in OracleMethod.allCases where selected.contains(method) {
+            if method.usesPersonalProfile {
+                for person in input.readingParticipants {
+                    guard let original = originalPeople.first(where: { $0.id == person.id }),
+                          sameInputs(method: method, original: run.input, candidate: input, oldPerson: original, newPerson: person),
+                          var result = run.results.last(where: {
+                              $0.method == method && isUsable($0) &&
+                              ($0.participantID == original.id || ($0.participantID == nil && originalPeople.count == 1))
+                          }) else { continue }
+                    // Old single-person records did not store participant identity on results.
+                    result.participantID = person.id
+                    result.participantName = person.participantLabel
+                    reusable.append(result)
+                }
+            } else if sameInputs(method: method, original: run.input, candidate: input,
+                                 oldPerson: run.input.profile, newPerson: input.profile),
+                      let result = run.results.last(where: { $0.method == method && isUsable($0) }) {
+                reusable.append(result)
+            }
+        }
+        return reusable
+    }
+
+    /// Named calculations can be used on a fresh or existing question. An explicit
+    /// addition also asks to keep the current question.
+    static func requestedAdditionalMethods(in question: String, requiresAdditiveWording: Bool = false) -> [OracleMethod] {
+        guard !explicitlyChangesScope(question) else { return [] }
+        let namedMethod = "(?:" + methodNames.map { $0.1 }.joined(separator: "|") + ")"
+        // A generic "再帮我算一下" can be the second half of a supplement.
+        // Only a concrete fresh draw, restart or changed question overrides it.
+        let freshScopePatterns = [recastPatterns[0], recastPatterns[1], recastPatterns[3],
+            newQuestionPattern,
+            #"(?:再|另外|另)(?:帮我|替我|给我)?(?:起(?:一|个|一轮)?卦|抽(?:(?:一次|一组|三张)牌?|牌)|(?:投掷|投|掷)(?:一次|六次))"#,
+            #"(?:改用|换用|改成|换成|再用)"# + namedMethod + #".{0,6}(?:起(?:一|个|一轮)?卦|抽(?:(?:一次|一组|三张)牌?|牌)|占卜)"#
+        ]
+        guard !hasAffirmativeMatch(in: question, patterns: freshScopePatterns) else { return [] }
+        let clauses = question.components(separatedBy: CharacterSet(charactersIn: "，,。；;！!？?\n"))
+        let additions = #"(?:加上|加个|加一个|加入|再加|增加|补算|补个|补一个|补上|补一份)"#
+        var requested = Set<OracleMethod>()
+        for clause in clauses {
+            let compact = clause.filter { !$0.isWhitespace }
+            let fullRange = NSRange(compact.startIndex..<compact.endIndex, in: compact)
+            for (method, names) in methodNames {
+                // "姓名资料" is an ordinary profile field, not a calculation request.
+                let name = "(?:" + (method == .xingming ? "姓名五格|五格|姓名学|姓名数理" : names) + ")"
+                var patterns = [
+                    additions + ".{0,20}" + name,
+                    #"(?:再用|也用|再按|也按|再根据)"# + name + #".{0,8}(?:看看|算|排盘|推演|参考|分析|解读)"#,
+                    name + #"(?:也|再)(?:帮我|替我|给我)?(?:算|排盘|推演|看看)"#
+                ]
+                if !requiresAdditiveWording {
+                    patterns += [
+                        #"(?:用|按|按照)"# + name + #"(?:帮我|替我|给我)?(?:看看|算|排盘|推演)"#,
+                        #"(?:再|也)?(?:帮我|替我|给我)?算(?:一下|一次|一遍|算)?(?:用|按|按照)?"# + name
+                    ]
+                }
+                for pattern in patterns {
+                    guard let expression = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { continue }
+                    for match in expression.matches(in: compact, range: fullRange) {
+                        guard let range = Range(match.range, in: compact) else { continue }
+                        let prefix = String(compact[..<range.lowerBound].suffix(20))
+                        let suffix = String(compact[range.upperBound...].prefix(16))
+                        let matched = String(compact[range])
+                        // A command may name several methods, with a later method negated.
+                        guard let mention = matched.range(of: name, options: [.regularExpression, .caseInsensitive]) else { continue }
+                        let mentionPrefix = String(matched[..<mention.lowerBound].suffix(20))
+                        let negation = #"(?:不|别|莫|不要|不用|无需|不必|不想|不需要|不是要|并非要|没让你|没有让你|拒绝).{0,5}$"#
+                        let explanation = #"(?:为什么|为何|怎么|什么时候|什么情况|何时|是否必须|是不是必须|难道|一定要|解释|说明|介绍|什么是|想知道|想了解).{0,8}$"#
+                        let explainsSuffix = #"^(?:[”\"」』])?(?:是什么|是什么意思|的意思|的必要|的区别|的原理|的步骤|有必要吗|没必要|没有必要|怎么算|怎么排)"#
+                        let joinsAnotherRequest = prefix.range(of: #"(?:并且?|同时|顺便|然后)(?:也|再|请)?$"#, options: .regularExpression) != nil
+                        guard prefix.range(of: negation, options: .regularExpression) == nil,
+                              mentionPrefix.range(of: negation, options: .regularExpression) == nil,
+                              joinsAnotherRequest || prefix.range(of: explanation, options: .regularExpression) == nil,
+                              suffix.range(of: explainsSuffix, options: .regularExpression) == nil else { continue }
+                        requested.insert(method)
+                    }
+                }
+            }
+        }
+        return OracleMethod.allCases.filter { requested.contains($0) }
+    }
+
+    /// A short method selection without a subject can continue the current
+    /// question even when there is no remote planner to disambiguate it.
+    static func isMethodOnlyRequest(_ question: String) -> Bool {
+        let compact = question.filter { !$0.isWhitespace }
+        let namedMethod = "(?:" + methodNames.map { $0.1 }.joined(separator: "|") + ")"
+        let prefix = #"^(?:请|请你|麻烦|帮我|替我|给我|我想|可以|能否|只|仅|必须)*(?:用|按|按照)"#
+        let suffix = #"(?:看看|算(?:一下|算)?|排盘(?:分析)?|推演)(?:吧|吗|呢|好吗|可以吗)?[。！!？?]*$"#
+        return compact.range(of: prefix + namedMethod + suffix, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    /// A method switch without a new subject keeps the current question's scope.
+    static func bareMethodChange(in question: String) -> [OracleMethod] {
+        let compact = question.filter { !$0.isWhitespace }
+        let name = "(?:" + methodNames.map { $0.1 }.joined(separator: "|") + ")"
+        let prefix = #"^(?:那|就|还是|这次|这回|我想|我要|请(?:你)?|麻烦(?:你)?|帮我|替我|给我|能否|可以)*(?:把(?:方法|方式))?(?:改用|换用|换成|改成|改为|改按)(?:(?:只|仅)(?:用)?)?"#
+        let suffix = #"(?:看看|看一下|算一下|算算|排盘|推演)?(?:吧|吗|呢|好吗|可以吗)?[。！!？?]*$"#
+        let pattern = prefix + "(" + name + "(?:(?:、|以及|和|与|及|加)" + name + ")*)" + suffix
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+              let match = regex.firstMatch(in: compact, range: NSRange(compact.startIndex..<compact.endIndex, in: compact)),
+              let range = Range(match.range(at: 1), in: compact) else { return [] }
+        let names = compact[range].replacingOccurrences(of: "以及", with: "、")
+            .components(separatedBy: CharacterSet(charactersIn: "、和与及加"))
+        return methodNames.compactMap { method, aliases in
+            names.contains { $0.range(of: "^(?:" + aliases + ")$", options: [.regularExpression, .caseInsensitive]) != nil } ? method : nil
+        }
+    }
+
+    /// Keep a narrow local path for explanations of named cards in the saved
+    /// spread. Mixed questions and requests for further calculation still plan.
+    static func isSavedTarotExplanation(_ question: String) -> Bool {
+        guard !explicitlyRequestsNewReading(question), requestedAdditionalMethods(in: question).isEmpty else { return false }
+        let newCard = #"(?:补抽|加抽|追加|再抽|继续抽|补)(?:[一1１]张(?:塔罗牌?|澄清牌|牌)?|塔罗牌?|澄清牌|牌)"#
+        guard !hasAffirmativeMatch(in: question, patterns: [newCard]) else { return false }
+        let reference = #"(?:第[一二三四五1-5]张牌|(?:这|那)张牌|现状牌|影响牌|建议牌|澄清牌|补牌|原牌阵|原牌面|原结果)"#
+        let explanation = #"(?:解释|解读|理解|含义|意思|说明|为什么|为何|关系|正位|逆位|联系|指什么)"#
+        let mixedIntent = #"(?:不|别|不要|无需|不必|不想)(?:再|只|仅)?(?:解释|解读|说明)|(?:并且?|顺便|另外|同时|还想|接着)(?:问|看看|算|帮我看|补抽|加抽|补算|补一张|补牌)"#
+        let optedOut = #"^(?:请)?(?:我(?:并)?不是要|不要|不用|无需|不必|别|不想|先不|暂不|不)(?:现在|再|重新){0,2}(?:补牌|补一张|补抽(?:一张)?牌?|抽(?:一张|一次|三张)?牌?|重抽(?:一张|牌)?|重算|算|八字|紫微|六爻|梅花|奇门|小六壬|称骨|占星|姓名五格)(?:了|吧)?$"#
+        var explainsCard = false
+        for clause in question.components(separatedBy: CharacterSet(charactersIn: "，,。；;！!？?\n")) {
+            let compact = clause.filter { !$0.isWhitespace }
+            if compact.isEmpty || compact == "谢谢" || compact.range(of: optedOut, options: .regularExpression) != nil { continue }
+            guard compact.range(of: reference, options: .regularExpression) != nil,
+                  compact.range(of: explanation, options: .regularExpression) != nil,
+                  compact.range(of: mixedIntent, options: .regularExpression) == nil else { return false }
+            explainsCard = true
+        }
+        return explainsCard
+    }
+
+    private static func isUsable(_ result: OracleResult) -> Bool {
+        result.status == .complete || result.status == .partial
+    }
+
+    private static func sameInputs(method: OracleMethod, original: OracleInput, candidate: OracleInput,
+                                   oldPerson: OracleProfile, newPerson: OracleProfile) -> Bool {
+        switch method {
+        case .xingming:
+            return oldPerson.familyName.trimmingCharacters(in: .whitespacesAndNewlines) == newPerson.familyName.trimmingCharacters(in: .whitespacesAndNewlines)
+                && oldPerson.givenName.trimmingCharacters(in: .whitespacesAndNewlines) == newPerson.givenName.trimmingCharacters(in: .whitespacesAndNewlines)
+                && sameUnknowns([.surname, .givenName], oldPerson, newPerson)
+        case .bazi, .chenggu, .ziwei, .astrology:
+            guard sameBirth(oldPerson, newPerson) else { return false }
+            let hasTime = oldPerson.birthTimeKnown && !oldPerson.unknownFields.contains(.birthTime)
+            if method == .ziwei || (method == .bazi && hasTime) {
+                guard oldPerson.sex == newPerson.sex, sameUnknowns([.gender], oldPerson, newPerson) else { return false }
+            }
+            if method == .ziwei {
+                return original.castingDate == candidate.castingDate && oldPerson.currentTimeZoneID == newPerson.currentTimeZoneID
+            }
+            if method == .astrology, hasTime {
+                guard original.castingDate == candidate.castingDate,
+                      sameUnknowns([.birthCoordinates], oldPerson, newPerson) else { return false }
+                if !oldPerson.unknownFields.contains(.birthCoordinates) {
+                    return oldPerson.birthLatitude == newPerson.birthLatitude && oldPerson.birthLongitude == newPerson.birthLongitude
+                }
+            }
+            return true
+        case .tarot:
+            return original.tarotDraws == candidate.tarotDraws
+                && (original.tarotClarificationRounds ?? []) == (candidate.tarotClarificationRounds ?? [])
+        case .qimen, .xiaoliuren:
+            return original.castingDate == candidate.castingDate && oldPerson.currentTimeZoneID == newPerson.currentTimeZoneID
+        case .meihua:
+            guard original.castingDate == candidate.castingDate, oldPerson.currentTimeZoneID == newPerson.currentTimeZoneID else { return false }
+            let oldUsesNumbers = !oldPerson.unknownFields.contains(.numbers) && original.numbers.count >= 2
+            let newUsesNumbers = !newPerson.unknownFields.contains(.numbers) && candidate.numbers.count >= 2
+            return oldUsesNumbers == newUsesNumbers && (!oldUsesNumbers || original.numbers == candidate.numbers)
+        case .liuyao:
+            guard original.castingDate == candidate.castingDate, oldPerson.currentTimeZoneID == newPerson.currentTimeZoneID,
+                  original.manualLines == candidate.manualLines else { return false }
+            if original.manualLines.isEmpty {
+                return original.seed == candidate.seed
+                    && (original.castingStyle?.lowercased() ?? "coins") == (candidate.castingStyle?.lowercased() ?? "coins")
+            }
+            let oldInteracted = original.interactionResponses?.contains { $0.requestID == OracleMethod.liuyao.rawValue } == true
+            let newInteracted = candidate.interactionResponses?.contains { $0.requestID == OracleMethod.liuyao.rawValue } == true
+            return oldInteracted == newInteracted && (!oldInteracted || (original.castingStyle == "yarrow") == (candidate.castingStyle == "yarrow"))
+        }
+    }
+
+    private static func sameUnknowns(_ fields: Set<OracleField>, _ original: OracleProfile, _ candidate: OracleProfile) -> Bool {
+        original.unknownFields.intersection(fields) == candidate.unknownFields.intersection(fields)
+    }
+
+    private static func sameBirth(_ original: OracleProfile, _ candidate: OracleProfile) -> Bool {
+        guard sameUnknowns([.birthDate, .birthTimeZone], original, candidate),
+              original.birthTimeZoneID == candidate.birthTimeZoneID else { return false }
+        let oldHasTime = original.birthTimeKnown && !original.unknownFields.contains(.birthTime)
+        let newHasTime = candidate.birthTimeKnown && !candidate.unknownFields.contains(.birthTime)
+        guard oldHasTime == newHasTime else { return false }
+        if oldHasTime { return original.birthDate == candidate.birthDate }
+        guard let oldDate = original.birthDate, let newDate = candidate.birthDate,
+              oldDate.timeIntervalSince1970.isFinite, newDate.timeIntervalSince1970.isFinite,
+              let zone = TimeZone(identifier: original.birthTimeZoneID) else { return original.birthDate == candidate.birthDate }
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = zone
+        return calendar.dateComponents([.year, .month, .day], from: oldDate)
+            == calendar.dateComponents([.year, .month, .day], from: newDate)
     }
 
     static func explicitlyRequestsNewReading(_ question: String) -> Bool {
-        let clauses = question.components(separatedBy: CharacterSet(charactersIn: "，,。；;！!？?\n"))
+        if explicitlyChangesScope(question) { return true }
         // Naming a method or asking how a chart was calculated is not a request to calculate again.
+        let namedMethod = "(?:" + methodNames.map { $0.1 }.joined(separator: "|") + ")"
         let patterns = recastPatterns + [
-            #"(?:换个|换一个|另一个|另外一个|另问(?:一件|一桩)?|换一件)(?:问题|事|事情)"#,
+            newQuestionPattern,
             #"(?:帮我|替我|给我|我想|我要|我需要)(?:再)?(?:算(?:一下|一算|算|卦|命)|起(?:一|个|一轮)?卦|占卜|抽牌|推演)"#,
-            #"(?:改用|换用|改成|换成|再用)(?:六爻|塔罗|梅花|八字|紫微|占星|小六壬|奇门|姓名|称骨).{0,6}(?:起(?:一|个|一轮)?卦|算|抽牌|看看|占卜|推演)"#
+            #"(?:改用|换用|改成|换成)"# + namedMethod + #".{0,6}(?:起(?:一|个|一轮)?卦|算|抽牌|看看|占卜|推演)"#,
+            "再用" + namedMethod + #".{0,6}(?:起(?:一|个|一轮)?卦|抽(?:(?:一次|一组|三张)牌?|牌)|占卜)"#
         ]
+        return hasAffirmativeMatch(in: question, patterns: patterns)
+    }
+
+    private static func hasAffirmativeMatch(in question: String, patterns: [String]) -> Bool {
+        let clauses = question.components(separatedBy: CharacterSet(charactersIn: "，,。；;！!？?\n"))
         for clause in clauses {
             let compact = clause.filter { !$0.isWhitespace }
             let fullRange = NSRange(compact.startIndex..<compact.endIndex, in: compact)
             for pattern in patterns {
-                guard let expression = try? NSRegularExpression(pattern: pattern) else { continue }
+                guard let expression = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { continue }
                 for match in expression.matches(in: compact, range: fullRange) {
                     guard let range = Range(match.range, in: compact) else { continue }
                     let prefix = String(compact[..<range.lowerBound].suffix(20))

@@ -77,4 +77,32 @@ final class TarotPluginTests: XCTestCase {
         let data = try JSONEncoder().encode(validDraws)
         XCTAssertEqual(try JSONDecoder().decode([TarotDraw].self, from: data), validDraws)
     }
+
+    func testSavedClarificationAddsItsOwnMeaningAndLeavesTheOriginalSpreadIntact() async throws {
+        var input = request(draws: validDraws)
+        let original = try await TarotPlugin().calculate(input)
+        let round = TarotClarificationRound(request: .init(focus: "下一步怎么做", originalPosition: TarotDeck.positions[2]),
+            draw: .init(cardID: "major-01", isReversed: true, position: TarotDeck.clarificationPosition))
+        input.tarotClarificationRounds = [round]
+
+        let result = try await TarotPlugin().calculate(input)
+        XCTAssertEqual(result.status, .complete)
+        XCTAssertEqual(result.tarotDraws, original.tarotDraws)
+        XCTAssertEqual(result.tarotClarificationRounds, [round])
+        XCTAssertEqual(Array(result.rows.prefix(original.rows.count)), original.rows)
+        let card = try XCTUnwrap(TarotDeck.card(id: round.draw.cardID))
+        XCTAssertEqual(result.rows.first { $0.label == "澄清牌 1 · 牌义" }?.value, card.reversed.joined(separator: "; "))
+        XCTAssertEqual(result.rows.first { $0.label == "澄清牌 1 · 方向" }?.value, "下一步怎么做（对应建议）")
+    }
+
+    func testInvalidClarificationCannotProduceFabricatedEvidence() async throws {
+        var input = request(draws: validDraws)
+        let clarification = TarotClarificationRequest(focus: "补一张")
+        input.tarotClarificationRounds = [.init(request: clarification,
+            draw: .init(cardID: validDraws[0].cardID, isReversed: true, position: TarotDeck.clarificationPosition))]
+        let result = try await TarotPlugin().calculate(input)
+        XCTAssertEqual(result.status, .unavailable)
+        XCTAssertTrue(result.evidence.isEmpty)
+        XCTAssertNil(result.tarotClarificationRounds)
+    }
 }

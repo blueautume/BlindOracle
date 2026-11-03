@@ -128,7 +128,9 @@ private struct ReadingResultReferenceCard: View {
                     .lineSpacing(5)
                     .textSelection(.enabled)
 
-                if let draws = result.tarotDraws, !draws.isEmpty { TarotSpreadView(draws: draws) }
+                if let draws = result.tarotDraws, !draws.isEmpty {
+                    TarotSpreadView(draws: draws, clarificationRounds: result.tarotClarificationRounds ?? [])
+                }
 
                 if !result.rows.isEmpty {
                     Divider().overlay(InkTheme.line.opacity(0.6))

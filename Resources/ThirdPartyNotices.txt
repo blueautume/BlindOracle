@@ -406,3 +406,11 @@ Run python3 Scripts/fetch_tarot_resources.py from the BlindOracle directory.
 This fetches the fixed upstream revision and recreates the JSON and JPEG files.
 The installed app loads all cards and images from its own bundle and makes no
 network request for tarot data or card artwork.
+
+
+=== Resources/Locations/SOURCES.txt ===
+Offline mainland hierarchy from modood/Administrative-divisions-of-China (WTFPL).
+GeoNames administrative locations and coordinates, CC BY 4.0.
+https://www.geonames.org/
+https://creativecommons.org/licenses/by/4.0/
+The app extracts, matches and reorganizes a subset. See Locations/SOURCES.txt for sources and coverage.

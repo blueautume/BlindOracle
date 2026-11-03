@@ -51,6 +51,7 @@ struct ConversationHistoryLoadResult {
     var archive: OracleConversationArchive
     var needsInitialSave: Bool
     var recoveredUnreadableFile: Bool
+    var recoveryCopyPreserved = true
 }
 
 enum ConversationHistory {
@@ -69,17 +70,24 @@ enum ConversationHistory {
         // marker. Deleting the final chat must never revive legacy archives.
         if vault.contains(filename) {
             let stored = vault.load(OracleConversationArchive?.self, from: filename, fallback: nil)
-            guard var archive = stored,
+            // One malformed conversation should not hide every other chat in
+            // an otherwise valid archive. The original remains recoverable.
+            let recovered = stored == nil
+                ? vault.load(RecoverableArchive?.self, from: filename, fallback: nil)?.archive
+                : nil
+            guard var archive = stored ?? recovered,
                   archive.schemaVersion == 1 else {
-                // Decoder failures already preserve a copy in LocalVault.
-                // Preserve unknown versions as well before a future user action
-                // writes the current schema.
-                if stored != nil { vault.preserveRecoveryCopy(filename) }
-                return ConversationHistoryLoadResult(archive: .blank(), needsInitialSave: false, recoveredUnreadableFile: true)
+                // Preserve unknown schemas and JSON null as well as decoder
+                // failures before a future action writes the current schema.
+                let preserved = vault.preserveRecoveryCopy(filename)
+                return ConversationHistoryLoadResult(archive: .blank(), needsInitialSave: false,
+                                                     recoveredUnreadableFile: true, recoveryCopyPreserved: preserved)
             }
             var seen = Set<UUID>()
             archive.conversations = ordered(archive.conversations).filter { !$0.isEmpty && seen.insert($0.id).inserted }
-            return ConversationHistoryLoadResult(archive: archive, needsInitialSave: false, recoveredUnreadableFile: false)
+            let preserved = stored != nil || vault.preserveRecoveryCopy(filename)
+            return ConversationHistoryLoadResult(archive: archive, needsInitialSave: false,
+                                                 recoveredUnreadableFile: stored == nil, recoveryCopyPreserved: preserved)
         }
 
         var conversations: [OracleConversation] = []
@@ -119,5 +127,28 @@ enum ConversationHistory {
         // Repeated question text can be a different conversation. Message UUIDs
         // identify a copied transcript without merging independent questions.
         messages.map { $0.id.uuidString }.joined(separator: "/")
+    }
+
+    private struct RecoverableArchive: Decodable {
+        let archive: OracleConversationArchive
+
+        private enum CodingKeys: String, CodingKey { case schemaVersion, activeConversationID, conversations }
+
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            let version = try values.decode(Int.self, forKey: .schemaVersion)
+            let activeID = (try? values.decode(UUID.self, forKey: .activeConversationID)) ?? UUID()
+            let entries = try values.decode([RecoverableConversation].self, forKey: .conversations)
+            archive = OracleConversationArchive(schemaVersion: version, activeConversationID: activeID,
+                                                conversations: entries.compactMap(\.conversation))
+        }
+    }
+
+    private struct RecoverableConversation: Decodable {
+        let conversation: OracleConversation?
+
+        init(from decoder: Decoder) throws {
+            conversation = try? OracleConversation(from: decoder)
+        }
     }
 }

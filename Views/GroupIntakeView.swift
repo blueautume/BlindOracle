@@ -1,22 +1,30 @@
 import SwiftUI
+import UIKit
 
 /// Every participant keeps a separate draft; one confirmation freezes them all.
 struct GroupIntakeView: View {
+    private struct DraftSnapshot: Equatable {
+        let profiles: [OracleProfile]
+        let numbers: [Int]
+    }
+
     let plan: OraclePlan
     let onDraftChange: (([OracleProfile], [Int]) -> Void)?
-    let onConfirm: ([OracleProfile], [Int], Bool) -> Bool
+    let onConfirm: ([OracleProfile], [Int], Bool, Bool) -> Bool
     @EnvironmentObject private var store: OracleStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var drafts: [UUID: ProfileFormDraft]
     @State private var selectedIDs: [UUID]
     @State private var numberTexts: [String]
     @State private var keepProfiles = true
     @State private var error: String?
     @State private var submitted = false
+    @State private var savedDraft: DraftSnapshot?
 
     init(plan: OraclePlan, profiles: [OracleProfile], numbers: [Int] = [],
          onDraftChange: (([OracleProfile], [Int]) -> Void)? = nil,
-         onConfirm: @escaping ([OracleProfile], [Int], Bool) -> Bool) {
+         onConfirm: @escaping ([OracleProfile], [Int], Bool, Bool) -> Bool) {
         self.plan = plan; self.onDraftChange = onDraftChange; self.onConfirm = onConfirm
         var values: [UUID: ProfileFormDraft] = [:]
         var ids: [UUID] = []
@@ -39,7 +47,11 @@ struct GroupIntakeView: View {
         }
     }
     private var report: ReadingPreparationReport {
-        ReadingPreparationPolicy.evaluate(plan: plan, participants: selectedProfiles, descriptors: store.registry.descriptors)
+        let participants = selectedProfiles.map(ProfileDirectory.assigningDefaultBirthTimeZone(to:))
+        return ReadingPreparationPolicy.evaluate(plan: plan, participants: participants, descriptors: store.registry.descriptors)
+    }
+    private var offersLocalFallback: Bool {
+        report.blockedMandatoryMethods.contains(where: \.usesPersonalProfile) && store.registry.plugin(.xiaoliuren) != nil
     }
     private var requestsNumbers: Bool {
         plan.methods.contains(.meihua) && (plan.requiredFields.contains(.numbers) || (plan.interactions ?? []).contains { $0.kind == .numbers })
@@ -47,6 +59,9 @@ struct GroupIntakeView: View {
     private var draftNumbers: [Int] {
         guard numberTexts.contains(where: { !$0.isEmpty }) else { return [] }
         return numberTexts.map { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0 }
+    }
+    private var draftSnapshot: DraftSnapshot {
+        DraftSnapshot(profiles: selectedProfiles, numbers: draftNumbers)
     }
 
     var body: some View {
@@ -76,10 +91,17 @@ struct GroupIntakeView: View {
                             Text(displayedError).font(.system(size: 12)).foregroundStyle(InkTheme.cinnabar)
                                 .accessibilityIdentifier("intakeValidationError")
                         }
-                        Button(action: confirm) {
+                        Button { confirm() } label: {
                             HStack { Text("确认资料并开始"); Image(systemName: "arrow.right") }
                         }.buttonStyle(InkPrimaryButton()).accessibilityIdentifier("confirmIntake")
                             .disabled(store.isBusy)
+                        if offersLocalFallback {
+                            Button("改用小六壬") { confirm(useLocalFallback: true) }
+                                .font(.system(size: 14, design: .serif)).tint(InkTheme.cinnabar)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .disabled(store.isBusy)
+                                .accessibilityIdentifier("confirmIntakeWithLocalFallback")
+                        }
                         Text("每人的资料分别保存、分别推演。确认后，抽牌或投掷会接着进行。")
                             .font(.system(size: 10)).lineSpacing(4).foregroundStyle(InkTheme.secondary)
                     }.padding(24).frame(maxWidth: 760).frame(maxWidth: .infinity)
@@ -88,7 +110,7 @@ struct GroupIntakeView: View {
             .navigationTitle("问事资料").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("稍后填写") { dismiss() }.font(.system(size: 13)).foregroundStyle(InkTheme.secondary)
+                    Button("稍后填写") { saveUnsubmittedDraft(); dismiss() }.font(.system(size: 13)).foregroundStyle(InkTheme.secondary)
                         .accessibilityIdentifier("cancelIntake")
                 }
             }
@@ -98,8 +120,28 @@ struct GroupIntakeView: View {
                     for _ in 0..<minimumCount { addPerson() }
                 }
             }
-            .onDisappear { if !submitted { onDraftChange?(selectedProfiles, draftNumbers) } }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .background { saveUnsubmittedDraft() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIScene.willDeactivateNotification)) { _ in
+                saveUnsubmittedDraft()
+            }
+            .task(id: draftSnapshot) {
+                // Coalesce typing while keeping a recent on-disk draft before suspension.
+                do { try await Task.sleep(for: .milliseconds(350)) }
+                catch { return }
+                saveUnsubmittedDraft()
+            }
+            .onDisappear(perform: saveUnsubmittedDraft)
         }.presentationDragIndicator(.visible)
+    }
+
+    private func saveUnsubmittedDraft() {
+        guard !submitted, let onDraftChange else { return }
+        let snapshot = draftSnapshot
+        guard savedDraft != snapshot else { return }
+        savedDraft = snapshot
+        onDraftChange(snapshot.profiles, snapshot.numbers)
     }
 
     private var questionCard: some View {
@@ -107,7 +149,7 @@ struct GroupIntakeView: View {
             VStack(alignment: .leading, spacing: 13) {
                 SectionEyebrow(text: "此次所问")
                 Text(plan.question).font(.system(size: 19, design: .serif)).lineSpacing(7).foregroundStyle(InkTheme.ink)
-                Text("在这一页核对所有人员资料，填好后一次确认。未知的资料可以注明不确定。")
+                Text("填写已知的资料，其余可以留空。")
                     .font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.secondary).lineSpacing(4)
                 Text("本次方法：" + OracleMethod.allCases.filter { plan.methods.contains($0) }.map(\.progressName).joined(separator: "、"))
                     .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
@@ -191,8 +233,13 @@ struct GroupIntakeView: View {
             VStack(alignment: .leading, spacing: 13) {
                 SectionEyebrow(text: "确认前核对")
                 if selectedIDs.count < minimumCount {
-                    Text(minimumCount > 1 ? "此次需要至少两位人员。" : "此次需要一位具名人员。")
+                    Text(minimumCount > 1 ? "此次需要至少两位人员。" : "请选择或新增一位人员。")
                         .foregroundStyle(InkTheme.cinnabar)
+                }
+                if review.runnableMethods.contains(.xiaoliuren), !plan.methods.contains(.xiaoliuren) {
+                    Text("当前资料不足以完成所选方法，将用小六壬提供问事参考。")
+                        .foregroundStyle(InkTheme.secondary)
+                        .accessibilityIdentifier("intakeFallbackNotice")
                 }
                 ForEach(Array(blocked.enumerated()), id: \.offset) { _, assessment in
                     VStack(alignment: .leading, spacing: 6) {
@@ -217,8 +264,7 @@ struct GroupIntakeView: View {
     }
 
     private func title(_ profile: OracleProfile?) -> String {
-        guard let profile, !profile.resolvedName.isEmpty else { return "未填写姓名" }
-        return profile.resolvedName
+        profile?.participantLabel ?? "人员资料"
     }
 
     private func binding(for id: UUID) -> Binding<ProfileFormDraft> {
@@ -239,23 +285,27 @@ struct GroupIntakeView: View {
         }
     }
 
-    private func confirm() {
+    private func confirm(useLocalFallback: Bool = false) {
         var people: [OracleProfile] = []
         var errors: [String] = []
-        if selectedIDs.count < minimumCount {
-            errors.append(minimumCount > 1 ? "请选好至少两位人员。" : "请选择或新增这次要看的人员。")
+        let requiredCount = useLocalFallback && plan.subject != "多人" ? 0 : minimumCount
+        if selectedIDs.count < requiredCount {
+            errors.append(requiredCount > 1 ? "请选好至少两位人员。" : "请选择或新增这次要看的人员。")
         }
         for id in selectedIDs {
             guard let draft = drafts[id] else { continue }
-            do { people.append(try draft.validatedProfile()) }
+            do {
+                let profile = try draft.validatedProfile()
+                people.append(ProfileDirectory.assigningDefaultBirthTimeZone(to: profile))
+            }
             catch { errors.append("\(title(draft.profile))：\(error.localizedDescription)") }
         }
         let numbers = draftNumbers
-        if requestsNumbers && (numbers.count != 3 || !numbers.allSatisfy { (1...999).contains($0) }) {
+        if !useLocalFallback, requestsNumbers && (numbers.count != 3 || !numbers.allSatisfy { (1...999).contains($0) }) {
             errors.append("请填写三个1到999的整数。")
         }
         let review = ReadingPreparationPolicy.evaluate(plan: plan, participants: people, descriptors: store.registry.descriptors)
-        if !review.canProceed {
+        if !useLocalFallback, !review.canProceed {
             let blocked = review.assessments.filter { (plan.mandatoryMethods ?? []).contains($0.method) && !$0.canExecute }
             errors += blocked.map { assessment in
                 let reasons = assessment.blocking.map(\.reason) + [assessment.unavailableReason].compactMap { $0 }
@@ -265,7 +315,7 @@ struct GroupIntakeView: View {
         }
         guard errors.isEmpty else { error = errors.joined(separator: "\n"); return }
         error = nil
-        if onConfirm(people, requestsNumbers ? numbers : [], keepProfiles) {
+        if onConfirm(people, requestsNumbers && !useLocalFallback ? numbers : [], keepProfiles, useLocalFallback) {
             submitted = true
         } else {
             error = store.intakeError ?? "资料尚未确认，请核对后再试。"

@@ -92,6 +92,14 @@ class VersionTests(unittest.TestCase):
         self.assert_synced('0.1.2', 3)
         self.assert_success(self.run_version('--check'))
 
+    def test_major_bump_resets_minor_and_patch_and_increments_build(self):
+        self.write_versions('1.4.7', 12)
+        self.commit_baseline()
+        self.assert_success(self.run_version('--major'))
+        self.assert_synced('2.0.0', 13)
+        self.git('add', *VERSION_FILES)
+        self.assert_success(self.run_version('--check-staged'))
+
     def test_check_rejects_a_project_configuration_that_drifted_from_manifest(self):
         project = self.root / 'BlindOracle.xcodeproj/project.pbxproj'
         project.write_text(project.read_text().replace('MARKETING_VERSION = 0.1.1;',

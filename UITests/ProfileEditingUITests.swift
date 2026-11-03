@@ -1,161 +1,166 @@
 import XCTest
 
 final class ProfileEditingUITests: XCTestCase {
-    @MainActor func testNewProfileShowsAllFieldsWithoutExpanding() throws {
+    @MainActor func testAnonymousProfileUsesStableAliasPlaceholderAcrossRelaunch() throws {
         let app = launchFreshApp()
-        app.tabBars.buttons["数据"].tap()
-        app.buttons["addProfile"].tap()
-        let name = app.textFields["profileName"]
-        XCTAssertTrue(name.waitForExistence(timeout: 10))
+        openNewProfile(in: app)
+        let alias = app.textFields["profileAlias"]
+        let code = try XCTUnwrap(alias.placeholderValue)
+        XCTAssertNotNil(code.range(of: #"^[0-9]{4}$"#, options: .regularExpression))
         XCTAssertTrue(app.textFields["profileSurname"].exists)
         XCTAssertTrue(app.textFields["profileGivenName"].exists)
-        XCTAssertFalse(app.buttons["toggleBirthDetails"].exists)
-        XCTAssertFalse(app.buttons["姓名推演用字 · 选填"].exists)
-        XCTAssertTrue(element("profileBirthDate", in: app).exists)
-        XCTAssertTrue(element("profileBirthTime", in: app).exists)
-        XCTAssertEqual(app.switches["birthDateKnown"].value as? String, "0")
-        XCTAssertEqual(app.switches["birthTimeKnown"].value as? String, "0")
-        capture("profile-flat-name-and-birth", in: app)
-        name.tap(); name.typeText("陈平\n")
-        for identifier in ["profileBirthPlace", "profileBirthTimeZone", "profileBirthLatitude", "profileBirthLongitude", "profileCurrentPlace", "profileCurrentTimeZone", "profileCurrentLatitude", "profileCurrentLongitude"] {
-            let field = element(identifier, in: app)
-            reveal(field, in: app)
-            XCTAssertTrue(field.isHittable, identifier)
-        }
-        capture("profile-flat-location-fields", in: app)
-        let save = app.buttons["confirmIntake"]
-        reveal(save, in: app)
-        save.tap()
-        XCTAssertTrue(profileRow("陈平", in: app).waitForExistence(timeout: 10))
-        XCTAssertTrue(profileRow("陈平", in: app).label.contains("出生资料待补充"))
+        XCTAssertFalse(app.textFields["profileName"].exists)
+        XCTAssertEqual(app.buttons["profileBirthDate"].value as? String, "未填写")
+        XCTAssertEqual(app.buttons["profileBirthTime"].value as? String, "未填写")
+        capture("anonymous-profile-optional-fields", in: app)
+        saveProfile(in: app)
+
+        reopenProfile(code, in: app)
+        XCTAssertEqual(alias.placeholderValue, code)
+        alias.tap(); alias.typeText("同事甲\n")
+        saveProfile(in: app)
+        reopenProfile("同事甲", in: app)
+        XCTAssertEqual(alias.value as? String, "同事甲")
+        XCTAssertEqual(alias.placeholderValue, code)
+        app.buttons["clear-profileAlias"].tap()
+        saveProfile(in: app)
+        XCTAssertTrue(profileRow(code, in: app).waitForExistence(timeout: 10))
     }
 
-    @MainActor func testSavedBirthdayIsVisibleAndSurvivesNameOnlyEdit() throws {
+    @MainActor func testSavedBirthClockSurvivesNameEditAndCanBeCleared() throws {
         let app = launchFreshApp()
-        let input = app.textFields["questionInput"]
-        input.tap(); input.typeText("姓名：陈平，男，1992年6月15日08:30出生，出生地上海")
-        app.buttons["sendQuestion"].tap()
-        app.tabBars.buttons["数据"].tap()
-        let row = profileRow("陈平", in: app)
-        XCTAssertTrue(row.waitForExistence(timeout: 15))
-        XCTAssertTrue(row.label.contains("1992"))
-        row.tap()
-        let name = app.textFields["profileName"]
-        XCTAssertTrue(name.waitForExistence(timeout: 10))
-        let date = element("profileBirthDate", in: app)
-        XCTAssertTrue(date.exists)
-        XCTAssertEqual(app.switches["birthDateKnown"].value as? String, "1")
-        XCTAssertEqual(app.switches["birthTimeKnown"].value as? String, "1")
-        XCTAssertFalse(app.buttons["toggleBirthDetails"].exists)
-        capture("saved-birthday-visible-on-entry", in: app)
-        name.tap(); name.typeText("安\n")
-        let renamed = try XCTUnwrap(name.value as? String)
-        XCTAssertTrue(renamed.contains("陈平")); XCTAssertTrue(renamed.contains("安"))
-        let save = app.buttons["confirmIntake"]
-        reveal(save, in: app)
-        save.tap()
-        let saved = profileRow(renamed, in: app)
-        XCTAssertTrue(saved.waitForExistence(timeout: 10))
-        XCTAssertTrue(saved.label.contains("1992"))
-        XCTAssertFalse(saved.label.contains("时辰未定"))
-        app.terminate()
-        app.launchArguments = ["--ui-testing-local"]
-        app.launch()
-        XCTAssertTrue(app.tabBars.buttons["数据"].waitForExistence(timeout: 15))
-        app.tabBars.buttons["数据"].tap()
-        XCTAssertTrue(profileRow(renamed, in: app).waitForExistence(timeout: 10))
-        XCTAssertTrue(profileRow(renamed, in: app).label.contains("1992"))
-        XCTAssertFalse(profileRow(renamed, in: app).label.contains("时辰未定"))
+        openNewProfile(in: app)
+        let surname = app.textFields["profileSurname"]
+        surname.tap(); surname.typeText("陈\n")
+        let givenName = app.textFields["profileGivenName"]
+        givenName.tap(); givenName.typeText("平\n")
+        let date = app.buttons["profileBirthDate"]
+        let time = app.buttons["profileBirthTime"]
+        for field in [date, time] {
+            reveal(field, in: app)
+            field.tap()
+            let confirm = app.buttons["confirmBirthClock"]
+            XCTAssertTrue(confirm.waitForExistence(timeout: 10))
+            confirm.tap()
+            XCTAssertNotEqual(field.value as? String, "未填写")
+        }
+        let savedDate = try XCTUnwrap(date.value as? String)
+        let savedTime = try XCTUnwrap(time.value as? String)
+        saveProfile(in: app)
+
+        reopenProfile("陈平", in: app)
+        XCTAssertEqual(date.value as? String, savedDate)
+        XCTAssertEqual(time.value as? String, savedTime)
+        for field in [date, time] {
+            reveal(field, in: app); field.tap()
+            XCTAssertTrue(app.buttons["confirmBirthClock"].waitForExistence(timeout: 10))
+            app.buttons["取消"].tap()
+        }
+        givenName.tap(); givenName.typeText("安\n")
+        let renamed = try XCTUnwrap(givenName.value as? String)
+        XCTAssertTrue(renamed.contains("平"))
+        XCTAssertTrue(renamed.contains("安"))
+        saveProfile(in: app)
+        reopenProfile("陈" + renamed, in: app)
+        XCTAssertEqual(date.value as? String, savedDate)
+        XCTAssertEqual(time.value as? String, savedTime)
+        for id in ["clearProfileBirthDate", "clearProfileBirthTime"] {
+            let clear = app.buttons[id]
+            reveal(clear, in: app); clear.tap()
+        }
+        XCTAssertEqual(date.value as? String, "未填写")
+        XCTAssertEqual(time.value as? String, "未填写")
     }
 
-    @MainActor func testBirthPlaceShortcutFillsPlaceCoordinatesAndLocalTimezoneOnly() throws {
-        let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-location-fixture"]
-        app.launch()
-        XCTAssertTrue(app.tabBars.buttons["数据"].waitForExistence(timeout: 15))
+    @MainActor func testLocationPickersAndGPSAreIndependentAndPersist() throws {
+        let app = launchFreshApp(locationFixture: true)
+        openNewProfile(in: app)
+        let alias = app.textFields["profileAlias"]
+        alias.tap(); alias.typeText("位置测试\n")
+        let birthPlace = app.buttons["profileBirthPlace"]
+        let currentPlace = app.buttons["profileCurrentPlace"]
+        reveal(birthPlace, in: app); birthPlace.tap()
+        tapDistrictPath(["chinaDistrict-110000", "chinaDistrict-110101"], in: app)
+        waitForValue("北京市东城区", of: birthPlace)
+        XCTAssertFalse(app.textFields["profileBirthLatitude"].exists)
+        XCTAssertFalse(app.buttons["profileBirthTimeZone"].exists)
+
+        reveal(currentPlace, in: app)
+        XCTAssertEqual(currentPlace.value as? String, "未填写")
+        currentPlace.tap()
+        tapDistrictPath(["chinaDistrict-130000", "chinaDistrict-130100", "chinaWholeCity-130100"], in: app)
+        waitForValue("河北省石家庄市", of: currentPlace)
+        XCTAssertEqual(birthPlace.value as? String, "北京市东城区")
+        capture("district-and-whole-city", in: app)
+        saveProfile(in: app)
+
+        reopenProfile("位置测试", in: app)
+        reveal(birthPlace, in: app)
+        XCTAssertEqual(birthPlace.value as? String, "北京市东城区")
+        reveal(currentPlace, in: app)
+        XCTAssertEqual(currentPlace.value as? String, "河北省石家庄市")
+        currentPlace.tap()
+        tapDistrictPath(["chinaDistrict-110000", "chinaWholeCity-110000"], in: app)
+        waitForValue("北京市", of: currentPlace)
+
+        let currentGPS = app.buttons["useCurrentLocation"]
+        reveal(currentGPS, in: app); currentGPS.tap()
+        waitForValue("北京市海淀区", of: currentPlace)
+        XCTAssertEqual(birthPlace.value as? String, "北京市东城区")
+        let clearCurrent = app.buttons["clearProfileCurrentPlace"]
+        reveal(clearCurrent, in: app); clearCurrent.tap()
+        XCTAssertEqual(currentPlace.value as? String, "未填写")
+        XCTAssertEqual(birthPlace.value as? String, "北京市东城区")
+
+        let birthGPS = app.buttons["useCurrentLocationForBirthPlace"]
+        reveal(birthGPS, in: app); birthGPS.tap()
+        waitForValue("北京市海淀区", of: birthPlace)
+        XCTAssertEqual(currentPlace.value as? String, "未填写")
+        let clearBirth = app.buttons["clearProfileBirthPlace"]
+        reveal(clearBirth, in: app); clearBirth.tap()
+        XCTAssertEqual(birthPlace.value as? String, "未填写")
+    }
+
+    @MainActor private func tapDistrictPath(_ identifiers: [String], in app: XCUIApplication) {
+        for identifier in identifiers {
+            let item = element(identifier, in: app)
+            XCTAssertTrue(item.waitForExistence(timeout: 10), identifier)
+            item.tap()
+        }
+    }
+
+    @MainActor private func openNewProfile(in app: XCUIApplication) {
         app.tabBars.buttons["数据"].tap()
-        app.buttons["addProfile"].tap()
-        let name = app.textFields["profileName"]
-        XCTAssertTrue(name.waitForExistence(timeout: 10))
-        name.tap(); name.typeText("位置测试\n")
-        let currentPlace = app.textFields["profileCurrentPlace"]
-        reveal(currentPlace, in: app)
-        currentPlace.tap(); currentPlace.typeText("原所在地\n")
-        let currentZone = try XCTUnwrap(app.buttons["profileCurrentTimeZone"].value as? String)
-        // Reopen the saved profile at its top before testing the birth shortcut.
-        // Dragging down from a keyboard-focused field can dismiss an iOS sheet.
-        let initialSave = app.buttons["confirmIntake"]
-        reveal(initialSave, in: app); initialSave.tap()
-        let initialRow = profileRow("位置测试", in: app)
-        XCTAssertTrue(initialRow.waitForExistence(timeout: 10)); initialRow.tap()
-        XCTAssertTrue(app.textFields["profileName"].waitForExistence(timeout: 10))
-        let shortcut = app.buttons["useCurrentLocationForBirthPlace"]
-        reveal(shortcut, in: app)
-        XCTAssertTrue(shortcut.isHittable)
-        shortcut.tap()
-        let birthPlace = app.textFields["profileBirthPlace"]
-        let populated = NSPredicate(format: "value == %@", "日本东京都")
-        expectation(for: populated, evaluatedWith: birthPlace)
-        waitForExpectations(timeout: 10)
-        XCTAssertEqual(app.buttons["profileBirthTimeZone"].value as? String, "Asia/Tokyo")
-        XCTAssertTrue((app.textFields["profileBirthLatitude"].value as? String ?? "").contains("35.6762"))
-        XCTAssertTrue((app.textFields["profileBirthLongitude"].value as? String ?? "").contains("139.6503"))
-        capture("birthplace-current-location-shortcut", in: app)
-        reveal(currentPlace, in: app)
-        XCTAssertEqual(currentPlace.value as? String, "原所在地")
-        XCTAssertEqual(app.buttons["profileCurrentTimeZone"].value as? String, currentZone)
+        let add = app.buttons["addProfile"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10)); add.tap()
+        XCTAssertTrue(app.textFields["profileAlias"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor private func saveProfile(in app: XCUIApplication) {
         let save = app.buttons["confirmIntake"]
         reveal(save, in: app); save.tap()
-        XCTAssertTrue(profileRow("位置测试", in: app).waitForExistence(timeout: 10))
+    }
+
+    @MainActor private func reopenProfile(_ label: String, in app: XCUIApplication) {
         app.terminate()
-        app.launchArguments = ["--ui-testing-local"]
+        app.launchArguments.removeAll { $0 == "--ui-testing-reset" }
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons["数据"].waitForExistence(timeout: 15))
-        app.tabBars.buttons["数据"].tap()
-        let row = profileRow("位置测试", in: app)
+        let data = app.tabBars.buttons["数据"]
+        XCTAssertTrue(data.waitForExistence(timeout: 15)); data.tap()
+        let row = profileRow(label, in: app)
         XCTAssertTrue(row.waitForExistence(timeout: 10)); row.tap()
-        XCTAssertTrue(app.textFields["profileName"].waitForExistence(timeout: 10))
-        reveal(app.textFields["profileBirthPlace"], in: app)
-        XCTAssertEqual(app.textFields["profileBirthPlace"].value as? String, "日本东京都")
-        XCTAssertEqual(app.buttons["profileBirthTimeZone"].value as? String, "Asia/Tokyo")
-        reveal(app.textFields["profileCurrentPlace"], in: app)
-        XCTAssertEqual(app.textFields["profileCurrentPlace"].value as? String, "原所在地")
-        XCTAssertEqual(app.buttons["profileCurrentTimeZone"].value as? String, currentZone)
+        XCTAssertTrue(app.textFields["profileAlias"].waitForExistence(timeout: 10))
     }
 
-    @MainActor func testTimezonePickerSupportsChineseSearchAndIndependentSelections() throws {
-        let app = launchFreshApp()
-        app.tabBars.buttons["数据"].tap(); app.buttons["addProfile"].tap()
-        let name = app.textFields["profileName"]
-        XCTAssertTrue(name.waitForExistence(timeout: 10)); name.tap(); name.typeText("时区测试\n")
-        let birthZone = app.buttons["profileBirthTimeZone"]
-        reveal(birthZone, in: app)
-        let originalCurrentZone = app.buttons["profileCurrentTimeZone"].value as? String
-        XCTAssertFalse(app.textFields["profileBirthTimeZone"].exists)
-        birthZone.tap()
-        let search = app.searchFields.firstMatch
-        XCTAssertTrue(search.waitForExistence(timeout: 10)); search.tap(); search.typeText("巴黎")
-        let paris = app.buttons["timeZone-Europe/Paris"]
-        XCTAssertTrue(paris.waitForExistence(timeout: 10)); paris.tap()
-        XCTAssertEqual(birthZone.value as? String, "Europe/Paris")
-        XCTAssertEqual(app.buttons["profileCurrentTimeZone"].value as? String, originalCurrentZone)
-        let currentZone = app.buttons["profileCurrentTimeZone"]
-        reveal(currentZone, in: app); currentZone.tap()
-        XCTAssertTrue(search.waitForExistence(timeout: 10)); search.tap(); search.typeText("纽约")
-        let newYork = app.buttons["timeZone-America/New_York"]
-        XCTAssertTrue(newYork.waitForExistence(timeout: 10)); newYork.tap()
-        XCTAssertEqual(currentZone.value as? String, "America/New_York")
-        XCTAssertEqual(birthZone.value as? String, "Europe/Paris")
-        currentZone.tap()
-        XCTAssertTrue(app.buttons["cancelTimeZonePicker"].waitForExistence(timeout: 10))
-        app.buttons["cancelTimeZonePicker"].tap()
-        XCTAssertEqual(currentZone.value as? String, "America/New_York")
-        capture("timezone-chinese-city-selection", in: app)
+    @MainActor private func waitForValue(_ value: String, of element: XCUIElement) {
+        let expected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", value), object: element)
+        XCTAssertEqual(XCTWaiter.wait(for: [expected], timeout: 10), .completed)
     }
 
-    @MainActor private func launchFreshApp() -> XCUIApplication {
+    @MainActor private func launchFreshApp(locationFixture: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]
+        if locationFixture { app.launchArguments.append("--ui-testing-location-fixture") }
         app.launch()
         XCTAssertTrue(app.tabBars.buttons["数据"].waitForExistence(timeout: 15))
         return app
@@ -170,7 +175,7 @@ final class ProfileEditingUITests: XCTestCase {
     }
 
     @MainActor private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
-        let editor = app.scrollViews.containing(.textField, identifier: "profileName").firstMatch
+        let editor = app.scrollViews["profileEditorScroll"]
         XCTAssertTrue(editor.exists)
         for _ in 0..<18 {
             if element.exists && element.isHittable { return }

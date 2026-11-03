@@ -2,6 +2,7 @@ import SwiftUI
 
 @main struct BlindOracleApp: App {
     @StateObject private var store = OracleStore()
+    @Environment(\.scenePhase) private var scenePhase
     init() {
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()
@@ -19,6 +20,10 @@ import SwiftUI
             .tint(InkTheme.cinnabar).preferredColorScheme(.light)
             .environment(\.locale, Locale(identifier: "zh_Hans_CN"))
             .environmentObject(store)
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .background { store.checkpoint() }
+                if phase == .active { store.refreshCredential() }
+            }
         }
     }
 }

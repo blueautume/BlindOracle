@@ -72,11 +72,85 @@ final class FormIntakeTests: XCTestCase {
         XCTAssertTrue(store.runs.isEmpty)
         XCTAssertNil(store.pendingInteraction)
         XCTAssertNotNil(store.pendingPlan)
-        let report = ReadingPreparationPolicy.evaluate(plan: pending, participants: [person], descriptors: store.registry.descriptors)
+        let report = try XCTUnwrap(store.intakePreparationReport(for: [person]))
         let fields = Set(report.missing.flatMap(\.fields))
-        XCTAssertTrue(fields.isSuperset(of: [.birthDate, .birthTime, .birthTimeZone, .gender]))
+        XCTAssertTrue(fields.isSuperset(of: [.birthDate, .birthTime, .gender]))
+        XCTAssertFalse(fields.contains(.birthTimeZone))
         let notice = try XCTUnwrap(store.intakeError)
         for field in fields { XCTAssertTrue(notice.contains(field.title), "缺项必须一次完整告知：\(field.title)") }
+    }
+
+    @MainActor func testSavedAnonymousProfileKeepsItsCodeAndCanClearAnAlias() throws {
+        let vault = try temporaryVault()
+        let store = OracleStore(vault: vault, bootstrapCredential: false)
+        let blank = OracleProfile()
+        let code = blank.participantLabel
+        XCTAssertEqual(code.count, 4)
+        XCTAssertTrue(code.allSatisfy(\.isNumber))
+        store.saveProfile(blank)
+
+        let reopened = OracleStore(vault: vault, bootstrapCredential: false)
+        var profile = try XCTUnwrap(reopened.profiles.first)
+        XCTAssertEqual(profile.id, blank.id)
+        XCTAssertEqual(profile.participantLabel, code)
+        XCTAssertTrue(profile.resolvedName.isEmpty)
+        XCTAssertNil(reopened.selfProfileID)
+        profile.alias = "朋友 A"
+        reopened.saveProfile(profile)
+        XCTAssertEqual(reopened.profiles.first?.participantLabel, "朋友 A")
+        profile.alias = nil
+        reopened.saveProfile(profile)
+        XCTAssertEqual(reopened.profiles.first?.participantLabel, code)
+    }
+
+    @MainActor func testAliasCollisionRequiresAnExplicitProfileSelection() throws {
+        let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
+        let named = try person(), anonymous = OracleProfile(alias: "张三")
+        store.saveProfile(named); store.saveProfile(anonymous)
+        var pending = plan([.tarot])
+        pending.participantNames = ["张三"]
+        XCTAssertTrue(store.defaultParticipants(for: pending).isEmpty)
+        pending.participantIDs = [anonymous.id]
+        XCTAssertEqual(store.defaultParticipants(for: pending).map(\.id), [anonymous.id])
+    }
+
+    @MainActor func testAnonymousPairCanConfirmTarotWithoutBirthDataOrNames() throws {
+        let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
+        let first = OracleProfile(), second = OracleProfile(alias: "同事")
+        store.pendingPlan = plan([.tarot], people: [first, second], strict: true)
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [first, second], numbers: [], save: false))
+        let pending = try XCTUnwrap(store.pendingInteraction)
+        XCTAssertEqual(pending.requests.map(\.kind), [.tarot])
+        XCTAssertEqual(pending.input.readingParticipants.map(\.id), [first.id, second.id])
+        XCTAssertEqual(pending.plan.participantNames, [first.participantLabel, "同事"])
+        XCTAssertTrue(store.profiles.isEmpty)
+    }
+
+    @MainActor func testMissingBirthFactsCanUseANonPersonalMethodWithoutInventingBirthData() async throws {
+        let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
+        let person = OracleProfile(alias: "邻居")
+        store.pendingPlan = plan([.bazi], people: [person])
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [person], numbers: [], save: false))
+        try await waitUntilIdle(store)
+        let ordinary = try XCTUnwrap(store.runs.last)
+        XCTAssertEqual(ordinary.plan.methods, [.xiaoliuren])
+        XCTAssertEqual(ordinary.plan.omittedMethods?.map(\.method), [.bazi])
+        XCTAssertNil(ordinary.input.readingParticipants.first?.birthDate)
+
+        store.pendingPlan = plan([.bazi], people: [person], strict: true)
+        XCTAssertFalse(store.confirmGroupIntake(profiles: [person], numbers: [], save: false))
+        XCTAssertEqual(store.runs.count, 1)
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [person], numbers: [], save: false, useLocalFallback: true))
+        try await waitUntilIdle(store)
+        let explicit = try XCTUnwrap(store.runs.last)
+        XCTAssertEqual(explicit.plan.methods, [.xiaoliuren])
+        XCTAssertNil(explicit.input.readingParticipants.first?.birthDate)
+
+        let group = plan([.bazi], people: [person, OracleProfile()], strict: true)
+        store.pendingPlan = group
+        XCTAssertFalse(store.confirmGroupIntake(profiles: [person], numbers: [], save: false, useLocalFallback: true))
+        XCTAssertEqual(store.pendingPlan?.mandatoryMethods, [.bazi])
+        XCTAssertEqual(store.pendingPlan?.draftParticipants?.map(\.id), [person.id])
     }
 
     @MainActor func testMixedSubmissionSkipsUnavailablePersonalMethodAndPreservesItsExplanation() async throws {
