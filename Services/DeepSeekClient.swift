@@ -56,24 +56,24 @@ struct DeepSeekTokenUsage: Decodable, Sendable {
 }
 
 enum DeepSeekError: LocalizedError, Sendable {
-    case missingKey
+    case missingKey(AIProvider)
     case invalidResponse
     case malformedJSON
     case truncated
-    case http(Int)
+    case http(Int, AIProvider)
     case provider(String)
     case missingResponseModel
     case unexpectedModel(requested: String, actual: String)
     var errorDescription: String? {
         switch self {
-        case .missingKey: "尚未设置 DeepSeek 密钥，可在「数据」里的设置中添加。"
+        case .missingKey(let provider): "尚未设置 \(provider.displayName) 密钥，可在「数据」里的设置中添加。"
         case .invalidResponse: "大师暂时没接上话，请稍后再试。"
         case .malformedJSON: "收到的回答格式不完整，请再试一次；本地资料已保留。"
         case .truncated: "回答在传输中被截断，请重试；本地推演结果已保留。"
-        case .http(401), .http(403): "密钥验证未通过，请在设置中检查 DeepSeek 密钥。"
-        case .http(402): "DeepSeek 账户余额不足，请检查账户。"
-        case .http(429): "DeepSeek 请求较多，请稍后再试。"
-        case .http(let code) where code >= 500: "DeepSeek 暂时繁忙，请稍后再试。"
+        case .http(401, let provider), .http(403, let provider): "密钥验证未通过，请在设置中检查 \(provider.displayName) 密钥。"
+        case .http(402, let provider): "\(provider.displayName) 账户余额不足，请检查账户。"
+        case .http(429, let provider): "\(provider.displayName) 请求较多，请稍后再试。"
+        case .http(let code, let provider) where code >= 500: "\(provider.displayName) 暂时繁忙，请稍后再试。"
         case .http: "网络请求未完成，请稍后再试。"
         case .provider(let message): message
         case .missingResponseModel: "服务未返回实际模型信息，暂时无法确认解读连接。"
@@ -85,7 +85,8 @@ enum DeepSeekError: LocalizedError, Sendable {
 /// Remote language-only orchestration. All numeric charts are produced by local plugins.
 actor DeepSeekClient {
     private let session: URLSession
-    private let endpoint = URL(string: "https://api.deepseek.com/chat/completions")!
+    private let provider: AIProvider
+    private let endpoint: URL
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private let credential: String?
@@ -104,7 +105,9 @@ actor DeepSeekClient {
     确有显著分歧时，写清冲突的是哪项判断及能区分它们的现实条件，不强行选边，不把真实分歧平均成模糊折中。不沿袭历史回答中的空泛套话。
     """
 
-    init(apiKey: String? = nil) {
+    init(provider: AIProvider = .deepSeek, apiKey: String? = nil) {
+        self.provider = provider
+        endpoint = provider.endpoint
         credential = apiKey
         let configuration = URLSessionConfiguration.ephemeral
         configuration.urlCache = nil
@@ -115,7 +118,7 @@ actor DeepSeekClient {
     }
 
     private var model: String {
-        DeepSeekConfiguration.model()
+        provider.model()
     }
 
     func plan(question: String, profile: OracleProfile, plugins: [OraclePluginDescriptor],
@@ -377,14 +380,14 @@ actor DeepSeekClient {
                         AIConversationTurn(role: "user", content: "Reply OK.")]
         let started = Date()
         let request = try request(messages, jsonMode: false, streaming: false,
-                                  maxTokens: DeepSeekConfiguration.outputTokenBudget, model: requestedModel)
+                                  maxTokens: provider.outputTokenBudget, model: requestedModel)
         let (data, response) = try await session.data(for: request)
         try Task.checkCancellation()
         guard let http = response as? HTTPURLResponse else { throw DeepSeekError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode) }
+        guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode, provider) }
         let result = try decoder.decode(CompletionEnvelope.self, from: data)
         let report = Self.report(result, requestedModel: requestedModel,
-            host: http.url?.host ?? endpoint.host ?? "api.deepseek.com", started: started)
+            host: http.url?.host ?? endpoint.host ?? "", started: started)
         lastResponseReport = report
         try Self.validateConnectionResponse(result, requestedModel: requestedModel)
         lastSuccessfulConnection = report
@@ -394,15 +397,22 @@ actor DeepSeekClient {
     /// Exposes only the request payload so parameter regressions can be checked
     /// without credentials or a network request.
     static func requestBody(_ messages: [AIConversationTurn], model: String, jsonMode: Bool,
-                            streaming: Bool, maxTokens: Int) -> [String: Any] {
+                            streaming: Bool, maxTokens: Int, provider: AIProvider = .deepSeek) -> [String: Any] {
         var body: [String: Any] = [
             "model": model,
             "messages": messages.map { ["role": $0.role, "content": $0.content] },
             "stream": streaming,
-            "max_tokens": max(DeepSeekConfiguration.outputTokenBudget, maxTokens),
-            "thinking": ["type": DeepSeekConfiguration.thinkingEnabled ? "enabled" : "disabled"],
-            "reasoning_effort": DeepSeekConfiguration.reasoningEffort
+            provider.outputTokenParameter: max(provider.outputTokenBudget, maxTokens),
+            "reasoning_effort": provider.reasoningEffort
         ]
+        switch provider {
+        case .deepSeek:
+            body["thinking"] = ["type": DeepSeekConfiguration.thinkingEnabled ? "enabled" : "disabled"]
+        case .qwen:
+            body["enable_thinking"] = true
+            body["preserve_thinking"] = false
+            if streaming { body["stream_options"] = ["include_usage": true] }
+        }
         if jsonMode { body["response_format"] = ["type": "json_object"] }
         return body
     }
@@ -411,15 +421,15 @@ actor DeepSeekClient {
                          maxTokens: Int, model: String) throws -> URLRequest {
         let key: String?
         if let credential { key = credential }
-        else { key = try KeychainStore.shared.load() }
-        guard let key, !key.isEmpty else { throw DeepSeekError.missingKey }
+        else { key = try KeychainStore.store(for: provider).load() }
+        guard let key, !key.isEmpty else { throw DeepSeekError.missingKey(provider) }
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(streaming ? "text/event-stream" : "application/json", forHTTPHeaderField: "Accept")
         request.httpBody = try JSONSerialization.data(withJSONObject: Self.requestBody(messages, model: model,
-            jsonMode: jsonMode, streaming: streaming, maxTokens: maxTokens))
+            jsonMode: jsonMode, streaming: streaming, maxTokens: maxTokens, provider: provider))
         return request
     }
 
@@ -504,10 +514,10 @@ actor DeepSeekClient {
                 try await Task.sleep(nanoseconds: UInt64(attempt + 1) * 1_500_000_000)
                 continue
             }
-            guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode) }
+            guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode, provider) }
             let result = try decoder.decode(CompletionEnvelope.self, from: data)
             let report = Self.report(result, requestedModel: requestedModel,
-                host: http.url?.host ?? endpoint.host ?? "api.deepseek.com", started: started)
+                host: http.url?.host ?? endpoint.host ?? "", started: started)
             lastResponseReport = report
             try Self.verifyModel(requested: requestedModel, actual: result.model)
             guard let choice = result.choices.first else { throw DeepSeekError.invalidResponse }
@@ -530,8 +540,8 @@ actor DeepSeekClient {
         let (bytes, response) = try await session.bytes(for: request(messages, jsonMode: jsonMode, streaming: true,
             maxTokens: maxTokens, model: requestedModel))
         guard let http = response as? HTTPURLResponse else { throw DeepSeekError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode) }
-        let host = http.url?.host ?? endpoint.host ?? "api.deepseek.com"
+        guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode, provider) }
+        let host = http.url?.host ?? endpoint.host ?? ""
         var full = ""
         var framer = DeepSeekSSEFramer()
         var done = false
@@ -730,7 +740,7 @@ struct DeepSeekSSEChunk: Sendable {
         }
         guard let data = event.data(using: .utf8) else { throw DeepSeekError.invalidResponse }
         let envelope = try JSONDecoder().decode(Envelope.self, from: data)
-        if envelope.error != nil { throw DeepSeekError.provider("DeepSeek 暂时无法完成回答，请稍后重试。") }
+        if envelope.error != nil { throw DeepSeekError.provider("解读服务暂时无法完成回答，请稍后重试。") }
         return DeepSeekSSEChunk(content: (envelope.choices ?? []).compactMap { $0.delta?.content }.joined(),
                                 finishReason: envelope.choices?.compactMap(\.finish_reason).last, isDone: false,
                                 model: envelope.model, usage: envelope.usage)
@@ -748,7 +758,7 @@ struct DeepSeekSSEChunk: Sendable {
     }
 }
 
-/// DeepSeek sends one complete JSON object per `data:` line. AsyncBytes.lines can
+/// Providers send one complete JSON object per `data:` line. AsyncBytes.lines can
 /// omit blank separators, so a complete object must be consumed immediately.
 /// A genuinely split JSON event is accumulated only until its braces balance.
 struct DeepSeekSSEFramer {

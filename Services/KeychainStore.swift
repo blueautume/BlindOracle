@@ -4,14 +4,29 @@ import CryptoKit
 
 /// A single device-only credential. Never persisted in chat, profiles, logs or UserDefaults.
 final class KeychainStore: @unchecked Sendable {
-    static let shared = KeychainStore()
-    private let service = "com.blindoracle.deepseek"
+    static let shared = KeychainStore(namespace: "deepseek", bundleResource: "dev-key")
+    private static let qwen = KeychainStore(namespace: "qwen", bundleResource: "qwen-key")
+    private let service: String
+    private let bundleResource: String
     private let account = "api-key"
     private let lock = NSLock()
     private let defaults = UserDefaults.standard
-    private static let bundledFingerprintKey = "deepseek.bundled-key.sha256"
-    private static let manuallySavedKey = "deepseek.credential.manually-saved"
-    private init() {}
+    private let bundledFingerprintKey: String
+    private let manuallySavedKey: String
+
+    private init(namespace: String, bundleResource: String) {
+        service = "com.blindoracle.\(namespace)"
+        self.bundleResource = bundleResource
+        bundledFingerprintKey = "\(namespace).bundled-key.sha256"
+        manuallySavedKey = "\(namespace).credential.manually-saved"
+    }
+
+    static func store(for provider: AIProvider) -> KeychainStore {
+        switch provider {
+        case .deepSeek: shared
+        case .qwen: qwen
+        }
+    }
 
     func string() -> String? {
         try? load()
@@ -46,7 +61,7 @@ final class KeychainStore: @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         try persist(BootstrapPolicy.normalizedKey(value))
         // Settings is an explicit choice, including re-entering the same key.
-        defaults.set(true, forKey: Self.manuallySavedKey)
+        defaults.set(true, forKey: manuallySavedKey)
     }
 
     private func persist(_ key: String) throws {
@@ -81,8 +96,8 @@ final class KeychainStore: @unchecked Sendable {
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainError.status(status)
         }
-        defaults.removeObject(forKey: Self.bundledFingerprintKey)
-        defaults.removeObject(forKey: Self.manuallySavedKey)
+        defaults.removeObject(forKey: bundledFingerprintKey)
+        defaults.removeObject(forKey: manuallySavedKey)
     }
 
     enum BootstrapResult: Equatable {
@@ -93,15 +108,15 @@ final class KeychainStore: @unchecked Sendable {
     /// The historical method name remains compatible with existing callers.
     @discardableResult func bootstrapDevelopmentKey() throws -> BootstrapResult {
         lock.lock(); defer { lock.unlock() }
-        guard let url = Bundle.main.url(forResource: "dev-key", withExtension: "txt") else { return .missingResource }
+        guard let url = Bundle.main.url(forResource: bundleResource, withExtension: "txt") else { return .missingResource }
         let text: String
         do { text = try String(contentsOf: url, encoding: .utf8) }
         catch { throw KeychainError.bundledResourceUnreadable }
         let key = try BootstrapPolicy.normalizedKey(text)
         let result = try BootstrapPolicy.decision(
             bundledKey: key, existingKey: storedString(),
-            previousBundledFingerprint: defaults.string(forKey: Self.bundledFingerprintKey),
-            manuallySaved: defaults.bool(forKey: Self.manuallySavedKey))
+            previousBundledFingerprint: defaults.string(forKey: bundledFingerprintKey),
+            manuallySaved: defaults.bool(forKey: manuallySavedKey))
         if result == .imported || result == .updated {
             try persist(key)
         }
@@ -109,8 +124,8 @@ final class KeychainStore: @unchecked Sendable {
             // Commit ownership only after the keychain write succeeds.
             // Matching legacy imports can acquire provenance without rewriting
             // the key; explicit manual keys return preservedUserKey instead.
-            defaults.set(BootstrapPolicy.fingerprint(key), forKey: Self.bundledFingerprintKey)
-            defaults.set(false, forKey: Self.manuallySavedKey)
+            defaults.set(BootstrapPolicy.fingerprint(key), forKey: bundledFingerprintKey)
+            defaults.set(false, forKey: manuallySavedKey)
         }
         return result
     }

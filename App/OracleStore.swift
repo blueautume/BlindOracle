@@ -24,14 +24,18 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     @Published var pendingInteraction: OracleInteractionSession?
     @Published var showInteraction = false
     @Published var notice: String?
-    @Published var hasCredential = false
+    @Published private(set) var aiProvider: AIProvider
+    @Published private(set) var hasCredential = false
     @Published private(set) var credentialIssue: String?
     @Published private(set) var connectionReport: AIConnectionReport?
     @Published private(set) var connectionFeedback: String?
     @Published private(set) var isCheckingConnection = false
     @Published var selectedTab = 0
     let registry = PluginRegistry()
-    let client = DeepSeekClient()
+    private lazy var deepSeekClient = DeepSeekClient(provider: .deepSeek)
+    private lazy var qwenClient = DeepSeekClient(provider: .qwen)
+    var client: DeepSeekClient { aiProvider == .deepSeek ? deepSeekClient : qwenClient }
+    var credentialStore: KeychainStore { KeychainStore.store(for: aiProvider) }
     private let vault: LocalVault
     private var task: Task<Void, Never>?
     private var operationID: UUID?
@@ -54,6 +58,8 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
 
     init(vault: LocalVault = .shared, bootstrapCredential: Bool = true) {
         DeepSeekConfiguration.migrateDefault()
+        aiProvider = UserDefaults.standard.string(forKey: AIProvider.selectionKey)
+            .flatMap(AIProvider.init(rawValue:)) ?? .deepSeek
         self.vault = vault
         let history = ConversationHistory.load(from: vault)
         conversations = history.archive.conversations
@@ -107,20 +113,34 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
 
     var connectionStatus: String {
         if localOnly { return "仅本地规则摘要 · AI 未启用" }
-        if credentialIssue != nil { return "AI 密钥读取异常 · 请检查设置" }
-        guard hasCredential else { return "仅本地规则摘要 · 未配置解读密钥" }
-        let model = DeepSeekConfiguration.model()
-        return (model == DeepSeekConfiguration.defaultModel ? "DeepSeek Pro" : model) + " · 深度思考 max"
+        if credentialIssue != nil { return "\(aiProvider.displayName) 密钥读取异常 · 请检查设置" }
+        guard hasCredential else { return "仅本地规则摘要 · 未配置 \(aiProvider.displayName) 密钥" }
+        let model = aiProvider.model()
+        let title: String
+        switch aiProvider {
+        case .deepSeek: title = model == DeepSeekConfiguration.defaultModel ? "DeepSeek Pro" : model
+        case .qwen: title = "\(aiProvider.displayName) · \(model)"
+        }
+        return "\(title) · \(aiProvider.reasoningDescription)"
+    }
+
+    func selectAIProvider(_ provider: AIProvider) {
+        guard provider != aiProvider, !isBusy, !isCheckingConnection else { return }
+        aiProvider = provider
+        UserDefaults.standard.set(provider.rawValue, forKey: AIProvider.selectionKey)
+        invalidateConnectionReport()
+        refreshCredential()
     }
 
     func refreshCredential(importBundledKey: Bool = true) {
+        let keychain = credentialStore
         var bootstrapIssue: String?
         if importBundledKey {
-            do { try KeychainStore.shared.bootstrapDevelopmentKey() }
+            do { try keychain.bootstrapDevelopmentKey() }
             catch { bootstrapIssue = error.localizedDescription }
         }
         var issue: String?
-        do { hasCredential = try KeychainStore.shared.load() != nil }
+        do { hasCredential = try keychain.load() != nil }
         catch { hasCredential = false; issue = error.localizedDescription }
         credentialIssue = issue
         if let issue = issue ?? bootstrapIssue { notice = issue }
@@ -129,6 +149,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     func invalidateConnectionReport() { connectionReport = nil; connectionFeedback = nil }
 
     func restoreRecommendedConnection() {
+        guard aiProvider == .deepSeek else { return }
         DeepSeekConfiguration.restoreRecommendedSettings()
         connectionReport = nil; connectionFeedback = "已恢复 DeepSeek Pro 联网解读，深度思考强度 max。"
         refreshCredential()
@@ -140,7 +161,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         defer { isCheckingConnection = false }
         refreshCredential()
         guard hasCredential else {
-            connectionFeedback = credentialIssue ?? "尚无可用解读密钥，请检查安装包或保存自己的密钥。"
+            connectionFeedback = credentialIssue ?? "尚无可用的 \(aiProvider.displayName) 密钥，请检查安装包或保存自己的密钥。"
             return
         }
         do {
@@ -1374,7 +1395,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         activityMessageID = messageID
         persist()
         if !hasCredential || localOnly {
-            let reason = "沿用这次已保存的卦象，以下是本地规则摘要；" + (localOnly ? "详细追问需要开启 DeepSeek 解读。" : "设置解读密钥后可以继续细说。")
+            let reason = "沿用这次已保存的卦象，以下是本地规则摘要。" + (localOnly ? "详细追问需要开启 AI 解读。" : "设置解读密钥后可以继续细说。")
             let text = run.map { localReading($0, reason: reason).text } ?? "说说你想看的具体事情，我可以为你准备本地推演。"
             if let index = messages.firstIndex(where: { $0.id == messageID }) { messages[index].content = text }
             progress(run == nil ? "等待具体问题" : "已有结果已保留", state: .completed)

@@ -5,6 +5,7 @@ DerivedData/
 xcuserdata/
 LocalSecrets*
 dev-key.txt
+qwen-key.txt
 *.ipa
 .swiftpm/
 .build/

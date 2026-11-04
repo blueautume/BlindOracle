@@ -10,6 +10,53 @@ final class AIServiceTests: XCTestCase {
         XCTAssertFalse(DeepSeekClient.modelsMatch(requested: "deepseek-v4-pro", returned: "deepseek-v4-professional"))
         XCTAssertFalse(DeepSeekClient.modelsMatch(requested: "deepseek-v4-pro-0813", returned: "deepseek-v4-pro"))
         XCTAssertFalse(DeepSeekClient.modelsMatch(requested: "", returned: "-0813"))
+        XCTAssertTrue(DeepSeekClient.modelsMatch(requested: "qwen3.8-max", returned: "qwen3.8-max-0902"))
+        XCTAssertFalse(DeepSeekClient.modelsMatch(requested: "qwen3.8-max", returned: "qwen3.8-flash"))
+    }
+
+    func testQwenRequestUsesBailianParametersForPlanningAndStreaming() {
+        let provider = AIProvider.qwen
+        let messages = [
+            AIConversationTurn(role: "assistant", content: "此前的回答"),
+            AIConversationTurn(role: "user", content: "请输出 json")
+        ]
+        XCTAssertEqual(provider.endpoint.host, "dashscope.aliyuncs.com")
+        XCTAssertEqual(provider.endpoint.path, "/compatible-mode/v1/chat/completions")
+        for streaming in [false, true] {
+            let body = DeepSeekClient.requestBody(messages, model: provider.model(),
+                jsonMode: true, streaming: streaming, maxTokens: 2400, provider: provider)
+            XCTAssertEqual(body["model"] as? String, "qwen3.8-max")
+            XCTAssertEqual(body["messages"] as? [[String: String]], [
+                ["role": "assistant", "content": "此前的回答"],
+                ["role": "user", "content": "请输出 json"]
+            ])
+            XCTAssertEqual(body["enable_thinking"] as? Bool, true)
+            XCTAssertEqual(body["preserve_thinking"] as? Bool, false)
+            XCTAssertEqual(body["reasoning_effort"] as? String, "xhigh")
+            XCTAssertEqual(body["max_completion_tokens"] as? Int, 65_536)
+            XCTAssertEqual(body["stream"] as? Bool, streaming)
+            XCTAssertEqual((body["stream_options"] as? [String: Bool])?["include_usage"], streaming ? true : nil)
+            XCTAssertEqual((body["response_format"] as? [String: String])?["type"], "json_object")
+            XCTAssertNil(body["thinking"])
+            XCTAssertNil(body["max_tokens"])
+        }
+    }
+
+    func testBailianStreamSeparatesVisibleAnswerAndUsageFromHiddenReasoning() throws {
+        var framer = DeepSeekSSEFramer()
+        let lines = [
+            #"data: {"model":"qwen3.8-max","choices":[{"delta":{"content":null,"reasoning_content":"private"},"finish_reason":null}]}"#,
+            #"data: {"model":"qwen3.8-max","choices":[{"delta":{"content":"可先观察"},"finish_reason":null}]}"#,
+            #"data: {"model":"qwen3.8-max","choices":[{"delta":{},"finish_reason":"stop"}]}"#,
+            #"data: {"model":"qwen3.8-max","choices":[],"usage":{"prompt_tokens":12,"completion_tokens":8,"total_tokens":20,"completion_tokens_details":{"reasoning_tokens":5}}}"#,
+            "data: [DONE]"
+        ]
+        let chunks = try lines.compactMap { try framer.push($0) }
+        XCTAssertEqual(chunks.map(\.content).joined(), "可先观察")
+        XCTAssertEqual(chunks.compactMap(\.finishReason), ["stop"])
+        XCTAssertEqual(chunks.compactMap { $0.usage?.reasoningTokens }, [5])
+        XCTAssertTrue(chunks.last?.isDone == true)
+        try framer.finish()
     }
 
     func testConnectionProbeKeepsModelAndTokenEvidenceWithoutSavingResponseOrReasoningText() throws {

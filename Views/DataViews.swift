@@ -186,8 +186,17 @@ private struct OracleSettingsView: View {
                             SectionEyebrow(text: "解读连接")
                             PaperCard {
                                 VStack(alignment: .leading, spacing: 15) {
+                                    Picker("解读模型", selection: Binding(get: { store.aiProvider }, set: { store.selectAIProvider($0) })) {
+                                        ForEach(AIProvider.allCases, id: \.self) { provider in
+                                            Text(provider.displayName).tag(provider)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .disabled(store.isBusy || store.isCheckingConnection)
+                                    .accessibilityIdentifier("aiProviderPicker")
                                     HStack {
-                                        Text("DeepSeek").font(.system(size: 17, design: .serif)).foregroundStyle(InkTheme.ink)
+                                        Text("\(store.aiProvider.displayName) API 密钥")
+                                            .font(.system(size: 17, design: .serif)).foregroundStyle(InkTheme.ink)
                                         Spacer()
                                         Label(store.hasCredential ? "已保存密钥" : "未设置", systemImage: store.hasCredential ? "checkmark.circle.fill" : "circle")
                                             .font(.system(size: 11)).foregroundStyle(store.hasCredential ? InkTheme.sage : InkTheme.secondary)
@@ -195,13 +204,17 @@ private struct OracleSettingsView: View {
                                     SecureField(store.hasCredential ? "输入新密钥以替换" : "输入 API 密钥", text: $draftKey)
                                         .font(.system(size: 14)).textInputAutocapitalization(.never).autocorrectionDisabled()
                                         .padding(12).background(InkTheme.paper, in: RoundedRectangle(cornerRadius: 9))
-                                        .accessibilityLabel("DeepSeek API 密钥")
+                                        .accessibilityLabel("\(store.aiProvider.displayName) API 密钥")
                                     HStack {
                                         Button("保存到钥匙串") { saveKey() }.disabled(draftKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                                            .disabled(store.isCheckingConnection)
+                                            .disabled(store.isBusy || store.isCheckingConnection)
                                             .font(.system(size: 13, design: .serif)).tint(InkTheme.cinnabar)
                                         Spacer()
-                                        if store.hasCredential { Button("移除") { showRemoveKey = true }.font(.system(size: 12)).foregroundStyle(InkTheme.secondary).disabled(store.isCheckingConnection) }
+                                        if store.hasCredential {
+                                            Button("移除") { showRemoveKey = true }
+                                                .font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
+                                                .disabled(store.isBusy || store.isCheckingConnection)
+                                        }
                                     }
                                     if !feedback.isEmpty { Text(feedback).font(.system(size: 12)).foregroundStyle(InkTheme.sage) }
                                     Divider().overlay(InkTheme.line)
@@ -211,12 +224,14 @@ private struct OracleSettingsView: View {
                                     Toggle("仅本地试算", isOn: $localOnly).font(.system(size: 15, design: .serif)).tint(InkTheme.sage)
                                         .disabled(store.isBusy || store.isCheckingConnection)
                                         .onChange(of: localOnly) { _, _ in store.invalidateConnectionReport() }
-                                    Text("本地试算只显示规则摘要，不调用 AI。启用 AI 解读时，问事、所需资料与推演结果会发送至 DeepSeek。安装包可携带内置密钥，运行时保存于本机钥匙串。")
+                                    Text("本地试算只显示规则摘要，不调用 AI。启用 AI 解读时，问事、所需资料与推演结果会发送至所选服务。安装包可携带内置密钥，运行时保存于本机钥匙串。")
                                         .font(.system(size: 12)).foregroundStyle(InkTheme.secondary).lineSpacing(5)
-                                    Button("恢复 Pro 联网解读") { store.restoreRecommendedConnection() }
-                                        .font(.system(size: 13, design: .serif)).tint(InkTheme.cinnabar)
-                                        .disabled(store.isBusy || store.isCheckingConnection)
-                                        .accessibilityIdentifier("restoreProConnection")
+                                    if store.aiProvider == .deepSeek {
+                                        Button("恢复 Pro 联网解读") { store.restoreRecommendedConnection() }
+                                            .font(.system(size: 13, design: .serif)).tint(InkTheme.cinnabar)
+                                            .disabled(store.isBusy || store.isCheckingConnection)
+                                            .accessibilityIdentifier("restoreProConnection")
+                                    }
                                     Button {
                                         Task { await store.checkAIConnection() }
                                     } label: {
@@ -237,22 +252,24 @@ private struct OracleSettingsView: View {
                                         VStack(alignment: .leading, spacing: 6) {
                                             Text("请求模型：\(report.requestedModel)")
                                             Text("实际模型：\(report.actualModel ?? "服务端未提供")")
-                                            Text("深度思考：开启 · max · 输出预算 65,536 tokens")
+                                            Text("深度思考：开启 · \(store.aiProvider.reasoningEffort) · 输出预算 \(store.aiProvider.outputTokenBudget, format: .number) tokens")
                                             Text("服务：\(report.host) · 耗时 \(String(format: "%.1f", report.elapsed)) 秒")
                                             if let count = report.reasoningTokens { Text("思考 token 数：\(count)") }
                                             Text("检查时间：\(report.checkedAt.formatted(date: .numeric, time: .standard))")
                                         }.font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                                             .textSelection(.enabled).accessibilityIdentifier("connectionCheckReport")
                                     }
-                                    DisclosureGroup("模型设置") {
-                                        TextField("模型 ID", text: $model).textInputAutocapitalization(.never).autocorrectionDisabled()
-                                            .font(.system(size: 13)).padding(.top, 10)
-                                            .disabled(store.isBusy || store.isCheckingConnection)
-                                            .onChange(of: model) { _, value in
-                                                DeepSeekConfiguration.recordUserModelSelection(value)
-                                                store.invalidateConnectionReport()
-                                            }
-                                    }.font(.system(size: 12)).tint(InkTheme.secondary)
+                                    if store.aiProvider == .deepSeek {
+                                        DisclosureGroup("模型设置") {
+                                            TextField("模型 ID", text: $model).textInputAutocapitalization(.never).autocorrectionDisabled()
+                                                .font(.system(size: 13)).padding(.top, 10)
+                                                .disabled(store.isBusy || store.isCheckingConnection)
+                                                .onChange(of: model) { _, value in
+                                                    DeepSeekConfiguration.recordUserModelSelection(value)
+                                                    store.invalidateConnectionReport()
+                                                }
+                                        }.font(.system(size: 12)).tint(InkTheme.secondary)
+                                    }
                                 }
                             }
                         }
@@ -293,6 +310,10 @@ private struct OracleSettingsView: View {
             .navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
             .onAppear { store.refreshCredential() }
             .onDisappear { store.refreshCredential(importBundledKey: false) }
+            .onChange(of: store.aiProvider) { _, _ in
+                draftKey = ""
+                feedback = ""
+            }
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() }.tint(InkTheme.cinnabar) } }
             .confirmationDialog("将解读偏好恢复为均等？", isPresented: $showReset, titleVisibility: .visible) {
                 Button("恢复均等偏好") { store.resetPreferences() }
@@ -302,7 +323,7 @@ private struct OracleSettingsView: View {
                 Button("移除密钥", role: .destructive) {
                     do {
                         store.invalidateConnectionReport()
-                        try KeychainStore.shared.delete(); store.refreshCredential()
+                        try store.credentialStore.delete(); store.refreshCredential()
                         feedback = store.hasCredential ? "已恢复安装包内置密钥。停用 AI 可开启仅本地试算。" : "密钥已移除。"
                     }
                     catch { feedback = error.localizedDescription }
@@ -314,7 +335,7 @@ private struct OracleSettingsView: View {
     private func saveKey() {
         do {
             store.invalidateConnectionReport()
-            try KeychainStore.shared.save(draftKey); draftKey = ""; store.refreshCredential(); feedback = "已安全保存。"
+            try store.credentialStore.save(draftKey); draftKey = ""; store.refreshCredential(); feedback = "已安全保存。"
         }
         catch { feedback = error.localizedDescription }
     }

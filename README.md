@@ -1,8 +1,8 @@
 # 瞎子 · BlindOracle
 
-一个以水墨宣纸为视觉语言的原生 SwiftUI iOS 应用。只有「对话」「数据」两个标签。十种方法在设备本地执行，DeepSeek 负责选择适用插件、提出资料与交互需求、整合中文解读和回答追问。
+一个以水墨宣纸为视觉语言的原生 SwiftUI iOS 应用。只有「对话」「数据」两个标签。十种方法在设备本地执行，所选的 DeepSeek 或千问模型负责选择适用插件、提出资料与交互需求、整合中文解读和回答追问。
 
-当前版本：**2.0.5（Build 18）**。
+当前版本：**2.0.6（Build 19）**。
 
 每批修改提交前同时递增补丁版本和 Build，运行一次 `python3 Scripts/version.py` 即可同步版本配置。单一版本源为 `Configuration/Version.json`，工程生成脚本也从这里读取；构建和测试不会自动加版本。`python3 Scripts/version.py --check` 检查工作区同步状态，提交钩子用 `--check-staged` 检查暂存区相对 HEAD 的递增。首次克隆后使用 `git config core.hooksPath .githooks` 启用密钥及版本检查。
 
@@ -10,8 +10,8 @@
 
 1. 用 Xcode 27.1 打开 `BlindOracle.xcodeproj`，选择 `BlindOracle` scheme。
 2. 选择 iOS 17 或更高版本的模拟器运行。真机需在 Signing & Capabilities 选择自己的开发团队；本项目的 bundle identifier 保持为 `com.lihao.BlindOracle`。
-3. 将 `Configuration/Secrets.example.json` 复制为 `Configuration/Secrets.local.json`，填写 `deepseek_api_key`。本地密钥文件已被 Git 忽略，仓库只保留空白模板。按本次明确要求，Debug 与 Release 都把同一配置密钥生成到包内 `dev-key.txt`，启动时导入设备的 ThisDeviceOnly 钥匙串；配置为空则不带该资源，无效配置使构建失败。原工程上一级 `key` 目录仍保留兼容读取，存在的空配置不会回退旧密钥。
-4. 也可以在「数据 → 设置」填写自己的密钥，手工保存的凭据优先保留；随包密钥只在当前凭据仍匹配上次导入指纹时自动轮换。联网部分仅调用 `https://api.deepseek.com`。默认模型为 DeepSeek Pro（`deepseek-v4-pro`），开启 thinking，推理强度为 `max`；可在设置修改模型。旧版 Flash 默认值首次升级为 Pro，之后用户主动选定的模型会保留。设置中的连接检查可核对请求模型、API 返回模型及推理和输出预算参数。
+3. Debug 与 Release 可分别随包提供 DeepSeek 和千问密钥。DeepSeek 可从 `Configuration/Secrets.local.json` 中的 `deepseek_api_key` 或原有 Finder 文本剪辑读取，千问默认读取工程上一级的 `key/qwen-bailian.key`。生成包内的 `dev-key.txt` 和 `qwen-key.txt` 后，应用分别导入设备的 ThisDeviceOnly 钥匙串。配置优先级和轮换规则见[本地与随包密钥](Configuration/README.md)。
+4. 在「数据 → 设置」切换 DeepSeek 或千问，也可以分别保存自己的 API 密钥。DeepSeek 默认使用 `deepseek-v4-pro`，在设置中可调整模型。千问通过阿里云百炼调用 `qwen3.8-max`。设置中的连接检查可核对请求模型、API 返回模型及推理和输出预算参数。
 
 没有 XcodeGen、CocoaPods 或 npm 安装步骤。全部运行依赖已随源码或资源提供；`iztro` 在构建前已打成 JavaScriptCore 可执行的本地 bundle，应用运行时不带 Node/Python。
 
@@ -31,9 +31,9 @@
 
 明确指定的方法缺少必要资料时，普通提交会停留在表单。若表单提供“改用小六壬”，可主动切换为对问题本身的参考。未指定必选方法且没有其他可执行方法时，表单会提示使用小六壬。允许部分输出的情况会先说明限制，例如八字时辰未知时只保留前三柱；混合推演可跳过缺资料的方法或人员，并说明原因。解读出现明显分歧时只提供两个选项；选择只会小幅改变个人解读偏好，不代表方法被证实或预测准确率。
 
-塔罗作为独立本地方法，使用完整 78 张牌、正逆位与固定牌阵。牌名和牌义保留英文，DeepSeek 依据本次实际抽牌结果生成中文解读。抽牌和六爻结果连同输入快照保存在本机；继续未完成的交互、重新打开历史或再次请求解读不会重新抽取。同一问事补算保留原起问时刻、随机种子、报数和已完成交互，已有塔罗或六爻不要求重做；新增塔罗或六爻且尚无有效保存选择时，才接着完成对应操作。补算会另存一份包含复用与新增结果的完整记录，再结合本条追问解读，历史原盘保持原样。
+塔罗作为独立本地方法，使用完整 78 张牌、正逆位与固定牌阵。牌名和牌义保留英文，所选模型依据本次实际抽牌结果生成中文解读。抽牌和六爻结果连同输入快照保存在本机；继续未完成的交互、重新打开历史或再次请求解读不会重新抽取。同一问事补算保留原起问时刻、随机种子、报数和已完成交互，已有塔罗或六爻不要求重做；新增塔罗或六爻且尚无有效保存选择时，才接着完成对应操作。补算会另存一份包含复用与新增结果的完整记录，再结合本条追问解读，历史原盘保持原样。
 
-DeepSeek 请求统一提供 65,536 token 输出预算，包含推理与最终回答；请求超时为 300 秒，资源总超时为 900 秒。聊天仅显示最终回答，模型返回的 `reasoning_content` 不解码、不保存、不展示。
+DeepSeek 请求提供 65,536 token 输出预算，包含推理与最终回答。请求超时为 300 秒，资源总超时为 900 秒。聊天只显示最终回答。
 
 「数据」页用于管理留存人员和查看本地推演方法介绍。留存人员完整平铺展示，每个人都可直接编辑或删除。基础资料单独保存，修改资料不会改写旧记录的输入快照。为他人问事会使用独立资料，不会自动套用本人的生辰。手动选择的地区即使暂时没有坐标也会保留。
 
@@ -73,7 +73,7 @@ App/             SwiftUI 入口、对话状态机
 Core/            模型、档案目录、资料准备策略、对话答复解析、插件协议、持久化与偏好
 Plugins/Native/  八个原生方法插件
 Plugins/Sky/     紫微及占星插件
-Services/        DeepSeek SSE、钥匙串、定位、宽松上下文压缩
+Services/        模型请求与 SSE、钥匙串、定位、宽松上下文压缩
 Views/           两个标签、聊天确认、抽牌与投掷、完整人员列表、原始数据和设置
 Resources/       本地数据、JS bundle、许可证、图标与水墨头像
 Vendor/          固定版本的 MIT 历法与天文 C 源码
@@ -107,7 +107,7 @@ xcodebuild -project BlindOracle.xcodeproj -scheme BlindOracle \
 python3 Scripts/generate_project.py
 ```
 
-本次授权分发使用包含内置密钥的 Release 包。检查包资源时，应确认非空配置已生成 `dev-key.txt`、空配置已移除该资源，核对过程不打印密钥值；启动后仍保留用户手工密钥，具体导入与轮换规则见[配置说明](Configuration/README.md)。密钥值不进入程序源码、Git、用户备份或日志。
+授权分发的 Release 包包含内置密钥。检查包资源时，分别核对 DeepSeek 的 `dev-key.txt` 和千问的 `qwen-key.txt` 是否与各自配置相符，核对过程不打印密钥值。具体导入与轮换规则见[配置说明](Configuration/README.md)。
 
 安装包中的内置密钥可被提取，仅用于本次明确授权的分发，不能对安装包接收者保证密钥保密。
 

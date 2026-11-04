@@ -1,5 +1,56 @@
 import Foundation
 
+enum AIProvider: String, CaseIterable, Sendable {
+    case deepSeek
+    case qwen
+
+    static let selectionKey = "oracle.aiProvider"
+
+    var displayName: String {
+        switch self {
+        case .deepSeek: "DeepSeek"
+        case .qwen: "千问"
+        }
+    }
+
+    var endpoint: URL {
+        switch self {
+        case .deepSeek: URL(string: "https://api.deepseek.com/chat/completions")!
+        case .qwen: URL(string: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions")!
+        }
+    }
+
+    func model(in defaults: UserDefaults = .standard) -> String {
+        switch self {
+        case .deepSeek: DeepSeekConfiguration.model(in: defaults)
+        case .qwen: "qwen3.8-max"
+        }
+    }
+
+    var reasoningEffort: String {
+        switch self {
+        case .deepSeek: DeepSeekConfiguration.reasoningEffort
+        case .qwen: "xhigh"
+        }
+    }
+
+    var reasoningDescription: String { "深度思考 \(reasoningEffort)" }
+
+    var outputTokenBudget: Int {
+        switch self {
+        case .deepSeek: DeepSeekConfiguration.outputTokenBudget
+        case .qwen: 65_536
+        }
+    }
+
+    var outputTokenParameter: String {
+        switch self {
+        case .deepSeek: "max_tokens"
+        case .qwen: "max_completion_tokens"
+        }
+    }
+}
+
 enum DeepSeekConfiguration {
     static let defaultModel = "deepseek-v4-pro"
     static let thinkingEnabled = true

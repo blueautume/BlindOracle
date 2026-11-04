@@ -6,16 +6,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-from development_key import read_key
+from development_key import DEEPSEEK_RESOURCE, QWEN_RESOURCE, read_keys
 
-PROVIDER_KEY = re.compile(rb'\bsk-[A-Za-z0-9_-]{24,}\b')
+PROVIDER_KEY = re.compile(rb'\bsk-(?:ws-[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+|[A-Za-z0-9_-]{24,})\b')
 PRIVATE_KEY = re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----')
 
-def credential_issue(path, data, known_key=None):
+def credential_issue(path, data, known_keys=()):
     name = Path(path).name.lower()
-    if name in {'secrets.local.json', 'dev-key.txt', '.env'} or name.endswith(('.pem', '.p12', '.textclipping')):
+    if name in {'secrets.local.json', DEEPSEEK_RESOURCE, QWEN_RESOURCE, '.env'} or name.endswith(('.key', '.pem', '.p12', '.textclipping')):
         return 'private credential file must not be tracked'
-    if known_key and known_key.encode('utf-8') in data:
+    if any(key and key.encode('utf-8') in data for key in known_keys):
         return 'contains the configured local credential'
     if PROVIDER_KEY.search(data) or PRIVATE_KEY.search(data):
         return 'contains a credential-shaped value'
@@ -27,16 +27,19 @@ def main():
     args = parser.parse_args()
     root = Path(subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], text=True).strip())
     try:
-        known_key = read_key(root)
+        known_keys = read_keys(root).values()
     except ValueError as error:
         print(str(error), file=sys.stderr)
+        return 1
+    except OSError:
+        print('Could not read the configured local credentials.', file=sys.stderr)
         return 1
     paths = subprocess.check_output(['git', 'ls-files', '--cached', '-z'], cwd=root).split(b'\0')
     issues = []
     for encoded in filter(None, paths):
         path = encoded.decode('utf-8', errors='surrogateescape')
         data = subprocess.check_output(['git', 'show', ':' + path], cwd=root)
-        reason = credential_issue(path, data, known_key)
+        reason = credential_issue(path, data, known_keys)
         if reason:
             issues.append((path, reason))
     for path, reason in issues:

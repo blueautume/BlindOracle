@@ -55,7 +55,7 @@ descriptor 声明版本、必填/选填资料、适用问题、输出说明、�
 
 ## 4. AI 与流式输出
 
-使用 DeepSeek HTTPS chat/completions，默认模型为 DeepSeek Pro（`deepseek-v4-pro`），请求显式设置 `thinking.type=enabled`、`reasoning_effort=max`。每次调用提供 65,536 token 输出预算，包含推理与最终回答；请求超时 300 秒，资源总超时 900 秒。首次升级迁移旧版 Flash 默认值，迁移后用户主动选择的模型继续保留。
+设置中的服务选择保存在 `oracle.aiProvider`，初始使用 DeepSeek Pro（`deepseek-v4-pro`）。DeepSeek 请求使用 `thinking.type=enabled` 和 `reasoning_effort=max`。千问通过百炼北京的 OpenAI 兼容端点调用 `qwen3.8-max`，使用 `enable_thinking=true` 和 `reasoning_effort=xhigh`。两种服务均提供 65,536 token 的推理及回答预算，请求超时为 300 秒，资源总超时为 900 秒。旧版 DeepSeek Flash 默认值会在首次升级时迁移，用户之后主动设置的 DeepSeek 模型继续保留。
 
 设置中的连接检查由用户主动发起，展示当前设备的请求模型、API 返回模型以及 thinking、推理强度和输出预算参数。真机排查依据该设备的配置与检查结果；未连接、未取得设备配置时，不用本机或模拟器的状态代替手机诊断。
 
@@ -103,9 +103,9 @@ JSON 原子写入并启用首次解锁后文件保护；目录排除自动云备
 
 ## 7. 隐私与部署
 
-AI 调度和解读请求访问 DeepSeek，UI 明示会发送问题、必要资料和规则摘要。数值计算、内置地区目录和资料保存均在本机。选择出生地区无需定位权限。离线目录缺少坐标时，DeepSeek 只接收区划名称和代码以生成查询，Apple 地理服务核对区划后才回填坐标，失败仍保留所选地区。用户主动点按定位时，可用设备坐标填写出生地或当前所在地，经 Apple 地理服务确认在支持范围内，新资料使用北京时间。iOS 26 及以上使用 MapKit 地理编码，旧系统使用 Core Location 接口。地区查询与定位分别处理过期和取消回调。
+AI 调度和解读请求发往设置中所选的服务，UI 明示会发送问题、必要资料和规则摘要。数值计算、内置地区目录和资料保存均在本机。选择出生地区无需定位权限。离线目录缺少坐标时，所选服务只接收区划名称和代码以生成查询，Apple 地理服务核对区划后才回填坐标，失败仍保留所选地区。用户主动点按定位时，可用设备坐标填写出生地或当前所在地，经 Apple 地理服务确认在支持范围内，新资料使用北京时间。iOS 26 及以上使用 MapKit 地理编码，旧系统使用 Core Location 接口。地区查询与定位分别处理过期和取消回调。
 
-按本次用户明确要求，Debug 与 Release 都从已忽略的`Configuration/Secrets.local.json`生成包内`dev-key.txt`，仓库只提交空白模板。本地配置不存在时兼容读取上级key目录及Finder textClipping；配置为空时清除生成资源且不回退旧密钥，无效配置构建失败并清理残留。资源以0600权限原子生成，密钥值不进入程序源码、Git、用户备份或日志。安装包内置密钥可被提取，本次仅面向已授权分发。
+Debug 与 Release 可分别生成包内 DeepSeek 密钥 `dev-key.txt` 与千问密钥 `qwen-key.txt`。配置来源和优先级见[配置说明](../Configuration/README.md)。两种凭据独立保存在钥匙串，当前服务的内置凭据在启动或切换后导入。安装包内置密钥可被提取，本次仅面向已授权分发。
 
 启动导入使用`AfterFirstUnlockThisDeviceOnly`钥匙串，设置中手工保存的凭据与来源不明的已有凭据优先保留。只有现存凭据的SHA-256指纹匹配上次成功导入的bundle key，且未标记为手工保存时，才随新包自动轮换；指纹在钥匙串写入成功后更新，`UserDefaults`只存指纹和来源标记。空配置不带密钥资源，也不删除设备中的用户凭据。提交钩子继续扫描完整暂存区，阻止私有配置及凭据值进入Git。
 

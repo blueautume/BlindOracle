@@ -1,4 +1,3 @@
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -11,7 +10,7 @@ import unittest
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
-from development_key import read_key
+from development_key import DEEPSEEK_RESOURCE, QWEN_KEY_FILE, QWEN_RESOURCE, read_keys
 from check_secrets import credential_issue
 
 
@@ -24,7 +23,9 @@ class DevelopmentKeyTests(unittest.TestCase):
         (self.root / 'Configuration').mkdir(parents=True)
         self.file = self.root / 'Configuration/Secrets.local.json'
         self.key = 'sk-' + 'x' * 32
-        self.private_values = [self.key, 'sk-' + 'y' * 32]
+        self.qwen_file = self.parent / 'key' / QWEN_KEY_FILE
+        self.qwen_key = 'sk-ws-' + '.'.join(['a', 'b' * 5, 'c' * 64])
+        self.private_values = [self.key, 'sk-' + 'y' * 32, self.qwen_key]
 
     def write_config(self, value):
         self.file.write_text(json.dumps({'deepseek_api_key': value}))
@@ -35,27 +36,31 @@ class DevelopmentKeyTests(unittest.TestCase):
         folder = self.parent / 'key'; folder.mkdir(exist_ok=True)
         (folder / 'legacy.textClipping').write_bytes(plistlib.dumps({'public.utf8-plain-text': 'sk-' + 'y' * 32}))
 
+    def write_qwen_file(self):
+        self.qwen_file.parent.mkdir(exist_ok=True)
+        self.qwen_file.write_text(self.qwen_key + '\n')
+
     def test_local_file_is_preferred_to_legacy_clipping(self):
         self.legacy(); self.write_config(self.key)
-        self.assertEqual(read_key(self.root), self.key)
+        self.assertEqual(read_keys(self.root)[DEEPSEEK_RESOURCE], self.key)
 
     def test_legacy_clipping_remains_compatible(self):
         self.legacy()
-        self.assertEqual(read_key(self.root), 'sk-' + 'y' * 32)
+        self.assertEqual(read_keys(self.root)[DEEPSEEK_RESOURCE], 'sk-' + 'y' * 32)
 
     def test_empty_local_file_does_not_reactivate_old_key(self):
         self.legacy(); self.write_config('')
-        self.assertIsNone(read_key(self.root))
+        self.assertIsNone(read_keys(self.root)[DEEPSEEK_RESOURCE])
 
     def test_malformed_json_does_not_print_its_contents(self):
         self.file.write_text(self.key + '{')
         with self.assertRaises(ValueError) as failure:
-            read_key(self.root)
+            read_keys(self.root)
         self.assertNotIn(self.key, str(failure.exception))
 
     def test_invalid_schema_is_rejected(self):
         self.file.write_text(json.dumps({'deepseek_api_key': 123}))
-        with self.assertRaises(ValueError): read_key(self.root)
+        with self.assertRaises(ValueError): read_keys(self.root)
 
     def build(self, configuration, succeeds=True):
         output = self.parent / 'products'
@@ -85,6 +90,43 @@ class DevelopmentKeyTests(unittest.TestCase):
         target = self.build('Release')
         self.assertEqual(target.read_text(), self.key)
         self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+
+    def test_release_build_packages_qwen_workspace_file_with_existing_deepseek_config(self):
+        self.write_config(self.key)
+        self.write_qwen_file()
+        deepseek = self.build('Release')
+        qwen = deepseek.with_name(QWEN_RESOURCE)
+        self.assertEqual(deepseek.read_text(), self.key)
+        self.assertEqual(qwen.read_text(), self.qwen_key)
+        self.assertEqual(stat.S_IMODE(qwen.stat().st_mode), 0o600)
+
+    def test_qwen_key_file_does_not_fill_missing_deepseek_credential(self):
+        self.qwen_file.parent.mkdir()
+        self.qwen_file.write_text(self.key)
+        self.assertEqual(read_keys(self.root), {DEEPSEEK_RESOURCE: None, QWEN_RESOURCE: self.key})
+
+    def test_qwen_local_override_and_empty_value_take_precedence_over_file(self):
+        self.write_qwen_file()
+        for value in [self.key, '']:
+            with self.subTest(empty=not value):
+                self.file.write_text(json.dumps({'deepseek_api_key': self.key, 'qwen_api_key': value}))
+                deepseek = self.build('Release')
+                qwen = deepseek.with_name(QWEN_RESOURCE)
+                self.assertEqual(deepseek.read_text(), self.key)
+                if value:
+                    self.assertEqual(qwen.read_text(), value)
+                else:
+                    self.assertFalse(qwen.exists())
+
+    def test_invalid_qwen_key_fails_build_and_clears_both_resources(self):
+        self.write_config(self.key)
+        self.write_qwen_file()
+        deepseek = self.build('Release')
+        qwen = deepseek.with_name(QWEN_RESOURCE)
+        self.qwen_file.write_text(self.qwen_key + '\ninvalid')
+        self.build('Release', succeeds=False)
+        self.assertFalse(deepseek.exists())
+        self.assertFalse(qwen.exists())
 
     def test_rotation_updates_the_packaged_credential_across_build_configurations(self):
         values = [self.key, 'sk-' + 'z' * 32, 'sk-' + 'w' * 32]
@@ -140,8 +182,11 @@ class DevelopmentKeyTests(unittest.TestCase):
 
     def test_staged_scan_rejects_private_file_and_embedded_value(self):
         self.assertIsNotNone(credential_issue('Configuration/Secrets.local.json', b'{}'))
+        self.assertIsNotNone(credential_issue(QWEN_KEY_FILE, b''))
+        self.assertIsNotNone(credential_issue(QWEN_RESOURCE, b''))
         self.assertIsNotNone(credential_issue('example.swift', self.key.encode()))
-        self.assertIsNone(credential_issue('Configuration/Secrets.example.json', b'{"deepseek_api_key":""}'))
+        self.assertIsNotNone(credential_issue('example.swift', self.qwen_key.encode()))
+        self.assertIsNone(credential_issue('Configuration/Secrets.example.json', b'{"deepseek_api_key":"","qwen_api_key":""}'))
 
 
 if __name__ == '__main__':

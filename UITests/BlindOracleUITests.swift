@@ -51,6 +51,56 @@ final class BlindOracleUITests: XCTestCase {
         add(attachment)
     }
 
+    @MainActor func testReleaseBundledQwenConnectsAndSelectionPersists() throws {
+        guard ProcessInfo.processInfo.environment["BLINDORACLE_RELEASE_CONNECTION_SMOKE"] == "1" else {
+            throw XCTSkip("Release connection smoke is opt-in")
+        }
+        let app = XCUIApplication()
+        app.launch()
+        openSettings(in: app)
+
+        let picker = app.segmentedControls["aiProviderPicker"]
+        let qwen = picker.buttons["千问"]
+        XCTAssertTrue(qwen.waitForExistence(timeout: 10))
+        qwen.tap()
+        XCTAssertTrue(qwen.isSelected)
+        let status = app.staticTexts["settingsAIConnectionStatus"]
+        XCTAssertTrue(status.waitForExistence(timeout: 10))
+        XCTAssertTrue(status.label.contains("千问"))
+
+        let check = app.buttons["checkAIConnection"]
+        for _ in 0..<6 where !check.isHittable { app.swipeUp() }
+        XCTAssertTrue(check.isHittable)
+        XCTAssertTrue(check.isEnabled)
+        check.tap()
+
+        let feedback = app.staticTexts["connectionCheckFeedback"]
+        XCTAssertTrue(feedback.waitForExistence(timeout: 120))
+        XCTAssertTrue(feedback.label.contains("连接正常"), feedback.label)
+        let labels = app.staticTexts.matching(identifier: "connectionCheckReport").allElementsBoundByIndex.map(\.label).joined(separator: "\n")
+        XCTAssertTrue(labels.contains("请求模型：qwen3.8-max"))
+        XCTAssertTrue(labels.contains("实际模型：qwen3.8-max"))
+        XCTAssertTrue(labels.contains("dashscope.aliyuncs.com"))
+
+        app.terminate()
+        app.launch()
+        openSettings(in: app)
+        XCTAssertTrue(qwen.waitForExistence(timeout: 10))
+        XCTAssertTrue(qwen.isSelected)
+        let deepSeek = picker.buttons["DeepSeek"]
+        deepSeek.tap()
+        XCTAssertTrue(deepSeek.isSelected)
+    }
+
+    @MainActor private func openSettings(in app: XCUIApplication) {
+        let data = app.tabBars.buttons["数据"]
+        XCTAssertTrue(data.waitForExistence(timeout: 15))
+        data.tap()
+        let settings = app.buttons["设置"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+    }
+
     @MainActor func testProfilePersistsAcrossAppRelaunch() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]

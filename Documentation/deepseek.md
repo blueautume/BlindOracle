@@ -1,6 +1,6 @@
-# DeepSeek 调度与对话
+# AI 调度与对话
 
-本地插件负责所有排盘、抽牌、起卦与确定性规则；DeepSeek 只负责选择适用插件、说明需要的资料与交互，以及整合本地结果与中文追问解读。
+本地插件负责排盘、抽牌、起卦与确定性规则。设置中所选的 DeepSeek 或千问负责选择适用插件、说明需要的资料与交互，以及整合本地结果和回答中文追问。
 
 ## 调用接口
 
@@ -21,13 +21,13 @@ API 使用 `https://api.deepseek.com/chat/completions`，默认模型为 DeepSee
 
 设置提供用户主动发起的连接检查，展示该设备实际请求模型、API 返回模型，以及 `thinking`、`reasoning_effort=max` 和 `max_tokens` 参数，用于区分请求配置与服务端响应。未连接真机并读取设备设置或检查报告时，不能将开发机的模型与密钥状态当作 iPhone 的诊断结论。
 
-所有请求显式设置 `thinking: {"type":"enabled"}` 与 `reasoning_effort: "max"`，统一使用 65,536 token 输出预算，包含推理与最终回答，而非最终正文的目标长度。`URLSession` 的请求超时为 300 秒、资源总超时为 900 秒，以容纳较长推理。模型的隐藏推理仍不解码、不保存、不展示，也不写入聊天历史或后续请求；应用只消费最终 `content`。
+DeepSeek 使用 `thinking.type=enabled`、`reasoning_effort=max` 和 `max_tokens`。千问使用百炼北京的 OpenAI 兼容端点和 `qwen3.8-max`，设置 `enable_thinking=true`、`reasoning_effort=xhigh` 和 `max_completion_tokens`。两种服务的 65,536 token 输出预算均包含推理和最终回答。`URLSession` 的请求超时为 300 秒，资源总超时为 900 秒。应用仅消费最终 `content`，隐藏推理不会写入聊天记录或后续请求。
 
 SSE 帧按每条完整 `data:` JSON 即时消费，不依赖 `AsyncBytes.lines` 是否保留空行；只有真正尚未闭合的 JSON 才跨行累积，避免把连续 JSON 对象拼接成无效响应。
 
 计划与综合响应使用 JSON Output，并在 system 提示中给出 json 示例。若响应为空、截断或无效 JSON，应用返回可恢复错误，保留本地结果。计划 JSON 有一次格式重试；非流请求遇到 429/5xx 最多重试两次。流式请求开始后不会自动重复发送，以免重复输出或多次计费。
 
-塔罗原始数据保留本地英文牌名、牌位与对应正逆位牌义，按本次保存的抽牌结果送入综合和追问；DeepSeek 结合问题生成中文解读，不重新抽牌、不改变朝向，不声称读取未提供的图片细节。重新请求解读复用已有本地结果。
+塔罗原始数据保留本地英文牌名、牌位与对应正逆位牌义，按本次保存的抽牌结果送入综合和追问。所选模型结合问题生成中文解读，重新请求解读时复用已有本地结果。
 
 ## 解读口吻
 
@@ -37,9 +37,9 @@ SSE 帧按每条完整 `data:` JSON 即时消费，不依赖 `AsyncBytes.lines` 
 
 ## 密钥
 
-`KeychainStore.shared.string()` / `save(_:)` / `delete()`。钥匙串使用 `AfterFirstUnlockThisDeviceOnly`，无 iCloud 同步，不进入档案、消息或日志。
+`KeychainStore.store(for:)` 按服务选取钥匙串项。钥匙串使用 `AfterFirstUnlockThisDeviceOnly`，无 iCloud 同步，不进入档案、消息或日志。
 
-按本次用户明确要求，Debug 与 Release 均从已忽略的 `Configuration/Secrets.local.json` 生成包内 `dev-key.txt`；仓库仅提交 `Secrets.example.json` 空白模板，生成资源与构建目录被忽略。空配置不生成密钥资源且不回退旧密钥，无效配置使构建失败并清理陈旧资源。密钥值不进入程序源码、Git、资料 JSON、导出备份或日志；包内密钥可被提取，本次内置仅面向已授权分发。
+Debug 与 Release 分别生成 `dev-key.txt` 和 `qwen-key.txt`，来源和优先级见[配置说明](../Configuration/README.md)。密钥值不进入程序源码、Git、资料 JSON、导出备份或日志。包内密钥可被提取，本次内置仅面向已授权分发。
 
 启动时将随包密钥导入 ThisDeviceOnly 钥匙串。无有效凭据时导入；用户手工保存或来源不明的已有凭据均不覆盖。只有当前凭据仍匹配上次成功导入的 SHA-256 指纹，且未标记为手工保存时，才自动采用轮换后的 bundle key；写入成功后再更新指纹。`UserDefaults` 仅保存指纹与来源标记，空配置不会清除用户已有钥匙串凭据。设置仍允许用户录入自己的密钥。
 
@@ -57,5 +57,6 @@ SSE 帧按每条完整 `data:` JSON 即时消费，不依赖 `AsyncBytes.lines` 
 - [JSON Output](https://api-docs.deepseek.com/guides/json_mode/)
 - [Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode/)
 - [Tool Calls](https://api-docs.deepseek.com/guides/tool_calls/)
+- [阿里云百炼 OpenAI 兼容 Chat API](https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions)
 
 本版本采用“结构化计划＋客户端白名单执行”模式：语言模型不能直接运行任意代码或访问未登记的插件。
