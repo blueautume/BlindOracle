@@ -67,6 +67,61 @@ final class LiveIntegrationTests: XCTestCase {
         try await assertLiveTarotPlanAndReading(provider: .qwen)
     }
 
+    @MainActor func testReadingVoiceMatrixWithDeepSeek() async throws {
+        try await assertLiveReadingVoiceMatrix(provider: .deepSeek)
+    }
+
+    @MainActor func testReadingVoiceMatrixWithQwen() async throws {
+        try await assertLiveReadingVoiceMatrix(provider: .qwen)
+    }
+
+    @MainActor private func assertLiveReadingVoiceMatrix(provider: AIProvider) async throws {
+        let clients = try OracleVoiceStyle.allCases.map { voice in (voice, try liveClient(provider: provider)) }
+        let question = "这是虚构练习。朋友邀我一起办周末创意市集，场地已定，费用分摊和当天分工还没说清。这个项目靠谱吗？"
+        let followUp = "对方说先开工，费用和分工以后再谈。我今天该怎么回复？"
+        let draws = zip([("wands-03", false), ("pentacles-06", true), ("major-11", false)], TarotDeck.positions)
+            .map { card, position in TarotDraw(cardID: card.0, isReversed: card.1, position: position) }
+        let input = OracleInput(question: question, profile: OracleProfile(), castingDate: Date(timeIntervalSince1970: 1_730_000_000),
+                                seed: 42, subject: "事件", tarotDraws: draws, participants: [])
+        let plan = OraclePlan(intent: "合作决策", subject: "事件", methods: [.tarot], requiredFields: [], note: "", question: question)
+        let result = try await TarotPlugin().calculate(input)
+        XCTAssertEqual(result.status, .complete)
+        let run = OracleRun(input: input, plan: plan, results: [result])
+        let prior = ReadingSynthesis(text: "建议先把费用分摊和分工说清，再决定要不要接。", alternatives: [])
+        var priorRun = run
+        priorRun.synthesis = prior
+        let followUpRun = priorRun
+        let history = [AIConversationTurn(role: "user", content: question), .init(role: "assistant", content: prior.text)]
+
+        // The follow-up uses a fixed prior reply so each voice sees the same history.
+        // Retain every sample as an attachment for comparison without brittle word matching.
+        let tasks = clients.map { voice, client in
+            Task { @MainActor in
+                let stage = "voice \(provider.rawValue) \(voice.rawValue)"
+                let initialStream = StreamCollector()
+                let initial = try await client.synthesize(run: run, weights: [:], history: [],
+                                                          language: .simplifiedChinese, voice: voice) { initialStream.append($0) }
+                XCTAssertEqual(initialStream.text, initial.text, stage)
+                XCTAssertTrue(initial.alternatives.isEmpty, stage)
+                let initialReport = await client.lastSuccessfulConnection
+                assertLiveResponse(initialReport, provider: provider)
+                recordJourneyText(initial.text, stage: "\(stage) initial")
+
+                let followUpStream = StreamCollector()
+                let reply = try await client.followUp(question: followUp, run: followUpRun, profile: run.input.profile,
+                                                      history: history, language: .simplifiedChinese, voice: voice) { followUpStream.append($0) }
+                XCTAssertEqual(followUpStream.text, reply, stage)
+                let followUpReport = await client.lastSuccessfulConnection
+                assertLiveResponse(followUpReport, provider: provider)
+                recordJourneyText(reply, stage: "\(stage) follow-up")
+            }
+        }
+        for ((voice, _), task) in zip(clients, tasks) {
+            do { try await task.value }
+            catch { XCTFail("\(provider.rawValue) \(voice.rawValue): \(error.localizedDescription)") }
+        }
+    }
+
     private func assertLiveTarotPlanAndReading(provider: AIProvider) async throws {
         let client = try liveClient(provider: provider)
         let registry = PluginRegistry()

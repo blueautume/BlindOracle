@@ -181,7 +181,13 @@ struct OracleSettingsView: View {
                 PaperBackground()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        PaperCard { AppLanguageSettingsRow() }
+                        PaperCard {
+                            VStack(alignment: .leading, spacing: 12) {
+                                AppLanguageSettingsRow()
+                                Divider().overlay(InkTheme.line)
+                                OracleVoiceSettingsRow()
+                            }
+                        }
                         VStack(alignment: .leading, spacing: 12) {
                             SectionEyebrow(text: L10n.text("解读连接", "AI connection"))
                             PaperCard {
@@ -342,6 +348,35 @@ struct OracleSettingsView: View {
             try store.credentialStore.save(draftKey); draftKey = ""; store.refreshCredential(); feedback = L10n.text("已安全保存。", "Saved to Keychain.")
         }
         catch { feedback = error.localizedDescription }
+    }
+}
+
+private struct OracleVoiceSettingsRow: View {
+    @AppStorage(OracleVoiceStyle.preferenceKey) private var style: OracleVoiceStyle = .defaultStyle
+
+    var body: some View {
+        let label = L10n.text("解读口吻", "Reading style")
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label).font(.system(size: 15, design: .serif))
+                    .accessibilityHidden(true)
+                Spacer()
+                Picker(label, selection: $style) {
+                    ForEach(OracleVoiceStyle.allCases) { option in
+                        Text(option.title).tag(option)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .tint(InkTheme.cinnabar)
+                .accessibilityLabel(label)
+                .accessibilityIdentifier("oracleVoiceStylePicker")
+            }
+            Text(style.detail)
+                .font(.footnote)
+                .foregroundStyle(InkTheme.secondary)
+                .accessibilityIdentifier("oracleVoiceStyleDetail")
+        }
     }
 }
 

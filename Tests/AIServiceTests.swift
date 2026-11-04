@@ -352,7 +352,7 @@ extension AIServiceTests {
         let plugins = PluginRegistry().descriptors
         for provider in AIProvider.allCases {
             let configuration = URLSessionConfiguration.ephemeral
-            configuration.protocolClasses = [EnglishReadingURLProtocol.self]
+            configuration.protocolClasses = [ReadingURLProtocol.self]
             let client = DeepSeekClient(provider: provider, apiKey: "test-key", sessionConfiguration: configuration)
             let plan = try await client.plan(question: question, profile: profile, plugins: plugins, history: history, language: .english)
             XCTAssertEqual(plan.action, "intake")
@@ -375,35 +375,97 @@ extension AIServiceTests {
             XCTAssertTrue(synthesis.alternatives.isEmpty)
         }
     }
+
+    func testBothProvidersSendEachVoiceForSynthesisAndFollowUpWithoutChangingFormats() async throws {
+        let question = "这个新项目靠谱吗？"
+        let followUp = "如果分工仍不明确呢？"
+        let profile = OracleProfile()
+        let plan = OraclePlan(intent: "合作", subject: "事件", methods: [.tarot],
+                              requiredFields: [], note: "", question: question)
+        let run = OracleRun(input: OracleInput(question: question, profile: profile), plan: plan,
+                            results: [OracleResult(method: .tarot, headline: "测试牌面", rows: [])])
+        let history = [AIConversationTurn(role: "assistant", content: "上次的对话原文")]
+
+        for provider in AIProvider.allCases {
+            for voice in OracleVoiceStyle.allCases {
+                let configuration = URLSessionConfiguration.ephemeral
+                configuration.protocolClasses = [ReadingURLProtocol.self]
+                let client = DeepSeekClient(provider: provider, apiKey: "test-voice-\(voice.rawValue)",
+                                            sessionConfiguration: configuration)
+                let synthesisDelta = expectation(description: "\(provider) \(voice) streamed synthesis text")
+                let synthesis = try await client.synthesize(run: run, weights: [:], history: history,
+                                                            language: .simplifiedChinese, voice: voice) { delta in
+                    XCTAssertEqual(delta, "先问清分工。")
+                    synthesisDelta.fulfill()
+                }
+                XCTAssertEqual(synthesis.text, "先问清分工。")
+                XCTAssertTrue(synthesis.alternatives.isEmpty)
+                let followUpDelta = expectation(description: "\(provider) \(voice) streamed follow-up text")
+                let reply = try await client.followUp(question: followUp, run: run, profile: profile, history: history,
+                                                      language: .simplifiedChinese, voice: voice) { delta in
+                    XCTAssertEqual(delta, "先别答应。")
+                    followUpDelta.fulfill()
+                }
+                XCTAssertEqual(reply, "先别答应。")
+                await fulfillment(of: [synthesisDelta, followUpDelta], timeout: 1)
+            }
+        }
+    }
 }
 
 /// Validates real encoded requests while supplying synthetic API envelopes for
 /// both provider endpoints. This protocol claims all requests in the test session.
-private final class EnglishReadingURLProtocol: URLProtocol, @unchecked Sendable {
+private final class ReadingURLProtocol: URLProtocol, @unchecked Sendable {
+    private static let voiceTitles = [
+        "Bearer test-voice-classic": "经典",
+        "Bearer test-voice-deadpan": "冷面直断",
+        "Bearer test-voice-warm": "温和参谋",
+        "Bearer test-voice-storyteller": "江湖说书"
+    ]
+
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
         do {
             let data = try requestBody()
+            let key = request.value(forHTTPHeaderField: "Authorization") ?? ""
+            let voiceTitle = Self.voiceTitles[key]
             guard let url = request.url, let host = url.host,
                   let body = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let model = body["model"] as? String,
                   let stream = body["stream"] as? Bool,
                   let turns = body["messages"] as? [[String: String]],
                   turns.first?["role"] == "system",
-                  turns.first?["content"]?.contains("natural English") == true,
+                  let system = turns.first?["content"],
+                  let latest = turns.last?["content"],
                   turns.contains(["role": "assistant", "content": "上次的对话原文"]),
-                  turns.last?["content"]?.contains("Should I apply for the new job?") == true,
-                  (body["response_format"] as? [String: String])?["type"] == "json_object",
                   (host == "api.deepseek.com" && body["thinking"] != nil
                     || host == "dashscope.aliyuncs.com" && body["enable_thinking"] as? Bool == true) else {
                 throw URLError(.badServerResponse)
             }
 
+            let jsonMode = (body["response_format"] as? [String: String])?["type"] == "json_object"
+            let isFollowUp = latest == "如果分工仍不明确呢？"
+            if let voiceTitle {
+                let markers = Self.voiceTitles.values.filter { system.contains("本轮回答风格：" + $0) }
+                guard stream, system.contains("简体中文"), markers == [voiceTitle],
+                      (isFollowUp ? !jsonMode : jsonMode && latest.contains("这个新项目靠谱吗？")) else {
+                    throw URLError(.badServerResponse)
+                }
+            } else {
+                guard key == "Bearer test-key", jsonMode, system.contains("natural English"),
+                      latest.contains("Should I apply for the new job?") else {
+                    throw URLError(.badServerResponse)
+                }
+            }
+
             let payload: Data
             if stream {
-                let content = #"{"text":"Apply if the role fits your priorities.","alternatives":[]}"#
+                let content: String
+                if isFollowUp { content = "先别答应。" }
+                else if voiceTitle != nil { content = #"{"text":"先问清分工。","alternatives":[]}"# }
+                else { content = #"{"text":"Apply if the role fits your priorities.","alternatives":[]}"# }
                 let events: [[String: Any]] = [
                     ["model": model, "choices": [["delta": ["reasoning_content": "Private test reasoning"]]]],
                     ["model": model, "choices": [["delta": ["content": content], "finish_reason": "stop"]]]

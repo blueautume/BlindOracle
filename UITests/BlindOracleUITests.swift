@@ -92,12 +92,65 @@ final class BlindOracleUITests: XCTestCase {
         XCTAssertTrue(deepSeek.isSelected)
     }
 
+    @MainActor func testReadingStylePickerFallsBackToDeadpanForUnknownPreference() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "-oracle.appLanguage", "zh-Hans", "-oracle.voiceStyle", "unsupported"]
+        app.launch()
+        openSettings(in: app)
+
+        let detail = app.staticTexts["oracleVoiceStyleDetail"]
+        XCTAssertTrue(detail.waitForExistence(timeout: 5))
+        XCTAssertEqual(detail.label, "直给判断，带一点冷幽默。")
+    }
+
+    @MainActor func testReadingStyleSelectionPersistsAcrossRelaunch() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "-oracle.appLanguage", "zh-Hans"]
+        app.launch()
+        openSettings(in: app)
+
+        let styles = [
+            (title: "经典", detail: "平实稳重，结论之后细讲盘面依据。"),
+            (title: "冷面直断", detail: "直给判断，带一点冷幽默。"),
+            (title: "温和参谋", detail: "温和给建议，帮你看清下一步。"),
+            (title: "江湖说书", detail: "用一个鲜活的比喻说清眼前的局。")
+        ]
+        let picker = app.buttons["oracleVoiceStylePicker"]
+        let detail = app.staticTexts["oracleVoiceStyleDetail"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        XCTAssertTrue(detail.waitForExistence(timeout: 5))
+        let initialStyle = try XCTUnwrap(styles.first { $0.detail == detail.label })
+        let newStyle = try XCTUnwrap(styles.reversed().first { $0.title != initialStyle.title })
+
+        picker.tap()
+        for style in styles {
+            XCTAssertTrue(app.buttons[style.title].waitForExistence(timeout: 5))
+        }
+        app.buttons[newStyle.title].tap()
+        defer {
+            if picker.exists {
+                picker.tap()
+                let initialChoice = app.buttons[initialStyle.title]
+                if initialChoice.waitForExistence(timeout: 5) { initialChoice.tap() }
+            }
+        }
+        XCTAssertEqual(detail.label, newStyle.detail)
+
+        app.terminate()
+        app.launch()
+        openSettings(in: app)
+        XCTAssertTrue(detail.waitForExistence(timeout: 5))
+        XCTAssertEqual(detail.label, newStyle.detail)
+    }
+
     @MainActor private func openSettings(in app: XCUIApplication) {
-        let data = app.tabBars.buttons["数据"]
-        XCTAssertTrue(data.waitForExistence(timeout: 15))
+        // iPadOS exposes the floating tabs without a TabBar ancestor.
+        let data = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label IN %@", ["数据", "Data"])).firstMatch
+        guard data.waitForExistence(timeout: 15) else { return XCTFail("Data tab was not shown") }
         data.tap()
-        let settings = app.buttons["设置"]
-        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        let settings = app.buttons.matching(NSPredicate(format: "label IN %@", ["设置", "Settings"])).firstMatch
+        guard settings.waitForExistence(timeout: 10) else { return XCTFail("Settings button was not shown") }
         settings.tap()
     }
 

@@ -13,6 +13,7 @@
   "local_plugin_count": 10,
   "release_is_signed": true,
   "notes": [
+    "Reading voices 2.0.10 / Build 23: 46 focused non-live tests passed, including the request format and four voice settings for both providers. Two iPad simulator UI tests passed for the default fallback and selection persistence. Two live tests on the iPhone simulator returned 16 synthetic samples across DeepSeek and Qwen, covering all four voices in both synthesis and follow-up. Manual review found direct openings and distinct styles, with 15 replies of two or three sentences and one five-sentence Qwen follow-up. The signed Release build was installed and version-checked on the physical iPhone.",
     "Interruptible analysis 2.0.9 / Build 22: 345 non-live unit tests and six chat progress UI tests passed on the iOS 26.5 iPhone 17 Pro simulator (Xcode 27.2). Nine opt-in live API tests were skipped. The UI verified completing an answer in the background, sending a follow-up during output, and retrying after termination and relaunch. The unsigned Release build passed. The iOS 26 continued-processing grant was not tested on a physical device.",
     "Saved-profile reuse update 0.1.6 / Build 7: 219 non-live unit tests and five UI regressions passed; three opt-in live tests skipped. Existing named profiles retain UUID, birthday, wall-clock time, confirmed birth timezone and location. Empty AI participant arrays and missing name selections cannot hide grounded saved records; a sole saved person is only a visible form candidate, without automatic self binding. Incomplete non-declared-unknown draft fields are repaired from the matching saved UUID while intentional known edits and explicit unknowns remain. Birth timezone restoration preserves the local clock. Synthetic saved-profile → unqualified fortune question → prefilled form → one confirmation → coins/result, timezone selection, multi-person and followup flows verified. Final Debug tests and unsigned Release archive completed with zero warnings; live DeepSeek/physical GPS were not rerun. Other broader UI evidence below retains its earlier version.",
     "Unified intake update 0.1.5 / Build 6: 205 non-live unit tests and 13 UI regressions passed; three opt-in live tests skipped. New readings open one complete form with all selected people inline and any requested numbers; one successful submit directly starts the reading or required card/coin operation. Missing required data stays in the same form with combined feedback. Searchable Chinese timezone selection, independent birth/current location, saved birthdays, draft recovery, stale callbacks, history, tarot/coin continuity, multi-person inputs and ordinary follow-ups verified. Final Debug builds and unsigned Release archive completed with zero warnings. Live DeepSeek/physical GPS were not rerun; older evidence below retains its original version.",
@@ -39,8 +40,8 @@
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "2.0.9",
-  "build": "22",
+  "version": "2.0.10",
+  "build": "23",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",

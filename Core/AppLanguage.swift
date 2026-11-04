@@ -49,6 +49,39 @@ enum AppLanguagePreference: String, CaseIterable, Identifiable, Sendable {
     var language: AppLanguage { AppLanguage(rawValue: rawValue) ?? AppLanguage.systemLanguage() }
 }
 
+enum OracleVoiceStyle: String, CaseIterable, Identifiable, Sendable {
+    case classic, deadpan, warm, storyteller
+
+    static let preferenceKey = "oracle.voiceStyle"
+    static let defaultStyle: Self = .deadpan
+
+    var id: String { rawValue }
+
+    static var current: Self {
+        UserDefaults.standard.string(forKey: preferenceKey).flatMap(Self.init(rawValue:)) ?? defaultStyle
+    }
+
+    var title: String { title(language: .current) }
+
+    func title(language: AppLanguage) -> String {
+        switch self {
+        case .classic: L10n.text("经典", "Classic", language: language)
+        case .deadpan: L10n.text("冷面直断", "Deadpan", language: language)
+        case .warm: L10n.text("温和参谋", "Warm Adviser", language: language)
+        case .storyteller: L10n.text("江湖说书", "Folk Storyteller", language: language)
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .classic: L10n.text("平实稳重，结论之后细讲盘面依据。", "Measured and plainspoken, with the reasoning behind the answer.")
+        case .deadpan: L10n.text("直给判断，带一点冷幽默。", "A straight answer with a touch of dry humor.")
+        case .warm: L10n.text("温和给建议，帮你看清下一步。", "Gentle, practical guidance on what to do next.")
+        case .storyteller: L10n.text("用一个鲜活的比喻说清眼前的局。", "A vivid image that makes the situation easier to read.")
+        }
+    }
+}
+
 enum L10n {
     static func text(_ chinese: String, _ english: @autoclosure () -> String, language: AppLanguage = .current) -> String {
         language.isEnglish ? english() : chinese

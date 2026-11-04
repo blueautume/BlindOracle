@@ -1420,7 +1420,8 @@ enum OraclePhase: String {
         var synthesis: ReadingSynthesis
         if hasCredential && !localOnly {
             do {
-                synthesis = try await client.synthesize(run: run, weights: weights, history: history, language: replyLanguage, onProgress: { [weak self] stage in
+                synthesis = try await client.synthesize(run: run, weights: weights, history: history, language: replyLanguage,
+                                                        voice: OracleVoiceStyle.current, onProgress: { [weak self] stage in
                     await self?.readingProgress(stage, runID: runID, operation: operation)
                 }) { [weak self] delta in
                     await self?.appendStreamDelta(delta, to: messageID, operation: operation)
@@ -1526,7 +1527,8 @@ enum OraclePhase: String {
             finishOperation(); return
         }
         do {
-            let text = try await client.followUp(question: question, run: run, profile: profile, history: history, language: replyLanguage) { [weak self] delta in
+            let text = try await client.followUp(question: question, run: run, profile: profile, history: history,
+                                                language: replyLanguage, voice: OracleVoiceStyle.current) { [weak self] delta in
                 await self?.appendStreamDelta(delta, to: messageID, operation: operation, followUp: true)
             }
             guard operationID == operation, !Task.isCancelled else { return }
