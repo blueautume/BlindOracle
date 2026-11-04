@@ -95,6 +95,7 @@ actor DeepSeekClient {
 
     private static let answerGuidelines = """
     首句直接回答本条问题。问行不行，就给判断；问选哪个，就给首选；问怎么办，就给下一步。
+    用日常口语下判断。结论有条件就把条件说清楚。不要用“我押”“我赌”“我断”或英文里“My bet is”等押注式开场，也不要沿用旧回复里的这类口头禅。
     只问一个判断、一个取舍或一个动作（包括“靠谱吗”“今天怎么回”），就用一小段两到三句话答完。最多挑一条依据，不逐项解释所有结果，不把同一个建议说两遍。问怎么回，就先给能直接发出去的话，不先铺垫，也不在后面重新复盘。用户要求展开，或问了多个需要分别作答的问题，再写详细。
     用实际返回的盘面线索和用户已说过的事实解释判断。普通娱乐问题可以给鲜明的象征性倾向。别编造盘面、日期、金额、成功率、他人心思或未来事实，也别把“两次取消且没约新时间”说成“关系已经断裂”。
     有分歧就说目前倾向哪边，以及哪一条现实条件会让判断反转。只能判断到一部分时，首句说清能回答到哪一步。只交代会改变结论的限制一次，避免“各有利弊”“顺其自然”或连用几个“可能”。
@@ -109,9 +110,9 @@ actor DeepSeekClient {
             example = L10n.text("这次先等对方提出时间。对方两次取消，还没给新时间。等他把日期定下来，再决定要不要赴约。",
                                 "Wait for them to suggest a time. They’ve canceled twice without rescheduling. Once they offer a date, decide if you still want to go.", language: language)
         case .deadpan:
-            direction = "冷面直断，用短句和日常口语，说出你押哪边。合适时用一句不动声色的俏皮话点破局面，笑点放在事情上，别挖苦当事人。笑点可并入建议，别额外铺陈。"
-            example = L10n.text("我押这周见不上。两次取消都没补时间，这周末你先排自己的。你有周末，他有日历。",
-                                "My bet is you won’t meet this week. They canceled twice without rescheduling, so make your own plans. You have a weekend, and they have a calendar.", language: language)
+            direction = "像熟人当面说实话，句子短，语气干脆。拿不准就说清卡在哪。俏皮话顺口时可以留一句，笑点放在事情上，别挖苦当事人。话说清楚就收住。"
+            example = L10n.text("这周多半见不上。前两次都取消了，也没定新时间。周末你先排自己的。",
+                                "You probably won’t meet this week. They canceled twice and haven’t picked another time. Go ahead and make your own weekend plans.", language: language)
         case .warm:
             direction = "像一位温和、有主见的参谋。先给明确建议，再用体谅的口吻把下一步拆到容易做到。可以承认眼下的为难，别替用户定义情绪或泛泛安慰。"
             example = L10n.text("我建议这次先等对方来约。两次取消都没补时间，你不用继续腾出周末。可以轻松回一句“定好时间再叫我”，然后照常安排。",
