@@ -75,6 +75,68 @@ final class LiveIntegrationTests: XCTestCase {
         try await assertLiveReadingVoiceMatrix(provider: .qwen)
     }
 
+    @MainActor func testConversationUnderstandingWithDeepSeek() async throws {
+        try await assertLiveConversationUnderstanding(provider: .deepSeek)
+    }
+
+    @MainActor func testConversationUnderstandingWithQwen() async throws {
+        try await assertLiveConversationUnderstanding(provider: .qwen)
+    }
+
+    @MainActor private func assertLiveConversationUnderstanding(provider: AIProvider) async throws {
+        let client = try liveClient(provider: provider)
+        var chen = OracleProfile(); chen.name = "陈平"
+        var li = OracleProfile(); li.name = "李岚"
+        let marketQuestion = ChatMessage(role: .user, content: "我们一起办周末市集，应该怎么谈合作？")
+        let marketAnswer = ChatMessage(role: .assistant, content: "先谈清预算和当天的分工。")
+        let workQuestion = ChatMessage(role: .user, content: "陈平这周的工作怎么样？")
+        let workPlan = OraclePlan(intent: "本周工作", subject: "他人", methods: [.xiaoliuren],
+                                  requiredFields: [], note: "", question: workQuestion.content)
+        let workRun = OracleRun(input: OracleInput(question: workQuestion.content, profile: chen, seed: 42,
+                                                   subject: "他人", participants: [chen]),
+                                plan: workPlan, results: [OracleResult(method: .xiaoliuren, headline: "测试工作盘", rows: [])])
+        let workAnswer = ChatMessage(role: .assistant, content: "陈平本周可以先核对工作分工。", kind: .reading, runID: workRun.id)
+        let loveQuestion = ChatMessage(role: .user, content: "感情呢，今天")
+        let loveAnswer = ChatMessage(role: .assistant, content: "今天可以观察对方会不会主动联系。")
+        let transcript = [marketQuestion, marketAnswer, workQuestion, workAnswer, loveQuestion, loveAnswer]
+        let history = ContextCompressor.history(messages: transcript, summary: .init(), language: .simplifiedChinese)
+        let references = ConversationPlanningReference.candidates(in: transcript, runs: [workRun])
+        let plugins = PluginRegistry().descriptors
+        let scenarios: [(name: String, raw: String, relation: ConversationUnderstanding.Relation,
+                         anchors: [ChatMessage], topicWords: [String])] = [
+            ("time-range", "再看看这周", .continuation, [loveQuestion, loveAnswer], ["感情", "情感"]),
+            ("older-topic", "回到最开始那件合作，先问清哪一条？", .continuation, [marketQuestion, marketAnswer], ["市集", "合作"]),
+            ("changed-participant", "刚才问陈平工作的那题，换成李岚呢？", .changedParticipants, [workQuestion, workAnswer], ["李岚"])
+        ]
+        let tasks = scenarios.map { scenario in
+            Task { @MainActor in
+                let plan = try await client.plan(question: scenario.raw, profile: OracleProfile(), plugins: plugins,
+                                                 history: history, profiles: [chen, li], existingRun: workRun,
+                                                 references: references, language: .simplifiedChinese)
+                let stage = "\(provider.rawValue) \(scenario.name)"
+                let understanding = try XCTUnwrap(plan.understanding, stage)
+                let anchored = understanding.referenceMessageID.map { id in scenario.anchors.contains { $0.id == id } } == true
+                print("[CONVERSATION_PLAN] \(stage) | \(plan.action ?? "nil") | \(understanding.relation.rawValue) | anchored=\(anchored) | \(understanding.resolvedQuestion)")
+                XCTAssertEqual(understanding.relation, scenario.relation, stage)
+                XCTAssertTrue(anchored, stage)
+                XCTAssertTrue(scenario.topicWords.contains { understanding.resolvedQuestion.contains($0) }, stage)
+                if scenario.name == "time-range" {
+                    XCTAssertTrue(["这周", "本周", "这一周"].contains { understanding.resolvedQuestion.contains($0) }, stage)
+                    XCTAssertFalse(["陈平", "李岚"].contains { understanding.resolvedQuestion.contains($0) }, stage)
+                }
+                if scenario.name == "changed-participant" {
+                    XCTAssertFalse(understanding.resolvedQuestion.contains("陈平"), stage)
+                }
+                let report = await client.lastSuccessfulConnection
+                assertLiveResponse(report, provider: provider)
+            }
+        }
+        for (scenario, task) in zip(scenarios, tasks) {
+            do { try await task.value }
+            catch { XCTFail("\(provider.rawValue) \(scenario.name): \(error.localizedDescription)") }
+        }
+    }
+
     @MainActor private func assertLiveReadingVoiceMatrix(provider: AIProvider) async throws {
         let clients = try OracleVoiceStyle.allCases.map { voice in (voice, try liveClient(provider: provider)) }
         let question = "这是虚构练习。朋友邀我一起办周末创意市集，场地已定，费用分摊和当天分工还没说清。这个项目靠谱吗？"

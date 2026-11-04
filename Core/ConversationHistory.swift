@@ -1,5 +1,50 @@
 import Foundation
 
+struct ConversationPlanningReference: Sendable {
+    let messageID: UUID
+    let role: ChatRole
+    let excerpt: String
+    let resolvedQuestion: String?
+    let run: OracleRun?
+
+    static func candidates(in transcript: [ChatMessage], runs: [OracleRun]) -> [Self] {
+        let runsByID = Dictionary(runs.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var questionsByReplyID: [UUID: String] = [:]
+        var precedingQuestion: String?
+        for message in transcript where message.isConversationTurn {
+            if message.role == .user { precedingQuestion = message.resolvedQuestion ?? message.content }
+            else { questionsByReplyID[message.id] = precedingQuestion }
+        }
+        var recent: [Self] = []
+        var olderReadings: [Self] = []
+        var includedRunIDs = Set<UUID>()
+        var reply: ChatMessage?
+
+        for message in transcript.reversed() where message.isConversationTurn {
+            if message.role == .assistant {
+                // Link the user question to its own answer, including text-only answers.
+                if reply == nil { reply = message }
+            }
+            let linked = message.role == .assistant ? message : reply
+            if message.role == .user { reply = nil }
+            let run = linked?.deletedRunID == nil ? linked?.runID.flatMap { runsByID[$0] } : nil
+            let reference = Self(messageID: message.id, role: message.role,
+                                 excerpt: String(message.content.prefix(800)),
+                                 resolvedQuestion: (message.resolvedQuestion ?? run?.plan.followUpQuestion ?? run?.input.question
+                                                    ?? questionsByReplyID[message.id]).map { String($0.prefix(800)) },
+                                 run: run)
+            if recent.count < 16 {
+                recent.append(reference)
+                if let run { includedRunIDs.insert(run.id) }
+            } else if let run, includedRunIDs.insert(run.id).inserted {
+                olderReadings.append(reference)
+                if olderReadings.count == 8 { break }
+            }
+        }
+        return recent + olderReadings
+    }
+}
+
 /// The work needed to retry the latest request without duplicating its user
 /// turn or making a new cast. Presence while idle means it can be retried.
 enum OracleAnalysisAttempt: Codable, Sendable {

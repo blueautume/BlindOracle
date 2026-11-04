@@ -21,9 +21,11 @@ enum ReadingContextBuilder {
         }
         // Deliberately retain every person's result, even when method IDs match.
         func label(_ chinese: String, _ english: String) -> String { L10n.text(chinese, english, language: language) }
+        let understoodFollowUp = run.plan.followUpQuestion.flatMap { _ in run.plan.understanding?.resolvedQuestion }
+        let followUp = run.plan.followUpQuestion ?? label("无，回答原问题", "None; answer the original question.")
         return """
         \(label("用户问题：", "Original question: "))\(run.input.question)
-        \(label("本条补充问题（用户的实际追问或操作请求）：", "Actual follow-up or action request: "))\(run.plan.followUpQuestion ?? label("无，回答原问题", "None; answer the original question."))
+        \(label("本条补充问题（用户的实际追问或操作请求）：", "Actual follow-up or action request: "))\(followUp)\(understoodFollowUp.map { "\n" + label("结合对话理解的追问：", "Follow-up resolved from the conversation: ") + $0 } ?? "")
         \(label("询问对象：", "Subject: "))\(run.input.subject)
         \(label("关系主题：", "Relationship: "))\(run.input.relationship ?? label("未指定", "Unspecified"))
         \(label("参与人员（本次已确认快照） json：", "Confirmed participants JSON: "))\(try json(run.input.readingParticipants))

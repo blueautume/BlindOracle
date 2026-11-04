@@ -63,6 +63,11 @@ enum OraclePhase: String {
               reference.deletedRunID == nil, let id = reference.runID else { return nil }
         return runs.first { $0.id == id }
     }
+    private var activeReplyRun: OracleRun? {
+        guard let reply = messages.last(where: \.isConversationTurn), reply.role == .assistant,
+              reply.deletedRunID == nil, let runID = reply.runID else { return nil }
+        return runs.first { $0.id == runID }
+    }
     var pendingIntakeMessageID: UUID? { pendingPlan == nil ? nil : messages.last(where: { $0.kind == .intake && $0.runID == nil })?.id }
     var localOnly: Bool {
         if aiClient != nil { return false }
@@ -804,8 +809,8 @@ enum OraclePhase: String {
     func acceptTarotClarification(messageID: UUID) {
         guard let message = messages.last, message.id == messageID,
               let offer = tarotClarificationOffer(for: message), let base = latestRun else { return }
-        let question = message.kind == .reading ? base.plan.followUpQuestion ?? base.input.question
-            : messages.dropLast().last(where: { $0.role == .user })?.content ?? base.input.question
+        let question = message.resolvedQuestion ?? (message.kind == .reading ? base.plan.followUpQuestion ?? base.input.question
+            : messages.dropLast().last(where: { $0.role == .user })?.content ?? base.input.question)
         messages.append(ChatMessage(role: .user, content: L10n.text("补抽 1 张 · \(offer.focus)", "Draw one clarifying card · \(offer.focus)")))
         startTarotClarification(offer, base: base, question: question)
     }
@@ -890,7 +895,7 @@ enum OraclePhase: String {
         guard pendingInteraction == nil else {
             notice = L10n.text("先完成这次操作，先知便能接着为你解读。", "Finish this step to continue the reading."); showInteraction = true; return
         }
-        if pendingPlan == nil, let base = latestRun, base.input.tarotDraws != nil,
+        if pendingPlan == nil, let base = hasCredential && !localOnly ? activeReplyRun : latestRun, base.input.tarotDraws != nil,
            handleTarotClarificationCommand(text, base: base) { return }
         if pendingPlan != nil, ConversationalIntake.isConfirmation(text) { confirmPendingIntake(); return }
         if var plan = pendingPlan, ["不对", "有问题", "需要修改", "不是", "不准确"].contains(text)
@@ -919,12 +924,15 @@ enum OraclePhase: String {
             guard let self else { return }
             await prepareContext(operation: id, language: replyLanguage)
             guard operationID == id, !Task.isCancelled else { return }
-            let history = ContextCompressor.history(messages: Array(messages.prefix { $0.id != questionID }), summary: summary, language: replyLanguage)
+            let transcript = Array(messages.prefix { $0.id != questionID })
+            let history = ContextCompressor.history(messages: transcript, summary: summary, language: replyLanguage)
             let previousPlan = pendingPlan
-            let currentRun = previousPlan == nil ? latestRun : nil
+            let usesAI = hasCredential && !localOnly
+            let references = usesAI ? ConversationPlanningReference.candidates(in: transcript, runs: runs) : []
+            let currentRun = previousPlan == nil ? (usesAI ? references.first?.run : latestRun) : nil
             let target = ReadingContinuationPolicy.participantIntent(in: text, profiles: profiles)
             let scope = ReadingContinuationPolicy.scopeChange(question: text, run: currentRun, profiles: profiles, selfProfileID: selfProfileID)
-            let base = scope == .none ? currentRun : nil
+            var base = scope == .none ? currentRun : nil
             let changesPendingPeople = previousPlan.map { previous in
                 let names = Set((previous.participantNames ?? []) + self.initialIntakeParticipants(for: previous).map(\.resolvedName))
                 return !Set(target.names).isSubset(of: names) || !names.isDisjoint(with: target.excludedNames)
@@ -992,7 +1000,8 @@ enum OraclePhase: String {
                 // A bare recast changes the draw, not the question being asked.
                 plan = OraclePlan(intent: original.plan.intent, subject: original.input.subject,
                                   methods: original.plan.methods, requiredFields: original.plan.requiredFields,
-                                  note: L10n.text("按原问题重新推演，请先核对这次资料。", "Review the details before starting a new reading for the same question."), question: original.input.question)
+                                  note: L10n.text("按原问题重新推演，请先核对这次资料。", "Review the details before starting a new reading for the same question."),
+                                  question: references.first?.resolvedQuestion ?? original.input.question)
                 plan.action = "intake"; plan.interactions = original.plan.interactions
                 plan.participantIDs = original.input.readingParticipants.map(\.id)
                 plan.participantNames = original.input.readingParticipants.map(\.participantLabel)
@@ -1007,7 +1016,7 @@ enum OraclePhase: String {
             let extendsExistingReading = !additionalMethods.isEmpty &&
                 (!methodChange.isEmpty || ReadingContinuationPolicy.isMethodOnlyRequest(text) ||
                  !ReadingContinuationPolicy.requestedAdditionalMethods(in: text, requiresAdditiveWording: true).isEmpty)
-            if let base, let draws = base.input.tarotDraws, TarotDeck.isValidInitialSpread(draws),
+            if localOnly || !hasCredential, let base, let draws = base.input.tarotDraws, TarotDeck.isValidInitialSpread(draws),
                base.results.contains(where: { $0.method == .tarot && ($0.status == .complete || $0.status == .partial) }),
                ReadingContinuationPolicy.isSavedTarotExplanation(text) {
                 await answerFollowUp(text, history: history, operation: id, run: base)
@@ -1030,8 +1039,8 @@ enum OraclePhase: String {
                 await answerFollowUp(text, history: history, operation: id, run: nil); return
             }
             progress(L10n.text("选择适用方法与所需资料", "Choosing methods and checking what details they need"))
-            if hasCredential && !localOnly {
-                do { plan = try await client.plan(question: text, profile: profile, plugins: registry.descriptors, history: history, profiles: profiles, pendingPlan: keepsPendingScope ? pendingPlan : nil, existingRun: base, language: replyLanguage) }
+            if usesAI {
+                do { plan = try await client.plan(question: text, profile: profile, plugins: registry.descriptors, history: history, profiles: profiles, pendingPlan: keepsPendingScope ? pendingPlan : nil, existingRun: base, references: references, language: replyLanguage) }
                 catch {
                     guard operationID == id, !Task.isCancelled else { return }
                     failAnalysis(L10n.text("暂未能处理这次问题", "Couldn’t process this question"), error: error)
@@ -1039,19 +1048,51 @@ enum OraclePhase: String {
                 }
             }
             guard operationID == id, !Task.isCancelled else { return }
+            let requestsFreshReading = ReadingContinuationPolicy.explicitlyRequestsNewReading(text)
+            let effectiveQuestion = resolveConversationUnderstanding(in: &plan, references: references, rawQuestion: text,
+                                                                     base: &base, pending: previousPlan)
+            if let effectiveQuestion, let index = messages.firstIndex(where: { $0.id == questionID }) {
+                messages[index].resolvedQuestion = effectiveQuestion
+                messages[index].referenceMessageID = plan.understanding?.referenceMessageID
+            }
+            // A verified continuation can answer directly even if the planner
+            // proposed a fresh form. Profile corrections and method requests still
+            // go through the existing calculation and reuse checks below.
+            var grounded = answer.clarification == nil ? ProfileDirectory.groundedUpdates(plan.profileUpdates ?? [], in: text, profiles: profiles,
+                                                                                           contextIDs: contextIDs) : []
+            if EnglishConversation.isLunarDate(text) { for index in grounded.indices { grounded[index].birthDate = nil } }
+            let isContextualReply = previousPlan == nil && plan.understanding?.relation == .continuation
+                && effectiveQuestion != nil && !requestsFreshReading && additionalMethods.isEmpty
+                && explicitUpdates.isEmpty && grounded.isEmpty
+                && (plan.action == "reply" || plan.action == "intake")
+            if isContextualReply {
+                await answerFollowUp(text, history: history, operation: id, run: base,
+                                     tarotOffer: plan.action == "reply" ? plan.tarotClarification : nil,
+                                     resolvedQuestion: effectiveQuestion)
+                return
+            }
+            let contextualPlan = plan.understanding != nil && previousPlan == nil
             if AIPlanRouting.shouldOpenFormForProfileRequest(action: plan.action, note: plan.note, question: text, hasPendingQuestion: previousPlan != nil) {
                 let updates = plan.profileUpdates
                 plan = AIPlanRouting.isConcreteReadingQuestion(text) ? localPeoplePlan(question: text, collectedIDs: collected.appliedIDs) : previousPlan ?? plan
                 plan.action = "intake"; plan.profileUpdates = updates
             }
-            var grounded = answer.clarification == nil ? ProfileDirectory.groundedUpdates(plan.profileUpdates ?? [], in: text, profiles: profiles,
-                                                           contextIDs: contextIDs) : []
-            if EnglishConversation.isLunarDate(text) { for index in grounded.indices { grounded[index].birthDate = nil } }
             let extracted = applyProfileUpdates(grounded)
             let changedIDs = Array(Set(collected.appliedIDs + extracted.appliedIDs))
+            if contextualPlan, plan.understanding?.relation == .changedConditions {
+                let updatedParticipants = base?.input.readingParticipants.contains { changedIDs.contains($0.id) } == true
+                if !updatedParticipants {
+                    // A change to the underlying situation cannot be treated as
+                    // the same cast simply because plugin inputs look identical.
+                    if plan.action == "supplement" { plan.action = "intake" }
+                    base = nil
+                    plan.baseRunID = nil
+                    plan.followUpQuestion = nil
+                }
+            }
             let requestsReading = changesPendingPeople || !additionalMethods.isEmpty
                 || (scope == .explicit && !methodsMentioned(in: text, positiveRequestsOnly: true).isEmpty)
-            if !keepsPendingScope, plan.action != "collect", plan.action != "clarify",
+            if !contextualPlan, !keepsPendingScope, plan.action != "collect", plan.action != "clarify",
                plan.action != "reply" || requestsReading {
                 let local = localPeoplePlan(question: text, collectedIDs: changedIDs)
                 if plan.action == "reply" || plan.action == "supplement" { plan = local }
@@ -1063,8 +1104,9 @@ enum OraclePhase: String {
                 }
             }
             resolveParticipants(in: &plan, question: text)
-            if base != nil, extendsExistingReading { plan.action = "supplement" }
-            else if let base, ReadingContinuationPolicy.explicitlyRequestsNewReading(text) {
+            if base != nil, extendsExistingReading, plan.action != "clarify", plan.action != "collect" { plan.action = "supplement" }
+            else if requestsFreshReading, let base = base ?? (scope == .none ? currentRun : nil),
+                    plan.action != "clarify", plan.action != "collect" {
                 // Explicit fresh draws/questions take precedence over a model's
                 // supplement suggestion, including requests with a new subject.
                 plan.action = "intake"; plan.baseRunID = nil; plan.followUpQuestion = nil; plan.question = text
@@ -1076,19 +1118,22 @@ enum OraclePhase: String {
                 enforceRequestedMethods(&plan, text: text)
             }
             if let base, previousPlan == nil, plan.action != "collect", plan.action != "clarify",
-               plan.action == "supplement" || (followup && plan.action == "reply") {
+               plan.action == "supplement" || ((contextualPlan || followup) && plan.action == "reply") {
                 if plan.action == "supplement", !additionalMethods.isEmpty {
                     plan.methods = Array(Set(plan.methods + additionalMethods))
                 }
                 let onlyExplain = additionalMethods.isEmpty && (text.range(of: #"(?:不要|不用|无需|不必|别).{0,5}(?:重算|重新|补算|再算)|只解释|(?:沿用|解释)原"#, options: .regularExpression) != nil
                     || EnglishConversation.declinesClarifier(text)
                     || EnglishConversation.matches(text, #"\b(?:just explain|only explain|without recalculating|do not recalculate|don['’]t recalculate)\b"#))
-                if onlyExplain { await answerFollowUp(text, history: history, operation: id, run: base); return }
+                if onlyExplain { await answerFollowUp(text, history: history, operation: id, run: base, resolvedQuestion: effectiveQuestion); return }
                 if prepareSupplement(plan, base: base, question: text) { return }
-                await answerFollowUp(text, history: history, operation: id, run: base, tarotOffer: plan.action == "reply" ? plan.tarotClarification : nil)
+                await answerFollowUp(text, history: history, operation: id, run: base,
+                                     tarotOffer: plan.action == "reply" ? plan.tarotClarification : nil, resolvedQuestion: effectiveQuestion)
                 return
             }
-            if !(plan.mandatoryMethods ?? []).isEmpty, plan.action == "clarify" { plan.action = "intake" }
+            if !(plan.mandatoryMethods ?? []).isEmpty, plan.action == "clarify", plan.understanding?.relation != .ambiguous {
+                plan.action = "intake"
+            }
             let bareMethodSwitch = !ReadingContinuationPolicy.bareMethodChange(in: text).isEmpty
             let asksNewQuestion = !bareMethodSwitch && ["？", "?", "看看", "如何", "怎样", "算卦", "问卦"].contains(where: text.contains)
             if keepsPendingScope, let previous = previousPlan, !asksNewQuestion, !methodsMentioned(in: text).isEmpty,
@@ -1105,7 +1150,7 @@ enum OraclePhase: String {
                 prepareConversation(plan)
                 return
             }
-            if keepsPendingScope, var previous = previousPlan,
+            if keepsPendingScope, var previous = previousPlan, plan.understanding?.relation != .ambiguous,
                plan.resumesPendingQuestion == true || (!asksNewQuestion && (!changedIDs.isEmpty || !answer.updates.isEmpty || answer.clarification != nil || answer.declinedName || !(previous.requestedFields ?? []).isEmpty || ConversationalIntake.isUnknown(text) || ConversationalIntake.isConfirmation(text))) {
                 if previous.requestedFields?.contains(.name) == true, !changedIDs.isEmpty {
                     var ids = previous.participantIDs ?? []
@@ -1144,7 +1189,8 @@ enum OraclePhase: String {
                 messages.append(ChatMessage(role: .assistant, content: L10n.text("已按姓名更新留存资料：\(names.joined(separator: "、"))。", "Updated profiles for \(names.joined(separator: ", "))."), kind: .notice))
             }
             if plan.action == "reply" {
-                await answerFollowUp(text, history: history, operation: id, run: base, tarotOffer: plan.tarotClarification); return
+                await answerFollowUp(text, history: history, operation: id, run: base,
+                                     tarotOffer: plan.tarotClarification, resolvedQuestion: effectiveQuestion); return
             }
             if plan.action == "clarify" {
                 messages.append(ChatMessage(role: .assistant, content: plan.note.isEmpty ? L10n.text("你最想问的是哪一件具体的事？", "What specific question is on your mind?") : plan.note))
@@ -1153,10 +1199,84 @@ enum OraclePhase: String {
                 finishOperation(); return
             }
             // A union of declared requirements prevents a model from bypassing local validation.
+            if let effectiveQuestion, plan.baseRunID == nil, plan.resumesPendingQuestion != true {
+                plan.question = effectiveQuestion
+            }
             let requirements = registry.descriptors.filter { plan.methods.contains($0.method) }.flatMap(\.requiredFields)
             plan.requiredFields = Array(Set(plan.requiredFields + requirements))
             prepareConversation(plan)
         }
+    }
+
+    private func resolveConversationUnderstanding(in plan: inout OraclePlan, references: [ConversationPlanningReference],
+                                                  rawQuestion: String, base: inout OracleRun?, pending: OraclePlan?) -> String? {
+        guard let understanding = plan.understanding else { return nil }
+        if pending != nil, plan.resumesPendingQuestion == true || plan.action == "collect" || plan.action == "intake" {
+            // The pending form owns its question and confirmed participants.
+            return nil
+        }
+        let reference = references.first { $0.messageID == understanding.referenceMessageID }
+        let question = understanding.resolvedQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        let needsReference = understanding.relation != .newQuestion && understanding.relation != .ambiguous
+
+        if understanding.relation == .ambiguous || (needsReference && (reference == nil || question.isEmpty)) {
+            base = nil
+            plan.baseRunID = nil
+            plan.action = "clarify"
+            plan.mandatoryMethods = []
+            plan.profileUpdates = []
+            return nil
+        }
+
+        base = nil
+        plan.baseRunID = nil
+        if understanding.relation == .continuation || understanding.relation == .changedConditions,
+           let saved = reference?.run,
+           let current = runs.first(where: { $0.id == saved.id }),
+           current.results.contains(where: { $0.status == .complete || $0.status == .partial }) {
+            let participantIDs = Set(current.input.readingParticipants.map(\.id))
+            let proposedIDs = Set(plan.participantIDs ?? [])
+            let participantNames = Set(current.input.readingParticipants.flatMap { [$0.resolvedName, $0.participantLabel] })
+            let matchesParticipants = (proposedIDs.isEmpty || proposedIDs == participantIDs)
+                && Set(plan.participantNames ?? []).isSubset(of: participantNames)
+            let matchesScope = [rawQuestion, question].allSatisfy {
+                ReadingContinuationPolicy.scopeChange(question: $0, run: current, profiles: profiles, selfProfileID: selfProfileID) == .none
+            }
+            if matchesParticipants, matchesScope {
+                base = current
+                plan.subject = current.input.subject
+                plan.participantIDs = current.input.readingParticipants.map(\.id)
+                plan.participantNames = current.input.readingParticipants.map(\.participantLabel)
+            } else if (understanding.relation == .continuation || plan.action == "reply")
+                        && !ReadingContinuationPolicy.explicitlyRequestsNewReading(rawQuestion) {
+                plan.action = "clarify"
+                plan.note = ""
+                plan.mandatoryMethods = []
+                plan.profileUpdates = []
+                return nil
+            }
+        }
+        if base == nil, plan.action == "supplement" {
+            plan.action = "intake"
+            plan.followUpQuestion = nil
+        }
+        if base == nil { plan.tarotClarification = nil }
+        if understanding.relation == .continuation, let reference, reference.run == nil {
+            let knownPeople = profiles + references.flatMap { $0.run?.input.readingParticipants ?? [] }
+            let expandedNames = Set(ProfileDirectory.referencedNames(in: question, profiles: knownPeople))
+            let citedQuestion = reference.resolvedQuestion ?? reference.excerpt
+            let groundedNames = Set([rawQuestion, citedQuestion, reference.excerpt].flatMap {
+                ProfileDirectory.referencedNames(in: $0, profiles: knownPeople)
+            })
+            if !expandedNames.isSubset(of: groundedNames) {
+                // Keep the referenced topic without importing an ungrounded person.
+                let language = EnglishConversation.replyLanguage(in: rawQuestion) ?? AppLanguage.current
+                return L10n.text("接着前面「\(citedQuestion)」这件事回答本轮「\(rawQuestion)」。",
+                                 "Continue the earlier topic “\(citedQuestion)” and answer this request: “\(rawQuestion)”.",
+                                 language: language)
+            }
+        }
+        return question.isEmpty ? nil : question
     }
 
     private func prepareContext(operation: UUID, language: AppLanguage) async {
@@ -1497,15 +1617,28 @@ enum OraclePhase: String {
     }
     private func answerFollowUp(_ question: String, history: [AIConversationTurn], operation: UUID,
                                 run: OracleRun?, tarotOffer: TarotClarificationSuggestion? = nil,
-                                retryReplyID: UUID? = nil) async {
+                                retryReplyID: UUID? = nil, resolvedQuestion: String? = nil) async {
         guard operationID == operation, !Task.isCancelled else { return }
+        let citedQuestion: String?
+        switch analysisAttempt {
+        case let .planning(questionID), let .followUp(questionID, _, _, _):
+            let transcript = Array(messages.prefix { $0.id != questionID })
+            let referenceID = messages.first { $0.id == questionID }?.referenceMessageID
+            let reference = referenceID.flatMap { id in
+                ConversationPlanningReference.candidates(in: transcript, runs: runs).first { $0.messageID == id }
+            }
+            citedQuestion = reference.map { $0.resolvedQuestion ?? $0.excerpt }
+        default:
+            citedQuestion = nil
+        }
         let messageID: UUID
         if let retryReplyID, let index = messages.firstIndex(where: { $0.id == retryReplyID }) {
             messageID = retryReplyID
             messages[index].content = ""
         } else {
             messageID = UUID()
-            messages.append(ChatMessage(id: messageID, role: .assistant, content: "", runID: run?.id))
+            messages.append(ChatMessage(id: messageID, role: .assistant, content: "", runID: run?.id,
+                                        resolvedQuestion: resolvedQuestion))
         }
         if case let .planning(questionID) = analysisAttempt {
             analysisAttempt = .followUp(questionID: questionID, replyID: messageID, runID: run?.id, tarotOffer: tarotOffer)
@@ -1528,6 +1661,7 @@ enum OraclePhase: String {
         }
         do {
             let text = try await client.followUp(question: question, run: run, profile: profile, history: history,
+                                                resolvedQuestion: resolvedQuestion, citedQuestion: citedQuestion,
                                                 language: replyLanguage, voice: OracleVoiceStyle.current) { [weak self] delta in
                 await self?.appendStreamDelta(delta, to: messageID, operation: operation, followUp: true)
             }
@@ -1563,14 +1697,15 @@ enum OraclePhase: String {
             planQuestion(question)
         case let .followUp(questionID, replyID, runID, tarotOffer):
             guard let index = messages.firstIndex(where: { $0.id == questionID }) else { return }
-            let question = messages[index].content
+            let question = messages[index]
             let run = runID.flatMap { id in runs.first { $0.id == id } }
-            let language = EnglishConversation.replyLanguage(in: question) ?? AppLanguage.current
+            let language = EnglishConversation.replyLanguage(in: question.content) ?? AppLanguage.current
             let history = ContextCompressor.history(messages: Array(messages.prefix(upTo: index)), summary: summary, language: language)
             beginActivitySession(); notice = nil; activityMessageID = replyID
             let operation = UUID(); operationID = operation; phase = .synthesizing
             task = Task { [weak self] in
-                await self?.answerFollowUp(question, history: history, operation: operation, run: run, tarotOffer: tarotOffer, retryReplyID: replyID)
+                await self?.answerFollowUp(question.content, history: history, operation: operation, run: run,
+                                           tarotOffer: tarotOffer, retryReplyID: replyID, resolvedQuestion: question.resolvedQuestion)
             }
         case let .reading(runID, messageID, needsCalculation):
             guard let run = runs.first(where: { $0.id == runID }) else { return }

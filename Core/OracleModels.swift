@@ -192,6 +192,16 @@ protocol OraclePlugin: Sendable {
     func calculate(_ input: OracleInput) async throws -> OracleResult
 }
 
+struct ConversationUnderstanding: Codable, Sendable {
+    enum Relation: String, Codable, Sendable {
+        case newQuestion, continuation, changedConditions, changedParticipants, ambiguous
+    }
+
+    var relation: Relation
+    var resolvedQuestion: String
+    var referenceMessageID: UUID?
+}
+
 struct OraclePlan: Codable, Sendable {
     var intent: String
     var subject: String
@@ -223,6 +233,7 @@ struct OraclePlan: Codable, Sendable {
     var baseRunID: UUID? = nil
     var followUpQuestion: String? = nil
     var tarotClarification: TarotClarificationSuggestion? = nil
+    var understanding: ConversationUnderstanding? = nil
 }
 
 enum ChatRole: String, Codable, Sendable { case user, assistant, system }
@@ -238,6 +249,19 @@ struct ChatMessage: Codable, Identifiable, Sendable {
     /// Keeps the transcript's deleted reference distinct from another reading.
     var deletedRunID: UUID? = nil
     var tarotClarificationOffer: TarotClarificationSuggestion? = nil
+    /// The question the planner understood. The transcript still displays content.
+    var resolvedQuestion: String? = nil
+    var referenceMessageID: UUID? = nil
+
+    var isConversationTurn: Bool {
+        guard role != .system, kind == .text || kind == .reading,
+              !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        // Confirmations in existing archives were stored as ordinary user text.
+        return role != .user || ![
+            "已核对问事资料，开始推演。",
+            "I’ve reviewed the details. Start the reading."
+        ].contains(content)
+    }
 }
 
 struct ReadingAlternative: Codable, Identifiable, Sendable {

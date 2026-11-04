@@ -13,6 +13,7 @@
   "local_plugin_count": 10,
   "release_is_signed": true,
   "notes": [
+    "Conversation understanding 2.0.12 / Build 25: 351 non-live unit tests and the unsigned Release build passed. Mocked store regressions cover a text-only topic over an unrelated older reading, retry across relaunch, returning to an older reading, rejecting a foreign conversation reference, changing participants, and blocking an unrelated person from a resolved question. Final DeepSeek and Qwen planner checks passed all six synthetic cases for period, topic, and participant references. The store tests verify that a planner intake suggestion for a verified continuation does not open the form.",
     "Natural reading voice 2.0.11 / Build 24: 29 AI service tests passed. DeepSeek and Qwen each returned eight Chinese samples across the four voices and both reply routes. None of the 16 samples used the discouraged betting or theatrical openings. All four Deadpan samples opened with a direct answer, and one DeepSeek initial reading used four sentences. The signed Release build was installed and version-checked on the physical iPhone.",
     "Reading voices 2.0.10 / Build 23: 46 focused non-live tests passed, including the request format and four voice settings for both providers. Two iPad simulator UI tests passed for the default fallback and selection persistence. Two live tests on the iPhone simulator returned 16 synthetic samples across DeepSeek and Qwen, covering all four voices in both synthesis and follow-up. Manual review found direct openings and distinct styles, with 15 replies of two or three sentences and one five-sentence Qwen follow-up. The signed Release build was installed and version-checked on the physical iPhone.",
     "Interruptible analysis 2.0.9 / Build 22: 345 non-live unit tests and six chat progress UI tests passed on the iOS 26.5 iPhone 17 Pro simulator (Xcode 27.2). Nine opt-in live API tests were skipped. The UI verified completing an answer in the background, sending a follow-up during output, and retrying after termination and relaunch. The unsigned Release build passed. The iOS 26 continued-processing grant was not tested on a physical device.",
@@ -41,8 +42,8 @@
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "2.0.11",
-  "build": "24",
+  "version": "2.0.12",
+  "build": "25",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",

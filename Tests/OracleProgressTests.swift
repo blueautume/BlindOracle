@@ -381,6 +381,195 @@ final class OracleProgressTests: XCTestCase {
         XCTAssertFalse(store.canRetryAnalysis)
     }
 
+    @MainActor func testTimeRangeFollowUpUsesTheRecentTextTopicInsteadOfAnOlderReading() async throws {
+        let workEvidence = "旧工作盘面专属线索"
+        let work = savedReading(question: "今天的工作怎么样？", evidence: workEvidence, seed: 41)
+        let loveQuestion = ChatMessage(role: .user, content: "感情呢，今天")
+        let loveAnswer = ChatMessage(role: .assistant, content: "今天可以观察对方是否主动联系。")
+        let expanded = "再看看这周的感情走向。"
+        let reply = "这周继续看双方有没有主动推进联系。"
+        let client = scriptedClient([
+            .plan(try mistakenIntake(continuing: loveAnswer, expanded: expanded), requiringReference: loveAnswer.id),
+            .checkedReply("这周先观察", questionIncludes: [expanded], priorTurn: loveQuestion.content,
+                          includesEvidence: nil, excludesEvidence: workEvidence, complete: false),
+            .checkedReply(reply, questionIncludes: [expanded], priorTurn: loveQuestion.content,
+                          includesEvidence: nil, excludesEvidence: workEvidence)
+        ])
+        let conversation = OracleConversation(messages: [
+            ChatMessage(role: .user, content: work.input.question),
+            ChatMessage(role: .assistant, content: "工作上先确认分工。", kind: .reading, runID: work.id),
+            loveQuestion, loveAnswer
+        ])
+        let vault = try temporaryVault()
+        let store = try routedStore(conversation: conversation, runs: [work], client: client, vault: vault)
+
+        store.send("再看看这周")
+        try await waitUntil { !store.isBusy }
+        XCTAssertTrue(store.canRetryAnalysis)
+        XCTAssertTrue(store.messages.last?.content.contains("这周先观察") == true)
+        XCTAssertNil(store.pendingPlan)
+
+        let restored = OracleStore(vault: vault, bootstrapCredential: false, aiClient: client)
+        restored.retryAnalysis()
+        try await waitUntil { !restored.isBusy }
+
+        XCTAssertEqual(restored.activeConversationID, conversation.id)
+        XCTAssertEqual(restored.messages.filter { $0.role == .user }.map(\.content),
+                       [work.input.question, loveQuestion.content, "再看看这周"])
+        XCTAssertEqual(restored.messages.last?.content, reply)
+        XCTAssertNil(restored.messages.last?.runID)
+        XCTAssertNil(restored.pendingPlan)
+        XCTAssertNil(restored.pendingInteraction)
+        XCTAssertEqual(restored.runs.map(\.id), [work.id])
+        XCTAssertEqual(restored.runs.first?.input.seed, 41)
+    }
+
+    @MainActor func testTextOnlyContinuationDoesNotImportAnUncitedPersonFromAnEarlierTopic() async throws {
+        var chen = OracleProfile(); chen.name = "陈平"
+        let workEvidence = "陈平旧工作盘面专属线索"
+        var work = savedReading(question: "陈平今天的工作怎么样？", evidence: workEvidence, seed: 41)
+        work.input.profile = chen
+        work.input.participants = [chen]
+        work.input.subject = "他人"
+        work.plan.subject = "他人"
+        let loveQuestion = ChatMessage(role: .user, content: "感情呢，今天")
+        let loveAnswer = ChatMessage(role: .assistant, content: "今天可以观察对方是否主动联系。")
+        let raw = "再看看这周"
+        let reply = "这周继续看双方有没有主动推进联系。"
+        let client = scriptedClient([
+            .plan(try mistakenIntake(continuing: loveAnswer, expanded: "陈平这周的感情怎么样？"),
+                  requiringReference: loveAnswer.id),
+            .checkedReply(reply, questionIncludes: [raw, "感情"], priorTurn: loveQuestion.content,
+                          includesEvidence: nil, excludesEvidence: workEvidence, questionExcludes: [chen.resolvedName])
+        ])
+        let conversation = OracleConversation(messages: [
+            ChatMessage(role: .user, content: work.input.question),
+            ChatMessage(role: .assistant, content: "陈平工作上先确认分工。", kind: .reading, runID: work.id),
+            loveQuestion, loveAnswer
+        ])
+        let store = try routedStore(conversation: conversation, runs: [work], client: client, vault: temporaryVault())
+        store.saveProfile(chen)
+
+        store.send(raw)
+        try await waitUntil { !store.isBusy }
+
+        XCTAssertEqual(store.messages.dropLast().last?.content, raw)
+        XCTAssertFalse(store.messages.dropLast().last?.resolvedQuestion?.contains(chen.resolvedName) ?? false)
+        XCTAssertEqual(store.messages.last?.content, reply)
+        XCTAssertNil(store.messages.last?.runID)
+        XCTAssertNil(store.pendingPlan)
+        XCTAssertNil(store.pendingInteraction)
+        XCTAssertEqual(store.runs.map(\.id), [work.id])
+    }
+
+    @MainActor func testFollowUpCanReturnToAnOlderReadingWithoutReusingTheNewerOne() async throws {
+        let earlierEvidence = "较早合作盘面专属线索"
+        let laterEvidence = "较晚出行盘面专属线索"
+        let earlier = savedReading(question: "这个合作怎么推进？", evidence: earlierEvidence, seed: 21)
+        let later = savedReading(question: "这周出行怎么安排？", evidence: laterEvidence, seed: 22)
+        let earlierQuestion = ChatMessage(role: .user, content: earlier.input.question)
+        let earlierAnswer = ChatMessage(role: .assistant, content: "合作前先问清费用和分工。", kind: .reading, runID: earlier.id)
+        let raw = "还是前面那件事，先问哪一条？"
+        let expanded = "回到前面的合作，费用和分工应该先问清哪一项？"
+        let reply = "先问清谁承担费用。"
+        let client = scriptedClient([
+            .plan(try mistakenIntake(continuing: earlierQuestion, expanded: expanded), requiringReference: earlierQuestion.id),
+            .checkedReply(reply, questionIncludes: [expanded], priorTurn: earlierQuestion.content,
+                          includesEvidence: earlierEvidence, excludesEvidence: laterEvidence)
+        ])
+        let conversation = OracleConversation(messages: [
+            earlierQuestion, earlierAnswer,
+            ChatMessage(role: .user, content: later.input.question),
+            ChatMessage(role: .assistant, content: "出行前先核对场馆时间。", kind: .reading, runID: later.id)
+        ])
+        let store = try routedStore(conversation: conversation, runs: [earlier, later], client: client, vault: temporaryVault())
+
+        store.send(raw)
+        try await waitUntil { !store.isBusy }
+
+        XCTAssertEqual(store.messages.dropLast().last?.content, raw)
+        XCTAssertEqual(store.messages.last?.content, reply)
+        XCTAssertEqual(store.messages.last?.runID, earlier.id)
+        XCTAssertNil(store.pendingPlan)
+        XCTAssertNil(store.pendingInteraction)
+        XCTAssertEqual(store.runs.map(\.id), [earlier.id, later.id])
+        XCTAssertEqual(store.runs.map(\.input.seed), [21, 22])
+    }
+
+    @MainActor func testContinuationWithReferenceFromAnotherConversationAsksForClarification() async throws {
+        let currentQuestion = ChatMessage(role: .user, content: "今天适合先做什么？")
+        let currentAnswer = ChatMessage(role: .assistant, content: "先核对手头的计划。")
+        let foreignQuestion = ChatMessage(role: .user, content: "出行怎么安排？")
+        let foreign = OracleConversation(messages: [foreignQuestion, ChatMessage(role: .assistant, content: "先核对场馆时间。")])
+        let current = OracleConversation(messages: [currentQuestion, currentAnswer])
+        let client = scriptedClient([
+            .plan(try mistakenIntake(continuing: foreignQuestion, expanded: "这周出行怎么安排？"),
+                  excludingReference: foreignQuestion.id)
+        ])
+        let store = try routedStore(conversation: current, runs: [], client: client, vault: temporaryVault(), other: [foreign])
+
+        store.send("那这周呢？")
+        try await waitUntil { !store.isBusy }
+
+        XCTAssertEqual(store.activeConversationID, current.id)
+        XCTAssertEqual(store.messages.dropLast().last?.content, "那这周呢？")
+        XCTAssertEqual(store.messages.last?.role, .assistant)
+        XCTAssertFalse(store.messages.last?.content.isEmpty ?? true)
+        XCTAssertNil(store.messages.last?.runID)
+        XCTAssertFalse(store.canRetryAnalysis)
+        XCTAssertNil(store.pendingPlan)
+        XCTAssertNil(store.pendingInteraction)
+    }
+
+    @MainActor func testChangedParticipantStartsASeparateReadingWithTheExpandedQuestion() async throws {
+        var chen = OracleProfile(); chen.name = "陈平"
+        var li = OracleProfile(); li.name = "李岚"
+        let raw = "换成李岚呢？"
+        let expanded = "李岚这周的工作怎么样？"
+        let oldQuestion = ChatMessage(role: .user, content: "陈平这周的工作怎么样？")
+        let oldPlan = OraclePlan(intent: "本周工作", subject: "他人", methods: [.xiaoliuren],
+                                 requiredFields: [], note: "", question: oldQuestion.content)
+        let oldInput = OracleInput(question: oldQuestion.content, profile: chen, seed: 41, subject: "他人", participants: [chen])
+        let oldResult = OracleResult(method: .xiaoliuren, headline: "陈平的测试盘", rows: [])
+        let oldReply = "陈平这周先确认手头任务。"
+        let oldRun = OracleRun(input: oldInput, plan: oldPlan, results: [oldResult],
+                               synthesis: ReadingSynthesis(text: oldReply, alternatives: []))
+        let oldAnswer = ChatMessage(role: .assistant, content: oldReply, kind: .reading, runID: oldRun.id)
+        let conversation = OracleConversation(messages: [oldQuestion, oldAnswer])
+        let client = scriptedClient([
+            .plan(try contextualIntake(anchoredTo: oldQuestion, expanded: expanded, relation: .changedParticipants, person: li),
+                  requiringReference: oldQuestion.id),
+            .complete(#"{"text":"李岚这周可以先梳理优先级。","alternatives":[]}"#)
+        ])
+        let store = try routedStore(conversation: conversation, runs: [oldRun], client: client, vault: temporaryVault())
+        store.saveProfile(chen)
+        store.saveProfile(li)
+
+        store.send(raw)
+        try await waitUntil { !store.isBusy }
+
+        let pending = try XCTUnwrap(store.pendingPlan)
+        XCTAssertEqual(pending.question, expanded)
+        XCTAssertEqual(pending.participantIDs, [li.id])
+        XCTAssertNil(pending.baseRunID)
+        XCTAssertEqual(store.intakeParticipants.map(\.id), [li.id])
+        XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], save: false))
+        try await waitUntil { !store.isBusy }
+
+        let newRun = try XCTUnwrap(store.runs.last)
+        XCTAssertEqual(store.runs.count, 2)
+        XCTAssertNotEqual(newRun.id, oldRun.id)
+        XCTAssertEqual(newRun.input.question, expanded)
+        XCTAssertEqual(newRun.input.readingParticipants.map(\.id), [li.id])
+        XCTAssertNil(newRun.plan.baseRunID)
+        XCTAssertEqual(newRun.synthesis?.text, "李岚这周可以先梳理优先级。")
+        XCTAssertEqual(store.runs.first?.input.readingParticipants.map(\.id), [chen.id])
+        XCTAssertEqual(store.runs.first?.results.map(\.id), [oldResult.id])
+        XCTAssertEqual(store.runs.first?.input.seed, 41)
+        XCTAssertEqual(store.runs.first?.synthesis?.text, oldReply)
+        XCTAssertTrue(store.messages.contains { $0.role == .user && $0.content == raw })
+    }
+
     @MainActor func testBackgroundExpirationPersistsFollowUpRetryAcrossRelaunch() async throws {
         let partial = "I can help."
         let completed = "I can help. What are you working on?"
@@ -418,6 +607,44 @@ final class OracleProgressTests: XCTestCase {
         XCTAssertTrue(condition(), "Timed out waiting for the analysis to reach the expected state.")
     }
 
+    private func savedReading(question: String, evidence: String, seed: UInt64) -> OracleRun {
+        let plan = OraclePlan(intent: question, subject: "事件", methods: [.xiaoliuren],
+                              requiredFields: [], note: "", question: question)
+        let result = OracleResult(method: .xiaoliuren, headline: evidence, rows: [])
+        return OracleRun(input: OracleInput(question: question, profile: OracleProfile(), seed: seed),
+                         plan: plan, results: [result])
+    }
+
+    private func mistakenIntake(continuing message: ChatMessage, expanded: String) throws -> String {
+        try contextualIntake(anchoredTo: message, expanded: expanded, relation: .continuation)
+    }
+
+    private func contextualIntake(anchoredTo message: ChatMessage, expanded: String,
+                                  relation: ConversationUnderstanding.Relation, person: OracleProfile? = nil) throws -> String {
+        var body: [String: Any] = [
+            "action": "intake", "intent": "补充问事", "subject": "事件", "methods": ["xiaoliuren"],
+            "requiredFields": [], "note": "请填写问事资料。", "question": expanded,
+            "understanding": [
+                "relation": relation.rawValue, "resolvedQuestion": expanded,
+                "referenceMessageID": message.id.uuidString
+            ]
+        ]
+        if let person {
+            body["subject"] = "他人"
+            body["participantIDs"] = [person.id.uuidString]
+            body["participantNames"] = [person.resolvedName]
+        }
+        return String(decoding: try JSONSerialization.data(withJSONObject: body), as: UTF8.self)
+    }
+
+    @MainActor private func routedStore(conversation: OracleConversation, runs: [OracleRun], client: DeepSeekClient,
+                                         vault: LocalVault, other: [OracleConversation] = []) throws -> OracleStore {
+        try vault.save(runs, as: "readings")
+        try vault.save(OracleConversationArchive(activeConversationID: conversation.id, conversations: [conversation] + other),
+                       as: ConversationHistory.filename)
+        return OracleStore(vault: vault, bootstrapCredential: false, aiClient: client)
+    }
+
     private func scriptedClient(_ responses: [AnalysisURLProtocol.Response]) -> DeepSeekClient {
         let key = UUID().uuidString
         AnalysisURLProtocol.install(responses, for: key)
@@ -433,8 +660,10 @@ private final class AnalysisURLProtocol: URLProtocol, @unchecked Sendable {
         case hold(String)
         case truncate(String)
         case complete(String)
+        case checkedReply(String, questionIncludes: [String], priorTurn: String, includesEvidence: String?, excludesEvidence: String,
+                          complete: Bool = true, questionExcludes: [String] = [])
         case networkError
-        case plan(String)
+        case plan(String, requiringReference: UUID? = nil, excludingReference: UUID? = nil)
     }
 
     private static let lock = NSLock()
@@ -464,16 +693,65 @@ private final class AnalysisURLProtocol: URLProtocol, @unchecked Sendable {
         switch response {
         case .networkError:
             client?.urlProtocol(self, didFailWithError: URLError(.networkConnectionLost))
-        case .plan(let content):
+        case .plan(let content, let requiringReference, let excludingReference):
+            if requiringReference != nil || excludingReference != nil {
+                guard let user = (try? requestTurns())?.last?["content"],
+                      requiringReference.map({ user.localizedCaseInsensitiveContains($0.uuidString) }) ?? true,
+                      excludingReference.map({ !user.localizedCaseInsensitiveContains($0.uuidString) }) ?? true else {
+                    client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+                    return
+                }
+            }
             let body: [String: Any] = ["choices": [["message": ["content": content], "finish_reason": "stop"]]]
             if sendJSON(body, contentType: "application/json") { client?.urlProtocolDidFinishLoading(self) }
-        case .hold(let content), .truncate(let content), .complete(let content):
-            let body = ["choices": [["delta": ["content": content]]]]
-            guard sendJSON(body, contentType: "text/event-stream") else { return }
-            if case .hold = response { return }
-            if case .complete = response { client?.urlProtocol(self, didLoad: Data("data: [DONE]\n\n".utf8)) }
-            client?.urlProtocolDidFinishLoading(self)
+        case .checkedReply(let content, let questionIncludes, let priorTurn, let includesEvidence, let excludesEvidence,
+                           let complete, let questionExcludes):
+            guard let turns = try? requestTurns(), let system = turns.first?["content"],
+                  turns.last?["role"] == "user", let question = turns.last?["content"],
+                  questionIncludes.allSatisfy({ question.contains($0) }),
+                  questionExcludes.allSatisfy({ !question.contains($0) }),
+                  turns.dropLast().contains(["role": "user", "content": priorTurn]),
+                  includesEvidence.map({ system.contains($0) }) ?? true,
+                  !system.contains(excludesEvidence) else {
+                client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+                return
+            }
+            sendStream(content, hold: false, complete: complete)
+        case .hold(let content):
+            sendStream(content, hold: true, complete: false)
+        case .truncate(let content):
+            sendStream(content, hold: false, complete: false)
+        case .complete(let content):
+            sendStream(content, hold: false, complete: true)
         }
+    }
+
+    private func sendStream(_ content: String, hold: Bool, complete: Bool) {
+        let body = ["choices": [["delta": ["content": content]]]]
+        guard sendJSON(body, contentType: "text/event-stream") else { return }
+        if hold { return }
+        if complete { client?.urlProtocol(self, didLoad: Data("data: [DONE]\n\n".utf8)) }
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    private func requestTurns() throws -> [[String: String]] {
+        var data = request.httpBody ?? Data()
+        if let stream = request.httpBodyStream, data.isEmpty {
+            stream.open()
+            defer { stream.close() }
+            var buffer = [UInt8](repeating: 0, count: 4096)
+            while true {
+                let count = stream.read(&buffer, maxLength: buffer.count)
+                guard count >= 0 else { throw stream.streamError ?? URLError(.badServerResponse) }
+                if count == 0 { break }
+                data.append(contentsOf: buffer.prefix(count))
+            }
+        }
+        guard let body = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let turns = body["messages"] as? [[String: String]] else {
+            throw URLError(.badServerResponse)
+        }
+        return turns
     }
 
     private func sendJSON(_ body: [String: Any], contentType: String) -> Bool {
