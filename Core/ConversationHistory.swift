@@ -15,9 +15,9 @@ struct OracleConversation: Codable, Identifiable, Sendable {
         let source = messages.first(where: { $0.role == .user && !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })?.content
             ?? pendingPlan?.question
             ?? messages.first?.content
-            ?? "新的对话"
+            ?? L10n.text("新的对话", "New Conversation")
         let line = source.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-        return line.isEmpty ? "新的对话" : String(line.prefix(40))
+        return line.isEmpty ? L10n.text("新的对话", "New Conversation") : String(line.prefix(40))
     }
 
     var isEmpty: Bool { messages.isEmpty && summary.text.isEmpty && pendingPlan == nil && pendingInteraction == nil }

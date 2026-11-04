@@ -105,4 +105,16 @@ final class TarotPluginTests: XCTestCase {
         XCTAssertTrue(result.evidence.isEmpty)
         XCTAssertNil(result.tarotClarificationRounds)
     }
+    func testEnglishTarotResultRetainsOriginalCardsAndPositions() async throws {
+        let plugin = TarotPlugin()
+        let input = request(draws: validDraws)
+        let result = try await AppLanguage.$override.withValue(.english) {
+            XCTAssertTrue(plugin.descriptor.summary.contains("Rider–Waite–Smith"))
+            return try await plugin.calculate(input)
+        }
+        XCTAssertEqual(result.contentLanguageCode, "en")
+        XCTAssertEqual(result.tarotDraws, validDraws)
+        XCTAssertEqual(result.rows.first { $0.label == "Current situation" }?.value, "The Fool · Upright")
+        XCTAssertTrue(result.rows.contains { $0.label == "Card 2 keywords · Reversed" })
+    }
 }

@@ -100,3 +100,34 @@ final class ConversationalIntakeTests: XCTestCase {
         XCTAssertEqual(saved.givenName, "三")
     }
 }
+
+extension ConversationalIntakeTests {
+    func testEnglishProfileFactsAreGroundedAndUnknownTimeDoesNotInventAValue() {
+        let message = "Alice Jones was born on June 2, 1995 at 8:30 PM; Bob Smith, birth time: unknown"
+        let parsed = ProfileDirectory.parseExplicitUpdates(in: message, profiles: [])
+        let alice = parsed.first { $0.name == "Alice Jones" }
+        XCTAssertEqual(alice?.birthDate, "1995-06-02")
+        XCTAssertEqual(alice?.birthTime, "20:30")
+        let bob = parsed.first { $0.name == "Bob Smith" }
+        XCTAssertEqual(bob?.birthTimeKnown, false)
+        XCTAssertEqual(bob?.unknownFields, [.birthTime])
+
+        let grounded = ProfileDirectory.groundedUpdates([
+            ProfileUpdate(name: "Alice Jones", birthDate: "1995-06-02", birthTime: "20:30", birthTimeZoneID: "America/New_York"),
+            ProfileUpdate(name: "Bob Smith", birthTime: "20:30", birthTimeKnown: false, unknownFields: [.birthTime])
+        ], in: message, profiles: [])
+        XCTAssertEqual(grounded.first { $0.name == "Alice Jones" }?.birthDate, "1995-06-02")
+        XCTAssertNil(grounded.first { $0.name == "Alice Jones" }?.birthTimeZoneID)
+        XCTAssertNil(grounded.first { $0.name == "Bob Smith" }?.birthTime)
+        XCTAssertEqual(grounded.first { $0.name == "Bob Smith" }?.birthTimeKnown, false)
+        XCTAssertTrue(ProfileDirectory.parseExplicitUpdates(in: "Was Alice Jones born on June 2, 1995?", profiles: []).isEmpty)
+        var existing = OracleProfile(); existing.name = "Alice Jones"
+        let otherPerson = ProfileDirectory.groundedUpdates([
+            ProfileUpdate(id: existing.id, name: "Alice Jones", birthDate: "1995-06-02")
+        ], in: "My sister was born on June 2, 1995.", profiles: [existing], contextIDs: [existing.id])
+        XCTAssertTrue(otherPerson.isEmpty)
+        XCTAssertTrue(ConversationalIntake.isUnknown("I don’t know."))
+        XCTAssertTrue(ConversationalIntake.isConfirmation("Confirm and start."))
+        XCTAssertFalse(ConversationalIntake.isConfirmation("Confirm and start?"))
+    }
+}

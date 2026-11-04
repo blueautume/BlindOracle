@@ -11,11 +11,14 @@ enum ConversationalIntake {
     static func isConfirmation(_ text: String) -> Bool {
         guard !text.contains("？"), !text.contains("?") else { return false }
         let value = text.components(separatedBy: .whitespacesAndNewlines.union(.punctuationCharacters)).joined()
+        let english = text.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters)).lowercased()
+        if ["yes", "confirm", "confirmed", "start", "start the reading", "confirm and start", "confirm, start", "that’s correct", "that's correct", "looks correct", "looks good", "go ahead"].contains(english) { return true }
         return ["确认", "确认开始", "确认开始解析", "确认无误", "资料无误", "没问题", "没有问题", "信息正确", "正确", "开始", "开始解析", "可以开始", "可以开始解析", "可以", "对", "是的", "就按这个算", "按以上资料开始", "没问题开始", "没问题开始解析", "没有问题开始解析", "资料无误开始解析", "信息没问题开始解析"].contains(value)
     }
 
     static func isUnknown(_ text: String) -> Bool {
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+        if EnglishConversation.matches(value, #"^(?:unknown|not sure|unsure|i (?:do not|don['’]t) know|i (?:cannot|can['’]t|don['’]t) remember|prefer not to say|i (?:cannot|can['’]t) provide it)$"#) { return true }
         return ["不知道", "不清楚", "不确定", "未知", "不详", "忘了", "记不清", "没资料", "没有资料", "无法提供", "不想提供", "都不知道", "这些都不知道", "其余都不知道"].contains(value)
     }
 
@@ -39,8 +42,8 @@ enum ConversationalIntake {
                                                        birthTimeKnown: fields.contains(.birthTime) ? false : nil, unknownFields: fields)])
         }
         let content = (plan.pendingAnswer.map { $0 + "，" } ?? "") + text
-        if fields.contains(.birthDate), content.contains("农历") || content.contains("阴历") {
-            return IntakeAnswer(clarification: "这条是农历日期。请再告诉我对应的公历年月日，避免把日期记错。")
+        if fields.contains(.birthDate), EnglishConversation.isLunarDate(content) {
+            return IntakeAnswer(clarification: L10n.text("这条是农历日期。请再告诉我对应的公历年月日，避免把日期记错。", "Please provide the corresponding Gregorian date so I can record it correctly."))
         }
         var updates: [ProfileUpdate] = []
         for field in fields {
@@ -51,10 +54,11 @@ enum ConversationalIntake {
             }
             switch field {
             case .birthTime:
-                if let clock = clock(in: content) {
+                if let clock = ProfileDirectory.englishClock(content) ?? clock(in: content) {
                     patch.birthTime = clock
-                } else if matches(#"[\d零〇一二两三四五六七八九十]+[点时]"#, content) {
-                    return IntakeAnswer(clarification: "你说的这个时刻，是上午、下午还是晚上？我确认一下再记。", pendingAnswer: text)
+                } else if matches(#"[\d零〇一二两三四五六七八九十]+[点时]"#, content)
+                    || EnglishConversation.matches(content, #"^\s*(?:at\s+)?(?:[1-9]|1[0-2])\s*$"#) {
+                    return IntakeAnswer(clarification: L10n.text("你说的这个时刻，是上午、下午还是晚上？我确认一下再记。", "Was that time in the morning or evening? Please include AM or PM."), pendingAnswer: text)
                 }
             case .birthCoordinates:
                 if let pair = captures(#"^\s*([+-]?\d{1,2}(?:\.\d+)?)\s*[,，、 /]\s*([+-]?\d{1,3}(?:\.\d+)?)\s*$"#, content) {
@@ -71,7 +75,17 @@ enum ConversationalIntake {
                 case .givenName: label = "名字"
                 default: label = field.title
                 }
-                let fact = "\(label)：\(content)"
+                let englishLabel: String
+                switch field {
+                case .birthDate: englishLabel = "Birth date"
+                case .birthTimeZone: englishLabel = "Birth time zone"
+                case .birthPlace: englishLabel = "Birthplace"
+                case .gender: englishLabel = "Sex"
+                case .surname: englishLabel = "Surname"
+                case .givenName: englishLabel = "Given name"
+                default: englishLabel = label
+                }
+                let fact = EnglishConversation.matches(content, #"\p{Latin}"#) ? "\(englishLabel): \(content)" : "\(label)：\(content)"
                 if person.resolvedName.isEmpty {
                     updates += ProfileDirectory.parseContextualFields(in: fact, for: id)
                 } else {
@@ -84,34 +98,35 @@ enum ConversationalIntake {
     }
 
     static func summary(plan: OraclePlan, participants: [OracleProfile]) -> String {
-        var lines = ["我把这次的信息整理好了，请核对：", "", "所问：\(plan.question)"]
-        if let methods = plan.mandatoryMethods, !methods.isEmpty { lines.append("本次指定方法：\(methods.map(\.progressName).joined(separator: "、"))。") }
-        if participants.isEmpty { lines.append("对象：这件事本身，不附个人生辰资料。") }
+        var lines = [L10n.text("我把这次的信息整理好了，请核对：", "Please review these reading details:"), "", L10n.text("所问：\(plan.question)", "Question: \(plan.question)")]
+        if let methods = plan.mandatoryMethods, !methods.isEmpty { lines.append(L10n.text("本次指定方法：\(methods.map(\.progressName).joined(separator: "、"))。", "Requested methods: \(methods.map(\.progressName).joined(separator: ", ")).")) }
+        if participants.isEmpty { lines.append(L10n.text("对象：这件事本身，不附个人生辰资料。", "Subject: The situation itself. No birth details are attached.")) }
         for person in participants {
             lines.append("")
-            lines.append("档案：\(person.participantLabel)")
-            if !person.familyName.isEmpty || !person.givenName.isEmpty { lines.append("姓氏：\(person.familyName.isEmpty ? "未确定" : person.familyName)；名字：\(person.givenName.isEmpty ? "未确定" : person.givenName)") }
+            lines.append(L10n.text("档案：\(person.participantLabel)", "Profile: \(person.participantLabel)"))
+            if !person.familyName.isEmpty || !person.givenName.isEmpty { lines.append(L10n.text("姓氏：\(person.familyName.isEmpty ? "未确定" : person.familyName)；名字：\(person.givenName.isEmpty ? "未确定" : person.givenName)", "Family name: \(person.familyName.isEmpty ? "Unknown" : person.familyName) · Given name: \(person.givenName.isEmpty ? "Unknown" : person.givenName)")) }
             let date: String
-            if person.unknownFields.contains(.birthDate) { date = "未确定" }
+            if person.unknownFields.contains(.birthDate) { date = L10n.text("未确定", "Unknown") }
             else if let text = person.birthDateText { date = text }
             else if let instant = person.birthDate {
                 let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd"
                 formatter.timeZone = TimeZone(identifier: person.birthTimeZoneID) ?? .gmt
                 date = formatter.string(from: instant)
-            } else { date = "未提供" }
-            lines.append("公历生日：\(date)")
+            } else { date = L10n.text("未提供", "Not provided") }
+            lines.append(L10n.text("公历生日：\(date)", "Gregorian birth date: \(date)"))
             let time = person.birthTimeKnown && !person.unknownFields.contains(.birthTime)
                 ? person.birthTimeText ?? person.birthDate.map { value in
                     let formatter = DateFormatter(); formatter.dateFormat = "HH:mm:ss"; formatter.timeZone = TimeZone(identifier: person.birthTimeZoneID) ?? .gmt
                     return formatter.string(from: value)
-                } ?? "未提供" : "未确定"
-            lines.append("出生时间：\(time)")
-            lines.append("出生时区：\(person.unknownFields.contains(.birthTimeZone) ? "未确定" : person.birthTimeZoneID)")
-            lines.append("性别：\(person.sex)；出生地：\(person.birthPlace.isEmpty ? "未提供" : person.birthPlace)")
-            if let lat = person.birthLatitude, let lon = person.birthLongitude, !person.unknownFields.contains(.birthCoordinates) { lines.append("出生地坐标：纬度\(lat)，经度\(lon)") }
+                } ?? L10n.text("未提供", "Not provided") : L10n.text("未确定", "Unknown")
+            lines.append(L10n.text("出生时间：\(time)", "Birth time: \(time)"))
+            lines.append(L10n.text("出生时区：\(person.unknownFields.contains(.birthTimeZone) ? "未确定" : person.birthTimeZoneID)", "Birth time zone: \(person.unknownFields.contains(.birthTimeZone) ? "Unknown" : person.birthTimeZoneID)"))
+            let sex = person.sex == "男" ? "Male" : person.sex == "女" ? "Female" : "Not provided"
+            lines.append(L10n.text("性别：\(person.sex)；出生地：\(person.birthPlace.isEmpty ? "未提供" : person.birthPlace)", "Chart sex: \(sex) · Birthplace: \(person.birthPlace.isEmpty ? "Not provided" : person.birthPlace)"))
+            if let lat = person.birthLatitude, let lon = person.birthLongitude, !person.unknownFields.contains(.birthCoordinates) { lines.append(L10n.text("出生地坐标：纬度\(lat)，经度\(lon)", "Birthplace coordinates: \(lat), \(lon)")) }
         }
         if !(plan.preparationNotes ?? []).isEmpty { lines += [""] + (plan.preparationNotes ?? []) }
-        lines += ["", "信息无误后，回复“确认，开始”，或点下方确认。需要更正的地方直接告诉我，我会重新整理。"]
+        lines += ["", L10n.text("信息无误后，回复“确认，开始”，或点下方确认。需要更正的地方直接告诉我，我会重新整理。", "When the details are correct, confirm below. You can tell me what to correct before you start.")]
         return lines.joined(separator: "\n")
     }
 

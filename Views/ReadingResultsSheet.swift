@@ -18,7 +18,7 @@ struct ReadingResultsSheet: View {
                             questionHeader(run)
                             if run.results.isEmpty {
                                 PaperCard {
-                                    Text("此次推演尚无方法返回结果。已填写的资料仍保存在本机。")
+                                    Text(L10n.text("此次推演尚无方法返回结果。已填写的资料仍保存在本机。", "No method returned a result for this reading. The details you entered are still on this device."))
                                         .font(.system(size: 14, design: .serif))
                                         .foregroundStyle(InkTheme.secondary)
                                         .lineSpacing(5)
@@ -31,10 +31,10 @@ struct ReadingResultsSheet: View {
                         } else {
                             PaperCard {
                                 VStack(alignment: .leading, spacing: 10) {
-                                    Text("这份推演暂时无法读取。")
+                                    Text(L10n.text("这份推演暂时无法读取。", "This reading couldn’t be opened."))
                                         .font(.system(size: 18, design: .serif))
                                         .foregroundStyle(InkTheme.ink)
-                                    Text("当前页面只对应这条回复，不会用其他推演替代。")
+                                    Text(L10n.text("当前页面只对应这条回复，不会用其他推演替代。", "This page shows the reading linked to this reply."))
                                         .font(.system(size: 12))
                                         .foregroundStyle(InkTheme.secondary)
                                 }
@@ -48,11 +48,11 @@ struct ReadingResultsSheet: View {
                 }
                 .accessibilityIdentifier("runResultsSheet")
             }
-            .navigationTitle("此次推演")
+            .navigationTitle(L10n.text("此次推演", "Reading details"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("完成") { dismiss() }
+                    Button(L10n.text("完成", "Done")) { dismiss() }
                         .font(.system(size: 14))
                         .accessibilityIdentifier("closeRunResults")
                 }
@@ -66,7 +66,7 @@ struct ReadingResultsSheet: View {
 
     private func questionHeader(_ run: OracleRun) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionEyebrow(text: "这次问事的直接结果")
+            SectionEyebrow(text: L10n.text("这次问事的直接结果", "Results for this question"))
             Text(run.input.question)
                 .font(.system(size: 22, design: .serif))
                 .foregroundStyle(InkTheme.ink)
@@ -76,7 +76,7 @@ struct ReadingResultsSheet: View {
             Text(castingTime(run))
                 .font(.system(size: 11))
                 .foregroundStyle(InkTheme.secondary)
-            Text("仅列出此次使用方法的原始返回，按方法分别查看。")
+            Text(L10n.text("仅列出此次使用方法的原始返回，按方法分别查看。", "See the original results for each method used in this reading."))
                 .font(.system(size: 12, design: .serif))
                 .foregroundStyle(InkTheme.secondary)
                 .lineSpacing(4)
@@ -85,9 +85,14 @@ struct ReadingResultsSheet: View {
 
     private func castingTime(_ run: OracleRun) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_Hans_CN")
+        formatter.locale = AppLanguage.current.locale
         formatter.timeZone = TimeZone(identifier: run.input.profile.currentTimeZoneID) ?? .gmt
-        formatter.dateFormat = "yyyy年M月d日 HH:mm"
+        if AppLanguage.current.isEnglish {
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
+        } else {
+            formatter.dateFormat = "yyyy年M月d日 HH:mm"
+        }
         return formatter.string(from: run.input.castingDate) + " · " + run.input.profile.currentTimeZoneID
     }
 }
@@ -102,10 +107,10 @@ private struct ReadingResultReferenceCard: View {
     private let previewRowCount = 4
     private var statusTitle: String {
         switch result.status {
-        case .complete: "已完成"
-        case .partial: "部分结果"
-        case .unavailable: "资料未定"
-        case .failed: "未完成"
+        case .complete: L10n.text("已完成", "Complete")
+        case .partial: L10n.text("部分结果", "Partial")
+        case .unavailable: L10n.text("资料未定", "Missing details")
+        case .failed: L10n.text("未完成", "Incomplete")
         }
     }
 
@@ -121,6 +126,12 @@ private struct ReadingResultReferenceCard: View {
                         .foregroundStyle(InkTheme.ink)
                     Spacer(minLength: 4)
                     InkPill(text: statusTitle, color: result.status == .complete ? InkTheme.sage : InkTheme.cinnabar)
+                }
+                let resultLanguage = result.contentLanguageCode ?? AppLanguage.simplifiedChinese.rawValue
+                if resultLanguage != AppLanguage.current.rawValue {
+                    Text(L10n.text("原始结果 · 英文", "Original result · Chinese"))
+                        .font(.caption)
+                        .foregroundStyle(InkTheme.secondary)
                 }
                 Text(result.headline)
                     .font(.system(size: 16, design: .serif))
@@ -140,7 +151,7 @@ private struct ReadingResultReferenceCard: View {
                             rows(Array(result.rows.dropFirst(previewRowCount)), startingAt: previewRowCount)
                                 .padding(.top, 12)
                         } label: {
-                            Text(showRemainingRows ? "收起其余原始数据" : "展开其余 \(result.rows.count - previewRowCount) 项原始数据")
+                            Text(showRemainingRows ? L10n.text("收起其余原始数据", "Hide remaining details") : L10n.text("展开其余 \(result.rows.count - previewRowCount) 项原始数据", "Show \(result.rows.count - previewRowCount) more"))
                                 .font(.system(size: 12))
                                 .foregroundStyle(InkTheme.secondary)
                         }
@@ -164,7 +175,7 @@ private struct ReadingResultReferenceCard: View {
                             }
                         }.padding(.top, 12)
                     } label: {
-                        Text("规则线索 · \(result.evidence.count) 条")
+                        Text(L10n.text("规则线索 · \(result.evidence.count) 条", "Rule notes · \(result.evidence.count)"))
                             .font(.system(size: 12))
                             .foregroundStyle(InkTheme.secondary)
                     }
@@ -182,7 +193,7 @@ private struct ReadingResultReferenceCard: View {
                     }
                     .padding(.top, 2)
                 }
-                Text("版本 \(result.version) · \(String(format: "%.0f", result.durationMilliseconds)) ms · \(result.provenance)")
+                Text(L10n.text("版本 \(result.version) · \(String(format: "%.0f", result.durationMilliseconds)) ms · \(result.provenance)", "Version \(result.version) · \(String(format: "%.0f", result.durationMilliseconds)) ms · \(result.provenance)"))
                     .font(.system(size: 10))
                     .foregroundStyle(InkTheme.secondary.opacity(0.85))
                     .lineSpacing(3)

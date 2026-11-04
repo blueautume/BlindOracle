@@ -9,6 +9,8 @@ struct LocalPlace: Identifiable, Equatable, Sendable {
     let latitude: Double
     let longitude: Double
     let timeZone: String
+
+    var displayName: String { ChinaDistrictCatalog.shared.displayName(for: nil, canonical: name) }
 }
 
 struct ChinaDistrict: Hashable, Identifiable, Sendable {
@@ -21,23 +23,27 @@ struct ChinaDistrict: Hashable, Identifiable, Sendable {
     let longitude: Double?
 
     var fullName: String { components.joined() }
+    var displayName: String { L10n.text(name, ChinaPlaceNames.english(name)) }
+    var fullDisplayName: String {
+        L10n.text(fullName, components.reversed().map(ChinaPlaceNames.english).joined(separator: ", "))
+    }
     var timeZone: String { OracleProfile.defaultChinaTimeZoneID }
 
     var wholeAreaSelectionTitle: String? {
         guard hasChildren else { return nil }
         switch countryCode {
         case "CN":
-            if name.hasSuffix("市") { return "全市" }
+            if name.hasSuffix("市") { return L10n.text("全市", "Entire city") }
             guard components.count == 2 else { return nil }
-            if name.hasSuffix("州") { return "全州" }
-            if name.hasSuffix("盟") { return "全盟" }
-            if name.hasSuffix("地区") { return "全地区" }
+            if name.hasSuffix("州") { return L10n.text("全州", "Entire prefecture") }
+            if name.hasSuffix("盟") { return L10n.text("全盟", "Entire league") }
+            if name.hasSuffix("地区") { return L10n.text("全地区", "Entire region") }
         case "TW":
             guard components.count == 2 else { return nil }
-            if name.hasSuffix("市") { return "全市" }
-            if name.hasSuffix("縣") { return "全縣" }
-        case "HK" where components.count == 1 && localPlace != nil: return "香港全境"
-        case "MO" where components.count == 1 && localPlace != nil: return "澳门全境"
+            if name.hasSuffix("市") { return L10n.text("全市", "Entire city") }
+            if name.hasSuffix("縣") { return L10n.text("全縣", "Entire county") }
+        case "HK" where components.count == 1 && localPlace != nil: return L10n.text("香港全境", "All of Hong Kong")
+        case "MO" where components.count == 1 && localPlace != nil: return L10n.text("澳门全境", "All of Macao")
         default: break
         }
         return nil
@@ -97,7 +103,7 @@ struct ChinaDistrictCatalog: Sendable {
         guard let url = Bundle.main.url(forResource: "china-districts", withExtension: "json", subdirectory: "Locations"),
               let data = try? Data(contentsOf: url),
               let catalog = try? ChinaDistrictCatalog(data: data) else {
-            return ChinaDistrictCatalog(provinces: [], childrenByParent: [:])
+            return ChinaDistrictCatalog(provinces: [], childrenByParent: [:], byID: [:])
         }
         return catalog
     }()
@@ -105,14 +111,25 @@ struct ChinaDistrictCatalog: Sendable {
     static let supportedCountryCodes: Set<String> = ["CN", "HK", "MO", "TW"]
     let provinces: [ChinaDistrict]
     private let childrenByParent: [String: [ChinaDistrict]]
+    private let byID: [String: ChinaDistrict]
+    private let byFullName: [String: ChinaDistrict]
 
     func children(of district: ChinaDistrict) -> [ChinaDistrict] {
         childrenByParent[district.id] ?? []
     }
 
-    private init(provinces: [ChinaDistrict], childrenByParent: [String: [ChinaDistrict]]) {
+    func displayName(for districtID: String?, canonical: String) -> String {
+        guard AppLanguage.current.isEnglish else { return canonical }
+        let district = districtID.flatMap { byID[$0] } ?? byFullName[canonical]
+        return district?.fullDisplayName ?? ChinaPlaceNames.english(canonical)
+    }
+
+    private init(provinces: [ChinaDistrict], childrenByParent: [String: [ChinaDistrict]], byID: [String: ChinaDistrict]) {
         self.provinces = provinces
         self.childrenByParent = childrenByParent
+        self.byID = byID
+        self.byFullName = Dictionary(byID.values.sorted { $0.id < $1.id }.map { ($0.fullName, $0) },
+                                     uniquingKeysWith: { first, _ in first })
     }
 
     init(data: Data) throws {
@@ -139,7 +156,7 @@ struct ChinaDistrictCatalog: Sendable {
             if let parent { childrenByParent[parent.id, default: []].append(district) }
             else { provinces.append(district) }
         }
-        self.init(provinces: provinces, childrenByParent: childrenByParent)
+        self.init(provinces: provinces, childrenByParent: childrenByParent, byID: byID)
     }
 
     private struct Source: Decodable {
@@ -157,14 +174,57 @@ struct ChinaDistrictCatalog: Sendable {
     }
 }
 
+private enum ChinaPlaceNames {
+    private static let conventional: [String: String] = [
+        "北京": "Beijing", "天津": "Tianjin", "上海": "Shanghai", "重庆": "Chongqing",
+        "内蒙古自治区": "Inner Mongolia", "广西壮族自治区": "Guangxi", "西藏自治区": "Tibet",
+        "宁夏回族自治区": "Ningxia", "新疆维吾尔自治区": "Xinjiang",
+        "香港特别行政区": "Hong Kong", "香港": "Hong Kong",
+        "澳门特别行政区": "Macao", "澳门": "Macao", "台湾地区": "Taiwan", "台湾": "Taiwan",
+        "陕西": "Shaanxi", "山西": "Shanxi", "厦门": "Xiamen", "西安": "Xi'an", "长安": "Chang'an",
+        "长春": "Changchun", "长沙": "Changsha", "长治": "Changzhi", "长乐": "Changle",
+        "朝阳": "Chaoyang", "六安": "Lu'an", "六盘水": "Liupanshui", "蚌埠": "Bengbu",
+        "台北": "Taipei", "新北": "New Taipei", "桃园": "Taoyuan", "台中": "Taichung",
+        "台南": "Tainan", "高雄": "Kaohsiung", "基隆": "Keelung", "新竹": "Hsinchu",
+        "嘉义": "Chiayi", "彰化": "Changhua", "南投": "Nantou", "宜兰": "Yilan",
+        "云林": "Yunlin", "屏东": "Pingtung", "花莲": "Hualien", "台东": "Taitung",
+        "苗栗": "Miaoli", "澎湖": "Penghu", "金门": "Kinmen", "连江": "Lienchiang",
+        "九龙": "Kowloon", "新界": "New Territories", "香港岛": "Hong Kong Island",
+        "尖沙咀": "Tsim Sha Tsui", "深水埗": "Sham Shui Po", "黄大仙": "Wong Tai Sin",
+        "荃湾": "Tsuen Wan", "沙田": "Sha Tin", "屯门": "Tuen Mun", "元朗": "Yuen Long",
+        "西贡": "Sai Kung", "葵青": "Kwai Tsing", "大埔": "Tai Po", "离岛": "Islands",
+        "油尖旺": "Yau Tsim Mong", "观塘": "Kwun Tong", "湾仔": "Wan Chai", "中西": "Central and Western",
+        "氹仔": "Taipa", "路环": "Coloane"
+    ]
+
+    static func english(_ name: String) -> String {
+        guard name.unicodeScalars.contains(where: { (0x3400...0x9FFF).contains($0.value) }) else { return name }
+        let simplified = name.applyingTransform(StringTransform("Traditional-Simplified"), reverse: false) ?? name
+        if let exact = conventional[simplified] { return exact }
+        // English names for administrative divisions; transliterate the name
+        // while keeping the Chinese catalog entry and district ID unchanged.
+        let suffixes = [("特别行政区", " SAR"), ("自治县", " Autonomous County"),
+                        ("自治州", " Autonomous Prefecture"), ("自治区", " Autonomous Region"),
+                        ("地区", " Prefecture"), ("市", ""), ("省", ""), ("区", " District"),
+                        ("县", " County"), ("盟", " League"), ("旗", " Banner")]
+        let match = suffixes.first { simplified.count > $0.0.count && simplified.hasSuffix($0.0) }
+        let stem = match.map { String(simplified.dropLast($0.0.count)) } ?? simplified
+        let suffix = match?.1 ?? ""
+        if let exact = conventional[stem] { return exact + suffix }
+        let latin = stem.applyingTransform(.mandarinToLatin, reverse: false) ?? stem
+        let plain = latin.applyingTransform(.stripDiacritics, reverse: false) ?? latin
+        return plain.split(whereSeparator: \.isWhitespace).joined().capitalized + suffix
+    }
+}
+
 enum LocationLookupError: LocalizedError {
     case unavailable, districtCoordinatesUnavailable, outsideChina
 
     var errorDescription: String? {
         switch self {
-        case .unavailable: "暂时无法确认当前位置，请重试或从地区列表选择。"
-        case .districtCoordinatesUnavailable: "已保留所选地区，暂时无法核实经纬度。可以重试或另选地区。"
-        case .outsideChina: "当前定位仅支持中国地区。可以重试或从地区列表选择。"
+        case .unavailable: L10n.text("暂时无法确认当前位置，请重试或从地区列表选择。", "Your location couldn't be confirmed. Try again or choose a place from the list.")
+        case .districtCoordinatesUnavailable: L10n.text("已保留所选地区，暂时无法核实经纬度。可以重试或另选地区。", "Your selection was kept, but its coordinates couldn't be confirmed. Try again or choose another place.")
+        case .outsideChina: L10n.text("当前定位仅支持中国地区。可以重试或从地区列表选择。", "Your current location is outside the supported regions. Try again or choose a place from the list.")
         }
     }
 }
@@ -305,7 +365,7 @@ extension LocalPlace {
         }
         #endif
         guard servicesEnabled() else {
-            fail("定位未开启，可以在系统设置中开启后重试，或从地区列表选择。", id: id); return
+            fail(L10n.text("定位未开启，可以在系统设置中开启后重试，或从地区列表选择。", "Location Services are off. Turn them on in Settings or choose a place from the list."), id: id); return
         }
         // A delegate callback carries its manager, not the UUID of requestLocation.
         // Give each request its own manager so queued callbacks from a cancelled
@@ -330,7 +390,7 @@ extension LocalPlace {
         case .notDetermined: manager.requestWhenInUseAuthorization()
         case .authorizedAlways, .authorizedWhenInUse:
             awaitingCoordinate = true; manager.requestLocation()
-        default: fail("未获得定位权限，可以在系统设置中允许后重试，或从地区列表选择。", id: id)
+        default: fail(L10n.text("未获得定位权限，可以在系统设置中允许后重试，或从地区列表选择。", "Location access is off. Allow it in Settings or choose a place from the list."), id: id)
         }
     }
 
@@ -344,7 +404,7 @@ extension LocalPlace {
         awaitingCoordinate = false
         guard let location = locations.last, location.horizontalAccuracy >= 0,
               CLLocationCoordinate2DIsValid(location.coordinate) else {
-            fail("暂时未能取得位置，请重试或从地区列表选择。", id: id); return
+            fail(L10n.text("暂时未能取得位置，请重试或从地区列表选择。", "Couldn't get your location. Try again or choose a place from the list."), id: id); return
         }
         geocodingTask = Task { [weak self] in
             guard let self, self.requestID == id, !Task.isCancelled else { return }
@@ -361,7 +421,7 @@ extension LocalPlace {
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         guard manager === self.manager, let id = requestID, awaitingCoordinate else { return }
-        fail("暂时未能取得位置，请重试或从地区列表选择。", id: id)
+        fail(L10n.text("暂时未能取得位置，请重试或从地区列表选择。", "Couldn't get your location. Try again or choose a place from the list."), id: id)
     }
 
     private func resolve(_ location: CLLocation) async throws -> LocalPlace {

@@ -86,7 +86,7 @@ final class LocalVault {
     }
     func export(profiles: [OracleProfile], runs: [OracleRun], weights: [String: Double]) throws -> URL {
         struct Export: Encodable { var schemaVersion = 1; var exportedAt = Date(); var profiles: [OracleProfile]; var runs: [OracleRun]; var weights: [String: Double] }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("瞎子-本地档案.json")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(L10n.text("瞎子-本地档案.json", "BlindOracle-local-data.json"))
         try encoder.encode(Export(profiles: profiles, runs: runs, weights: weights)).write(to: url, options: .atomic)
         return url
     }
@@ -142,7 +142,7 @@ enum LocalContextPolicy {
         guard !older.isEmpty else { return previous }
         let entries = older.filter { $0.kind != .intake }.map { message in
             let text = message.content.replacingOccurrences(of: "\n", with: " ")
-            return (message.role == .user ? "用户：" : "先知：") + String(text.prefix(message.role == .user ? 500 : 800))
+            return (message.role == .user ? L10n.text("用户：", "User: ") : L10n.text("先知：", "Oracle: ")) + String(text.prefix(message.role == .user ? 500 : 800))
         }
         // A bounded retrieval digest. Full original messages and all result records remain on disk.
         var result = previous

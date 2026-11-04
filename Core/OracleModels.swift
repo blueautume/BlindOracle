@@ -5,16 +5,16 @@ enum OracleMethod: String, Codable, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .bazi: "八字 / 四柱"
-        case .ziwei: "紫微斗数"
-        case .liuyao: "六爻 / 周易筮法"
-        case .meihua: "梅花易数"
-        case .qimen: "奇门遁甲"
-        case .xiaoliuren: "小六壬"
-        case .chenggu: "称骨"
-        case .xingming: "姓名五格"
-        case .astrology: "西方占星"
-        case .tarot: "塔罗牌"
+        case .bazi: L10n.text("八字 / 四柱", "BaZi / Four Pillars")
+        case .ziwei: L10n.text("紫微斗数", "Zi Wei Dou Shu")
+        case .liuyao: L10n.text("六爻 / 周易筮法", "Liu Yao / Six Lines")
+        case .meihua: L10n.text("梅花易数", "Mei Hua Yi Shu")
+        case .qimen: L10n.text("奇门遁甲", "Qi Men Dun Jia")
+        case .xiaoliuren: L10n.text("小六壬", "Xiao Liu Ren")
+        case .chenggu: L10n.text("称骨", "Bone Weight Reading")
+        case .xingming: L10n.text("姓名五格", "Chinese Name Numerology")
+        case .astrology: L10n.text("西方占星", "Western Astrology")
+        case .tarot: L10n.text("塔罗牌", "Tarot")
         }
     }
     var symbol: String {
@@ -38,17 +38,17 @@ enum OracleField: String, Codable, CaseIterable, Hashable, Sendable {
     case name, surname, givenName, gender, birthDate, birthTime, birthPlace, birthTimeZone, birthCoordinates, currentLocation, numbers
     var title: String {
         switch self {
-        case .name: "姓名"
-        case .surname: "姓氏"
-        case .givenName: "名字"
-        case .gender: "排盘性别"
-        case .birthDate: "出生日期"
-        case .birthTime: "出生时间"
-        case .birthPlace: "出生地"
-        case .birthTimeZone: "出生地时区"
-        case .birthCoordinates: "出生地经纬度"
-        case .currentLocation: "当前所在地"
-        case .numbers: "心中想到的数字"
+        case .name: L10n.text("姓名", "Name")
+        case .surname: L10n.text("姓氏", "Family Name")
+        case .givenName: L10n.text("名字", "Given Name")
+        case .gender: L10n.text("排盘性别", "Chart Gender")
+        case .birthDate: L10n.text("出生日期", "Date of Birth")
+        case .birthTime: L10n.text("出生时间", "Time of Birth")
+        case .birthPlace: L10n.text("出生地", "Birthplace")
+        case .birthTimeZone: L10n.text("出生地时区", "Birth Time Zone")
+        case .birthCoordinates: L10n.text("出生地经纬度", "Birth Coordinates")
+        case .currentLocation: L10n.text("当前所在地", "Current Location")
+        case .numbers: L10n.text("心中想到的数字", "Numbers You Have in Mind")
         }
     }
 }
@@ -152,6 +152,8 @@ struct OracleResult: Codable, Identifiable, Sendable {
     var generatedAt = Date()
     var durationMilliseconds: Double = 0
     var provenance: String
+    /// Language of the saved result text. Older records predate this field.
+    var contentLanguageCode: String?
     var tarotDraws: [TarotDraw]? = nil
     var tarotClarificationRounds: [TarotClarificationRound]? = nil
     var participantID: UUID? = nil
@@ -162,10 +164,11 @@ struct OracleResult: Codable, Identifiable, Sendable {
     }
     init(method: OracleMethod, version: String = "1.0.0", status: OracleResultStatus = .complete,
          headline: String, rows: [OracleRow], evidence: [OracleEvidence] = [],
-         limitations: [String] = [], provenance: String = "本地计算") {
+         limitations: [String] = [], provenance: String = L10n.text("本地计算", "Calculated on device")) {
         self.method = method; self.version = version; self.status = status
         self.headline = headline; self.rows = rows; self.evidence = evidence
         self.limitations = limitations; self.provenance = provenance
+        self.contentLanguageCode = AppLanguage.current.rawValue
     }
 }
 

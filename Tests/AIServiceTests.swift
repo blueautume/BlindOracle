@@ -343,3 +343,107 @@ final class AIServiceTests: XCTestCase {
         XCTAssertFalse(ContextCompressor.shouldCompress(messages: long, summary: recent))
     }
 }
+
+extension AIServiceTests {
+    func testBothProvidersPlanAndStreamAnEnglishReadingWithLegacyHistory() async throws {
+        let question = "Should I apply for the new job?"
+        let history = [AIConversationTurn(role: "assistant", content: "上次的对话原文")]
+        let profile = OracleProfile()
+        let plugins = PluginRegistry().descriptors
+        for provider in AIProvider.allCases {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [EnglishReadingURLProtocol.self]
+            let client = DeepSeekClient(provider: provider, apiKey: "test-key", sessionConfiguration: configuration)
+            let plan = try await client.plan(question: question, profile: profile, plugins: plugins, history: history, language: .english)
+            XCTAssertEqual(plan.action, "intake")
+            XCTAssertEqual(plan.subject, "本人")
+            XCTAssertEqual(plan.methods, [.tarot])
+            XCTAssertEqual(plan.interactions?.first?.kind, .tarot)
+            XCTAssertEqual(plan.interactions?.first?.prompt, "Choose three cards.")
+            XCTAssertEqual(plan.note, "Review the reading details.")
+            XCTAssertEqual(plan.question, question)
+
+            var run = OracleRun(input: OracleInput(question: question, profile: profile), plan: plan)
+            run.results = [OracleResult(method: .tarot, headline: "Test Tarot result", rows: [])]
+            let visible = XCTestExpectation(description: "\(provider) streamed only the visible reply")
+            let synthesis = try await client.synthesize(run: run, weights: [:], history: history, language: .english) { delta in
+                XCTAssertEqual(delta, "Apply if the role fits your priorities.")
+                visible.fulfill()
+            }
+            await fulfillment(of: [visible], timeout: 1)
+            XCTAssertEqual(synthesis.text, "Apply if the role fits your priorities.")
+            XCTAssertTrue(synthesis.alternatives.isEmpty)
+        }
+    }
+}
+
+/// Validates real encoded requests while supplying synthetic API envelopes for
+/// both provider endpoints. This protocol claims all requests in the test session.
+private final class EnglishReadingURLProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        do {
+            let data = try requestBody()
+            guard let url = request.url, let host = url.host,
+                  let body = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let model = body["model"] as? String,
+                  let stream = body["stream"] as? Bool,
+                  let turns = body["messages"] as? [[String: String]],
+                  turns.first?["role"] == "system",
+                  turns.first?["content"]?.contains("natural English") == true,
+                  turns.contains(["role": "assistant", "content": "上次的对话原文"]),
+                  turns.last?["content"]?.contains("Should I apply for the new job?") == true,
+                  (body["response_format"] as? [String: String])?["type"] == "json_object",
+                  (host == "api.deepseek.com" && body["thinking"] != nil
+                    || host == "dashscope.aliyuncs.com" && body["enable_thinking"] as? Bool == true) else {
+                throw URLError(.badServerResponse)
+            }
+
+            let payload: Data
+            if stream {
+                let content = #"{"text":"Apply if the role fits your priorities.","alternatives":[]}"#
+                let events: [[String: Any]] = [
+                    ["model": model, "choices": [["delta": ["reasoning_content": "Private test reasoning"]]]],
+                    ["model": model, "choices": [["delta": ["content": content], "finish_reason": "stop"]]]
+                ]
+                let framed = try events.map { event in
+                    "data: " + String(decoding: try JSONSerialization.data(withJSONObject: event), as: UTF8.self)
+                }.joined(separator: "\n\n") + "\n\ndata: [DONE]\n\n"
+                payload = Data(framed.utf8)
+            } else {
+                let content = #"{"action":"intake","intent":"Career choice","subject":"本人","methods":["tarot"],"requiredFields":[],"note":"Review the reading details.","question":"Untrusted replacement","interactions":[{"method":"tarot","kind":"tarot","prompt":"Choose three cards."}]}"#
+                payload = try JSONSerialization.data(withJSONObject: [
+                    "model": model, "choices": [["message": ["content": content], "finish_reason": "stop"]]
+                ])
+            }
+            guard let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": stream ? "text/event-stream" : "application/json"]) else {
+                throw URLError(.badServerResponse)
+            }
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: payload)
+            client?.urlProtocolDidFinishLoading(self)
+        } catch {
+            client?.urlProtocol(self, didFailWithError: error)
+        }
+    }
+
+    override func stopLoading() {}
+
+    private func requestBody() throws -> Data {
+        if let body = request.httpBody { return body }
+        guard let stream = request.httpBodyStream else { throw URLError(.badServerResponse) }
+        stream.open()
+        defer { stream.close() }
+        var output = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count == 0 { return output }
+            guard count > 0 else { throw stream.streamError ?? URLError(.badServerResponse) }
+            output.append(contentsOf: buffer.prefix(count))
+        }
+    }
+}

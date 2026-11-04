@@ -276,11 +276,11 @@ struct ProfileFormDraft: Identifiable {
         }
         if (birthDateChoiceChanged || birthTimeChoiceChanged || birthClockEdited || birthZoneEdited),
            birthDateKnown, TimeZone(identifier: profile.birthTimeZoneID) == nil {
-            throw ProfileFormError(message: "出生资料暂无法保存，请重新选择出生地。")
+            throw ProfileFormError(message: L10n.text("出生资料暂无法保存，请重新选择出生地。", "Couldn’t save the birth details. Choose the birthplace again."))
         }
         normalizeClock(in: &profile)
         if profile.sex == "未提供" { profile.unknownFields.insert(.gender) } else { profile.unknownFields.remove(.gender) }
-        let currentLocationError = ProfileFormError(message: "当前所在地资料有误，请重新定位或清空。")
+        let currentLocationError = ProfileFormError(message: L10n.text("当前所在地资料有误，请重新定位或清空。", "The current location is invalid. Locate it again or clear it."))
         guard TimeZone(identifier: profile.currentTimeZoneID) != nil else { throw currentLocationError }
         if let latitude = profile.currentLatitude, !(-90...90).contains(latitude) { throw currentLocationError }
         if let longitude = profile.currentLongitude, !(-180...180).contains(longitude) { throw currentLocationError }
@@ -288,16 +288,16 @@ struct ProfileFormDraft: Identifiable {
         if profile.birthPlace.isEmpty { profile.unknownFields.insert(.birthPlace) }
         if profile.declaredUnknownFields?.contains(.birthCoordinates) != true {
             if let latitude = profile.birthLatitude, !(-90...90).contains(latitude) {
-                throw ProfileFormError(message: "出生地坐标有误，请重新选择或清空出生地。")
+                throw ProfileFormError(message: L10n.text("出生地坐标有误，请重新选择或清空出生地。", "The birthplace coordinates are invalid. Select a place again or clear it."))
             }
             if let longitude = profile.birthLongitude, !(-180...180).contains(longitude) {
-                throw ProfileFormError(message: "出生地坐标有误，请重新选择或清空出生地。")
+                throw ProfileFormError(message: L10n.text("出生地坐标有误，请重新选择或清空出生地。", "The birthplace coordinates are invalid. Select a place again or clear it."))
             }
         }
         if profile.unknownFields.contains(.birthCoordinates) { profile.birthLatitude = nil; profile.birthLongitude = nil }
         if profile.birthLatitude == nil || profile.birthLongitude == nil { profile.unknownFields.insert(.birthCoordinates) }
         else if !(-90...90).contains(profile.birthLatitude!) || !(-180...180).contains(profile.birthLongitude!) {
-            throw ProfileFormError(message: "出生地坐标有误，请重新选择或清空出生地。")
+            throw ProfileFormError(message: L10n.text("出生地坐标有误，请重新选择或清空出生地。", "The birthplace coordinates are invalid. Select a place again or clear it."))
         }
         else { profile.unknownFields.remove(.birthCoordinates) }
         profile.unknownFields.insert(.numbers)
@@ -349,34 +349,34 @@ struct IntakeView: View {
                         HStack(alignment: .center, spacing: 16) {
                             OracleMark(size: 52)
                             VStack(alignment: .leading, spacing: 7) {
-                                Text("写下已知，留白未知。").font(.system(size: 22, design: .serif)).foregroundStyle(InkTheme.ink)
-                                Text("不必勉强记起每一件事。").font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.secondary)
+                                Text(L10n.text("写下已知，留白未知。", "Write down what you know.")).font(.system(size: 22, design: .serif)).foregroundStyle(InkTheme.ink)
+                                Text(L10n.text("不必勉强记起每一件事。", "You can leave the rest blank.")).font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.secondary)
                             }
                         }
                         if !isEditing {
                             PaperCard {
                                 VStack(alignment: .leading, spacing: 12) {
-                                    SectionEyebrow(text: "此次所问")
+                                    SectionEyebrow(text: L10n.text("此次所问", "Your question"))
                                     Text(plan.question).font(.system(size: 18, design: .serif)).lineSpacing(7).foregroundStyle(InkTheme.ink)
                                 }
                             }
                         }
                         ProfileFieldsView(draft: $draft)
                         if !isEditing {
-                            Toggle("把这份基础资料留在本机", isOn: $keepProfile)
+                            Toggle(L10n.text("把这份基础资料留在本机", "Save this profile on this device"), isOn: $keepProfile)
                                 .font(.system(size: 13, design: .serif)).tint(InkTheme.sage)
                         }
                         if let error { Text(error).font(.system(size: 12)).foregroundStyle(InkTheme.cinnabar) }
                         Button(action: confirm) {
-                            HStack { Text(isEditing ? "保存基础资料" : "确认资料，开始推演"); Image(systemName: "arrow.right") }
+                            HStack { Text(isEditing ? L10n.text("保存基础资料", "Save profile") : L10n.text("确认资料，开始推演", "Confirm and begin")); Image(systemName: "arrow.right") }
                         }.buttonStyle(InkPrimaryButton()).accessibilityIdentifier("confirmIntake")
-                        Text(isEditing ? "基础档案独立保存在本机。" : "问题、所需资料与推演摘要会用于 AI 解读；基础档案保存在本机。")
+                        Text(isEditing ? L10n.text("基础档案独立保存在本机。", "Your profile is stored on this device.") : L10n.text("问题、所需资料与推演摘要会用于 AI 解读；基础档案保存在本机。", "AI interpretation uses the question, required details, and a reading summary. Your profile stays on this device."))
                             .font(.system(size: 10)).foregroundStyle(InkTheme.secondary).lineSpacing(4).frame(maxWidth: .infinity, alignment: .center)
                     }.frame(maxWidth: 620).padding(24).frame(maxWidth: .infinity)
                 }.scrollDismissesKeyboard(.interactively).accessibilityIdentifier("profileEditorScroll")
             }
-            .navigationTitle(isEditing ? "基础资料" : "问事笺").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("稍后填写") { dismiss() }.font(.system(size: 13)).foregroundStyle(InkTheme.secondary) } }
+            .navigationTitle(isEditing ? L10n.text("基础资料", "Profile") : L10n.text("问事笺", "Reading details")).navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(L10n.text("稍后填写", "Finish later")) { dismiss() }.font(.system(size: 13)).foregroundStyle(InkTheme.secondary) } }
             .toolbarBackground(InkTheme.paper, for: .navigationBar).toolbarBackground(.visible, for: .navigationBar)
         }.presentationDragIndicator(.visible)
     }
@@ -392,6 +392,13 @@ struct IntakeView: View {
 private enum BirthDateCalendar: String {
     case gregorian = "公历"
     case lunar = "农历"
+
+    var selectionPrompt: String {
+        switch self {
+        case .gregorian: L10n.text("选公历日期", "Choose a Gregorian date")
+        case .lunar: L10n.text("选农历日期", "Choose a lunar date")
+        }
+    }
 }
 
 struct ProfileFieldsView: View {
@@ -432,39 +439,39 @@ struct ProfileFieldsView: View {
         VStack(alignment: .leading, spacing: 16) {
             PaperCard {
                 VStack(alignment: .leading, spacing: 0) {
-                    SectionEyebrow(text: "姓名与代称").padding(.bottom, 8)
-                    textRow("姓", text: surname, contentType: .familyName, id: "profileSurname")
+                    SectionEyebrow(text: L10n.text("姓名与代称", "Name and nickname")).padding(.bottom, 8)
+                    textRow(L10n.text("姓", "Family name"), text: surname, contentType: .familyName, id: "profileSurname")
                     Divider()
-                    textRow("名", text: givenName, contentType: .givenName, id: "profileGivenName")
+                    textRow(L10n.text("名", "Given name"), text: givenName, contentType: .givenName, id: "profileGivenName")
                     if let legacyName = draft.legacyUnsplitName {
                         Divider()
                         HStack {
-                            LabeledContent("旧档案姓名", value: legacyName)
+                            LabeledContent(L10n.text("旧档案姓名", "Previous profile name"), value: legacyName)
                                 .accessibilityIdentifier("legacyProfileName")
-                            clearButton("旧档案姓名", id: "clearLegacyProfileName") { draft.clearLegacyName() }
+                            clearButton(L10n.text("旧档案姓名", "Previous profile name"), id: "clearLegacyProfileName") { draft.clearLegacyName() }
                         }.frame(minHeight: 44)
                     }
                     Divider()
-                    textRow("代称", text: alias, contentType: .nickname, id: "profileAlias",
+                    textRow(L10n.text("代称", "Nickname"), text: alias, contentType: .nickname, id: "profileAlias",
                             placeholder: draft.profile.anonymousCode)
                 }
             }
             PaperCard {
                 VStack(alignment: .leading, spacing: 0) {
-                    SectionEyebrow(text: "出生与所在地").padding(.bottom, 8)
+                    SectionEyebrow(text: L10n.text("出生与所在地", "Birth and location")).padding(.bottom, 8)
                     genderRow
                     Divider()
                     birthDateRow
                     Divider()
-                    pickerRow("出生时刻", value: draft.profile.birthTimeKnown ? clockText("HH:mm") : nil,
-                              placeholder: "选钟表时间", id: "profileBirthTime", clearID: "clearProfileBirthTime",
+                    pickerRow(L10n.text("出生时刻", "Birth time"), value: draft.profile.birthTimeKnown ? clockText(isDate: false) : nil,
+                              placeholder: L10n.text("选钟表时间", "Choose a time"), id: "profileBirthTime", clearID: "clearProfileBirthTime",
                               action: { picker = .time }, clear: { draft.setBirthTime(nil) })
                     Divider()
-                    locationRow("出生地", value: nonempty(draft.profile.birthPlace) ?? (draft.profile.birthLatitude != nil || draft.profile.birthLongitude != nil ? "已记录地点" : nil),
+                    locationRow(L10n.text("出生地", "Birthplace"), value: displayPlace(code: draft.profile.birthDistrictCode, name: draft.profile.birthPlace) ?? (draft.profile.birthLatitude != nil || draft.profile.birthLongitude != nil ? L10n.text("已记录地点", "Location saved") : nil),
                                 id: "profileBirthPlace", gpsID: "useCurrentLocationForBirthPlace", clearID: "clearProfileBirthPlace",
                                 purpose: .birth, selection: .birthDistrict)
                     Divider()
-                    locationRow("当前所在地", value: nonempty(draft.profile.currentPlace) ?? (draft.profile.currentLatitude != nil || draft.profile.currentLongitude != nil ? "已定位" : nil),
+                    locationRow(L10n.text("当前所在地", "Current location"), value: displayPlace(code: draft.profile.currentDistrictCode, name: draft.profile.currentPlace) ?? (draft.profile.currentLatitude != nil || draft.profile.currentLongitude != nil ? L10n.text("已定位", "Located") : nil),
                                 id: "profileCurrentPlace", gpsID: "useCurrentLocation", clearID: "clearProfileCurrentPlace",
                                 purpose: .current, selection: .currentDistrict)
                 }
@@ -475,9 +482,9 @@ struct ProfileFieldsView: View {
         .sheet(item: $picker) { picker in
             switch picker {
             case .birthDistrict:
-                ChinaDistrictPicker(title: "选择出生地") { selectDistrict($0, purpose: .birth) }
+                ChinaDistrictPicker(title: L10n.text("选择出生地", "Choose a birthplace")) { selectDistrict($0, purpose: .birth) }
             case .currentDistrict:
-                ChinaDistrictPicker(title: "选择当前所在地") { selectDistrict($0, purpose: .current) }
+                ChinaDistrictPicker(title: L10n.text("选择当前所在地", "Choose current location")) { selectDistrict($0, purpose: .current) }
             case .date, .time:
                 BirthClockPicker(isDate: picker == .date, calendar: birthDateCalendar,
                                  value: draft.birthDate, timeZone: draft.birthZone) { value in
@@ -497,7 +504,7 @@ struct ProfileFieldsView: View {
     }
 
     private func textRow(_ title: String, text: Binding<String>, contentType: UITextContentType, id: String,
-                         placeholder: String = "可留空") -> some View {
+                         placeholder: String = L10n.text("可留空", "Optional")) -> some View {
         HStack(spacing: 10) {
             Text(title).accessibilityHidden(true)
             TextField(placeholder, text: text)
@@ -513,22 +520,27 @@ struct ProfileFieldsView: View {
     }
 
     private var genderRow: some View {
-        HStack(spacing: 10) {
-            Text("排盘性别")
+        let gender = switch draft.profile.sex {
+        case "男": L10n.text("男", "Male")
+        case "女": L10n.text("女", "Female")
+        default: L10n.text("未填写", "Not entered")
+        }
+        return HStack(spacing: 10) {
+            Text(L10n.text("排盘性别", "Sex for chart calculation"))
             Spacer()
             Menu {
-                Button("男") { draft.setGender("男") }
-                Button("女") { draft.setGender("女") }
+                Button(L10n.text("男", "Male")) { draft.setGender("男") }
+                Button(L10n.text("女", "Female")) { draft.setGender("女") }
             } label: {
-                Label(draft.profile.sex == "未提供" ? "可留空" : draft.profile.sex, systemImage: "chevron.up.chevron.down")
+                Label(draft.profile.sex == "未提供" ? L10n.text("可留空", "Optional") : gender, systemImage: "chevron.up.chevron.down")
                     .labelStyle(.titleOnly)
                     .foregroundStyle(InkTheme.secondary)
             }
-            .accessibilityLabel("排盘性别")
-            .accessibilityValue(draft.profile.sex == "未提供" ? "未填写" : draft.profile.sex)
+            .accessibilityLabel(L10n.text("排盘性别", "Sex for chart calculation"))
+            .accessibilityValue(gender)
             .accessibilityIdentifier("profileGender")
             if draft.profile.sex != "未提供" {
-                clearButton("排盘性别", id: "clearProfileGender") { draft.setGender("未提供") }
+                clearButton(L10n.text("排盘性别", "Sex for chart calculation"), id: "clearProfileGender") { draft.setGender("未提供") }
             }
         }.frame(minHeight: 44)
     }
@@ -552,18 +564,18 @@ struct ProfileFieldsView: View {
 
     private var birthDateControls: some View {
         HStack(spacing: 8) {
-            Button("出生日期") { picker = .date }
+            Button(L10n.text("出生日期", "Birth date")) { picker = .date }
                 .buttonStyle(.plain)
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
                 .fixedSize()
                 .accessibilityHidden(true)
-            Picker("出生日期历法", selection: $birthDateCalendar) {
-                Text("公历").tag(BirthDateCalendar.gregorian)
-                Text("农历").tag(BirthDateCalendar.lunar)
+            Picker(L10n.text("出生日期历法", "Birth date calendar"), selection: $birthDateCalendar) {
+                Text(L10n.text("公历", "Gregorian")).tag(BirthDateCalendar.gregorian)
+                Text(L10n.text("农历", "Lunar")).tag(BirthDateCalendar.lunar)
             }
             .pickerStyle(.segmented)
-            .frame(width: 92)
+            .frame(width: AppLanguage.current.isEnglish ? 150 : 92)
             .accessibilityIdentifier("profileBirthCalendar")
         }
     }
@@ -571,20 +583,20 @@ struct ProfileFieldsView: View {
     private var birthDateValue: some View {
         let value: String? = if !draft.birthDateKnown { nil }
         else if birthDateCalendar == .lunar {
-            BirthLunarDate(date: draft.birthDate, timeZone: draft.birthZone)?.label ?? "超出农历换算范围"
-        } else { clockText("yyyy-MM-dd") }
+            BirthLunarDate(date: draft.birthDate, timeZone: draft.birthZone)?.label ?? L10n.text("超出农历换算范围", "Outside the supported lunar calendar range")
+        } else { clockText(isDate: true) }
         return HStack(spacing: 0) {
             Button { picker = .date } label: {
-                pickerValue(value, placeholder: "选\(birthDateCalendar.rawValue)日期")
-                    .fixedSize()
+                pickerValue(value, placeholder: birthDateCalendar.selectionPrompt)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("出生日期")
-            .accessibilityValue(value ?? "未填写")
+            .accessibilityLabel(L10n.text("出生日期", "Birth date"))
+            .accessibilityValue(value ?? L10n.text("未填写", "Not entered"))
             .accessibilityIdentifier("profileBirthDate")
-            if value != nil { clearButton("出生日期", id: "clearProfileBirthDate") { draft.setBirthDate(nil) } }
+            if value != nil { clearButton(L10n.text("出生日期", "Birth date"), id: "clearProfileBirthDate") { draft.setBirthDate(nil) } }
         }
     }
 
@@ -602,7 +614,7 @@ struct ProfileFieldsView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(title)
-            .accessibilityValue(value ?? "未填写")
+            .accessibilityValue(value ?? L10n.text("未填写", "Not entered"))
             .accessibilityIdentifier(id)
             if value != nil { clearButton(title, id: clearID, action: clear) }
         }
@@ -626,21 +638,21 @@ struct ProfileFieldsView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(state.waitingForGPS)
-                .accessibilityLabel("用当前位置填写" + title)
+                .accessibilityLabel(L10n.text("用当前位置填写", "Use current location for ") + title)
                 .accessibilityIdentifier(gpsID)
                 Button { picker = selection } label: {
-                    pickerValue(value, placeholder: "省/市/区")
+                    pickerValue(value, placeholder: L10n.text("省/市/区", "Province, city, or district"))
                         .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(title)
-                .accessibilityValue(value ?? "未填写")
+                .accessibilityValue(value ?? L10n.text("未填写", "Not entered"))
                 .accessibilityIdentifier(id)
                 if value != nil { clearButton(title, id: clearID) { clearLocation(purpose) } }
             }
             if state.lookupID != nil {
-                Label("正在补充地区坐标", systemImage: "mappin")
+                Label(L10n.text("正在补充地区坐标", "Looking up coordinates"), systemImage: "mappin")
                     .font(.system(size: 11)).foregroundStyle(InkTheme.secondary).padding(.bottom, 8)
             } else if let message = state.message {
                 Text(message).font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
@@ -669,19 +681,27 @@ struct ProfileFieldsView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("清空" + title)
+        .accessibilityLabel(L10n.text("清空", "Clear ") + title)
         .accessibilityIdentifier(id)
     }
 
-    private func clockText(_ format: String) -> String {
+    private func clockText(isDate: Bool) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.locale = AppLanguage.current.locale
         formatter.timeZone = draft.birthZone
-        formatter.dateFormat = format
+        if AppLanguage.current.isEnglish {
+            if isDate { formatter.dateStyle = .medium }
+            else { formatter.timeStyle = .short }
+        } else {
+            formatter.dateFormat = isDate ? "yyyy-MM-dd" : "HH:mm"
+        }
         return formatter.string(from: draft.birthDate)
     }
 
-    private func nonempty(_ value: String) -> String? { value.isEmpty ? nil : value }
+    private func displayPlace(code: String?, name: String) -> String? {
+        guard !name.isEmpty else { return nil }
+        return ChinaDistrictCatalog.shared.displayName(for: code, canonical: name)
+    }
 
     private func selectDistrict(_ district: ChinaDistrict, purpose: LocationPurpose) {
         cancelLocation(purpose)
@@ -706,7 +726,7 @@ struct ProfileFieldsView: View {
                 }
             } catch {
                 guard !Task.isCancelled, state.wrappedValue.lookupID == lookupID else { return }
-                state.wrappedValue.message = "地区已选定，坐标暂未取得。"
+                state.wrappedValue.message = L10n.text("地区已选定，坐标暂未取得。", "Place selected. Coordinates are currently unavailable.")
             }
             state.wrappedValue.lookupID = nil
             state.wrappedValue.lookup = nil
@@ -792,12 +812,12 @@ private struct BirthClockPicker: View {
                 if let selection = Binding($lunarDate) {
                     BirthLunarWheel(selection: selection)
                 } else if isDate {
-                    DatePicker("公历日期", selection: $value, in: allowed, displayedComponents: .date)
+                    DatePicker(L10n.text("公历日期", "Gregorian date"), selection: $value, in: allowed, displayedComponents: .date)
                 } else {
-                    DatePicker("钟表时间", selection: $value, displayedComponents: .hourAndMinute)
+                    DatePicker(L10n.text("钟表时间", "Local time"), selection: $value, displayedComponents: .hourAndMinute)
                 }
                 if selected == nil {
-                    Text("所选日期在出生地时区中不存在。")
+                    Text(L10n.text("所选日期在出生地时区中不存在。", "That date does not exist in the birthplace’s time zone."))
                         .font(.footnote)
                         .foregroundStyle(InkTheme.cinnabar)
                 }
@@ -809,12 +829,12 @@ private struct BirthClockPicker: View {
             .accessibilityIdentifier("birthClockPicker")
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(InkTheme.paper)
-            .navigationTitle(isDate ? "选择出生日期" : "选择出生时刻")
+            .navigationTitle(isDate ? L10n.text("选择出生日期", "Choose a birth date") : L10n.text("选择出生时刻", "Choose a birth time"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(L10n.text("取消", "Cancel")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("确定") {
+                    Button(L10n.text("确定", "Confirm")) {
                         guard let selected else { return }
                         onSelect(selected)
                         dismiss()
@@ -844,14 +864,19 @@ struct BirthLunarDate {
         year = lunar.year; month = lunar.month; day = lunar.day
     }
 
-    var label: String { "\(year)年\(Self.monthLabel(month))\(LunarUtil.DAY[day])" }
+    var label: String {
+        L10n.text("\(year)年\(Self.monthLabel(month))\(LunarUtil.DAY[day])", "Lunar \(year) · \(Self.monthLabel(month)) · Day \(day)")
+    }
 
     var months: [LunarMonth] {
         LunarYear.fromYear(lunarYear: year).monthsInYear.filter { Self.days(in: $0) != nil }
     }
 
     static func monthLabel(_ month: Int) -> String {
-        (month < 0 ? "闰" : "") + LunarUtil.MONTH[abs(month)] + "月"
+        L10n.text(
+            (month < 0 ? "闰" : "") + LunarUtil.MONTH[abs(month)] + "月",
+            "\(month < 0 ? "Leap month" : "Month") \(abs(month))"
+        )
     }
 
     static func days(in month: LunarMonth) -> ClosedRange<Int>? {
@@ -897,14 +922,14 @@ private struct BirthLunarWheel: View {
     var body: some View {
         let months = selection.months
         HStack(spacing: 0) {
-            Picker("农历年", selection: Binding(get: { selection.year }, set: { selection.selectYear($0) })) {
+            Picker(L10n.text("农历年", "Lunar year"), selection: Binding(get: { selection.year }, set: { selection.selectYear($0) })) {
                 ForEach(BirthLunarDate.years, id: \.self) { year in
-                    Text("\(String(year))年").tag(year)
+                    Text(L10n.text("\(year)年", String(year))).tag(year)
                 }
             }
             .frame(maxWidth: .infinity)
             .clipped()
-            Picker("农历月", selection: Binding(get: { selection.month }, set: { month in
+            Picker(L10n.text("农历月", "Lunar month"), selection: Binding(get: { selection.month }, set: { month in
                 if let selected = months.first(where: { $0.month == month }) { selection.selectMonth(selected) }
             })) {
                 ForEach(months, id: \.month) { Text(BirthLunarDate.monthLabel($0.month)).tag($0.month) }
@@ -913,8 +938,8 @@ private struct BirthLunarWheel: View {
             .clipped()
             if let month = months.first(where: { $0.month == selection.month }),
                let days = BirthLunarDate.days(in: month) {
-                Picker("农历日", selection: $selection.day) {
-                    ForEach(days, id: \.self) { Text(LunarUtil.DAY[$0]).tag($0) }
+                Picker(L10n.text("农历日", "Lunar day"), selection: $selection.day) {
+                    ForEach(days, id: \.self) { Text(L10n.text(LunarUtil.DAY[$0], String($0))).tag($0) }
                 }
                 .frame(maxWidth: .infinity)
                 .clipped()

@@ -5,6 +5,26 @@ import CoreLocation
 final class LocationServiceTests: XCTestCase {
     private let tokyo = LocalPlace(name: "日本东京都", latitude: 35.6762, longitude: 139.6503, timeZone: "Asia/Tokyo")
 
+    func testEnglishDistrictDisplayDoesNotChangeCanonicalLookupOrSavedPlace() throws {
+        let catalog = ChinaDistrictCatalog.shared
+        let beijing = try XCTUnwrap(catalog.provinces.first { $0.id == "110000" })
+        let haidian = try XCTUnwrap(catalog.children(of: beijing).first { $0.id == "110108" })
+        let place = try XCTUnwrap(haidian.localPlace)
+        AppLanguage.$override.withValue(.english) {
+            XCTAssertEqual(beijing.displayName, "Beijing")
+            XCTAssertEqual(beijing.wholeAreaSelectionTitle, "Entire city")
+            XCTAssertEqual(place.displayName, "Haidian District, Beijing")
+            XCTAssertEqual(catalog.displayName(for: haidian.id, canonical: place.name), place.displayName)
+            XCTAssertTrue(haidian.matchesGeocodedAddress("北京市海淀区", regionCode: "CN"))
+            XCTAssertFalse(haidian.acceptsLookupQuery(place.displayName))
+            var profile = OracleProfile()
+            XCTAssertTrue(place.apply(to: &profile, purpose: .birth))
+            XCTAssertEqual(profile.birthPlace, "北京市海淀区")
+            XCTAssertEqual(profile.birthTimeZoneID, "Asia/Shanghai")
+            XCTAssertEqual(profile.birthLatitude, place.latitude)
+        }
+    }
+
     func testBundledDistrictsPreserveHierarchyAndDisambiguateDuplicateNames() throws {
         let catalog = ChinaDistrictCatalog.shared
         XCTAssertEqual(catalog.provinces.count, 34)

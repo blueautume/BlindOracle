@@ -38,8 +38,8 @@
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "2.0.7",
-  "build": "20",
+  "version": "2.0.8",
+  "build": "21",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",
@@ -670,5 +670,22 @@
     "upload_log": "build-testflight-2.0.7-20/testflight-upload.log",
     "app_store_connect_upload_succeeded": true,
     "apple_processing_status": "processing as reported at upload completion"
+  },
+  "english_localization": {
+    "date": "2026-11-04",
+    "version": "2.0.8",
+    "build": "21",
+    "xcode": "27.2 (27B52)",
+    "simulator": "iPhone 17 Pro / iOS 26.5",
+    "unit_tests_passed": 341,
+    "opt_in_live_api_tests_skipped": 9,
+    "ui_tests_passed": 4,
+    "script_tests_passed": 24,
+    "unit_test_result": "build/english-localization-units.xcresult",
+    "english_ui_result": "build/english-localization-ui.xcresult",
+    "chinese_ui_regression_result": "build/english-localization-regressions.xcresult",
+    "ipad_english_welcome_checked": true,
+    "unsigned_iphoneos_release_build_passed": true,
+    "notes": "Both provider flows were tested with simulated HTTP and SSE. The English UI checks cover persisted language, draft preservation, a Tarot reading, and a follow-up reusing its cards. Chinese UI checks cover local reading and profile persistence."
   }
 }

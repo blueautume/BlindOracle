@@ -7,9 +7,9 @@ enum OracleInteractionKind: String, Codable, Sendable {
 
     var title: String {
         switch self {
-        case .numbers: "随心留数"
-        case .coins: "六掷成卦"
-        case .tarot: "静心抽牌"
+        case .numbers: L10n.text("随心留数", "Choose Three Numbers")
+        case .coins: L10n.text("六掷成卦", "Cast Six Lines")
+        case .tarot: L10n.text("静心抽牌", "Draw Tarot Cards")
         }
     }
 }
@@ -23,7 +23,16 @@ struct OracleInteractionRequest: Codable, Identifiable, Equatable, Sendable {
         guard kind == .tarot, let tarotClarification else { return method.rawValue }
         return "\(method.rawValue):\(tarotClarification.id.uuidString)"
     }
-    var title: String { kind == .tarot && tarotClarification != nil ? "抽取澄清牌" : kind.title }
+    var title: String { kind == .tarot && tarotClarification != nil ? L10n.text("抽取澄清牌", "Draw a Clarifying Card") : kind.title }
+    var displayPrompt: String {
+        let defaultChinese = Self.defaultPrompt(for: kind, clarifying: tarotClarification != nil, language: .simplifiedChinese)
+        let defaultEnglish = Self.defaultPrompt(for: kind, clarifying: tarotClarification != nil, language: .english)
+        if prompt.isEmpty || prompt == defaultChinese || prompt == defaultEnglish ||
+            (AppLanguage.current.isEnglish && prompt.range(of: #"^\s*\p{Han}"#, options: .regularExpression) != nil) {
+            return AppLanguage.current.isEnglish ? defaultEnglish : defaultChinese
+        }
+        return prompt
+    }
     var tarotPositions: [String] {
         guard kind == .tarot else { return [] }
         return tarotClarification == nil ? TarotDeck.positions : [TarotDeck.clarificationPosition]
@@ -34,14 +43,18 @@ struct OracleInteractionRequest: Codable, Identifiable, Equatable, Sendable {
         self.method = method; self.kind = kind
         self.tarotClarification = tarotClarification
         let supplied = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        let fallback: String
+        self.prompt = supplied.isEmpty ? Self.defaultPrompt(for: kind, clarifying: tarotClarification != nil, language: .current) : String(supplied.prefix(180))
+    }
+
+    private static func defaultPrompt(for kind: OracleInteractionKind, clarifying: Bool, language: AppLanguage) -> String {
         switch kind {
-        case .numbers: fallback = "凭着此刻的心意，留下三个数。"
-        case .coins: fallback = "心中留一问，依次留下六爻。"
+        case .numbers: L10n.text("凭着此刻的心意，留下三个数。", "Enter the first three numbers that come to mind.", language: language)
+        case .coins: L10n.text("心中留一问，依次留下六爻。", "Keep your question in mind as you cast each of the six lines.", language: language)
         case .tarot:
-            fallback = tarotClarification == nil ? "静下心，选出属于此问的三张牌。" : "围绕这个方向，从余下的牌中选出一张澄清牌。"
+            clarifying
+                ? L10n.text("围绕这个方向，从余下的牌中选出一张澄清牌。", "Keep the focus in mind and choose one card from the remaining deck.", language: language)
+                : L10n.text("静下心，选出属于此问的三张牌。", "Take a moment, then choose three cards for your question.", language: language)
         }
-        self.prompt = supplied.isEmpty ? fallback : String(supplied.prefix(180))
     }
 }
 

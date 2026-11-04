@@ -58,7 +58,7 @@ resourcepaths=[ROOT/'Resources/Assets.xcassets']+[p for p in (ROOT/'Resources').
 resourcepaths += [ROOT/'Documentation']
 for p in sorted(resourcepaths):
     path=p.relative_to(ROOT).as_posix()
-    kind='folder.assetcatalog' if p.suffix=='.xcassets' else 'folder' if p.is_dir() else 'text'
+    kind='folder.assetcatalog' if p.suffix=='.xcassets' else 'text.json.xcstrings' if p.suffix=='.xcstrings' else 'folder' if p.is_dir() else 'text'
     f=add('file:'+path,obj(isa='PBXFileReference',lastKnownFileType=q(kind),path=q(path),sourceTree=q('<group>')))
     resourceids.append(f);resourcebuild.append(add('build:'+path,obj(isa='PBXBuildFile',fileRef=f)))
 
@@ -108,7 +108,7 @@ testenv='<EnvironmentVariables><EnvironmentVariable key="BLINDORACLE_LIVE_SMOKE"
 (schemes/'BlindOracle.xcscheme').write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
 <Scheme LastUpgradeVersion="2710" version="1.3">
 <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES"><BuildActionEntries><BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">{appref}</BuildActionEntry></BuildActionEntries></BuildAction>
-<TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="NO"><Testables>{tests}</Testables>{testenv}</TestAction>
+<TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="NO" language="zh-Hans" region="CN"><Testables>{tests}</Testables>{testenv}</TestAction>
 <LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" debugServiceExtension="internal" allowLocationSimulation="YES"><BuildableProductRunnable runnableDebuggingMode="0">{appref}</BuildableProductRunnable></LaunchAction>
 <ProfileAction buildConfiguration="Release" shouldUseLaunchSchemeArgsEnv="YES" savedToolIdentifier="" useCustomWorkingDirectory="NO" debugDocumentVersioning="YES"><BuildableProductRunnable runnableDebuggingMode="0">{appref}</BuildableProductRunnable></ProfileAction>
 <AnalyzeAction buildConfiguration="Debug"/><ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/>

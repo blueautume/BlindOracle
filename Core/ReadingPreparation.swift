@@ -88,14 +88,14 @@ enum ReadingPreparationPolicy {
                     participantName: person?.participantLabel,
                     blocking: [], optionalGaps: [], limitations: [], requiresUserInteraction: interaction)
                 guard let descriptor else {
-                    assessment.unavailableReason = "\(method.progressName)尚未加载，本次不能调用。"
+                    assessment.unavailableReason = L10n.text("\(method.progressName)尚未加载，本次不能调用。", "\(method.progressName) is unavailable.")
                     assessments.append(assessment); continue
                 }
                 guard method.usesPersonalProfile else {
                     assessments.append(assessment); continue
                 }
                 guard let person else {
-                    assessment.blocking = [.init(field: .name, state: .unspecified, reason: "尚未明确要使用谁的资料。")]
+                    assessment.blocking = [.init(field: .name, state: .unspecified, reason: L10n.text("尚未明确要使用谁的资料。", "Choose whose details to use for this reading."))]
                     assessments.append(assessment); continue
                 }
                 let declared = explicitlyUnknownFields[person.id] ?? person.declaredUnknownFields ?? person.unknownFields
@@ -124,7 +124,7 @@ enum ReadingPreparationPolicy {
         let runnable = blockedMandatory.isEmpty ? available : []
         let omissions = assessments.filter { !$0.canExecute && !mandatory.contains($0.method) }.map { assessment in
             OracleMethodOmission(method: assessment.method,
-                reason: assessment.unavailableReason ?? assessment.blocking.map(\.reason).joined(separator: "；"),
+                reason: assessment.unavailableReason ?? assessment.blocking.map(\.reason).joined(separator: L10n.text("；", "; ")),
                 participantID: assessment.participantID, participantName: assessment.participantName)
         }
         let missing = groupMissing(assessments)
@@ -167,42 +167,42 @@ enum ReadingPreparationPolicy {
     }
 
     private static func gap(for field: OracleField, person: OracleProfile, declaredUnknown: Set<OracleField>) -> PreparationGap? {
-        if declaredUnknown.contains(field) { return .init(field: field, state: .explicitlyUnknown, reason: "\(field.title)已明确为不确定。") }
-        if person.unknownFields.contains(field) { return .init(field: field, state: .unspecified, reason: "\(field.title)尚未确认。") }
-        func missing() -> PreparationGap { .init(field: field, state: .unspecified, reason: "\(field.title)尚未提供。") }
+        if declaredUnknown.contains(field) { return .init(field: field, state: .explicitlyUnknown, reason: L10n.text("\(field.title)已明确为不确定。", "\(field.title) was marked unknown.")) }
+        if person.unknownFields.contains(field) { return .init(field: field, state: .unspecified, reason: L10n.text("\(field.title)尚未确认。", "\(field.title) has not been confirmed.")) }
+        func missing() -> PreparationGap { .init(field: field, state: .unspecified, reason: L10n.text("\(field.title)尚未提供。", "\(field.title) was not provided.")) }
         func invalid(_ reason: String) -> PreparationGap { .init(field: field, state: .invalid, reason: reason) }
         switch field {
         case .name: return person.resolvedName.isEmpty ? missing() : nil
         case .birthDate:
             guard let date = person.birthDate else { return missing() }
-            guard date.timeIntervalSince1970.isFinite else { return invalid("出生日期无效，尚不能排盘。") }
+            guard date.timeIntervalSince1970.isFinite else { return invalid(L10n.text("出生日期无效，尚不能排盘。", "The date of birth is invalid, so a chart cannot be drawn.")) }
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = TimeZone(identifier: person.birthTimeZoneID) ?? TimeZone(secondsFromGMT: 0)!
-            return (1900...2100).contains(calendar.component(.year, from: date)) ? nil : invalid("出生日期超出当前支持的1900–2100年范围。")
+            return (1900...2100).contains(calendar.component(.year, from: date)) ? nil : invalid(L10n.text("出生日期超出当前支持的1900–2100年范围。", "The date of birth is outside the supported range of 1900–2100."))
         case .birthTimeZone:
             guard !person.birthTimeZoneID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return missing() }
-            return TimeZone(identifier: person.birthTimeZoneID) == nil ? invalid("出生地时区无效，不能用出生地名称或默认时区代替。") : nil
+            return TimeZone(identifier: person.birthTimeZoneID) == nil ? invalid(L10n.text("出生地时区无效，不能用出生地名称或默认时区代替。", "The birth time zone is invalid. A place name or default time zone cannot substitute for it.")) : nil
         case .birthTime:
             guard person.birthTimeKnown else { return missing() }
             if let text = person.birthTimeText {
                 guard let expression = try? NSRegularExpression(pattern: #"^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$"#),
                       expression.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)) != nil else {
-                    return invalid("出生时间格式无效，请使用00:00至23:59的当地时间。")
+                    return invalid(L10n.text("出生时间格式无效，请使用00:00至23:59的当地时间。", "Enter the local time of birth from 00:00 to 23:59."))
                 }
                 return nil
             }
             return person.birthDate == nil ? missing() : nil // Legacy Date includes a known local time.
         case .gender:
             if ["男", "女"].contains(person.sex) { return nil }
-            return ["", "未提供", "未知", "不确定"].contains(person.sex) ? missing() : invalid("排盘性别尚未确认成当前算法支持的值。")
+            return ["", "未提供", "未知", "不确定"].contains(person.sex) ? missing() : invalid(L10n.text("排盘性别尚未确认成当前算法支持的值。", "The chart gender has not been confirmed as a supported value."))
         case .surname, .givenName:
             let value = (field == .surname ? person.familyName : person.givenName).trimmingCharacters(in: .whitespacesAndNewlines)
             if value.isEmpty { return missing() }
-            return value.count <= 4 ? nil : invalid("\(field.title)需分别提供1至4个字，未自动拆分统一姓名。")
+            return value.count <= 4 ? nil : invalid(L10n.text("\(field.title)需分别提供1至4个字，未自动拆分统一姓名。", "Enter \(field.title.lowercased()) separately in one to four characters. A full name is not split automatically."))
         case .birthCoordinates:
             guard let latitude = person.birthLatitude, let longitude = person.birthLongitude else { return missing() }
             return latitude.isFinite && longitude.isFinite && (-90...90).contains(latitude) && (-180...180).contains(longitude)
-                ? nil : invalid("出生经纬度无效，只能保留不依赖宫位的星位结果。")
+                ? nil : invalid(L10n.text("出生经纬度无效，只能保留不依赖宫位的星位结果。", "The birth coordinates are invalid. Only planetary positions that do not depend on houses are available."))
         case .birthPlace: return person.birthPlace.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? missing() : nil
         case .currentLocation: return person.currentPlace.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? missing() : nil
         case .numbers: return missing() // Collected by the existing interaction session, not the profile.
@@ -214,15 +214,15 @@ enum ReadingPreparationPolicy {
         switch method {
         case .bazi:
             var limits: [String] = []
-            if missing.contains(.birthTime) { limits.append("出生时辰未确定，仅保留前三柱及必要候选，不输出起运与大运。") }
-            else if missing.contains(.gender) { limits.append("排盘性别未确定，本次不输出起运与大运。") }
+            if missing.contains(.birthTime) { limits.append(L10n.text("出生时辰未确定，仅保留前三柱及必要候选，不输出起运与大运。", "The birth hour is unknown. Only the first three pillars and any necessary candidates are shown. Luck cycles are unavailable.")) }
+            else if missing.contains(.gender) { limits.append(L10n.text("排盘性别未确定，本次不输出起运与大运。", "The chart gender is unknown, so luck cycles are unavailable.")) }
             return limits
         case .chenggu:
-            return missing.contains(.birthTime) ? ["出生时辰未确定，只列可能骨重范围，不选定某一首评诗。"] : []
+            return missing.contains(.birthTime) ? [L10n.text("出生时辰未确定，只列可能骨重范围，不选定某一首评诗。", "The birth hour is unknown. Only the possible weight range is shown, without selecting a verse.")] : []
         case .astrology:
-            if missing.contains(.birthTime) { return ["出生时刻未确定，只列全天星位区间，不输出宫位、上升点与精确相位。"] }
-            if missing.contains(.birthCoordinates) { return ["出生坐标未完整确认，保留星位及相位，不计算上升点与宫位。"] }
-            if let latitude = person.birthLatitude, abs(latitude) >= 66 { return ["出生地位于高纬度，本版本不计算宫位。"] }
+            if missing.contains(.birthTime) { return [L10n.text("出生时刻未确定，只列全天星位区间，不输出宫位、上升点与精确相位。", "The time of birth is unknown. Only the range of planetary positions over the day is shown. Houses, the ascendant, and precise aspects are unavailable.")] }
+            if missing.contains(.birthCoordinates) { return [L10n.text("出生坐标未完整确认，保留星位及相位，不计算上升点与宫位。", "The birth coordinates are incomplete. Planetary positions and aspects are available; the ascendant and houses are not.")] }
+            if let latitude = person.birthLatitude, abs(latitude) >= 66 { return [L10n.text("出生地位于高纬度，本版本不计算宫位。", "The birthplace is at a high latitude, where this version does not calculate houses.")] }
             return []
         default: return []
         }
@@ -256,39 +256,46 @@ enum ReadingPreparationPolicy {
 
     private static func question(for gap: PreparationGap, name: String?) -> String {
         let subject = name.map { $0 + "的" } ?? "这次要使用资料的人的"
+        let owner = name.map { $0 + "’s" } ?? "this person’s"
         switch gap.field {
-        case .name: return "这次要使用谁的资料？可以选用匿名档案。"
-        case .birthDate: return "\(subject)公历出生日期是哪一天？"
-        case .birthTimeZone: return "\(subject)出生地采用哪个时区？请明确时区；不确定也可以直接说明。"
-        case .birthTime: return "\(subject)当地出生时间是几点？不记得具体时刻也可以说明。"
-        case .gender: return "\(subject)排盘性别是男还是女？不确定可说明。"
-        case .surname: return "请确认\(subject)姓氏部分，先不自动拆姓名。"
-        case .givenName: return "请确认\(subject)名字部分。"
-        case .birthCoordinates: return "\(subject)出生地经纬度是否已知？不确定时可以只保留不依赖宫位的部分。"
-        default: return "请补充或确认\(subject)\(gap.field.title)。"
+        case .name: return L10n.text("这次要使用谁的资料？可以选用匿名档案。", "Whose details should this reading use? You can choose an anonymous profile.")
+        case .birthDate: return L10n.text("\(subject)公历出生日期是哪一天？", "What is \(owner) Gregorian date of birth?")
+        case .birthTimeZone: return L10n.text("\(subject)出生地采用哪个时区？请明确时区；不确定也可以直接说明。", "What was the time zone at \(owner) birthplace? It’s okay to say if you don’t know.")
+        case .birthTime: return L10n.text("\(subject)当地出生时间是几点？不记得具体时刻也可以说明。", "What was \(owner) local time of birth? It’s okay to leave the exact time unknown.")
+        case .gender: return L10n.text("\(subject)排盘性别是男还是女？不确定可说明。", "Which chart gender should be used for \(name ?? "this person")? You can leave it unknown.")
+        case .surname: return L10n.text("请确认\(subject)姓氏部分，先不自动拆姓名。", "Confirm \(owner) family name separately.")
+        case .givenName: return L10n.text("请确认\(subject)名字部分。", "Confirm \(owner) given name separately.")
+        case .birthCoordinates: return L10n.text("\(subject)出生地经纬度是否已知？不确定时可以只保留不依赖宫位的部分。", "Do you know the coordinates of \(owner) birthplace? If not, we can use the chart details that don’t need houses.")
+        default: return L10n.text("请补充或确认\(subject)\(gap.field.title)。", "Please provide or confirm \(owner) \(gap.field.title.lowercased()).")
         }
     }
 
     private static func summary(plan: OraclePlan, people: [OracleProfile], assessments: [ReadingMethodAssessment], runnable: [OracleMethod],
                                 omissions: [OracleMethodOmission], blockedMandatory: [OracleMethod]) -> String {
-        var lines = ["所问：\(plan.question)"]
+        var lines = [L10n.text("所问：\(plan.question)", "Question: \(plan.question)")]
         for person in people {
             let gaps = assessments.filter { $0.participantID == person.id }.flatMap { $0.blocking + $0.optionalGaps }
             let unavailableFields = Set(gaps.map(\.field))
-            let date = person.unknownFields.contains(.birthDate) || unavailableFields.contains(.birthDate) ? "出生日期未确定" : (person.birthDateText ?? person.birthDate.map { dateText($0, zone: person.birthTimeZoneID) } ?? "出生日期未提供")
+            let date = person.unknownFields.contains(.birthDate) || unavailableFields.contains(.birthDate) ? L10n.text("出生日期未确定", "date of birth unknown") : (person.birthDateText ?? person.birthDate.map { dateText($0, zone: person.birthTimeZoneID) } ?? L10n.text("出生日期未提供", "date of birth not provided"))
             let time = person.birthTimeKnown && !person.unknownFields.contains(.birthTime) && !unavailableFields.contains(.birthTime)
-                ? (person.birthTimeText ?? person.birthDate.map { dateText($0, zone: person.birthTimeZoneID, format: "HH:mm") } ?? "出生时间未提供") : "出生时间未确定"
-            let zone = person.unknownFields.contains(.birthTimeZone) || unavailableFields.contains(.birthTimeZone) ? "出生时区未确定" : person.birthTimeZoneID
-            let gender = ["男", "女"].contains(person.sex) && !person.unknownFields.contains(.gender) && !unavailableFields.contains(.gender) ? person.sex : "排盘性别未确定"
-            let place = person.birthPlace.isEmpty || person.unknownFields.contains(.birthPlace) || unavailableFields.contains(.birthPlace) ? "" : "，出生地\(person.birthPlace)"
-            lines.append("\(person.participantLabel)：\(date)，\(time)，\(zone)，\(gender)\(place)。")
+                ? (person.birthTimeText ?? person.birthDate.map { dateText($0, zone: person.birthTimeZoneID, format: "HH:mm") } ?? L10n.text("出生时间未提供", "time of birth not provided")) : L10n.text("出生时间未确定", "time of birth unknown")
+            let zone = person.unknownFields.contains(.birthTimeZone) || unavailableFields.contains(.birthTimeZone) ? L10n.text("出生时区未确定", "birth time zone unknown") : person.birthTimeZoneID
+            let gender = ["男", "女"].contains(person.sex) && !person.unknownFields.contains(.gender) && !unavailableFields.contains(.gender) ? L10n.text(person.sex, person.sex == "男" ? "male" : "female") : L10n.text("排盘性别未确定", "chart gender unknown")
+            let place = person.birthPlace.isEmpty || person.unknownFields.contains(.birthPlace) || unavailableFields.contains(.birthPlace) ? "" : L10n.text("，出生地\(person.birthPlace)", ", birthplace: \(ChinaDistrictCatalog.shared.displayName(for: person.birthDistrictCode, canonical: person.birthPlace))")
+            lines.append(L10n.text("\(person.participantLabel)：\(date)，\(time)，\(zone)，\(gender)\(place)。", "\(person.participantLabel): \(date), \(time), \(zone), \(gender)\(place)."))
         }
-        if !blockedMandatory.isEmpty { lines.append("指定的\(blockedMandatory.map(\.progressName).joined(separator: "、"))资料尚未齐全，暂不开始，也不改用其他方法。") }
-        else if !runnable.isEmpty { lines.append("可使用：\(runnable.map(\.progressName).joined(separator: "、"))。") }
+        if !blockedMandatory.isEmpty { lines.append(L10n.text("指定的\(blockedMandatory.map(\.progressName).joined(separator: "、"))资料尚未齐全，暂不开始，也不改用其他方法。", "More details are needed for \(blockedMandatory.map(\.progressName).formatted(.list(type: .and))). The reading will wait rather than switch methods.")) }
+        else if !runnable.isEmpty { lines.append(L10n.text("可使用：\(runnable.map(\.progressName).joined(separator: "、"))。", "Available: \(runnable.map(\.progressName).formatted(.list(type: .and))).")) }
         for assessment in assessments where assessment.canExecute {
-            for limitation in assessment.limitations { lines.append((assessment.participantName.map { $0 + " · " } ?? "") + assessment.method.progressName + "：" + limitation) }
+            for limitation in assessment.limitations { lines.append((assessment.participantName.map { $0 + " · " } ?? "") + assessment.method.progressName + L10n.text("：", ": ") + limitation) }
         }
-        for omission in omissions { lines.append("暂不纳入" + (omission.participantName.map { $0 + "的" } ?? "") + omission.method.progressName + "：" + omission.reason) }
+        for omission in omissions {
+            let label = omission.participantName.map { "\($0) · " } ?? ""
+            lines.append(L10n.text(
+                "暂不纳入" + (omission.participantName.map { $0 + "的" } ?? "") + omission.method.progressName + "：" + omission.reason,
+                "Omitted: \(label)\(omission.method.progressName) — \(omission.reason)"
+            ))
+        }
         return lines.joined(separator: "\n")
     }
 

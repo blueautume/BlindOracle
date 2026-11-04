@@ -166,10 +166,10 @@ final class KeychainStore: @unchecked Sendable {
         case bundledResourceUnreadable
         var errorDescription: String? {
             switch self {
-            case .invalidValue: "请输入完整的 API 密钥。"
-            case .status: "无法将密钥保存到本机钥匙串，请重试。"
-            case .readStatus, .unreadableValue: "无法读取本机钥匙串中的解读密钥，请解锁设备后重试。"
-            case .bundledResourceUnreadable: "随包解读密钥未能读取，请检查应用资源配置。"
+            case .invalidValue: L10n.text("请输入完整的 API 密钥。", "Enter the full API key.")
+            case .status: L10n.text("无法将密钥保存到本机钥匙串，请重试。", "Couldn't save the API key to the device keychain. Try again.")
+            case .readStatus, .unreadableValue: L10n.text("无法读取本机钥匙串中的解读密钥，请解锁设备后重试。", "Couldn't read the API key from the device keychain. Unlock your device and try again.")
+            case .bundledResourceUnreadable: L10n.text("随包解读密钥未能读取，请检查应用资源配置。", "Couldn't read the bundled API key. Check the app's configuration.")
             }
         }
     }

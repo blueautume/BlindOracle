@@ -10,7 +10,7 @@ enum AIProvider: String, CaseIterable, Sendable {
     var displayName: String {
         switch self {
         case .deepSeek: "DeepSeek"
-        case .qwen: "千问"
+        case .qwen: L10n.text("千问", "Qwen")
         }
     }
 
@@ -35,7 +35,7 @@ enum AIProvider: String, CaseIterable, Sendable {
         }
     }
 
-    var reasoningDescription: String { "深度思考 \(reasoningEffort)" }
+    var reasoningDescription: String { L10n.text("深度思考 \(reasoningEffort)", "Reasoning: \(reasoningEffort)") }
 
     var outputTokenBudget: Int {
         switch self {

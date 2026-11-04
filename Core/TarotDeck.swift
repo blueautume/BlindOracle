@@ -54,6 +54,7 @@ enum TarotDeck {
     static let clarificationPosition = "Clarification"
 
     static func localizedTitle(for position: String) -> String {
+        if AppLanguage.current.isEnglish { return position }
         if position == clarificationPosition { return "澄清" }
         guard let index = positions.firstIndex(of: position) else { return position }
         return localizedPositions[index]

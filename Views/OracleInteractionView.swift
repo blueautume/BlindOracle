@@ -21,9 +21,9 @@ struct OracleInteractionView: View {
     private var isYarrow: Bool { session.input.castingStyle?.lowercased() == "yarrow" }
     private var clarificationNumber: Int { (session.input.tarotClarificationRounds?.count ?? 0) + 1 }
     private var navigationTitle: String {
-        guard let request = session.currentRequest else { return "留一份心意" }
-        if request.tarotClarification != nil { return "第\(clarificationNumber)次补牌" }
-        if request.kind == .coins, isYarrow { return "蓍草成卦" }
+        guard let request = session.currentRequest else { return L10n.text("留一份心意", "Reading steps") }
+        if request.tarotClarification != nil { return L10n.text("第\(clarificationNumber)次补牌", "Clarifier \(clarificationNumber)") }
+        if request.kind == .coins, isYarrow { return L10n.text("蓍草成卦", "Cast with yarrow stalks") }
         return request.title
     }
 
@@ -69,13 +69,13 @@ struct OracleInteractionView: View {
             .toolbar {
                 if session.currentRequest?.tarotClarification != nil, response.revealedCount == 0, let onCancelClarification {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button("取消补牌", role: .cancel, action: onCancelClarification)
+                        Button(L10n.text("取消补牌", "Cancel clarifier"), role: .cancel, action: onCancelClarification)
                             .font(.system(size: 13)).foregroundStyle(InkTheme.secondary)
                             .accessibilityIdentifier("cancelTarotClarification")
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("稍后继续") { dismiss() }
+                    Button(L10n.text("稍后继续", "Continue later")) { dismiss() }
                         .font(.system(size: 13)).foregroundStyle(InkTheme.secondary)
                         .accessibilityIdentifier("deferInteraction")
                 }
@@ -98,14 +98,14 @@ struct OracleInteractionView: View {
     private func heading(_ request: OracleInteractionRequest) -> some View {
         VStack(alignment: .leading, spacing: 13) {
             HStack {
-                SectionEyebrow(text: request.tarotClarification != nil ? "第\(clarificationNumber)次补牌 · 一张牌"
-                    : request.kind == .tarot ? "首轮 · 三张牌" : "此刻 · 此问")
+                SectionEyebrow(text: request.tarotClarification != nil ? L10n.text("第\(clarificationNumber)次补牌 · 一张牌", "Clarifier \(clarificationNumber) · 1 card")
+                    : request.kind == .tarot ? L10n.text("首轮 · 三张牌", "Initial spread · 3 cards") : L10n.text("此刻 · 此问", "This moment · This question"))
                     .accessibilityIdentifier(request.kind == .tarot ? "tarotRoundTitle" : "interactionStepTitle")
                 Spacer()
                 Text("\(session.currentIndex + 1) / \(session.requests.count)")
                     .font(.system(size: 11, weight: .medium)).monospacedDigit()
                     .foregroundStyle(InkTheme.secondary)
-                    .accessibilityLabel("第\(session.currentIndex + 1)步，共\(session.requests.count)步")
+                    .accessibilityLabel(L10n.text("第\(session.currentIndex + 1)步，共\(session.requests.count)步", "Step \(session.currentIndex + 1) of \(session.requests.count)"))
             }
             if let clarification = request.tarotClarification {
                 Text(clarification.focus)
@@ -114,11 +114,11 @@ struct OracleInteractionView: View {
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityIdentifier("tarotClarificationFocus")
                 if let position = clarification.originalPosition {
-                    Text("对应牌位 · \(TarotDeck.localizedTitle(for: position))")
+                    Text(L10n.text("对应牌位 · \(TarotDeck.localizedTitle(for: position))", "Related position · \(TarotDeck.localizedTitle(for: position))"))
                         .font(.system(size: 12)).foregroundStyle(InkTheme.cinnabar)
                 }
             } else {
-                Text(request.prompt.isEmpty ? defaultPrompt(for: request.kind) : request.prompt)
+                Text(request.displayPrompt.isEmpty ? defaultPrompt(for: request.kind) : request.displayPrompt)
                     .font(.system(size: 23, design: .serif)).lineSpacing(7)
                     .foregroundStyle(InkTheme.ink).fixedSize(horizontal: false, vertical: true)
             }
@@ -129,22 +129,22 @@ struct OracleInteractionView: View {
 
     private func defaultPrompt(for kind: OracleInteractionKind) -> String {
         switch kind {
-        case .numbers: "把这三个数，留给此刻。"
-        case .coins: isYarrow ? "心中留一问，三变定一爻。" : "心中留一问，六掷成一卦。"
-        case .tarot: "静下心来，选出你的三张牌。"
+        case .numbers: L10n.text("把这三个数，留给此刻。", "Choose three numbers for this moment.")
+        case .coins: isYarrow ? L10n.text("心中留一问，三变定一爻。", "Keep your question in mind. Three changes form each line.") : L10n.text("心中留一问，六掷成一卦。", "Keep your question in mind. Six tosses form a hexagram.")
+        case .tarot: L10n.text("静下心来，选出你的三张牌。", "Take a breath and choose three cards.")
         }
     }
 
     private var numberSelection: some View {
         PaperCard {
             VStack(alignment: .leading, spacing: 20) {
-                Text("慢慢转动，留下三个想到的数。")
+                Text(L10n.text("慢慢转动，留下三个想到的数。", "Turn the wheels and choose the first three numbers that come to mind."))
                     .font(.system(size: 14, design: .serif)).foregroundStyle(InkTheme.secondary)
                 HStack(spacing: 8) {
                     ForEach(0..<3, id: \.self) { index in
                         VStack(spacing: 8) {
-                            Text(["壹", "贰", "叁"][index]).font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.cinnabar)
-                            Picker("第\(index + 1)个数字", selection: numberBinding(at: index)) {
+                            Text(InkTheme.stepNumber(at: index)).font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.cinnabar)
+                            Picker(L10n.text("第\(index + 1)个数字", "Number \(index + 1)"), selection: numberBinding(at: index)) {
                                 ForEach(1...999, id: \.self) { value in Text("\(value)").tag(value) }
                             }
                             .pickerStyle(.wheel).frame(maxWidth: .infinity).frame(height: 170).clipped()
@@ -152,7 +152,7 @@ struct OracleInteractionView: View {
                         }
                     }
                 }
-                Text("没有对错，停在你愿意留下的位置就好。")
+                Text(L10n.text("没有对错，停在你愿意留下的位置就好。", "Any numbers you choose are fine."))
                     .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
             }
         }
@@ -180,7 +180,7 @@ struct OracleInteractionView: View {
             PaperCard {
                 VStack(spacing: 24) {
                     HStack {
-                        Text(response.lines.count == 6 ? "六爻已成" : isYarrow ? "第\(response.lines.count + 1)爻 · 三变归奇" : "第\(response.lines.count + 1)次投掷")
+                        Text(response.lines.count == 6 ? L10n.text("六爻已成", "Hexagram complete") : isYarrow ? L10n.text("第\(response.lines.count + 1)爻 · 三变归奇", "Line \(response.lines.count + 1) · Three changes") : L10n.text("第\(response.lines.count + 1)次投掷", "Toss \(response.lines.count + 1)"))
                             .font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.ink)
                         Spacer()
                         Text("\(response.lines.count) / 6").font(.system(size: 12)).monospacedDigit().foregroundStyle(InkTheme.secondary)
@@ -196,7 +196,7 @@ struct OracleInteractionView: View {
                             }
                         }.frame(maxWidth: .infinity).padding(.vertical, 10)
                     }
-                    Text(response.lines.isEmpty ? (isYarrow ? "四十九策，静候三变。" : "心中留着这一问，再投下三枚铜钱。") : lineDescription(response.lines.last!))
+                    Text(response.lines.isEmpty ? (isYarrow ? L10n.text("四十九策，静候三变。", "Forty-nine stalks are ready for the three changes.") : L10n.text("心中留着这一问，再投下三枚铜钱。", "Hold the question in mind and toss the three coins.")) : lineDescription(response.lines.last!))
                         .font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.secondary)
                     Button(action: tossCoins) {
                         Label(castButtonTitle, systemImage: isYarrow ? "line.3.horizontal" : "arrow.triangle.2.circlepath")
@@ -209,17 +209,17 @@ struct OracleInteractionView: View {
             }
             PaperCard {
                 VStack(alignment: .leading, spacing: 17) {
-                    SectionEyebrow(text: "由下往上，依次留爻")
+                    SectionEyebrow(text: L10n.text("由下往上，依次留爻", "Lines from bottom to top"))
                     ForEach((0..<6).reversed(), id: \.self) { index in
                         HStack(spacing: 15) {
-                            Text(["初爻", "二爻", "三爻", "四爻", "五爻", "上爻"][index])
+                            Text(L10n.text(["初爻", "二爻", "三爻", "四爻", "五爻", "上爻"][index], "Line \(index + 1)"))
                                 .font(.system(size: 11, design: .serif)).foregroundStyle(InkTheme.secondary).frame(width: 32)
                             if response.lines.indices.contains(index) {
                                 hexagramLine(response.lines[index])
                                 Text(lineName(response.lines[index])).font(.system(size: 10)).foregroundStyle(InkTheme.secondary).frame(width: 28)
                             } else {
                                 Rectangle().fill(InkTheme.line.opacity(0.45)).frame(height: 1)
-                                Text("待投").font(.system(size: 10)).foregroundStyle(InkTheme.secondary.opacity(0.6)).frame(width: 28)
+                                Text(L10n.text("待投", "Pending")).font(.system(size: 10)).foregroundStyle(InkTheme.secondary.opacity(0.6)).frame(width: 28)
                             }
                         }.frame(height: 22)
                         .accessibilityElement(children: .combine)
@@ -241,9 +241,9 @@ struct OracleInteractionView: View {
     }
 
     private var castButtonTitle: String {
-        if response.lines.count == 6 { return "六爻已成" }
-        if isYarrow { return response.lines.isEmpty ? "归奇，留下初爻" : "再行三变" }
-        return response.lines.isEmpty ? "投下铜钱" : "再投一次"
+        if response.lines.count == 6 { return L10n.text("六爻已成", "Hexagram complete") }
+        if isYarrow { return response.lines.isEmpty ? L10n.text("归奇，留下初爻", "Cast the first line") : L10n.text("再行三变", "Cast the next line") }
+        return response.lines.isEmpty ? L10n.text("投下铜钱", "Toss coins") : L10n.text("再投一次", "Toss again")
     }
 
     private var yarrowCasting: some View {
@@ -270,10 +270,10 @@ struct OracleInteractionView: View {
                     Text("= \(cast.value * 4)").foregroundStyle(InkTheme.ink)
                 }.font(.system(size: 15, weight: .medium, design: .serif)).monospacedDigit().foregroundStyle(InkTheme.secondary)
                     .contentTransition(.numericText())
-                Text("三变余\(cast.value * 4)策，四策为一，得\(cast.value)。")
+                Text(L10n.text("三变余\(cast.value * 4)策，四策为一，得\(cast.value)。", "\(cast.value * 4) stalks remain after three changes. In groups of four, they give \(cast.value)."))
                     .font(.system(size: 11, design: .serif)).foregroundStyle(InkTheme.secondary)
             } else {
-                Text("一变 · 二变 · 三变").font(.system(size: 13, design: .serif)).tracking(3).foregroundStyle(InkTheme.secondary)
+                Text(L10n.text("一变 · 二变 · 三变", "First · Second · Third change")).font(.system(size: 13, design: .serif)).tracking(3).foregroundStyle(InkTheme.secondary)
             }
         }.frame(maxWidth: .infinity)
     }
@@ -292,7 +292,8 @@ struct OracleInteractionView: View {
             }.padding(.vertical, 9).foregroundStyle(InkTheme.ink.opacity(0.7))
         }.frame(width: 66, height: 66)
             .shadow(color: InkTheme.ink.opacity(0.1), radius: 3, y: 3)
-            .accessibilityLabel(response.lines.isEmpty ? "铜钱" : "铜钱\(index + 1)，\(face == 3 ? "正面" : "背面")")
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(response.lines.isEmpty ? L10n.text("铜钱", "Coin") : L10n.text("铜钱\(index + 1)，\(face == 3 ? "正面" : "背面")", "Coin \(index + 1), \(face == 3 ? "heads" : "tails")"))
     }
 
     private func tossCoins() {
@@ -320,11 +321,15 @@ struct OracleInteractionView: View {
     }
 
     private func lineName(_ value: Int) -> String {
-        switch value { case 6: "老阴"; case 7: "少阳"; case 8: "少阴"; default: "老阳" }
+        switch value { case 6: L10n.text("老阴", "Old yin"); case 7: L10n.text("少阳", "Young yang"); case 8: L10n.text("少阴", "Young yin"); default: L10n.text("老阳", "Old yang") }
     }
 
     private func lineDescription(_ value: Int) -> String {
-        "这一爻为\(lineName(value))\(value == 6 || value == 9 ? "，记作动爻。" : "，已为你记下。")"
+        let isChanging = value == 6 || value == 9
+        return L10n.text(
+            "这一爻为\(lineName(value))\(isChanging ? "，记作动爻。" : "，已为你记下。")",
+            "\(lineName(value))\(isChanging ? ", a changing line." : ". Line recorded.")"
+        )
     }
 
     private func tarotReading(_ request: OracleInteractionRequest) -> some View {
@@ -333,7 +338,7 @@ struct OracleInteractionView: View {
         return VStack(alignment: .leading, spacing: 24) {
             if drawCount == 0 || cards.count < drawCount {
                 PaperCard {
-                    Text("牌暂时没有备齐，请稍后再试。")
+                    Text(L10n.text("牌暂时没有备齐，请稍后再试。", "The deck is unavailable. Try again later."))
                         .font(.system(size: 14, design: .serif)).foregroundStyle(InkTheme.secondary)
                 }
             } else if !hasShuffled {
@@ -357,7 +362,7 @@ struct OracleInteractionView: View {
                             .offset(x: CGFloat(index - 2) * (shuffleTurns == 0 ? 5 : 11))
                     }
                 }.frame(height: 245).frame(maxWidth: .infinity).accessibilityHidden(true)
-                Text("想着这一问，让牌慢慢归位。")
+                Text(L10n.text("想着这一问，让牌慢慢归位。", "Keep your question in mind as you shuffle."))
                     .font(.system(size: 14, design: .serif)).foregroundStyle(InkTheme.secondary)
                 Button {
                     isShuffling = true
@@ -368,7 +373,7 @@ struct OracleInteractionView: View {
                         isShuffling = false
                     }
                 } label: {
-                    Label(isShuffling ? "正在洗牌…" : "洗牌，开始选牌", systemImage: "shuffle")
+                    Label(isShuffling ? L10n.text("正在洗牌…", "Shuffling…") : L10n.text("洗牌，开始选牌", "Shuffle and choose cards"), systemImage: "shuffle")
                         .font(.system(size: 15, design: .serif)).foregroundStyle(InkTheme.cinnabar)
                         .padding(.vertical, 12)
                 }.buttonStyle(.plain).disabled(isShuffling).accessibilityIdentifier("shuffleTarot")
@@ -381,12 +386,12 @@ struct OracleInteractionView: View {
         let isClarification = request.tarotClarification != nil
         return VStack(alignment: .leading, spacing: 18) {
             HStack {
-                Text(isClarification ? "从余下的牌中选一张。" : "从牌中，选出与你有缘的三张。")
+                Text(isClarification ? L10n.text("从余下的牌中选一张。", "Choose one of the remaining cards.") : L10n.text("从牌中，选出与你有缘的三张。", "Choose the three cards you’re drawn to."))
                     .font(.system(size: 14, design: .serif)).foregroundStyle(InkTheme.ink)
                 Spacer(minLength: 4)
                 Text("\(response.tarotDraws.count) / \(drawCount)")
                     .font(.system(size: 12)).monospacedDigit().foregroundStyle(InkTheme.cinnabar)
-                    .accessibilityLabel("已选\(response.tarotDraws.count)张，共\(drawCount)张")
+                    .accessibilityLabel(L10n.text("已选\(response.tarotDraws.count)张，共\(drawCount)张", "\(response.tarotDraws.count) of \(drawCount) cards selected"))
                     .accessibilityIdentifier("tarotSelectionCount")
             }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 9), count: 6), spacing: 12) {
@@ -398,17 +403,17 @@ struct OracleInteractionView: View {
                             .overlay {
                                 if let selection {
                                     Circle().fill(InkTheme.paper).frame(width: 25, height: 25)
-                                        .overlay(Text(["壹", "贰", "叁"][selection]).font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.cinnabar))
+                                        .overlay(Text(InkTheme.stepNumber(at: selection)).font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.cinnabar))
                                 }
                             }
                             .offset(y: selection == nil || reduceMotion ? 0 : -4)
                             .opacity(selection == nil ? 1 : 0.5)
                     }.buttonStyle(.plain).disabled(selection != nil)
-                        .accessibilityLabel("第\(index + 1)张牌\(selection == nil ? "" : "，已选")")
+                        .accessibilityLabel(L10n.text("第\(index + 1)张牌\(selection == nil ? "" : "，已选")", "Card \(index + 1)\(selection == nil ? "" : ", selected")"))
                         .accessibilityIdentifier("tarotCard-\(index)")
                 }
             }
-            Text(isClarification ? "这张牌用于澄清本轮的焦点。" : "已选的牌会依次留在「现状、影响、建议」三个位置。")
+            Text(isClarification ? L10n.text("这张牌用于澄清本轮的焦点。", "This card will shed light on your follow-up question.") : L10n.text("已选的牌会依次留在「现状、影响、建议」三个位置。", "The cards are placed in order: Situation, Influence, and Advice."))
                 .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
         }
     }
@@ -427,8 +432,8 @@ struct OracleInteractionView: View {
     private func cardRevelation(for request: OracleInteractionRequest) -> some View {
         let allRevealed = response.revealedCount == request.tarotPositions.count
         let isClarification = request.tarotClarification != nil
-        let instruction = isClarification ? (allRevealed ? "补牌已翻开。" : "轻触翻开这张补牌。")
-            : (allRevealed ? "三张牌已翻开，看看它们带来的线索。" : "按照顺序，一张一张翻开。")
+        let instruction = isClarification ? (allRevealed ? L10n.text("补牌已翻开。", "The clarifier is revealed.") : L10n.text("轻触翻开这张补牌。", "Tap to reveal the clarifier."))
+            : (allRevealed ? L10n.text("三张牌已翻开，看看它们带来的线索。", "All three cards are revealed. Take a look at what they suggest.") : L10n.text("按照顺序，一张一张翻开。", "Reveal the cards in order, one at a time."))
         return VStack(alignment: .leading, spacing: 21) {
             Text(instruction)
                 .font(.system(size: 14, design: .serif)).foregroundStyle(InkTheme.secondary)
@@ -449,13 +454,13 @@ struct OracleInteractionView: View {
                                 }
                             }.aspectRatio(0.59, contentMode: .fit)
                         }.buttonStyle(.plain).disabled(index != response.revealedCount || flipping)
-                            .accessibilityLabel(index < response.revealedCount ? revealedLabel(draw, title: title) : "翻开第\(index + 1)张牌，\(title)")
+                            .accessibilityLabel(index < response.revealedCount ? revealedLabel(draw, title: title) : L10n.text("翻开第\(index + 1)张牌，\(title)", "Reveal card \(index + 1), \(title)"))
                             .accessibilityIdentifier("revealTarot-\(index)")
                         if index < response.revealedCount, let card = TarotDeck.card(id: draw.cardID) {
                             Text(card.name).font(.system(size: 12, weight: .medium, design: .serif)).multilineTextAlignment(.center).foregroundStyle(InkTheme.ink)
-                            Text(draw.isReversed ? "逆位" : "正位").font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
+                            Text(draw.isReversed ? L10n.text("逆位", "Reversed") : L10n.text("正位", "Upright")).font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
                         } else {
-                            Text(index == response.revealedCount ? "轻触翻牌" : "静候片刻")
+                            Text(index == response.revealedCount ? L10n.text("轻触翻牌", "Tap to reveal") : L10n.text("静候片刻", "Wait a moment"))
                                 .font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
                         }
                     }.frame(maxWidth: .infinity)
@@ -483,7 +488,9 @@ struct OracleInteractionView: View {
     }
 
     private func revealedLabel(_ draw: TarotDraw, title: String) -> String {
-        "\(title)，\(TarotDeck.card(id: draw.cardID)?.name ?? draw.cardID)，\(draw.isReversed ? "逆位" : "正位")"
+        let orientation = draw.isReversed ? L10n.text("逆位", "Reversed") : L10n.text("正位", "Upright")
+        return [title, TarotDeck.card(id: draw.cardID)?.name ?? draw.cardID, orientation]
+            .joined(separator: L10n.text("，", ", "))
     }
 
     private func revealCard(at index: Int) {
@@ -509,13 +516,13 @@ struct OracleInteractionView: View {
                 onComplete(response)
             } label: {
                 if request.tarotClarification != nil {
-                    Text("确认补牌，继续解读")
+                    Text(L10n.text("确认补牌，继续解读", "Confirm clarifier and continue"))
                 } else {
-                    Text(session.currentIndex + 1 == session.requests.count ? "确认，听听解读" : "确认，继续下一步")
+                    Text(session.currentIndex + 1 == session.requests.count ? L10n.text("确认，听听解读", "Confirm and read") : L10n.text("确认，继续下一步", "Confirm and continue"))
                 }
             }.buttonStyle(InkPrimaryButton()).disabled(!ready || isCompleting).opacity(ready ? 1 : 0.4)
                 .accessibilityIdentifier("confirmInteraction")
-            Text("暂时离开也没关系，已留好的会替你保留。")
+            Text(L10n.text("暂时离开也没关系，已留好的会替你保留。", "You can leave and return later. Your progress is saved."))
                 .font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
         }.frame(maxWidth: 650).padding(.horizontal, 24).padding(.top, 14).padding(.bottom, 12)
             .frame(maxWidth: .infinity).background(InkTheme.paper)

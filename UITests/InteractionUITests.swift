@@ -1,6 +1,114 @@
 import XCTest
 
 final class InteractionUITests: XCTestCase {
+    @MainActor func testLanguagePickerPersistsEnglishAcrossLaunches() {
+        let app = XCUIApplication()
+        let resetLanguage = ["--ui-testing-local", "--ui-testing-reset-language"]
+        app.launchArguments = resetLanguage
+        app.launch()
+        defer {
+            app.terminate()
+            app.launchArguments = resetLanguage
+            app.launch()
+            app.terminate()
+        }
+
+        let draft = "An unsent question"
+        let input = app.textFields["questionInput"]
+        guard input.waitForExistence(timeout: 15) else { return XCTFail("Chat input was not shown") }
+        input.tap()
+        input.typeText(draft)
+        app.staticTexts["瞎子"].firstMatch.tap()
+
+        let data = app.tabBars.buttons["数据"]
+        guard data.waitForExistence(timeout: 15) else { return XCTFail("Chinese Data tab was not shown") }
+        data.tap()
+        let settings = app.buttons["设置"]
+        guard settings.waitForExistence(timeout: 5) else { return XCTFail("Settings button was not shown") }
+        settings.tap()
+        let languagePicker = app.buttons["appLanguagePicker"]
+        guard languagePicker.waitForExistence(timeout: 5) else { return XCTFail("Language picker was not shown") }
+        languagePicker.tap()
+        let english = app.buttons["English"]
+        guard english.waitForExistence(timeout: 5) else { return XCTFail("English was not offered in the picker") }
+        english.tap()
+        guard app.navigationBars["Settings"].waitForExistence(timeout: 5) else { return XCTFail("Settings did not switch to English") }
+        app.buttons["Done"].tap()
+        app.tabBars.buttons["Chat"].tap()
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        XCTAssertEqual(input.value as? String, draft)
+
+        app.terminate()
+        app.launchArguments = ["--ui-testing-local"]
+        app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Chat"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.tabBars.buttons["Data"].exists)
+    }
+
+    @MainActor func testEnglishTarotReadingFromQuestionToSavedSpread() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "-oracle.appLanguage", "en"]
+        app.launch()
+        let input = app.textFields["questionInput"]
+        XCTAssertTrue(input.waitForExistence(timeout: 15))
+        XCTAssertEqual(input.placeholderValue, "What’s on your mind?")
+        input.tap()
+        input.typeText("Use only tarot. What should I consider before changing jobs?")
+        app.buttons["sendQuestion"].tap()
+        confirmIntake(in: app)
+
+        let shuffle = app.buttons["shuffleTarot"]
+        XCTAssertTrue(shuffle.waitForExistence(timeout: 15))
+        XCTAssertEqual(shuffle.label, "Shuffle and choose cards")
+        shuffle.tap()
+        XCTAssertTrue(app.buttons["tarotCard-0"].waitForExistence(timeout: 5))
+        for index in 0..<3 { app.buttons["tarotCard-\(index)"].tap() }
+
+        let firstCard = app.buttons["revealTarot-0"]
+        XCTAssertTrue(firstCard.waitForExistence(timeout: 5))
+        for index in 0..<3 {
+            let card = app.buttons["revealTarot-\(index)"]
+            waitUntilEnabled(card)
+            card.tap()
+        }
+        let confirm = app.buttons["confirmInteraction"]
+        waitUntilEnabled(confirm)
+        confirm.tap()
+
+        let reference = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "readingData-")).firstMatch
+        XCTAssertTrue(reference.waitForExistence(timeout: 30))
+        XCTAssertEqual(reference.label, "View reading")
+        for _ in 0..<5 where !reference.isHittable { app.swipeUp() }
+        let originalReferenceID = reference.identifier
+        reference.tap()
+        let resultQuestion = app.staticTexts["runResultsQuestion"]
+        XCTAssertTrue(resultQuestion.waitForExistence(timeout: 10))
+        let originalQuestion = resultQuestion.label
+        XCTAssertTrue(app.otherElements["savedTarotSpread"].exists)
+        XCTAssertTrue(app.staticTexts["Initial spread · 3 cards"].exists)
+
+        app.buttons["closeRunResults"].tap()
+        input.tap()
+        input.typeText("Explain the Advice card without drawing again.")
+        app.buttons["sendQuestion"].tap()
+        let followUp = app.staticTexts.containing(NSPredicate(
+            format: "label CONTAINS %@", "Here is a local rule summary based on your saved reading."
+        )).firstMatch
+        XCTAssertTrue(followUp.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["shuffleTarot"].exists)
+        XCTAssertFalse(app.buttons["confirmIntake"].exists)
+
+        let followUpReference = app.buttons.matching(NSPredicate(
+            format: "identifier BEGINSWITH %@ AND identifier != %@", "readingData-", originalReferenceID
+        )).firstMatch
+        XCTAssertTrue(followUpReference.waitForExistence(timeout: 5))
+        for _ in 0..<5 where !followUpReference.isHittable { app.swipeUp() }
+        followUpReference.tap()
+        XCTAssertTrue(resultQuestion.waitForExistence(timeout: 10))
+        XCTAssertEqual(resultQuestion.label, originalQuestion)
+        XCTAssertTrue(app.otherElements["savedTarotSpread"].exists)
+    }
+
     @MainActor func testTappingOutsideComposerDismissesKeyboardAndPreservesDraft() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]

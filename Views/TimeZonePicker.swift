@@ -24,27 +24,27 @@ struct ChinaDistrictPicker: View {
                     .accessibilityIdentifier("chinaWholeCity-\(parent.id)")
             }
             if districts.isEmpty, parent == nil {
-                Text("暂时无法读取地区列表。")
+                Text(L10n.text("暂时无法读取地区列表。", "The list of regions couldn’t be loaded."))
                     .foregroundStyle(InkTheme.secondary)
             }
             ForEach(districts) { district in
                 if catalog.children(of: district).isEmpty {
-                    Button(district.name) { select(district) }
+                    Button(district.displayName) { select(district) }
                         .foregroundStyle(InkTheme.ink)
                         .accessibilityIdentifier("chinaDistrict-\(district.id)")
                 } else {
-                    NavigationLink(value: district) { Text(district.name) }
+                    NavigationLink(value: district) { Text(district.displayName) }
                         .accessibilityIdentifier("chinaDistrict-\(district.id)")
                 }
             }
         }
         .scrollContentBackground(.hidden)
         .background(InkTheme.paper)
-        .navigationTitle(parent?.name ?? title)
+        .navigationTitle(parent?.displayName ?? title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("取消") { dismiss() }.accessibilityIdentifier("cancelChinaDistrictPicker")
+                Button(L10n.text("取消", "Cancel")) { dismiss() }.accessibilityIdentifier("cancelChinaDistrictPicker")
             }
         }
         .accessibilityIdentifier("chinaDistrictPicker")

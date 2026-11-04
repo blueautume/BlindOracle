@@ -3,13 +3,13 @@ import SwiftUI
 struct ChatView: View {
     @EnvironmentObject private var store: OracleStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var draft = ""
+    @Binding var draft: String
     @State private var confirmNew = false
     @State private var showHistory = false
     @State private var selectedReading: ReadingReference?
     @State private var inspectingActivities = false
     @FocusState private var composing: Bool
-    private let suggestions = ["最近的工作，该进还是该守？", "这段关系，我该如何往前走？", "心里有件事，想听一句建议。"]
+    private let suggestions = [L10n.text("最近的工作，该进还是该守？", "Is it time to make a move at work, or should I stay put?"), L10n.text("这段关系，我该如何往前走？", "How should I move forward in this relationship?"), L10n.text("心里有件事，想听一句建议。", "Something’s on my mind. Can you offer some advice?")]
 
     var body: some View {
         NavigationStack {
@@ -23,7 +23,7 @@ struct ChatView: View {
                             else {
                                 HStack(spacing: 10) {
                                     OracleMark(size: 30)
-                                    Text("一事一问，慢慢说。 ").font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.secondary)
+                                    Text(L10n.text("一事一问，慢慢说。 ", "One question at a time. Take your time.")).font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.secondary)
                                     Spacer()
                                 }.padding(.top, 8)
                             }
@@ -58,7 +58,7 @@ struct ChatView: View {
                                     Image(systemName: "info.circle")
                                     Text(notice).textSelection(.enabled)
                                     Spacer(minLength: 0)
-                                    Button { store.notice = nil } label: { Image(systemName: "xmark") }.accessibilityLabel("收起提示")
+                                    Button { store.notice = nil } label: { Image(systemName: "xmark") }.accessibilityLabel(L10n.text("收起提示", "Dismiss notice"))
                                 }.font(.system(size: 12)).foregroundStyle(InkTheme.secondary).padding(12)
                                     .background(InkTheme.wash.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
                             }
@@ -109,14 +109,15 @@ struct ChatView: View {
                         composing = false
                         withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) { showHistory.toggle() }
                     } label: { HistoryMenuIcon().foregroundStyle(InkTheme.ink) }
-                    .accessibilityLabel("历史")
+                    .accessibilityLabel(L10n.text("历史", "History"))
                     .accessibilityIdentifier("historyButton")
                     .accessibilityHidden(showHistory)
                 }
                 ToolbarItem(placement: .principal) {
                     HStack(spacing: 10) {
-                        Text("瞎子").font(.system(size: 20, weight: .medium, design: .serif)).tracking(3)
-                        Text("问").font(.system(size: 10, weight: .medium, design: .serif)).foregroundStyle(InkTheme.cinnabar)
+                        Text(L10n.text("瞎子", "BlindOracle")).font(.system(size: 20, weight: .medium, design: .serif))
+                            .tracking(AppLanguage.current.isEnglish ? 0.7 : 3)
+                        Text(L10n.text("问", "Ask")).font(.system(size: 10, weight: .medium, design: .serif)).foregroundStyle(InkTheme.cinnabar)
                             .padding(5).overlay(RoundedRectangle(cornerRadius: 2).stroke(InkTheme.cinnabar.opacity(0.55), lineWidth: 0.8))
                     }.foregroundStyle(InkTheme.ink)
                         .contentShape(Rectangle())
@@ -126,7 +127,7 @@ struct ChatView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { composing = false; confirmNew = true } label: { Image(systemName: "square.and.pencil").font(.system(size: 17)).foregroundStyle(InkTheme.secondary) }
-                        .disabled(store.isBusy || store.messages.isEmpty).accessibilityLabel("开启新对话")
+                        .disabled(store.isBusy || store.messages.isEmpty).accessibilityLabel(L10n.text("开启新对话", "New conversation"))
                         .accessibilityIdentifier("newConversationButton")
                         .accessibilityHidden(showHistory)
                 }
@@ -161,10 +162,10 @@ struct ChatView: View {
             .sheet(item: $selectedReading) { reference in
                 ReadingResultsSheet(runID: reference.id)
             }
-            .confirmationDialog("另开一卷对话？", isPresented: $confirmNew, titleVisibility: .visible) {
-                Button("开启新对话") { store.newConversation() }.accessibilityIdentifier("confirmNewConversation")
-                Button("取消", role: .cancel) { }
-            } message: { Text("当前对话归档，基础资料、推演和偏好仍保留。") }
+            .confirmationDialog(L10n.text("另开一卷对话？", "Start a new conversation?"), isPresented: $confirmNew, titleVisibility: .visible) {
+                Button(L10n.text("开启新对话", "New conversation")) { store.newConversation() }.accessibilityIdentifier("confirmNewConversation")
+                Button(L10n.text("取消", "Cancel"), role: .cancel) { }
+            } message: { Text(L10n.text("当前对话归档，基础资料、推演和偏好仍保留。", "The current conversation will be saved to history. Your profiles, readings, and preferences will be kept.")) }
         }
         .toolbar(showHistory ? .hidden : .visible, for: .tabBar)
         .onChange(of: store.selectedTab) { _, _ in composing = false }
@@ -185,23 +186,30 @@ struct ChatView: View {
 
     private var welcome: some View {
         VStack(spacing: 0) {
-            Text("X I A  Z I").font(.system(size: 10, weight: .medium)).tracking(2).foregroundStyle(InkTheme.secondary.opacity(0.8)).padding(.top, 35)
+            Text(L10n.text("X I A  Z I", "BLINDORACLE")).font(.system(size: 10, weight: .medium)).tracking(2)
+                .foregroundStyle(InkTheme.secondary.opacity(0.8)).padding(.top, 35)
             Image("OraclePortrait").resizable().scaledToFit().frame(width: 220, height: 220)
                 .blendMode(.multiply)
                 .mask { RadialGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.68), .init(color: .clear, location: 1)], center: .center, startRadius: 0, endRadius: 120) }
-                .padding(.top, 18).accessibilityLabel("水墨绘制的瞎子")
-            Text("问一事，听一言。").font(.system(size: 27, weight: .regular, design: .serif)).tracking(3).foregroundStyle(InkTheme.ink).padding(.top, 10)
-            Text("坐吧。把心里那件事，说给我听。").font(.system(size: 14, design: .serif)).foregroundStyle(InkTheme.secondary).padding(.top, 14)
+                .padding(.top, 18).accessibilityLabel(L10n.text("水墨绘制的瞎子", "Ink portrait of the Oracle"))
+            Text(L10n.text("问一事，听一言。", "Ask a question. Hear a thought."))
+                .font(.system(size: 27, weight: .regular, design: .serif)).tracking(AppLanguage.current.isEnglish ? 0 : 3)
+                .foregroundStyle(InkTheme.ink).multilineTextAlignment(.center).padding(.top, 10)
+            Text(L10n.text("坐吧。把心里那件事，说给我听。", "Take a seat. Tell me what’s on your mind."))
+                .font(.system(size: 14, design: .serif)).foregroundStyle(InkTheme.secondary)
+                .multilineTextAlignment(.center).padding(.top, 14)
             HStack(spacing: 12) {
                 Rectangle().fill(InkTheme.line).frame(width: 30, height: 0.6)
-                Text("此刻 · 此地 · 此问").font(.system(size: 10)).tracking(3).foregroundStyle(InkTheme.secondary)
+                Text(L10n.text("此刻 · 此地 · 此问", "This moment · This place · This question")).font(.system(size: 10))
+                    .tracking(AppLanguage.current.isEnglish ? 0.6 : 3).multilineTextAlignment(.center)
+                    .foregroundStyle(InkTheme.secondary)
                 Rectangle().fill(InkTheme.line).frame(width: 30, height: 0.6)
             }.padding(.top, 30).padding(.bottom, 24)
             VStack(spacing: 0) {
                 ForEach(Array(suggestions.enumerated()), id: \.offset) { index, item in
                     Button { draft = item; submit() } label: {
                         HStack(spacing: 14) {
-                            Text(["壹", "贰", "叁"][index]).font(.system(size: 11, design: .serif)).foregroundStyle(InkTheme.cinnabar.opacity(0.7))
+                            Text(InkTheme.stepNumber(at: index)).font(.system(size: 11, design: .serif)).foregroundStyle(InkTheme.cinnabar.opacity(0.7))
                             Text(item).font(.system(size: 14, design: .serif)).foregroundStyle(InkTheme.ink.opacity(0.85))
                             Spacer(minLength: 2)
                             Image(systemName: "arrow.up.left").font(.system(size: 10)).foregroundStyle(InkTheme.secondary.opacity(0.6))
@@ -230,7 +238,7 @@ struct ChatView: View {
             HStack(alignment: .bottom, spacing: 0) {
               VStack(alignment: .leading, spacing: 12) {
                 if message.content.isEmpty {
-                    Text("稍坐片刻…").font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.secondary)
+                    Text(L10n.text("稍坐片刻…", "One moment…")).font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.secondary)
                 } else {
                     Text(.init(message.content)).font(.system(size: 16, design: .serif)).lineSpacing(6).foregroundStyle(InkTheme.ink).textSelection(.enabled).tint(InkTheme.cinnabar)
                 }
@@ -238,11 +246,11 @@ struct ChatView: View {
                     if message.id == store.pendingIntakeMessageID {
                         intakeCard
                     } else if message.runID != nil {
-                        Label("问事笺已确认", systemImage: "checkmark.seal").font(.system(size: 12)).foregroundStyle(InkTheme.sage)
+                        Label(L10n.text("问事笺已确认", "Details confirmed"), systemImage: "checkmark.seal").font(.system(size: 12)).foregroundStyle(InkTheme.sage)
                     }
                 }
                 if let deletedID = message.deletedRunID {
-                    Label("推演记录已删除", systemImage: "trash")
+                    Label(L10n.text("推演记录已删除", "Reading deleted"), systemImage: "trash")
                         .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                         .accessibilityIdentifier("deletedReading-\(deletedID.uuidString)")
                 }
@@ -255,15 +263,15 @@ struct ChatView: View {
                         alternatives(synthesis.alternatives, run: run)
                     }
                     HStack(spacing: 18) {
-                        Button { selectedReading = ReadingReference(id: runID) } label: { Label("翻看数据", systemImage: "books.vertical") }
+                        Button { selectedReading = ReadingReference(id: runID) } label: { Label(L10n.text("翻看数据", "View reading"), systemImage: "books.vertical") }
                             .accessibilityIdentifier("readingData-\(message.id.uuidString)")
                             .disabled(store.phase == .planning)
                         if !store.isBusy {
                             if let run = store.runs.first(where: { $0.id == runID }), run.synthesis == nil {
-                                Button { store.retrySynthesis(run) } label: { Label("重试解读", systemImage: "arrow.clockwise") }
+                                Button { store.retrySynthesis(run) } label: { Label(L10n.text("重试解读", "Retry interpretation"), systemImage: "arrow.clockwise") }
                                     .accessibilityIdentifier("retryReading-\(runID.uuidString)")
                             } else {
-                                Button { draft = "请结合刚才的结果再详细解释一下，给我更具体的建议。"; submit() } label: { Label("再细说些", systemImage: "text.bubble") }
+                                Button { draft = L10n.text("请结合刚才的结果再详细解释一下，给我更具体的建议。", "Please explain the same reading in more detail and give me some practical advice."); submit() } label: { Label(L10n.text("再细说些", "Explain further"), systemImage: "text.bubble") }
                             }
                         }
                     }.font(.system(size: 11)).foregroundStyle(InkTheme.secondary).padding(.top, 6)
@@ -284,7 +292,7 @@ struct ChatView: View {
             composing = false
             store.acceptTarotClarification(messageID: messageID)
         } label: {
-            Label("补抽 1 张 · \(suggestion.focus)", systemImage: "rectangle.on.rectangle.angled")
+            Label(L10n.text("补抽 1 张 · \(suggestion.focus)", "Draw 1 clarifier · \(suggestion.focus)"), systemImage: "rectangle.on.rectangle.angled")
                 .font(.system(size: 13, weight: .medium, design: .serif))
                 .multilineTextAlignment(.leading)
                 .foregroundStyle(InkTheme.cinnabar)
@@ -293,8 +301,8 @@ struct ChatView: View {
                 .background(InkTheme.cinnabar.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("补抽一张塔罗牌，澄清\(suggestion.focus)")
-        .accessibilityHint("打开补牌界面，选牌并翻开后确认。")
+        .accessibilityLabel(L10n.text("补抽一张塔罗牌，澄清\(suggestion.focus)", "Draw a tarot card to clarify \(suggestion.focus)"))
+        .accessibilityHint(L10n.text("打开补牌界面，选牌并翻开后确认。", "Opens the card picker. Choose a card, reveal it, and confirm."))
         .accessibilityIdentifier("offerTarotClarification")
     }
 
@@ -303,8 +311,8 @@ struct ChatView: View {
             HStack(spacing: 15) {
                 Image(systemName: "doc.text").font(.system(size: 25, weight: .ultraLight)).foregroundStyle(InkTheme.cinnabar)
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("填写问事资料").font(.system(size: 17, design: .serif)).foregroundStyle(InkTheme.ink)
-                    Text("一次填写并核对，确认后直接开始。").font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                    Text(L10n.text("填写问事资料", "Add reading details")).font(.system(size: 17, design: .serif)).foregroundStyle(InkTheme.ink)
+                    Text(L10n.text("一次填写并核对，确认后直接开始。", "Review the details, then confirm to begin.")).font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "arrow.right").font(.system(size: 13)).foregroundStyle(InkTheme.cinnabar)
@@ -320,14 +328,14 @@ struct ChatView: View {
                     .font(.system(size: 25, weight: .ultraLight)).foregroundStyle(InkTheme.cinnabar)
                 VStack(alignment: .leading, spacing: 5) {
                     if let clarification = request.tarotClarification {
-                        Text("继续补牌")
+                        Text(L10n.text("继续补牌", "Continue drawing a clarifier"))
                             .font(.system(size: 19, design: .serif)).tracking(2).foregroundStyle(InkTheme.ink)
                         Text(clarification.focus)
                             .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                     } else {
-                        Text(request.kind == .coins && store.pendingInteraction?.input.castingStyle == "yarrow" ? "蓍草成卦" : request.title)
+                        Text(request.kind == .coins && store.pendingInteraction?.input.castingStyle == "yarrow" ? L10n.text("蓍草成卦", "Cast with yarrow stalks") : request.title)
                             .font(.system(size: 19, design: .serif)).tracking(2).foregroundStyle(InkTheme.ink)
-                        Text("慢慢来，已有的进度替你留着。").font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                        Text(L10n.text("慢慢来，已有的进度替你留着。", "Take your time. Your progress is saved.")).font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                     }
                 }
                 Spacer(minLength: 0)
@@ -339,11 +347,11 @@ struct ChatView: View {
 
     private func alternatives(_ choices: [ReadingAlternative], run: OracleRun) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("两种处境，哪一种更贴近你？").font(.system(size: 13, design: .serif)).foregroundStyle(InkTheme.secondary)
+            Text(L10n.text("两种处境，哪一种更贴近你？", "Which of these feels closer to your situation?")).font(.system(size: 13, design: .serif)).foregroundStyle(InkTheme.secondary)
             ForEach(Array(choices.enumerated()), id: \.element.id) { index, choice in
                 Button { store.select(choice, for: run.id) } label: {
                     HStack(alignment: .top, spacing: 12) {
-                        Text(index == 0 ? "甲" : "乙").font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.cinnabar)
+                        Text(index == 0 ? L10n.text("甲", "A") : L10n.text("乙", "B")).font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.cinnabar)
                             .frame(width: 30, height: 30).background(InkTheme.cinnabar.opacity(0.07), in: Circle())
                         VStack(alignment: .leading, spacing: 6) {
                             Text(choice.title).font(.system(size: 15, weight: .medium, design: .serif))
@@ -356,7 +364,7 @@ struct ChatView: View {
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(run.selectedAlternative == choice.id ? InkTheme.sage : InkTheme.line, lineWidth: 0.7))
                 }.buttonStyle(.plain).disabled(run.selectedAlternative != nil)
             }
-            Text(run.selectedAlternative == nil ? "只作细微调整，慢慢认识你的处境。" : "已记下这次选择。")
+            Text(run.selectedAlternative == nil ? L10n.text("只作细微调整，慢慢认识你的处境。", "Your choice helps fine-tune future interpretations.") : L10n.text("已记下这次选择。", "Choice saved."))
                 .font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
         }.padding(.top, 12)
     }
@@ -364,7 +372,7 @@ struct ChatView: View {
     private var composer: some View {
         VStack(spacing: 8) {
             HStack(alignment: .bottom, spacing: 10) {
-                TextField("说说你想问的事…", text: $draft, axis: .vertical).lineLimit(1...5)
+                TextField(L10n.text("说说你想问的事…", "What’s on your mind?"), text: $draft, axis: .vertical).lineLimit(1...5)
                     .font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.ink).focused($composing)
                     .submitLabel(.send).onSubmit { submit() }.accessibilityIdentifier("questionInput")
                     .padding(.leading, 4).padding(.vertical, 10)
@@ -375,7 +383,7 @@ struct ChatView: View {
                         .foregroundStyle(InkTheme.paper).frame(width: 38, height: 38)
                         .background((draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !store.isBusy) ? InkTheme.secondary.opacity(0.3) : InkTheme.ink, in: Circle())
                 }.disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !store.isBusy)
-                    .accessibilityLabel(store.isBusy ? "停止回答" : "发送问题").accessibilityIdentifier("sendQuestion")
+                    .accessibilityLabel(store.isBusy ? L10n.text("停止回答", "Stop reply") : L10n.text("发送问题", "Send question")).accessibilityIdentifier("sendQuestion")
             }.padding(.horizontal, 13).padding(.vertical, 8)
                 .background(Color(red: 0.982, green: 0.975, blue: 0.959), in: RoundedRectangle(cornerRadius: 22))
                 .overlay(RoundedRectangle(cornerRadius: 22).stroke(InkTheme.line, lineWidth: 0.8))

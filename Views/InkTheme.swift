@@ -8,6 +8,10 @@ enum InkTheme {
     static let line = Color(red: 0.82, green: 0.80, blue: 0.74)
     static let sage = Color(red: 0.43, green: 0.49, blue: 0.41)
     static let wash = Color(red: 0.92, green: 0.92, blue: 0.87)
+
+    static func stepNumber(at index: Int) -> String {
+        L10n.text(["壹", "贰", "叁"][index], String(index + 1))
+    }
 }
 
 struct PaperBackground: View {
@@ -38,7 +42,8 @@ struct SectionEyebrow: View {
     var body: some View {
         HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 1).fill(InkTheme.cinnabar).frame(width: 3, height: 12)
-            Text(text).font(.system(size: 12, weight: .medium)).tracking(2).foregroundStyle(InkTheme.secondary)
+            Text(text).font(.system(size: 12, weight: .medium)).tracking(AppLanguage.current.isEnglish ? 0.6 : 2)
+                .foregroundStyle(InkTheme.secondary)
         }
     }
 }

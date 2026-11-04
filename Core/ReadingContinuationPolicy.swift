@@ -29,11 +29,12 @@ enum ReadingContinuationPolicy {
 
     static func participantIntent(in question: String, profiles: [OracleProfile]) -> ParticipantIntent {
         let references = ProfileDirectory.participantReferences(in: question, profiles: profiles)
-        let selfWithAnother = hasAffirmativeMatch(in: question, patterns: [
+        let englishGroup = EnglishConversation.matches(question, #"\b(?:both of us|the two of us|between us|our (?:relationship|compatibility|partnership)|my (?:friend|partner|spouse) and (?:i|me)|(?:me|myself) and)\b"#)
+        let selfWithAnother = englishGroup || hasAffirmativeMatch(in: question, patterns: [
             #"(?:我(?:自己)?|本人)(?:和|跟|与|同)(?=[\p{Han}A-Za-z])"#,
             #"(?:和|跟|与|同)(?:我(?:自己)?|本人)(?=$|的|合|适合|一起|相处|关系|沟通|合作)"#
         ])
-        let selfTarget = hasAffirmativeMatch(in: question, patterns: [
+        let selfTarget = EnglishConversation.matches(question, #"\b(?:for me instead|about me instead|what about me|(?:only|just) me|my (?:career|job|relationship|finances|chart|birth|health))\b"#) || hasAffirmativeMatch(in: question, patterns: [
             #"(?:换成|改看|改问|改算|单独看|只看)(?:我自己|本人|我)(?=$|[的呢吧了])"#,
             #"^(?:那|还有|至于)?(?:我|我自己|本人)(?:呢|怎么样|怎么说)$"#,
             #"我(?:自己)?(?:的|最近的?|今年的?|明年的?|接下来的?)?(?:运势|事业|工作|感情|财运|婚姻|学业|面试)"#
@@ -44,8 +45,8 @@ enum ReadingContinuationPolicy {
             #"(?:我们俩|我们两个人|我俩|双方)(?:到底|是不是)?合适(?:吗|呢)?$"#
         ])
         let group = references.included.count > 1 || selfWithAnother && (!references.included.isEmpty || comparesPeople)
-            || groupWording && comparesPeople
-        let otherTarget = hasAffirmativeMatch(in: question, patterns: [
+            || groupWording && comparesPeople || englishGroup
+        let otherTarget = EnglishConversation.matches(question, #"\b(?:for|about) (?:my (?:friend|partner|spouse|sister|brother|mother|father|child)|someone else|another person|him|her|them)\b"#) || hasAffirmativeMatch(in: question, patterns: [
             #"(?:替|给|看|问|算|换成|改看|改问|改算)(?:我(?:的)?)?(?:朋友|同事|同学|家人|对象|伴侣|父亲|母亲|爸爸|妈妈|孩子|儿子|女儿|他|她|别人|另一位|另一(?:个)?人)(?=$|的|呢|吧|了|工作|事业|感情|运势|看看|怎么样)"#,
             #"(?:^|替|给|看(?:看|一下)?|问(?:一下)?|算(?:一下)?)我(?:的)?(?:朋友|同事|同学|家人|对象|伴侣|父亲|母亲|爸爸|妈妈|孩子|儿子|女儿)(?!圈|关系|缘|运|们)(?=[\p{Han}]{2,6}(?:$|的|工作|事业|感情|运势|最近|下周|呢|怎么样))"#,
             #"^(?:那|还有|至于)?(?:他|她|我(?:的)?(?:朋友|同事|同学|对象|爸爸|妈妈))(?:呢|怎么样|怎么说)$"#,
@@ -60,12 +61,12 @@ enum ReadingContinuationPolicy {
     /// independently of the more conservative conversational inference.
     static func explicitlyChangesScope(_ question: String, profiles: [OracleProfile] = []) -> Bool {
         let topicSwitch = #"(?:换(?:个|一个)?(?:新)?话题|另起(?:个|一个)?话题|(?:聊|说|问)(?:点|些)?别的(?:问题|话题|事)?|改问(?:另一个|另一件|别的|其他)(?:问题|事|话题))"#
-        if hasAffirmativeMatch(in: question, patterns: [newQuestionPattern, topicSwitch, personSwitch]) { return true }
+        if EnglishConversation.changesScope(question) || hasAffirmativeMatch(in: question, patterns: [newQuestionPattern, topicSwitch, personSwitch]) { return true }
         guard !profiles.isEmpty else { return false }
         let targets = ProfileDirectory.participantReferences(in: question, profiles: profiles).included
         return targets.contains { name in
             let exactName = NSRegularExpression.escapedPattern(for: name.filter { !$0.isWhitespace })
-            return hasAffirmativeMatch(in: question, patterns: [#"(?:换成|改成|改看|改问|改算|转而看)"# + exactName + #"(?=$|[的呢吧了]|工作|事业|感情|运势|合不合|怎么样)"#])
+            return EnglishConversation.matches(question, #"^\s*(?:please\s+)?(?:switch to|ask about)\s+"# + NSRegularExpression.escapedPattern(for: name) + #"\b"#) || hasAffirmativeMatch(in: question, patterns: [#"(?:换成|改成|改看|改问|改算|转而看)"# + exactName + #"(?=$|[的呢吧了]|工作|事业|感情|运势|合不合|怎么样)"#])
         }
     }
 
@@ -150,6 +151,7 @@ enum ReadingContinuationPolicy {
     /// addition also asks to keep the current question.
     static func requestedAdditionalMethods(in question: String, requiresAdditiveWording: Bool = false) -> [OracleMethod] {
         guard !explicitlyChangesScope(question) else { return [] }
+        let english = EnglishConversation.requestedMethods(in: question, additive: requiresAdditiveWording)
         let namedMethod = "(?:" + methodNames.map { $0.1 }.joined(separator: "|") + ")"
         // A generic "再帮我算一下" can be the second half of a supplement.
         // Only a concrete fresh draw, restart or changed question overrides it.
@@ -202,12 +204,13 @@ enum ReadingContinuationPolicy {
                 }
             }
         }
-        return OracleMethod.allCases.filter { requested.contains($0) }
+        return OracleMethod.allCases.filter { requested.contains($0) || english.contains($0) }
     }
 
     /// A short method selection without a subject can continue the current
     /// question even when there is no remote planner to disambiguate it.
     static func isMethodOnlyRequest(_ question: String) -> Bool {
+        if !EnglishConversation.bareMethodChange(question).isEmpty { return true }
         let compact = question.filter { !$0.isWhitespace }
         let namedMethod = "(?:" + methodNames.map { $0.1 }.joined(separator: "|") + ")"
         let prefix = #"^(?:请|请你|麻烦|帮我|替我|给我|我想|可以|能否|只|仅|必须)*(?:用|按|按照)"#
@@ -217,6 +220,10 @@ enum ReadingContinuationPolicy {
 
     /// A method switch without a new subject keeps the current question's scope.
     static func bareMethodChange(in question: String) -> [OracleMethod] {
+        if EnglishConversation.matches(question, #"\bswitch to\b|\binstead\b"#) {
+            let english = EnglishConversation.bareMethodChange(question)
+            if !english.isEmpty { return english }
+        }
         let compact = question.filter { !$0.isWhitespace }
         let name = "(?:" + methodNames.map { $0.1 }.joined(separator: "|") + ")"
         let prefix = #"^(?:那|就|还是|这次|这回|我想|我要|请(?:你)?|麻烦(?:你)?|帮我|替我|给我|能否|可以)*(?:把(?:方法|方式))?(?:改用|换用|换成|改成|改为|改按)(?:(?:只|仅)(?:用)?)?"#
@@ -235,6 +242,7 @@ enum ReadingContinuationPolicy {
     /// Keep a narrow local path for explanations of named cards in the saved
     /// spread. Mixed questions and requests for further calculation still plan.
     static func isSavedTarotExplanation(_ question: String) -> Bool {
+        if EnglishConversation.savedTarotExplanation(question) { return true }
         guard !explicitlyRequestsNewReading(question), requestedAdditionalMethods(in: question).isEmpty else { return false }
         let newCard = #"(?:补抽|加抽|追加|再抽|继续抽|补)(?:[一1１]张(?:塔罗牌?|澄清牌|牌)?|塔罗牌?|澄清牌|牌)"#
         guard !hasAffirmativeMatch(in: question, patterns: [newCard]) else { return false }
@@ -325,7 +333,7 @@ enum ReadingContinuationPolicy {
     }
 
     static func explicitlyRequestsNewReading(_ question: String) -> Bool {
-        if explicitlyChangesScope(question) { return true }
+        if explicitlyChangesScope(question) || EnglishConversation.requestsRecast(question) { return true }
         // Naming a method or asking how a chart was calculated is not a request to calculate again.
         let namedMethod = "(?:" + methodNames.map { $0.1 }.joined(separator: "|") + ")"
         let patterns = recastPatterns + [
@@ -361,6 +369,7 @@ enum ReadingContinuationPolicy {
     /// A command with no new subject keeps the prior question and participants.
     /// Match the entire message rather than guessing which free text is a new subject.
     static func isBareRecastRequest(_ question: String) -> Bool {
+        if EnglishConversation.isBareRecast(question) { return true }
         guard explicitlyRequestsNewReading(question) else { return false }
         let compact = question.filter { character in
             !character.isWhitespace && !character.unicodeScalars.allSatisfy { CharacterSet.punctuationCharacters.contains($0) }
@@ -373,5 +382,111 @@ enum ReadingContinuationPolicy {
         let pattern = "^(?:" + politePrefix + "|" + qualification + ")*" + command
             + "(?:" + politeSuffix + "|" + qualification + ")*$"
         return compact.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+}
+
+/// Narrow English commands for the paths that run before the model or while
+/// offline. Free-form requests still go through the normal planner.
+enum EnglishConversation {
+    private static let aliases: [(OracleMethod, String)] = [
+        (.bazi, #"ba[ -]?zi|four pillars(?: of destiny)?"#),
+        (.ziwei, #"zi[ -]?wei(?: dou[ -]?shu)?|purple star astrology"#),
+        (.liuyao, #"liu[ -]?yao|six[ -]line(?: divination)?|i[ -]ching"#),
+        (.meihua, #"mei[ -]?hua(?: yi[ -]?shu)?|plum blossom(?: divination)?"#),
+        (.qimen, #"qi[ -]?men(?: dun[ -]?jia)?"#),
+        (.xiaoliuren, #"xiao[ -]?liu[ -]?ren"#),
+        (.chenggu, #"cheng[ -]?gu|bone[ -]weight(?: reading)?"#),
+        (.xingming, #"xing[ -]?ming|five[ -]grid(?: name analysis)?|chinese name numerology"#),
+        (.astrology, #"western astrology|(?<!purple star )astrology|natal chart"#),
+        (.tarot, #"tarot"#)
+    ]
+
+    static func matches(_ text: String, _ pattern: String) -> Bool {
+        text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    static func methods(in text: String, positiveOnly: Bool = true) -> [OracleMethod] {
+        let source = text as NSString
+        return aliases.compactMap { method, alias in
+            guard let regex = try? NSRegularExpression(pattern: "\\b(?:" + alias + ")\\b", options: .caseInsensitive) else { return nil }
+            let occurrences = regex.matches(in: text, range: NSRange(location: 0, length: source.length))
+            return occurrences.contains { occurrence in
+                !positiveOnly || !matches(source.substring(to: occurrence.range.location), #"\b(?:not|no|without|skip|avoid|except|don['’]t|do not|never|instead of|rather than)\b[^,.;!?]{0,32}$"#)
+            } ? method : nil
+        }
+    }
+
+    private static let politePrefix = #"^\s*(?:(?:please|(?:can|could|would) you|you (?:must|have to|need to)|i(?:['’]d like| want| need) (?:you )?to)\s+)*"#
+    private static let politeSuffix = #"\s*(?:please|thanks)?\s*[.!?]*\s*$"#
+    private static let recast = #"(?:(?:recast|redraw|recalculate|redo)(?:\s+(?:it|the (?:reading|spread|cards|chart|hexagram)))?|(?:cast|draw|calculate|do)(?:\s+(?:it|the (?:reading|spread|cards|chart|hexagram)))?\s+again|(?:start|do|give me)\s+(?:a\s+)?(?:new|fresh)\s+(?:reading|spread|draw|cast)|start\s+over|draw\s+(?:three|3)\s+(?:new\s+)?cards(?:\s+again)?)"#
+    private static let newTopic = #"(?:let['’]s\s+)?(?:switch\s+(?:the\s+)?(?:topics?|subjects?)|change\s+(?:the\s+)?(?:topics?|subjects?)|(?:ask|talk about|move on to)\s+(?:a\s+)?(?:new|different|another)\s+(?:question|topic|subject)|new question|(?:talk|ask)\s+about\s+something else)"#
+
+    static func isBareTopicSwitch(_ text: String) -> Bool { matches(text, politePrefix + newTopic + politeSuffix) }
+
+    static func changesScope(_ text: String) -> Bool {
+        matches(text, politePrefix + newTopic + #"(?:\s*[:.!?,]|\s*$)"#)
+            || matches(text, politePrefix + #"(?:switch to|ask about)\s+(?:someone else|another person|my(?:self| (?:friend|partner|sister|brother|mother|father)))\b"#)
+    }
+
+    static func requestsRecast(_ text: String) -> Bool {
+        matches(text, politePrefix + recast + #"(?:\s*[,.:!?]|\s+|$)"#)
+            && !matches(text, #"\b(?:do not|don['’]t|not|never|without)\s+(?:recast|redraw|recalculate|redo|start|draw|cast)\b"#)
+    }
+
+    static func isBareRecast(_ text: String) -> Bool { matches(text, politePrefix + recast + politeSuffix) }
+
+    static func requestedMethods(in text: String, additive: Bool) -> [OracleMethod] {
+        guard !requestsRecast(text), !changesScope(text) else { return [] }
+        return text.components(separatedBy: CharacterSet(charactersIn: ";.!?\n")).flatMap { clause -> [OracleMethod] in
+            let use = additive
+                ? #"(?:add|also use|also include|also calculate|also do|include|supplement (?:it )?with|combine (?:it )?with)\s+"#
+                : #"(?:add|use|try|do|calculate|include|also use|also include|switch to|read (?:it )?with)\s+"#
+            let namedMethod = "(?:" + aliases.map(\.1).joined(separator: "|") + ")"
+            guard matches(clause, politePrefix + #"(?:(?:only|just)\s+)?"# + use + #"(?:(?:only|just)\s+)?"# + namedMethod + #"\b"#),
+                  !matches(clause, #"\b(?:instead of|rather than|no need to|don['’]t|do not)\s+(?:add|use|include|calculate)\b"#) else { return [] }
+            return methods(in: clause)
+        }
+    }
+
+    static func bareMethodChange(_ text: String) -> [OracleMethod] {
+        let method = "(?:" + aliases.map(\.1).joined(separator: "|") + ")"
+        guard matches(text, politePrefix + #"(?:switch to|use)\s+(?:(?:only|just)\s+)?"# + method + #"(?:\s+(?:instead|only))?"# + politeSuffix) else { return [] }
+        return methods(in: text)
+    }
+
+    static func savedTarotExplanation(_ text: String) -> Bool {
+        guard clarifierFocus(text) == nil, !requestsRecast(text), !changesScope(text),
+              requestedMethods(in: text, additive: true).isEmpty else { return false }
+        return matches(text, #"\b(?:explain|interpret|what does|why does|meaning of|what did|what is|why is)\b"#)
+            && matches(text, #"\b(?:(?:advice|influence(?:s)?|current situation|clarifying|first|second|third|that|this) card|saved (?:spread|reading)|original (?:spread|cards?)|reversed|upright)\b"#)
+            && !matches(text, #"\b(?:and|also|then)\s+(?:read|calculate|recast|redraw|add|draw|ask about)\b"#)
+    }
+
+    static func clarifierFocus(_ text: String) -> String? {
+        let command = politePrefix + #"(?:draw|pull|add)\s+(?:(?:me\s+)?(?:a|one|1)\s+)?(?:clarifier|clarifying card|(?:extra|more|additional)\s+card|card\s+to\s+clarify)\b\s*(?:please\s*)?(?:[:.,!?]\s*)?(?:(?:for|on|about|to clarify)\s+)?"#
+        guard let range = text.range(of: command, options: [.regularExpression, .caseInsensitive]) else { return nil }
+        return String(text[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters)).prefix(160))
+    }
+
+    static func declinesClarifier(_ text: String) -> Bool {
+        matches(text, #"\b(?:without|don['’]t|do not|no need to|please don['’]t|skip)\s+(?:draw(?:ing)?|pull(?:ing)?|add(?:ing)?|re-?draw(?:ing)?|a clarifier|another card)\b"#)
+    }
+
+    static func replyLanguage(in question: String) -> AppLanguage? {
+        if matches(question, #"\b(?:answer|reply|respond|explain|write)(?:\s+(?:to me|it|that|this))?\s+in\s+English\b|(?:请|用|改用)英文(?:回答|解释|解读|回复)"#) { return .english }
+        if matches(question, #"\b(?:answer|reply|respond|explain|write)(?:\s+(?:to me|it|that|this))?\s+in\s+(?:simplified\s+)?Chinese\b|(?:请|用|改用)(?:简体)?中文(?:回答|解释|解读|回复)"#) { return .simplifiedChinese }
+        return nil
+    }
+
+    static func introducesOtherPerson(_ text: String) -> Bool {
+        matches(text, #"\b(?:(?:my|his|her|their) (?:friend|partner|spouse|sister|brother|mother|father|child|son|daughter|colleague|coworker|relative)|another person|someone else)\b"#)
+    }
+
+    static func refersToOtherProfile(_ text: String) -> Bool {
+        matches(text, #"(?:^|[,;.!?\n])\s*(?:(?:he|she|they)\s+(?:was|were)\s+born|(?:his|her|their)\s+(?:birth(?:day| date| time|place)?|date of birth|time of birth|sex|gender|time zone))\b"#)
+    }
+
+    static func isLunarDate(_ text: String) -> Bool {
+        text.contains("农历") || text.contains("阴历") || matches(text, #"\b(?:lunar (?:date|calendar|birthday)|chinese lunar)\b"#)
     }
 }

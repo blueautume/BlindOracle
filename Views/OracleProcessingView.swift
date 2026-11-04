@@ -19,17 +19,17 @@ struct OracleProcessingView: View {
                         HStack(spacing: 8) {
                             Text(summary(for: current)).font(.system(size: 10, weight: .medium)).tracking(1)
                             if completedCount > 0 {
-                                Text("· 已完成 \(completedCount) 项").font(.system(size: 10))
+                                Text(L10n.text("· 已完成 \(completedCount) 项", "· \(completedCount) complete")).font(.system(size: 10))
                             }
                             Spacer(minLength: 0)
-                            Text(expanded ? "收起" : "展开").font(.system(size: 10))
+                            Text(expanded ? L10n.text("收起", "Collapse") : L10n.text("展开", "Expand")).font(.system(size: 10))
                             Image(systemName: "chevron.down").font(.system(size: 9, weight: .medium))
                                 .rotationEffect(.degrees(expanded ? 180 : 0))
                         }.foregroundStyle(InkTheme.secondary).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("progressHeaderToggle")
-                    .accessibilityValue(expanded ? "已展开" : "已折叠")
+                    .accessibilityValue(expanded ? L10n.text("已展开", "Expanded") : L10n.text("已折叠", "Collapsed"))
                     HStack(alignment: .center, spacing: 10) {
                         statusMark(current.status).frame(width: 17, height: 17)
                             .onTapGesture(perform: toggleExpansion)
@@ -54,8 +54,8 @@ struct OracleProcessingView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("progressToggle")
-                        .accessibilityValue(expanded ? "已展开" : "已折叠")
-                        .accessibilityHint(expanded ? "收起完整任务步骤" : "查看完整任务步骤")
+                        .accessibilityValue(expanded ? L10n.text("已展开", "Expanded") : L10n.text("已折叠", "Collapsed"))
+                        .accessibilityHint(expanded ? L10n.text("收起完整任务步骤", "Collapse all steps") : L10n.text("查看完整任务步骤", "Show all steps"))
                     }
                 }
 
@@ -120,34 +120,34 @@ struct OracleProcessingView: View {
                 Text(durationText(max(0, context.date.timeIntervalSince(activity.date))))
             }
         } else if activity.status == .waiting {
-            Text("待确认")
+            Text(L10n.text("待确认", "Awaiting confirmation"))
         }
     }
 
     private func durationText(_ duration: TimeInterval) -> String {
-        if duration < 1 { return "<1 秒" }
-        if duration < 60 { return "\(Int(duration)) 秒" }
-        return "\(Int(duration) / 60) 分 \(Int(duration) % 60) 秒"
+        if duration < 1 { return L10n.text("<1 秒", "<1 sec") }
+        if duration < 60 { return L10n.text("\(Int(duration)) 秒", "\(Int(duration)) sec") }
+        return L10n.text("\(Int(duration) / 60) 分 \(Int(duration) % 60) 秒", "\(Int(duration) / 60) min \(Int(duration) % 60) sec")
     }
 
     private func summary(for activity: OracleActivity) -> String {
-        if isBusy { return "正在处理" }
+        if isBusy { return L10n.text("正在处理", "Working") }
         return switch activity.status {
-        case .waiting: "等你继续"
-        case .failed: "暂未完成"
-        case .cancelled: "已停下"
-        case .completed: "已完成"
-        case .running: "正在处理"
+        case .waiting: L10n.text("等你继续", "Ready when you are")
+        case .failed: L10n.text("暂未完成", "Couldn’t finish")
+        case .cancelled: L10n.text("已停下", "Stopped")
+        case .completed: L10n.text("已完成", "Complete")
+        case .running: L10n.text("正在处理", "Working")
         }
     }
 
     private func statusTitle(_ status: OracleActivityStatus) -> String {
         switch status {
-        case .running: "进行中"
-        case .completed: "已完成"
-        case .waiting: "等待确认"
-        case .failed: "未完成"
-        case .cancelled: "已停止"
+        case .running: L10n.text("进行中", "In progress")
+        case .completed: L10n.text("已完成", "Complete")
+        case .waiting: L10n.text("等待确认", "Awaiting confirmation")
+        case .failed: L10n.text("未完成", "Incomplete")
+        case .cancelled: L10n.text("已停止", "Stopped")
         }
     }
 
@@ -157,7 +157,7 @@ struct OracleProcessingView: View {
             // animation continues while title text and elapsed time update.
             ProgressView().progressViewStyle(.circular).controlSize(.mini).tint(InkTheme.cinnabar)
                 .accessibilityElement()
-                .accessibilityLabel("进行中").accessibilityIdentifier("progressRunningIndicator")
+                .accessibilityLabel(L10n.text("进行中", "In progress")).accessibilityIdentifier("progressRunningIndicator")
         } else {
             let symbol: String = switch status {
             case .running: "circle.dotted"

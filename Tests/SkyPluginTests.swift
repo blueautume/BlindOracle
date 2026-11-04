@@ -98,4 +98,22 @@ final class SkyPluginTests: XCTestCase {
         XCTAssertEqual(SkyMath.timeIndex(hour: 22), 11)
         XCTAssertEqual(SkyMath.timeIndex(hour: 23), 12)
     }
+    func testEnglishSkyChartsPreserveTimeAndEvidenceIdentity() async throws {
+        let ziwei = ZiweiPlugin()
+        let astrology = WesternAstrologyPlugin()
+        let input = sample()
+        let chinese = try await AppLanguage.$override.withValue(.simplifiedChinese) {
+            (try await ziwei.calculate(input), try await astrology.calculate(input))
+        }
+        let english = try await AppLanguage.$override.withValue(.english) {
+            XCTAssertTrue(ziwei.descriptor.summary.contains("on device"))
+            return (try await ziwei.calculate(input), try await astrology.calculate(input))
+        }
+        XCTAssertEqual(english.0.evidence.map(\.id), chinese.0.evidence.map(\.id))
+        XCTAssertEqual(english.1.evidence.map(\.id), chinese.1.evidence.map(\.id))
+        XCTAssertTrue(english.0.headline.contains("Earth 5 configuration"))
+        XCTAssertEqual(english.0.rows.first { $0.label == "Time zone and hour" }?.value, "Asia/Shanghai · Wei hour")
+        XCTAssertTrue(english.1.rows.first { $0.label == "Natal Sun" }?.value.hasPrefix("Taurus ") == true)
+        XCTAssertEqual(english.1.rows.filter { $0.label.hasSuffix(" cusp") }.count, 12)
+    }
 }

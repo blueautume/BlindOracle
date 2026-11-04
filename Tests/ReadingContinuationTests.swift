@@ -381,3 +381,20 @@ final class ReadingContinuationTests: XCTestCase {
         XCTAssertTrue(ReadingContinuationPolicy.reusableResults(from: original, for: original.input, methods: []).isEmpty)
     }
 }
+
+extension ReadingContinuationTests {
+    func testEnglishCommandsPreserveReadingScopeAndRespectNegation() {
+        XCTAssertTrue(ReadingContinuationPolicy.isBareRecastRequest("Please redraw the cards."))
+        XCTAssertFalse(ReadingContinuationPolicy.explicitlyRequestsNewReading("Don't redraw the cards."))
+        XCTAssertTrue(ReadingContinuationPolicy.explicitlyChangesScope("Let's switch topics."))
+        XCTAssertTrue(ReadingContinuationPolicy.isSavedTarotExplanation("Can you explain the Advice card without drawing again?"))
+        XCTAssertEqual(ReadingContinuationPolicy.requestedAdditionalMethods(in: "Please also use BaZi.", requiresAdditiveWording: true), [.bazi])
+        XCTAssertTrue(ReadingContinuationPolicy.requestedAdditionalMethods(in: "Why use BaZi?", requiresAdditiveWording: true).isEmpty)
+        XCTAssertEqual(EnglishConversation.requestedMethods(in: "Use only Ba Zi.", additive: false), [.bazi])
+        XCTAssertEqual(EnglishConversation.requestedMethods(in: "You must use Tarot.", additive: false), [.tarot])
+        XCTAssertTrue(EnglishConversation.methods(in: "Don’t use Tarot.").isEmpty)
+        XCTAssertEqual(EnglishConversation.clarifierFocus("Could you draw one clarifying card about my next step?"), "my next step")
+        XCTAssertNil(EnglishConversation.clarifierFocus("Please don't draw a clarifier."))
+        XCTAssertEqual(EnglishConversation.replyLanguage(in: "Please answer in English."), .english)
+    }
+}

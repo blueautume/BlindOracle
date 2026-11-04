@@ -51,7 +51,14 @@ enum AIReadingProgress: Equatable, Sendable { case preparing, requesting, writin
 
 extension OracleMethod {
     var progressName: String {
-        switch self {
+        if AppLanguage.current.isEnglish {
+            switch self {
+            case .bazi: return "Ba Zi"
+            case .liuyao: return "Liu Yao"
+            default: return title
+            }
+        }
+        return switch self {
         case .bazi: "八字"
         case .ziwei: "紫微斗数"
         case .liuyao: "六爻"

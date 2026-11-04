@@ -229,4 +229,47 @@ final class NativePluginTests: XCTestCase {
         XCTAssertTrue(value(result, "逐字笔画")?.contains("張 11 / 華 14") == true)
         XCTAssertTrue(value(result, "输入字形原表笔画")?.contains("张 7") == true)
     }
+    func testEnglishResultsPreserveLineValuesAndLabelClassicalSource() async throws {
+        var request = input()
+        request.manualLines = [9, 7, 7, 7, 7, 7]
+        let english = try await AppLanguage.$override.withValue(.english) {
+            try await LiuyaoPlugin().calculate(request)
+        }
+        let chinese = try await AppLanguage.$override.withValue(.simplifiedChinese) {
+            try await LiuyaoPlugin().calculate(request)
+        }
+        XCTAssertEqual(english.contentLanguageCode, "en")
+        XCTAssertEqual(chinese.contentLanguageCode, "zh-Hans")
+        XCTAssertEqual(english.status, chinese.status)
+        XCTAssertEqual(english.evidence.map(\.id), chinese.evidence.map(\.id))
+        XCTAssertEqual(value(english, "Line values (bottom to top)"), value(chinese, "爻值（初→上）"))
+        XCTAssertEqual(value(english, "Original hexagram"), "The Creative")
+        XCTAssertTrue(value(english, "Original hexagram judgment")?.contains("strong beginning") == true)
+        XCTAssertTrue(value(english, "Original hexagram judgment")?.contains("元，亨，利，貞") == true)
+        XCTAssertTrue(value(english, "Changing line 1 · classical Chinese")?.contains("潛龍，勿用") == true)
+    }
+
+    func testEnglishBoneWeightAndNameKeepHistoricalTextAndUserCharacters() async throws {
+        let request = input()
+        try await AppLanguage.$override.withValue(.english) {
+            let weight = try await ChengguPlugin().calculate(request)
+            XCTAssertEqual(value(weight, "Total weight"), "4 liang 4 qian")
+            XCTAssertTrue(value(weight, "Historical verse")?.contains("Classical Chinese:") == true)
+            let name = try await XingmingPlugin().calculate(request)
+            XCTAssertEqual(value(name, "Total grid"), "15 · Earth")
+            XCTAssertEqual(value(name, "Strokes per character"), "王 4 / 小 3 / 明 8")
+        }
+    }
+    func testQimenLanguageChangesDoNotAlterPalaceAssignments() async throws {
+        let request = input()
+        let english = try await AppLanguage.$override.withValue(.english) {
+            try await QimenPlugin().calculate(request)
+        }
+        let chinese = try await AppLanguage.$override.withValue(.simplifiedChinese) {
+            try await QimenPlugin().calculate(request)
+        }
+        XCTAssertTrue(value(english, "Dui palace 7")?.contains("Tian Zhu · Alarm Gate · Chief Spirit") == true)
+        XCTAssertTrue(value(chinese, "兑7宫")?.contains("天柱 · 惊门 · 值符") == true)
+        XCTAssertEqual(english.evidence.map(\.id), chinese.evidence.map(\.id))
+    }
 }

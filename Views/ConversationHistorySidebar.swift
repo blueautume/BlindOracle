@@ -25,20 +25,20 @@ struct ConversationHistorySidebar: View {
         let today = history.filter { calendar.isDateInToday($0.updatedAt) }
         let yesterday = history.filter { calendar.isDateInYesterday($0.updatedAt) }
         let earlier = history.filter { !calendar.isDateInToday($0.updatedAt) && !calendar.isDateInYesterday($0.updatedAt) }
-        return [("今天", today), ("昨天", yesterday), ("更早", earlier)].filter { !$0.1.isEmpty }
+        return [(L10n.text("今天", "Today"), today), (L10n.text("昨天", "Yesterday"), yesterday), (L10n.text("更早", "Earlier"), earlier)].filter { !$0.1.isEmpty }
     }
 
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
                 Button(action: close) { Color.black.opacity(0.22).ignoresSafeArea() }
-                    .buttonStyle(.plain).accessibilityLabel("关闭历史侧栏")
+                    .buttonStyle(.plain).accessibilityLabel(L10n.text("关闭历史侧栏", "Close history sidebar"))
                 VStack(alignment: .leading, spacing: 0) {
                     HStack {
-                        Text("历史对话").font(.system(size: 23, weight: .medium, design: .serif)).tracking(2)
+                        Text(L10n.text("历史对话", "Conversation history")).font(.system(size: 23, weight: .medium, design: .serif)).tracking(2)
                         Spacer()
                         Button(action: close) { Image(systemName: "xmark").font(.system(size: 14)).frame(width: 38, height: 38) }
-                            .accessibilityLabel("关闭历史").accessibilityIdentifier("closeHistory")
+                            .accessibilityLabel(L10n.text("关闭历史", "Close history")).accessibilityIdentifier("closeHistory")
                     }
                     .foregroundStyle(InkTheme.ink)
                     .padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 22)
@@ -46,8 +46,8 @@ struct ConversationHistorySidebar: View {
 
                     if history.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("往日问事，都会留在这里。").font(.system(size: 16, design: .serif))
-                            Text("开始一段对话后，就可以随时回来。")
+                            Text(L10n.text("往日问事，都会留在这里。", "Your past conversations will appear here.")).font(.system(size: 16, design: .serif))
+                            Text(L10n.text("开始一段对话后，就可以随时回来。", "Once you start a conversation, you can return to it at any time."))
                                 .font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
                         }.padding(24)
                         Spacer()
@@ -66,7 +66,7 @@ struct ConversationHistorySidebar: View {
                             }.padding(.horizontal, 10).padding(.top, 24).padding(.bottom, 28)
                         }
                     }
-                    Text("长按一段对话，可将它删除。")
+                    Text(L10n.text("长按一段对话，可将它删除。", "Touch and hold a conversation to delete it."))
                         .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                         .padding(.horizontal, 24).padding(.top, 14)
                         .padding(.bottom, max(geometry.safeAreaInsets.bottom, 18))
@@ -83,13 +83,13 @@ struct ConversationHistorySidebar: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("conversationHistorySidebar")
         .accessibilityAction(.escape) { close() }
-        .confirmationDialog("删除这段对话？", isPresented: Binding(get: { deletionCandidate != nil }, set: { if !$0 { deletionCandidate = nil } }), titleVisibility: .visible) {
-            Button("删除对话", role: .destructive) {
+        .confirmationDialog(L10n.text("删除这段对话？", "Delete this conversation?"), isPresented: Binding(get: { deletionCandidate != nil }, set: { if !$0 { deletionCandidate = nil } }), titleVisibility: .visible) {
+            Button(L10n.text("删除对话", "Delete conversation"), role: .destructive) {
                 if let candidate = deletionCandidate { store.deleteConversation(candidate.id) }
                 deletionCandidate = nil
             }.accessibilityIdentifier("confirmDeleteConversation")
-            Button("取消", role: .cancel) { deletionCandidate = nil }
-        } message: { Text("这段聊天会从历史中移除，基础资料与独立推演记录仍保留。") }
+            Button(L10n.text("取消", "Cancel"), role: .cancel) { deletionCandidate = nil }
+        } message: { Text(L10n.text("这段聊天会从历史中移除，基础资料与独立推演记录仍保留。", "This chat will be removed from history. Your profiles and saved readings will be kept.")) }
     }
 
     private func historyRow(_ conversation: OracleConversation) -> some View {
@@ -102,7 +102,7 @@ struct ConversationHistorySidebar: View {
                 VStack(alignment: .leading, spacing: 7) {
                     Text(conversation.title).font(.system(size: 15, design: .serif)).lineLimit(1)
                         .foregroundStyle(InkTheme.ink)
-                    Text(conversation.updatedAt.formatted(.dateTime.month().day().hour().minute()))
+                    Text(conversation.updatedAt.formatted(.dateTime.month().day().hour().minute().locale(AppLanguage.current.locale)))
                         .font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
                 }
                 Spacer(minLength: 4)
@@ -116,10 +116,10 @@ struct ConversationHistorySidebar: View {
         .buttonStyle(.plain)
         .accessibilityLabel(conversation.title)
         .accessibilityIdentifier("historyRow-\(conversation.id.uuidString)")
-        .accessibilityValue(active ? "当前对话" : "")
+        .accessibilityValue(active ? L10n.text("当前对话", "Current conversation") : "")
         .contextMenu {
             Button(role: .destructive) { deletionCandidate = conversation } label: {
-                Label("删除对话", systemImage: "trash")
+                Label(L10n.text("删除对话", "Delete conversation"), systemImage: "trash")
             }.accessibilityIdentifier("deleteConversation")
         }
     }

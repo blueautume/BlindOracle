@@ -51,7 +51,7 @@ struct PluginRegistry: Sendable {
             !reusedKeys.contains(CalculationKey(method: method, participantID: person?.id))
         }
         for omission in omissions {
-            var result = OracleResult(method: omission.method, status: .unavailable, headline: "资料不足，本次未采用", rows: [], limitations: [omission.reason])
+            var result = OracleResult(method: omission.method, status: .unavailable, headline: L10n.text("资料不足，本次未采用", "Skipped because details were missing"), rows: [], limitations: [omission.reason])
             result.participantID = omission.participantID; result.participantName = omission.participantName
             results.append(result); await onProgress(result)
         }
@@ -62,11 +62,11 @@ struct PluginRegistry: Sendable {
             await onParticipantStart?(method, person, index + 1, tasks.count)
             if Task.isCancelled { break }
             if method.usesPersonalProfile, person == nil {
-                let result = OracleResult(method: method, status: .unavailable, headline: "尚未选择问事人员", rows: [], limitations: ["此方法需要明确的个人资料，未套用其他档案。"])
+                let result = OracleResult(method: method, status: .unavailable, headline: L10n.text("尚未选择问事人员", "No participant selected"), rows: [], limitations: [L10n.text("此方法需要明确的个人资料，未套用其他档案。", "Choose a profile for this method.")])
                 results.append(result); await onProgress(result); continue
             }
             guard let plugin = plugin(method) else {
-                let result = OracleResult(method: method, status: .unavailable, headline: "此方法尚未加载", rows: [])
+                let result = OracleResult(method: method, status: .unavailable, headline: L10n.text("此方法尚未加载", "This method is unavailable"), rows: [])
                 results.append(result); await onProgress(result); continue
             }
             let start = Date()
@@ -75,7 +75,7 @@ struct PluginRegistry: Sendable {
             var result: OracleResult
             do { result = try await plugin.calculate(request) }
             catch is CancellationError { break }
-            catch { result = OracleResult(method: method, status: .failed, headline: "本项未能完成", rows: [], limitations: [error.localizedDescription]) }
+            catch { result = OracleResult(method: method, status: .failed, headline: L10n.text("本项未能完成", "This calculation couldn’t finish"), rows: [], limitations: [error.localizedDescription]) }
             if Task.isCancelled { break }
             if input.participants != nil, let person {
                 result.participantID = person.id; result.participantName = person.participantLabel
@@ -86,17 +86,20 @@ struct PluginRegistry: Sendable {
         return results
     }
     func localPlan(question: String, profile: OracleProfile) -> OraclePlan {
-        let personal = ["我", "自己", "本人", "运势", "财运", "性格", "事业", "感情", "婚", "工作", "名字", "命"].contains { question.contains($0) }
-        let other = ["朋友", "家人", "孩子", "他", "她", "对象", "父亲", "母亲"].contains { question.contains($0) }
-        let naming = ["姓名", "名字", "改名", "取名"].contains { question.contains($0) }
-        let tarotRequested = question.localizedCaseInsensitiveContains("tarot") || question.contains("塔罗") || question.contains("塔羅")
+        let englishMethods = EnglishConversation.requestedMethods(in: question, additive: false)
+        let personal = EnglishConversation.matches(question, #"\b(?:my|myself|my own|career|job|love life|marriage)\b"#) || ["我", "自己", "本人", "运势", "财运", "性格", "事业", "感情", "婚", "工作", "名字", "命"].contains { question.contains($0) }
+        let other = ReadingContinuationPolicy.participantIntent(in: question, profiles: []).refersToOther || ["朋友", "家人", "孩子", "他", "她", "对象", "父亲", "母亲"].contains { question.contains($0) }
+        let naming = EnglishConversation.matches(question, #"\b(?:name analysis|rename|choose a name|five[ -]grid)\b"#) || ["姓名", "名字", "改名", "取名"].contains { question.contains($0) }
+        let tarotRequested = EnglishConversation.methods(in: question).contains(.tarot) || question.contains("塔罗") || question.contains("塔羅")
         var methods: [OracleMethod] = tarotRequested ? [.tarot] : [.liuyao, .meihua, .qimen, .xiaoliuren]
         if !tarotRequested, personal || other { methods += [.bazi, .ziwei, .chenggu, .astrology] }
         if !tarotRequested, naming || (!profile.familyName.isEmpty && !profile.givenName.isEmpty && personal) { methods.append(.xingming) }
+        if !englishMethods.isEmpty { methods = englishMethods }
         let fields = Array(Set(methods.flatMap { plugin($0)?.descriptor.requiredFields ?? [] })).sorted { $0.rawValue < $1.rawValue }
-        var plan = OraclePlan(intent: naming ? "姓名与个人问题" : personal || other ? "个人问题" : "具体问事", subject: other ? "他人" : "本人", methods: methods, requiredFields: fields,
-                          note: "已按这次问题备好问事笺。能确定的写下，不确定的也可以注明。", question: question)
-        if !tarotRequested, methods.contains(.meihua), ["报数", "数字", "留数"].contains(where: question.contains) {
+        var plan = OraclePlan(intent: naming ? L10n.text("姓名与个人问题", "Name and personal question") : personal || other ? L10n.text("个人问题", "Personal question") : L10n.text("具体问事", "Specific question"), subject: other ? "他人" : "本人", methods: methods, requiredFields: fields,
+                          note: L10n.text("已按这次问题备好问事笺。能确定的写下，不确定的也可以注明。", "The reading form is ready. Enter the details you know and mark anything you’re unsure about."), question: question)
+        if !tarotRequested, methods.contains(.meihua), ["报数", "数字", "留数"].contains(where: question.contains)
+            || EnglishConversation.matches(question, #"\b(?:three numbers|use numbers|provide numbers)\b"#) {
             plan.interactions = [.init(method: .meihua, kind: .numbers)]
         }
         return plan

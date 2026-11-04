@@ -19,11 +19,11 @@ struct ContextCompressor {
         return total > tokenThreshold
     }
 
-    static func history(messages: [ChatMessage], summary: ConversationSummary) -> [AIConversationTurn] {
+    static func history(messages: [ChatMessage], summary: ConversationSummary, language: AppLanguage = .current) -> [AIConversationTurn] {
         let covered = Set(summary.coveredMessageIDs)
         var history: [AIConversationTurn] = []
         if !summary.text.isEmpty {
-            history.append(AIConversationTurn(role: "assistant", content: "此前对话的延续摘要（资料档案另存，不以摘要修改）：\n" + summary.text))
+            history.append(AIConversationTurn(role: "assistant", content: L10n.text("此前对话的延续摘要（资料档案另存，不以摘要修改）：\n", "Previous conversation summary (profile records are stored separately):\n", language: language) + summary.text))
         }
         history += messages.filter { !covered.contains($0.id) && $0.role != .system && $0.kind != .intake }
             .map { AIConversationTurn(role: $0.role.rawValue, content: $0.content) }
@@ -31,7 +31,7 @@ struct ContextCompressor {
     }
 
     static func compact(messages: [ChatMessage], summary: ConversationSummary,
-                        using client: DeepSeekClient) async throws -> ConversationSummary? {
+                        using client: DeepSeekClient, language: AppLanguage = .current) async throws -> ConversationSummary? {
         guard shouldCompress(messages: messages, summary: summary) else { return nil }
         let older = Array(messages.dropLast(retainedRecentMessages))
         let alreadyCovered = Set(summary.coveredMessageIDs)
@@ -39,7 +39,7 @@ struct ContextCompressor {
         guard !pending.isEmpty else { return nil }
         let transcript = pending.map { "[\($0.role.rawValue)] \($0.content)" }.joined(separator: "\n")
         // If the network fails, leave the current summary and all messages unchanged.
-        let text = try await client.summarize(transcript: transcript, previous: summary.text)
+        let text = try await client.summarize(transcript: transcript, previous: summary.text, language: language)
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         var output = summary
         output.text = text
