@@ -1,5 +1,29 @@
 import Foundation
 
+/// The work needed to retry the latest request without duplicating its user
+/// turn or making a new cast. Presence while idle means it can be retried.
+enum OracleAnalysisAttempt: Codable, Sendable {
+    case planning(questionID: UUID)
+    case followUp(questionID: UUID, replyID: UUID, runID: UUID?, tarotOffer: TarotClarificationSuggestion?)
+    case reading(runID: UUID, messageID: UUID?, needsCalculation: Bool)
+
+    var messageID: UUID? {
+        switch self {
+        case let .planning(questionID): questionID
+        case let .followUp(_, replyID, _, _): replyID
+        case let .reading(_, messageID, _): messageID
+        }
+    }
+
+    var runID: UUID? {
+        switch self {
+        case .planning: nil
+        case let .followUp(_, _, runID, _): runID
+        case let .reading(runID, _, _): runID
+        }
+    }
+}
+
 /// A conversation owns its transcript and model context; profiles, readings and
 /// personal preferences remain independent, device-local records.
 struct OracleConversation: Codable, Identifiable, Sendable {
@@ -10,6 +34,7 @@ struct OracleConversation: Codable, Identifiable, Sendable {
     var summary: ConversationSummary
     var pendingPlan: OraclePlan?
     var pendingInteraction: OracleInteractionSession?
+    var analysisAttempt: OracleAnalysisAttempt?
 
     var title: String {
         let source = messages.first(where: { $0.role == .user && !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })?.content
@@ -25,12 +50,13 @@ struct OracleConversation: Codable, Identifiable, Sendable {
     init(id: UUID = UUID(), messages: [ChatMessage] = [],
          summary: ConversationSummary = ConversationSummary(), pendingPlan: OraclePlan? = nil,
          pendingInteraction: OracleInteractionSession? = nil,
-         createdAt: Date? = nil, fallbackDate: Date = Date()) {
+         createdAt: Date? = nil, fallbackDate: Date = Date(), analysisAttempt: OracleAnalysisAttempt? = nil) {
         self.id = id
         self.messages = messages
         self.summary = summary
         self.pendingPlan = pendingPlan
         self.pendingInteraction = pendingInteraction
+        self.analysisAttempt = analysisAttempt
         self.createdAt = createdAt ?? messages.map(\.date).min() ?? pendingPlan?.createdAt ?? fallbackDate
         // Reading a historical conversation must not make it appear newly active.
         self.updatedAt = (messages.map(\.date) + [pendingPlan?.createdAt, summary.updatedAt].compactMap { $0 }).max() ?? self.createdAt

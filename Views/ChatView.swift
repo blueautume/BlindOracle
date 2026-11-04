@@ -181,7 +181,7 @@ struct ChatView: View {
     private var activityInsertionIndex: Int {
         guard let messageID = store.activityMessageID,
               let index = store.messages.firstIndex(where: { $0.id == messageID }) else { return store.messages.count }
-        return index
+        return store.messages[index].role == .user ? index + 1 : index
     }
 
     private var welcome: some View {
@@ -268,8 +268,10 @@ struct ChatView: View {
                             .disabled(store.phase == .planning)
                         if !store.isBusy {
                             if let run = store.runs.first(where: { $0.id == runID }), run.synthesis == nil {
-                                Button { store.retrySynthesis(run) } label: { Label(L10n.text("重试解读", "Retry interpretation"), systemImage: "arrow.clockwise") }
-                                    .accessibilityIdentifier("retryReading-\(runID.uuidString)")
+                                if !store.canRetryAnalysis(for: message.id) {
+                                    Button { store.retrySynthesis(run) } label: { Label(L10n.text("重试解读", "Retry interpretation"), systemImage: "arrow.clockwise") }
+                                        .accessibilityIdentifier("retryReading-\(runID.uuidString)")
+                                }
                             } else {
                                 Button { draft = L10n.text("请结合刚才的结果再详细解释一下，给我更具体的建议。", "Please explain the same reading in more detail and give me some practical advice."); submit() } label: { Label(L10n.text("再细说些", "Explain further"), systemImage: "text.bubble") }
                             }
@@ -370,20 +372,51 @@ struct ChatView: View {
     }
 
     private var composer: some View {
-        VStack(spacing: 8) {
+        let hasDraft = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let stopWithoutSending = store.isBusy && !hasDraft
+        let actionEnabled = hasDraft || stopWithoutSending
+        let sendLabel = store.isBusy ? L10n.text("停止并发送追问", "Stop and send follow-up") : L10n.text("发送问题", "Send question")
+        let stopLabel = L10n.text("停止回答", "Stop reply")
+        return VStack(spacing: 8) {
+            if store.canRetryAnalysis {
+                Button {
+                    composing = false
+                    store.retryAnalysis()
+                } label: {
+                    Label(L10n.text("重试", "Retry"), systemImage: "arrow.clockwise")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(InkTheme.cinnabar)
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 38)
+                        .background(InkTheme.cinnabar.opacity(0.08), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("retryAnalysis")
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
             HStack(alignment: .bottom, spacing: 10) {
-                TextField(L10n.text("说说你想问的事…", "What’s on your mind?"), text: $draft, axis: .vertical).lineLimit(1...5)
+                TextField(store.isBusy ? L10n.text("想补充什么？", "Add a follow-up…") : L10n.text("说说你想问的事…", "What’s on your mind?"), text: $draft, axis: .vertical).lineLimit(1...5)
                     .font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.ink).focused($composing)
                     .submitLabel(.send).onSubmit { submit() }.accessibilityIdentifier("questionInput")
                     .padding(.leading, 4).padding(.vertical, 10)
+                if store.isBusy && hasDraft {
+                    Button { store.stop() } label: {
+                        Image(systemName: "stop.fill").font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(InkTheme.ink).frame(width: 38, height: 38)
+                            .background(InkTheme.wash, in: Circle())
+                    }
+                    .accessibilityLabel(stopLabel)
+                    .accessibilityIdentifier("stopAnswer")
+                }
                 Button {
-                    if store.isBusy { store.stop() } else { submit() }
+                    if stopWithoutSending { store.stop() } else { submit() }
                 } label: {
-                    Image(systemName: store.isBusy ? "stop.fill" : "arrow.up").font(.system(size: 15, weight: .medium))
+                    Image(systemName: stopWithoutSending ? "stop.fill" : "arrow.up").font(.system(size: 15, weight: .medium))
                         .foregroundStyle(InkTheme.paper).frame(width: 38, height: 38)
-                        .background((draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !store.isBusy) ? InkTheme.secondary.opacity(0.3) : InkTheme.ink, in: Circle())
-                }.disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !store.isBusy)
-                    .accessibilityLabel(store.isBusy ? L10n.text("停止回答", "Stop reply") : L10n.text("发送问题", "Send question")).accessibilityIdentifier("sendQuestion")
+                        .background(actionEnabled ? InkTheme.ink : InkTheme.secondary.opacity(0.3), in: Circle())
+                }.disabled(!actionEnabled)
+                    .accessibilityLabel(stopWithoutSending ? stopLabel : sendLabel)
+                    .accessibilityIdentifier("sendQuestion")
             }.padding(.horizontal, 13).padding(.vertical, 8)
                 .background(Color(red: 0.982, green: 0.975, blue: 0.959), in: RoundedRectangle(cornerRadius: 22))
                 .overlay(RoundedRectangle(cornerRadius: 22).stroke(InkTheme.line, lineWidth: 0.8))
@@ -400,13 +433,16 @@ struct ChatView: View {
             .accessibilityIdentifier("chatComposerPanel")
     }
     private func submit() {
-        guard !store.isBusy else { return }
-        if store.pendingInteraction != nil, !store.canSendWhileAwaitingInteraction(draft) {
+        let question = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !question.isEmpty else { return }
+        if store.pendingInteraction != nil, !store.canSendWhileAwaitingInteraction(question) {
             composing = false
             store.showInteraction = true
             return
         }
-        let text = draft; draft = ""; composing = false; store.send(text)
+        draft = ""
+        composing = false
+        store.send(question)
     }
 }
 

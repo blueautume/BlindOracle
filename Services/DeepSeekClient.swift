@@ -271,7 +271,7 @@ actor DeepSeekClient {
     func synthesize(run: OracleRun, weights: [String: Double], history: [AIConversationTurn],
                     language: AppLanguage = .current,
                     onProgress: (@Sendable (AIReadingProgress) async -> Void)? = nil,
-                    onDelta: @escaping @Sendable (String) -> Void) async throws -> ReadingSynthesis {
+                    onDelta: @escaping @Sendable (String) async -> Void) async throws -> ReadingSynthesis {
         await onProgress?(.preparing)
         let eligible = run.results.filter { $0.status == .complete || $0.status == .partial }
         guard !eligible.isEmpty else {
@@ -313,7 +313,7 @@ actor DeepSeekClient {
         let content = try await stream(turns, jsonMode: true, maxTokens: 4000) { piece in
             if let delta = extractor.append(piece), !delta.isEmpty {
                 if !hasWrittenText { hasWrittenText = true; await onProgress?(.writing) }
-                onDelta(delta)
+                await onDelta(delta)
             }
         }
         await onProgress?(.validating)
@@ -330,7 +330,7 @@ actor DeepSeekClient {
     }
 
     func followUp(question: String, run: OracleRun?, profile: OracleProfile,
-                  history: [AIConversationTurn], language: AppLanguage = .current, onDelta: @escaping @Sendable (String) -> Void) async throws -> String {
+                  history: [AIConversationTurn], language: AppLanguage = .current, onDelta: @escaping @Sendable (String) async -> Void) async throws -> String {
         let system = """
         你是瞎子，一位敏锐、说话直接的盲眼先生。简洁自然地回应用户，不堆砌方法名称，不卖弄古语；用户问卦象、爻辞或牌义时，直接解释相关术语。
         \(Self.interpretationStyle)
@@ -358,7 +358,7 @@ actor DeepSeekClient {
         let turns = [AIConversationTurn(role: "system", content: system + "\n" + context)]
             + sanitizedHistory(history)
             + [AIConversationTurn(role: "user", content: question)]
-        return try await stream(turns, jsonMode: false, maxTokens: 3500) { piece in onDelta(piece) }
+        return try await stream(turns, jsonMode: false, maxTokens: 3500) { piece in await onDelta(piece) }
     }
 
     func summarize(transcript: String, previous: String, language: AppLanguage = .current) async throws -> String {

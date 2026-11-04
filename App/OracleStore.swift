@@ -1,7 +1,10 @@
 import Foundation
 import Combine
 
-enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteraction, calculating, synthesizing }
+enum OraclePhase: String {
+    case idle, planning, awaitingIntake, awaitingInteraction, calculating, synthesizing
+    var isBusy: Bool { self == .planning || self == .calculating || self == .synthesizing }
+}
 
 @MainActor final class OracleStore: ObservableObject {
     @Published var profiles: [OracleProfile]
@@ -34,13 +37,25 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     let registry = PluginRegistry()
     private lazy var deepSeekClient = DeepSeekClient(provider: .deepSeek)
     private lazy var qwenClient = DeepSeekClient(provider: .qwen)
-    var client: DeepSeekClient { aiProvider == .deepSeek ? deepSeekClient : qwenClient }
+    private let aiClient: DeepSeekClient?
+    var client: DeepSeekClient { aiClient ?? (aiProvider == .deepSeek ? deepSeekClient : qwenClient) }
     var credentialStore: KeychainStore { KeychainStore.store(for: aiProvider) }
     private let vault: LocalVault
     private var task: Task<Void, Never>?
     private var operationID: UUID?
     private var activityRunID: UUID?
-    var isBusy: Bool { [.planning, .calculating, .synthesizing].contains(phase) }
+    @Published private var analysisAttempt: OracleAnalysisAttempt?
+    var isBusy: Bool { phase.isBusy }
+    var canRetryAnalysis: Bool {
+        guard !isBusy, pendingInteraction == nil, let attempt = analysisAttempt else { return false }
+        if let runID = attempt.runID, !runs.contains(where: { $0.id == runID }) { return false }
+        return true
+    }
+    func canRetryAnalysis(for messageID: UUID) -> Bool {
+        guard canRetryAnalysis, let attempt = analysisAttempt else { return false }
+        if attempt.messageID == messageID { return true }
+        return attempt.runID.map { runID in messages.contains { $0.id == messageID && $0.runID == runID } } ?? false
+    }
     private var waitingPhase: OraclePhase { pendingInteraction != nil ? .awaitingInteraction : pendingPlan != nil ? .awaitingIntake : .idle }
     var profile: OracleProfile { profiles.first(where: { $0.id == selfProfileID }) ?? OracleProfile() }
     var latestRun: OracleRun? {
@@ -50,17 +65,19 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     }
     var pendingIntakeMessageID: UUID? { pendingPlan == nil ? nil : messages.last(where: { $0.kind == .intake && $0.runID == nil })?.id }
     var localOnly: Bool {
+        if aiClient != nil { return false }
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-testing-local") { return true }
         #endif
         return UserDefaults.standard.bool(forKey: "oracle.localOnly")
     }
 
-    init(vault: LocalVault = .shared, bootstrapCredential: Bool = true) {
+    init(vault: LocalVault = .shared, bootstrapCredential: Bool = true, aiClient: DeepSeekClient? = nil) {
         DeepSeekConfiguration.migrateDefault()
         aiProvider = UserDefaults.standard.string(forKey: AIProvider.selectionKey)
             .flatMap(AIProvider.init(rawValue:)) ?? .deepSeek
         self.vault = vault
+        self.aiClient = aiClient
         let history = ConversationHistory.load(from: vault)
         conversations = history.archive.conversations
         activeConversationID = history.archive.activeConversationID
@@ -86,6 +103,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         summary = active?.summary ?? ConversationSummary()
         pendingPlan = active?.pendingPlan
         pendingInteraction = active?.pendingInteraction
+        analysisAttempt = active?.analysisAttempt
         phase = waitingPhase
         let recoveredClarification = recoverCommittedClarification()
         let discardedSupplement = discardMissingSupplement()
@@ -98,8 +116,9 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
                 ? L10n.text("历史对话有部分内容无法读取，已尽可能恢复可用对话并保留原文件副本。", "Some chat history could not be read. The available chats were recovered and a copy of the original file was kept.")
                 : L10n.text("历史对话有部分内容无法读取，原文件暂时无法备份，已阻止覆盖，请检查设备可用空间。", "Some chat history could not be read. The original file was preserved because it could not be backed up. Check your available storage.")
         }
-        if bootstrapCredential { refreshCredential() }
-        if let plan = pendingPlan { prepareConversation(plan, appendMessage: false) }
+        if aiClient != nil { hasCredential = true }
+        else if bootstrapCredential { refreshCredential() }
+        if let plan = pendingPlan, analysisAttempt == nil { prepareConversation(plan, appendMessage: false) }
         else if restoreActivities() || discardedSupplement || recoveredClarification { persist() }
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-testing-local") && ProcessInfo.processInfo.arguments.contains("--ui-testing-reading-library") {
@@ -133,6 +152,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     }
 
     func refreshCredential(importBundledKey: Bool = true) {
+        if aiClient != nil { return }
         let keychain = credentialStore
         var bootstrapIssue: String?
         if importBundledKey {
@@ -218,6 +238,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
             phase = waitingPhase
         }
         runs.removeAll { $0.id == id }
+        if analysisAttempt?.runID == id { analysisAttempt = nil }
         _ = discardMissingSupplement()
         func detach(_ transcript: inout [ChatMessage]) {
             for index in transcript.indices where transcript[index].runID == id {
@@ -227,6 +248,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         detach(&messages)
         for index in conversations.indices {
             detach(&conversations[index].messages)
+            if conversations[index].analysisAttempt?.runID == id { conversations[index].analysisAttempt = nil }
             let dependedOnDeletedRun = conversations[index].pendingPlan?.baseRunID == id || conversations[index].pendingInteraction?.plan.baseRunID == id
             if conversations[index].pendingPlan?.baseRunID == id { conversations[index].pendingPlan = nil }
             if conversations[index].pendingInteraction?.plan.baseRunID == id { conversations[index].pendingInteraction = nil }
@@ -391,7 +413,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         cancelConversationTask()
         captureCurrentConversation()
         if !messages.isEmpty || pendingPlan != nil || pendingInteraction != nil || !summary.text.isEmpty { activeConversationID = UUID() }
-        messages = []; summary = ConversationSummary(); pendingPlan = nil; pendingInteraction = nil
+        messages = []; summary = ConversationSummary(); pendingPlan = nil; pendingInteraction = nil; analysisAttempt = nil
         clearConversationPresentation()
         persist()
     }
@@ -402,10 +424,11 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         activeConversationID = target.id
         messages = target.messages; summary = target.summary; pendingPlan = target.pendingPlan
         pendingInteraction = target.pendingInteraction
+        analysisAttempt = target.analysisAttempt
         recoverCommittedClarification()
         clearConversationPresentation()
         _ = discardMissingSupplement()
-        if let plan = pendingPlan { prepareConversation(plan, appendMessage: false) }
+        if let plan = pendingPlan, analysisAttempt == nil { prepareConversation(plan, appendMessage: false) }
         selectedTab = 0
         persist()
     }
@@ -417,7 +440,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
             cancelConversationTask()
             conversations.removeAll { $0.id == id }
             activeConversationID = UUID()
-            messages = []; summary = ConversationSummary(); pendingPlan = nil; pendingInteraction = nil
+            messages = []; summary = ConversationSummary(); pendingPlan = nil; pendingInteraction = nil; analysisAttempt = nil
             clearConversationPresentation()
         } else { conversations.removeAll { $0.id == id } }
         persist()
@@ -425,20 +448,14 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     private func captureCurrentConversation() {
         let previous = conversations.first { $0.id == activeConversationID }
         let snapshot = OracleConversation(id: activeConversationID, messages: messages, summary: summary,
-                                          pendingPlan: pendingPlan, pendingInteraction: pendingInteraction, createdAt: previous?.createdAt)
+                                          pendingPlan: pendingPlan, pendingInteraction: pendingInteraction,
+                                          createdAt: previous?.createdAt, analysisAttempt: analysisAttempt)
         conversations.removeAll { $0.id == activeConversationID }
         if !snapshot.isEmpty { conversations.append(snapshot) }
         conversations = ConversationHistory.ordered(conversations)
     }
     private func cancelConversationTask() {
-        let interrupted = isBusy
-        task?.cancel(); task = nil; operationID = nil
-        if interrupted {
-            finishActivity(status: .cancelled)
-            for index in messages.indices where messages[index].role == .assistant && messages[index].content.isEmpty {
-                messages[index].content = L10n.text("这次先停在这里，已完成的资料与结果仍保留。", "I stopped here. Your saved details and results are still available.")
-            }
-        }
+        if isBusy { interruptAnalysis(backgroundExpired: false) }
     }
     private func clearConversationPresentation() {
         showIntake = false; showInteraction = false; notice = nil; intakeError = nil; status = ""; activities = []
@@ -492,21 +509,39 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     @discardableResult private func restoreActivities() -> Bool {
         var interrupted = false
         let awaitingUser = pendingPlan != nil || pendingInteraction != nil
-        if let message = messages.last(where: {
+        let attemptMessage = analysisAttempt?.messageID.flatMap { id in messages.first { $0.id == id } }
+        let attemptRun = analysisAttempt?.runID.flatMap { id in runs.first { $0.id == id } }
+        let historicalMessage = analysisAttempt == nil ? messages.last(where: {
             !($0.activities ?? []).isEmpty && (!awaitingUser || ($0.kind == .intake && $0.runID == nil))
-        }) {
+        }) : nil
+        if let message = attemptMessage ?? historicalMessage {
             activityMessageID = message.id
             activityRunID = message.kind == .reading || message.kind == .intake ? message.runID : nil
             activities = message.activities ?? []; activitySessionID = message.id
             if activities.last?.status == .running { finishActivity(status: .cancelled); interrupted = true }
             status = activities.last?.text ?? ""
-        } else if !awaitingUser, let run = latestRun, let saved = run.activities, !saved.isEmpty {
+        } else if let run = attemptRun ?? (analysisAttempt == nil && !awaitingUser ? latestRun : nil),
+                  let saved = run.activities, !saved.isEmpty {
             activities = saved; activityRunID = run.id; activitySessionID = run.id
             activityMessageID = messages.last(where: { $0.runID == run.id && $0.kind == .reading })?.id
             if activities.last?.status == .running { finishActivity(status: .cancelled); interrupted = true }
             status = activities.last?.text ?? ""
         }
+        if !interrupted, let attempt = analysisAttempt, attempt.runID != nil, activities.last?.status == .completed {
+            // A calculation can be saved between two local methods.
+            progress(L10n.text("上次处理已中断", "The last request was interrupted"), state: .cancelled)
+            interrupted = true
+        }
         if interrupted {
+            if analysisAttempt == nil, let index = messages.firstIndex(where: { $0.id == activityMessageID }) {
+                let message = messages[index]
+                if let runID = message.runID, message.kind == .reading || message.kind == .intake {
+                    analysisAttempt = .reading(runID: runID, messageID: message.id, needsCalculation: message.kind == .intake)
+                } else if message.kind == .text, message.role == .assistant,
+                          let question = messages[..<index].last(where: { $0.role == .user }) {
+                    analysisAttempt = .followUp(questionID: question.id, replyID: message.id, runID: message.runID, tarotOffer: nil)
+                }
+            }
             if let id = activityMessageID, let index = messages.firstIndex(where: { $0.id == id }),
                messages[index].role == .assistant, messages[index].content.isEmpty {
                 messages[index].content = L10n.text("上次回答中断，已保存的资料与结果仍保留。", "The last answer was interrupted. Your saved details and results are still available.")
@@ -514,7 +549,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
             notice = notice ?? L10n.text("上次处理已中断，已保存的资料、部分回答与本地结果仍保留。", "The last request was interrupted. Your saved details, partial answer, and local results are still available.")
         }
         if !awaitingUser, exposeInterruptedTarotReading() { interrupted = true }
-        if awaitingUser {
+        if awaitingUser, analysisAttempt == nil {
             activityRunID = nil
             activityMessageID = messages.last(where: { $0.kind == .intake && $0.runID == nil })?.id
             progress(pendingInteraction != nil ? interactionStatus : L10n.text("等待你确认问事资料", "Waiting for you to review the reading details"), state: .waiting)
@@ -593,7 +628,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         activityMessageID = messages.last(where: { $0.kind == .intake && $0.runID == nil })?.id
         progress(L10n.text("等待填写并确认问事资料", "Waiting for you to complete and confirm the reading details"), state: .waiting)
         showIntake = true; showInteraction = false
-        phase = .awaitingIntake; operationID = nil; persist()
+        finishOperation()
     }
 
     private func preparationParticipants(for plan: OraclePlan) -> [OracleProfile] {
@@ -658,9 +693,9 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
     /// then answers from the existing run without creating another record.
     private func prepareSupplement(_ proposed: OraclePlan, base: OracleRun, question: String) -> Bool {
         guard runs.contains(where: { $0.id == base.id }) else {
-            operationID = nil; phase = waitingPhase
             progress(L10n.text("补充推演已取消", "Follow-up reading canceled"), detail: L10n.text("原推演记录已删除。", "The original reading was deleted."), state: .cancelled)
-            notice = L10n.text("原推演记录已删除，无法继续这次补充推演。", "The original reading was deleted, so this follow-up cannot continue."); persist()
+            notice = L10n.text("原推演记录已删除，无法继续这次补充推演。", "The original reading was deleted, so this follow-up cannot continue.")
+            finishOperation()
             return true
         }
         var plan = proposed
@@ -717,7 +752,8 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         }
         if !requests.isEmpty {
             pendingInteraction = OracleInteractionSession(input: input, plan: plan, requests: requests)
-            pendingPlan = nil; showIntake = false; phase = .awaitingInteraction; operationID = nil
+            pendingPlan = nil; showIntake = false; analysisAttempt = nil
+            phase = .awaitingInteraction; operationID = nil; task = nil
             presentRequestedInteraction()
         } else { startReading(input: input, plan: plan) }
     }
@@ -824,8 +860,9 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
 
     func send(_ question: String) {
         let text = question.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !isBusy else { return }
+        guard !text.isEmpty else { return }
         guard text.count <= 6000 else { notice = L10n.text("这次问题较长，请先整理到六千字以内。", "Keep your question to 6,000 characters or fewer."); return }
+        if isBusy { interruptAnalysis(backgroundExpired: false) }
         let bareTopicSwitch = EnglishConversation.isBareTopicSwitch(text) || text.range(of: #"^(?:先|我们|咱们)?(?:换(?:个|一个)?(?:新)?(?:问题|话题)|聊点别的|问点别的)(?:吧|好吗)?[。！!？?]*$"#, options: .regularExpression) != nil
         if bareTopicSwitch {
             let hadDraft = pendingInteraction != nil || pendingPlan != nil
@@ -864,15 +901,25 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
             return
         }
         if pendingPlan == nil, activities.last?.status == .waiting { finishActivity() }
-        messages.append(ChatMessage(role: .user, content: text))
-        beginActivitySession(); phase = .planning; progress(L10n.text("理解问题与确认询问对象", "Understanding the question and who it concerns"))
+        let message = ChatMessage(role: .user, content: text)
+        messages.append(message)
+        planQuestion(message)
+    }
+
+    private func planQuestion(_ message: ChatMessage) {
+        let text = message.content
+        let questionID = message.id
+        beginActivitySession(); notice = nil
+        activityMessageID = questionID
+        analysisAttempt = .planning(questionID: questionID)
+        phase = .planning; progress(L10n.text("理解问题与确认询问对象", "Understanding the question and who it concerns"))
         let id = UUID(); operationID = id; persist()
         let replyLanguage = EnglishConversation.replyLanguage(in: text) ?? AppLanguage.current
         task = Task { [weak self] in
             guard let self else { return }
             await prepareContext(operation: id, language: replyLanguage)
             guard operationID == id, !Task.isCancelled else { return }
-            let history = ContextCompressor.history(messages: Array(messages.dropLast()), summary: summary, language: replyLanguage)
+            let history = ContextCompressor.history(messages: Array(messages.prefix { $0.id != questionID }), summary: summary, language: replyLanguage)
             let previousPlan = pendingPlan
             let currentRun = previousPlan == nil ? latestRun : nil
             let target = ReadingContinuationPolicy.participantIntent(in: text, profiles: profiles)
@@ -986,8 +1033,9 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
             if hasCredential && !localOnly {
                 do { plan = try await client.plan(question: text, profile: profile, plugins: registry.descriptors, history: history, profiles: profiles, pendingPlan: keepsPendingScope ? pendingPlan : nil, existingRun: base, language: replyLanguage) }
                 catch {
-                    guard !Task.isCancelled else { return }
-                    notice = error.localizedDescription + L10n.text(" 已改为本地准备问事笺。", " The reading form was prepared on this device.")
+                    guard operationID == id, !Task.isCancelled else { return }
+                    failAnalysis(L10n.text("暂未能处理这次问题", "Couldn’t process this question"), error: error)
+                    return
                 }
             }
             guard operationID == id, !Task.isCancelled else { return }
@@ -1089,7 +1137,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
                 messages.append(ChatMessage(role: .assistant, content: note))
                 activityMessageID = messages.last?.id
                 progress(names.isEmpty ? L10n.text("等待明确人员资料", "Waiting for profile details") : L10n.text("资料已按姓名分别留存", "Profiles saved by name"), state: names.isEmpty ? .waiting : .completed)
-                phase = waitingPhase; operationID = nil; showIntake = false; persist(); return
+                showIntake = false; finishOperation(); return
             }
             if !changedIDs.isEmpty {
                 let names = changedIDs.compactMap { id in self.profiles.first(where: { $0.id == id })?.resolvedName }.sorted()
@@ -1102,7 +1150,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
                 messages.append(ChatMessage(role: .assistant, content: plan.note.isEmpty ? L10n.text("你最想问的是哪一件具体的事？", "What specific question is on your mind?") : plan.note))
                 activityMessageID = messages.last?.id
                 progress(L10n.text("等待你补充确认所问事项", "Waiting for you to clarify the question"), state: .waiting)
-                phase = waitingPhase; operationID = nil; persist(); return
+                finishOperation(); return
             }
             // A union of declared requirements prevents a model from bypassing local validation.
             let requirements = registry.descriptors.filter { plan.methods.contains($0.method) }.flatMap(\.requiredFields)
@@ -1240,8 +1288,8 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
 
     private func startReading(input: OracleInput, plan: OraclePlan, isTarotClarification: Bool = false) {
         guard plan.baseRunID == nil || runs.contains(where: { $0.id == plan.baseRunID }) else {
-            notice = L10n.text("原推演记录已删除，无法继续这次补充推演。", "The original reading was deleted, so this follow-up cannot continue."); phase = waitingPhase; operationID = nil
-            progress(L10n.text("补充推演已取消", "Follow-up reading canceled"), state: .cancelled); persist(); return
+            notice = L10n.text("原推演记录已删除，无法继续这次补充推演。", "The original reading was deleted, so this follow-up cannot continue.")
+            progress(L10n.text("补充推演已取消", "Follow-up reading canceled"), state: .cancelled); finishOperation(); return
         }
         let base = plan.baseRunID.flatMap { id in runs.first { $0.id == id } }
         let reused = isTarotClarification ? (base?.results ?? []).filter { $0.method != .tarot }
@@ -1249,15 +1297,33 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         let run = OracleRun(input: input, plan: plan, results: reused, weightsSnapshot: weights,
                             reusedResultIDs: plan.baseRunID == nil ? nil : reused.map(\.id))
         activityRunID = run.id
-        runs.append(run); showIntake = false; pendingPlan = nil; phase = .calculating
+        runs.append(run); showIntake = false; pendingPlan = nil
         if let index = messages.lastIndex(where: { $0.kind == .intake && $0.runID == nil && $0.deletedRunID == nil }) {
             messages[index].runID = run.id
+            activityMessageID = messages[index].id
             if isTarotClarification { messages[index].content = L10n.text("补牌已保存，正在结合全部牌面解读。", "The clarifying card is saved. I’m reading the cards together.") }
             else { messages[index].content = plan.baseRunID == nil ? L10n.text("问事笺已收好。稍坐，我替你理一理。", "I have the details. Give me a moment to work through them.") : L10n.text("已有结果继续沿用，只补充新增或条件变化的部分。", "I’ll keep the existing results and update the parts affected by the new details.") }
         }
         if !reused.isEmpty {
             progress(L10n.text("沿用已完成的推演结果", "Using completed results"), detail: reused.map { $0.displayTitle }.joined(separator: L10n.text("、", ", ")), state: .completed)
         }
+        calculateReading(run)
+    }
+
+    private func calculateReading(_ run: OracleRun) {
+        let input = run.input
+        let plan = run.plan
+        let isTarotClarification = input.tarotClarificationRounds?.last.map { round in
+            plan.tarotClarification == TarotClarificationSuggestion(focus: round.request.focus, originalPosition: round.request.originalPosition)
+                && (round.request.question == nil || plan.followUpQuestion == round.request.question)
+        } ?? false
+        let unchanged = isTarotClarification ? run.results.filter { $0.method != .tarot } : []
+        let reusable = run.results.filter {
+            ($0.status == .complete || $0.status == .partial) && (!isTarotClarification || $0.method == .tarot)
+        }
+        if let index = runs.firstIndex(where: { $0.id == run.id }) { runs[index].results = unchanged + reusable }
+        analysisAttempt = .reading(runID: run.id, messageID: activityMessageID, needsCalculation: true)
+        phase = .calculating
         progress(L10n.text("核对资料与已确认的选择", "Checking details and confirmed choices"))
         let operation = UUID(); operationID = operation; persist()
         let conversationID = activeConversationID
@@ -1266,11 +1332,17 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
             let results = await registry.calculate(input, methods: isTarotClarification ? [.tarot] : plan.methods,
                 omissions: isTarotClarification ? [] : plan.omittedMethods ?? [], onParticipantStart: { [weak self] method, person, index, total in
                 await self?.beginMethod(method, person: person, index: index, total: total, runID: run.id, operation: operation, conversationID: conversationID)
-            }, reusedResults: isTarotClarification ? [] : reused, onProgress: { [weak self] result in
+            }, reusedResults: reusable, onProgress: { [weak self] result in
                 await self?.receive(result, for: run.id, operation: operation)
             })
             guard operationID == operation, !Task.isCancelled else { return }
-            if let index = runs.firstIndex(where: { $0.id == run.id }) { runs[index].results = isTarotClarification ? reused + results : results }
+            let allResults = unchanged + results
+            if let index = runs.firstIndex(where: { $0.id == run.id }) { runs[index].results = allResults }
+            if !allResults.contains(where: { $0.status == .complete || $0.status == .partial }),
+               allResults.contains(where: { $0.status == .failed }) {
+                failAnalysis(L10n.text("本次推演暂未完成", "The calculation couldn’t finish"))
+                return
+            }
             await synthesize(runID: run.id, operation: operation)
         }
     }
@@ -1290,15 +1362,22 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         persist()
     }
     func retrySynthesis(_ run: OracleRun) {
-        guard !isBusy, runs.contains(where: { $0.id == run.id }) else { return }
+        guard !isBusy, let current = runs.first(where: { $0.id == run.id }) else { return }
         guard pendingInteraction == nil else { notice = L10n.text("请先完成当前选择，再继续解读。", "Finish your current selection to continue."); return }
-        beginActivitySession(); activityRunID = run.id
-        progress(L10n.text("沿用已保存的推演结果", "Using saved results"), detail: run.results.map { $0.method.progressName }.joined(separator: L10n.text("、", ", ")), state: .completed)
-        phase = .synthesizing
-        let operation = UUID(); operationID = operation
-        task = Task { [weak self] in await self?.synthesize(runID: run.id, operation: operation) }
+        if analysisAttempt?.runID == run.id { retryAnalysis(); return }
+        resumeReading(current, messageID: nil, needsCalculation: false)
     }
-    private func synthesize(runID: UUID, operation: UUID) async {
+    private func resumeReading(_ run: OracleRun, messageID: UUID?, needsCalculation: Bool) {
+        beginActivitySession(); notice = nil; activityRunID = run.id
+        activityMessageID = messageID
+        progress(L10n.text("沿用已保存的推演结果", "Using saved results"), detail: run.results.map { $0.method.progressName }.joined(separator: L10n.text("、", ", ")), state: .completed)
+        if needsCalculation { calculateReading(run); return }
+        analysisAttempt = .reading(runID: run.id, messageID: messageID, needsCalculation: false)
+        phase = .synthesizing
+        let operation = UUID(); operationID = operation; persist()
+        task = Task { [weak self] in await self?.synthesize(runID: run.id, operation: operation, replyID: messageID) }
+    }
+    private func synthesize(runID: UUID, operation: UUID, replyID: UUID? = nil) async {
         guard operationID == operation, !Task.isCancelled,
               var run = runs.first(where: { $0.id == runID }) else { return }
         if run.plan.tarotClarification != nil, !(run.input.tarotClarificationRounds ?? []).isEmpty,
@@ -1314,10 +1393,17 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
             persist()
         }
         phase = .synthesizing
-        let messageID = UUID()
-        messages.append(ChatMessage(id: messageID, role: .assistant, content: "", kind: .reading, runID: runID))
+        let messageID: UUID
+        if let replyID, let index = messages.firstIndex(where: { $0.id == replyID && $0.kind == .reading }) {
+            messageID = replyID
+            messages[index].content = ""
+        } else {
+            messageID = UUID()
+            messages.append(ChatMessage(id: messageID, role: .assistant, content: "", kind: .reading, runID: runID))
+        }
         activityMessageID = messageID
-        let transcript = messages.dropLast()
+        analysisAttempt = .reading(runID: runID, messageID: messageID, needsCalculation: false)
+        let transcript = messages.prefix { $0.id != messageID }
         let replyLanguage = EnglishConversation.replyLanguage(in: run.plan.followUpQuestion ?? run.input.question) ?? AppLanguage.current
         let history: [AIConversationTurn]
         if run.plan.baseRunID == nil, let boundary = transcript.lastIndex(where: {
@@ -1337,21 +1423,12 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
                 synthesis = try await client.synthesize(run: run, weights: weights, history: history, language: replyLanguage, onProgress: { [weak self] stage in
                     await self?.readingProgress(stage, runID: runID, operation: operation)
                 }) { [weak self] delta in
-                    Task { @MainActor [weak self] in
-                        guard let self, self.operationID == operation,
-                              let index = self.messages.firstIndex(where: { $0.id == messageID }) else { return }
-                        self.messages[index].content += delta
-                    }
+                    await self?.appendStreamDelta(delta, to: messageID, operation: operation)
                 }
             } catch {
-                guard !Task.isCancelled else { return }
-                notice = error.localizedDescription
-                if let index = messages.firstIndex(where: { $0.id == messageID }) {
-                    messages[index].content = L10n.text("这次解读暂未完成，请稍后重试。已经确认的选择与本地结果都已保留。", "The reading couldn’t finish. Try again when you’re ready. Your choices and local results are saved.")
-                }
-                finishActivity(status: .failed)
-                progress(L10n.text("解读暂未完成，结果已保留", "Reading interrupted. Results saved."), detail: L10n.text("可以沿用本次结果重试。", "You can retry with these results."), state: .failed)
-                phase = waitingPhase; operationID = nil; persist(); return
+                guard operationID == operation, !Task.isCancelled else { return }
+                failAnalysis(L10n.text("解读暂未完成，结果已保留", "Reading interrupted. Results saved."), error: error)
+                return
             }
         } else {
             progress(L10n.text("整理本地规则摘要", "Preparing a local rule summary"))
@@ -1377,7 +1454,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         }
         if let index = runs.firstIndex(where: { $0.id == runID }) { runs[index].synthesis = synthesis; runs[index].completedAt = Date() }
         progress(L10n.text("解读已完成", "Reading complete"), state: .completed)
-        phase = waitingPhase; operationID = nil; persist()
+        finishOperation()
     }
     private func readingProgress(_ stage: AIReadingProgress, runID: UUID, operation: UUID) {
         guard operationID == operation, let run = runs.first(where: { $0.id == runID }), !Task.isCancelled else { return }
@@ -1418,11 +1495,23 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         return ReadingSynthesis(text: reason + "\n\n" + body + uncertainty, alternatives: [])
     }
     private func answerFollowUp(_ question: String, history: [AIConversationTurn], operation: UUID,
-                                run: OracleRun?, tarotOffer: TarotClarificationSuggestion? = nil) async {
-        phase = .synthesizing; progress(run == nil ? L10n.text("结合已确认资料生成回答", "Answering with the confirmed details") : L10n.text("沿用已有卦象，解答追问", "Answering with the saved reading"))
-        let messageID = UUID()
-        messages.append(ChatMessage(id: messageID, role: .assistant, content: "", runID: run?.id))
+                                run: OracleRun?, tarotOffer: TarotClarificationSuggestion? = nil,
+                                retryReplyID: UUID? = nil) async {
+        guard operationID == operation, !Task.isCancelled else { return }
+        let messageID: UUID
+        if let retryReplyID, let index = messages.firstIndex(where: { $0.id == retryReplyID }) {
+            messageID = retryReplyID
+            messages[index].content = ""
+        } else {
+            messageID = UUID()
+            messages.append(ChatMessage(id: messageID, role: .assistant, content: "", runID: run?.id))
+        }
+        if case let .planning(questionID) = analysisAttempt {
+            analysisAttempt = .followUp(questionID: questionID, replyID: messageID, runID: run?.id, tarotOffer: tarotOffer)
+        }
+        phase = .synthesizing
         activityMessageID = messageID
+        progress(run == nil ? L10n.text("结合已确认资料生成回答", "Answering with the confirmed details") : L10n.text("沿用已有卦象，解答追问", "Answering with the saved reading"))
         persist()
         let replyLanguage = EnglishConversation.replyLanguage(in: question) ?? AppLanguage.current
         if !hasCredential || localOnly {
@@ -1434,17 +1523,13 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
                 ?? L10n.text("说说你想看的具体事情，我可以为你准备本地推演。", "Tell me what’s on your mind, and I can prepare a local reading.", language: replyLanguage)
             if let index = messages.firstIndex(where: { $0.id == messageID }) { messages[index].content = text }
             progress(run == nil ? L10n.text("等待具体问题", "Waiting for a specific question") : L10n.text("已有结果已保留", "Previous results saved"), state: .completed)
-            phase = waitingPhase; operationID = nil; persist(); return
+            finishOperation(); return
         }
         do {
             let text = try await client.followUp(question: question, run: run, profile: profile, history: history, language: replyLanguage) { [weak self] delta in
-                Task { @MainActor [weak self] in
-                    guard let self, self.operationID == operation, let index = self.messages.firstIndex(where: { $0.id == messageID }) else { return }
-                    if self.messages[index].content.isEmpty { self.progress(L10n.text("正在整理补充回答", "Writing a follow-up")) }
-                    self.messages[index].content += delta
-                }
+                await self?.appendStreamDelta(delta, to: messageID, operation: operation, followUp: true)
             }
-            guard operationID == operation else { return }
+            guard operationID == operation, !Task.isCancelled else { return }
             if let index = messages.firstIndex(where: { $0.id == messageID }) {
                 messages[index].content = text
                 let declines = EnglishConversation.declinesClarifier(question) || question.range(of: #"(?:不要|不用|无需|不必|别|不想).{0,6}(?:补抽|加抽|追加|补牌|补一张|抽牌|再抽)"#, options: .regularExpression) != nil
@@ -1453,13 +1538,63 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
                 }
             }
         } catch {
-            guard !Task.isCancelled else { return }
-            finishActivity(status: .failed)
-            if let index = messages.firstIndex(where: { $0.id == messageID }) { messages[index].content = error.localizedDescription }
+            guard operationID == operation, !Task.isCancelled else { return }
+            failAnalysis(L10n.text("补充回答暂未完成", "The follow-up couldn’t finish"), error: error)
+            return
         }
-        guard operationID == operation else { return }
-        progress(activities.last?.status == .failed ? L10n.text("补充回答暂未完成", "The follow-up couldn’t finish") : L10n.text("补充回答已完成", "Follow-up complete"), state: activities.last?.status == .failed ? .failed : .completed)
-        phase = waitingPhase; operationID = nil; persist()
+        progress(L10n.text("补充回答已完成", "Follow-up complete"), state: .completed)
+        finishOperation()
+    }
+
+    private func appendStreamDelta(_ delta: String, to messageID: UUID, operation: UUID, followUp: Bool = false) {
+        guard operationID == operation, !Task.isCancelled,
+              let index = messages.firstIndex(where: { $0.id == messageID }) else { return }
+        if followUp, messages[index].content.isEmpty { progress(L10n.text("正在整理补充回答", "Writing a follow-up")) }
+        messages[index].content += delta
+    }
+
+    func retryAnalysis() {
+        guard canRetryAnalysis, let attempt = analysisAttempt else { return }
+        switch attempt {
+        case let .planning(questionID):
+            guard let question = messages.first(where: { $0.id == questionID }) else { return }
+            planQuestion(question)
+        case let .followUp(questionID, replyID, runID, tarotOffer):
+            guard let index = messages.firstIndex(where: { $0.id == questionID }) else { return }
+            let question = messages[index].content
+            let run = runID.flatMap { id in runs.first { $0.id == id } }
+            let language = EnglishConversation.replyLanguage(in: question) ?? AppLanguage.current
+            let history = ContextCompressor.history(messages: Array(messages.prefix(upTo: index)), summary: summary, language: language)
+            beginActivitySession(); notice = nil; activityMessageID = replyID
+            let operation = UUID(); operationID = operation; phase = .synthesizing
+            task = Task { [weak self] in
+                await self?.answerFollowUp(question, history: history, operation: operation, run: run, tarotOffer: tarotOffer, retryReplyID: replyID)
+            }
+        case let .reading(runID, messageID, needsCalculation):
+            guard let run = runs.first(where: { $0.id == runID }) else { return }
+            resumeReading(run, messageID: messageID, needsCalculation: needsCalculation)
+        }
+    }
+
+    private func finishOperation(keepRetry: Bool = false) {
+        task = nil; operationID = nil
+        if !keepRetry { analysisAttempt = nil }
+        phase = waitingPhase
+        persist()
+    }
+
+    private func failAnalysis(_ text: String, error: Error? = nil) {
+        notice = error?.localizedDescription
+        finishActivity(status: .failed)
+        progress(text, state: .failed)
+        fillEmptyActiveReply(with: text)
+        finishOperation(keepRetry: true)
+    }
+
+    private func fillEmptyActiveReply(with text: String) {
+        if let index = messages.firstIndex(where: { $0.id == activityMessageID && $0.role == .assistant && $0.content.isEmpty }) {
+            messages[index].content = text
+        }
     }
     func select(_ alternative: ReadingAlternative, for runID: UUID) {
         guard let index = runs.firstIndex(where: { $0.id == runID }), runs[index].selectedAlternative == nil,
@@ -1476,14 +1611,23 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         persist()
     }
     func stop() {
-        task?.cancel(); task = nil; operationID = nil; phase = waitingPhase
+        interruptAnalysis(backgroundExpired: false)
+    }
+    func suspendAnalysisForBackgroundExpiration() {
+        interruptAnalysis(backgroundExpired: true)
+    }
+    private func interruptAnalysis(backgroundExpired: Bool) {
+        guard isBusy else { return }
+        task?.cancel()
+        operationID = nil
         finishActivity(status: .cancelled)
-        progress(L10n.text("已停下，已有资料与结果仍保留", "Stopped. Your details and results are saved."), state: .cancelled)
-        for index in messages.indices where messages[index].role == .assistant && messages[index].content.isEmpty {
-            messages[index].content = L10n.text("这次先停在这里。", "I’ll stop here for now.")
-        }
+        let text = backgroundExpired
+            ? L10n.text("后台解读已中断，可重试", "The background reading was interrupted. You can retry.")
+            : L10n.text("已停下，已有资料与结果仍保留", "Stopped. Your details and results are saved.")
+        progress(text, state: .cancelled)
+        fillEmptyActiveReply(with: text)
         exposeInterruptedTarotReading()
-        persist()
+        finishOperation(keepRetry: true)
     }
 
     #if DEBUG
@@ -1517,10 +1661,12 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
             let paragraph = "先把手头的事情排出轻重，把需要确认的信息写下来。推进之前，留一点时间核对现实条件，再决定下一步。"
             messages.append(ChatMessage(role: .assistant, content: Array(repeating: paragraph, count: 3).joined(separator: "\n\n")))
         }
-        messages.append(ChatMessage(role: .user, content: "请结合八字和紫微斗数，看看未来一个月的工作节奏。"))
+        let question = ChatMessage(role: .user, content: "请结合八字和紫微斗数，看看未来一个月的工作节奏。")
+        messages.append(question)
         let messageID = UUID()
         messages.append(ChatMessage(id: messageID, role: .assistant, content: ""))
         activityMessageID = messageID
+        analysisAttempt = .followUp(questionID: question.id, replyID: messageID, runID: nil, tarotOffer: nil)
         let titles = [L10n.text("理解问题与确认询问对象", "Understanding the question and who it concerns"), L10n.text("选择适用方法与所需资料", "Choosing methods and checking what details they need"), "核对资料与已确认的交互结果",
                       "正在推演八字", "整理八字结果", "正在推演紫微斗数", "整理紫微斗数结果",
                       "汇集本次盘面与交互数据", "综合解析八字、紫微斗数等结果"]
@@ -1532,7 +1678,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
         activities = timeline.activities; status = titles.last!
         phase = .synthesizing
         let operation = UUID(); operationID = operation
-        syncActivities()
+        persist()
         guard !paused else { return }
         task = Task { [weak self] in
             do {
@@ -1545,7 +1691,7 @@ enum OraclePhase: String { case idle, planning, awaitingIntake, awaitingInteract
                 try await Task.sleep(for: .seconds(6))
                 guard operationID == operation, !Task.isCancelled else { return }
                 progress(L10n.text("解读已完成", "Reading complete"), state: .completed)
-                phase = .idle; operationID = nil; persist()
+                finishOperation()
             } catch { }
         }
     }

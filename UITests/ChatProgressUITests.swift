@@ -64,13 +64,46 @@ final class ChatProgressUITests: XCTestCase {
         capture("chat-opaque-composer-after-scroll", in: app)
     }
 
+    @MainActor func testComposerCanSendAFollowUpWhileAnAnswerIsRunning() {
+        let app = launchProgressFixture(paused: true)
+        let send = app.buttons["sendQuestion"]
+        XCTAssertTrue(send.waitForExistence(timeout: 15))
+        XCTAssertEqual(send.label, "停止回答")
+
+        let question = "这次还需要留意什么？"
+        let input = app.textFields["questionInput"]
+        input.tap()
+        input.typeText(question)
+        XCTAssertTrue(app.buttons["stopAnswer"].isHittable)
+        XCTAssertEqual(send.label, "停止并发送追问")
+        send.tap()
+
+        XCTAssertTrue(app.staticTexts[question].waitForExistence(timeout: 15))
+        let idle = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "发送问题"), object: send)
+        XCTAssertEqual(XCTWaiter.wait(for: [idle], timeout: 5), .completed)
+    }
+
+    @MainActor func testAnswerCanFinishWhileAppIsInBackground() {
+        let app = launchProgressFixture(paused: false)
+        let progress = app.buttons["progressToggle"]
+        XCTAssertTrue(progress.waitForExistence(timeout: 15))
+        XCTAssertTrue(progress.label.contains("综合解析"))
+
+        moveToBackground(app)
+        // The fixture writes at 10 seconds and then completes 6 seconds later.
+        Thread.sleep(forTimeInterval: 17)
+        app.activate()
+
+        XCTAssertTrue(progress.label.contains("解读已完成"))
+        XCTAssertEqual(app.buttons["sendQuestion"].label, "发送问题")
+    }
+
     @MainActor func testBackgroundCheckpointRestoresInterruptedReplyAfterTermination() {
         let app = launchProgressFixture(paused: true)
         XCTAssertTrue(app.buttons["progressToggle"].waitForExistence(timeout: 15))
         XCTAssertEqual(app.buttons["sendQuestion"].label, "停止回答")
 
-        XCUIDevice.shared.press(.home)
-        XCTAssertTrue(app.wait(for: .runningBackground, timeout: 10))
+        moveToBackground(app)
         app.terminate()
         app.launchArguments = ["--ui-testing-local"]
         app.launch()
@@ -80,6 +113,13 @@ final class ChatProgressUITests: XCTestCase {
         XCTAssertEqual(app.buttons["sendQuestion"].label, "发送问题")
         XCTAssertFalse(app.descendants(matching: .any).matching(identifier: "progressRunningIndicator").firstMatch.exists)
         capture("background-checkpoint-interrupted-reply", in: app)
+
+        let retry = app.buttons["retryAnalysis"]
+        XCTAssertTrue(retry.waitForExistence(timeout: 5))
+        retry.tap()
+        let retried = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "说说你想看的具体事情")).firstMatch
+        XCTAssertTrue(retried.waitForExistence(timeout: 10))
+        XCTAssertFalse(retry.exists)
     }
 
     @MainActor private func launchProgressFixture(paused: Bool) -> XCUIApplication {
@@ -88,6 +128,14 @@ final class ChatProgressUITests: XCTestCase {
                                paused ? "--ui-testing-progress-paused" : "--ui-testing-progress"]
         app.launch()
         return app
+    }
+
+    @MainActor private func moveToBackground(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        XCUIDevice.shared.press(.home)
+        let background = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            app.state != .runningForeground
+        }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [background], timeout: 5), .completed, file: file, line: line)
     }
 
     @MainActor private func progressRows(in app: XCUIApplication) -> XCUIElementQuery {

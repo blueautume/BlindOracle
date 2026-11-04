@@ -236,7 +236,7 @@ final class OracleProgressTests: XCTestCase {
         XCTAssertEqual(persisted?.last?.activities?.last?.status, .cancelled)
     }
 
-    @MainActor func testRelaunchCancelsBothIntakeAndRunProgressDuringLocalCalculation() throws {
+    @MainActor func testRelaunchCancelsBothIntakeAndRunProgressDuringLocalCalculation() async throws {
         let vault = try temporaryVault()
         let plan = OraclePlan(intent: "计算恢复", subject: "事件", methods: [.xiaoliuren], requiredFields: [], note: "", question: "出行如何安排？")
         var run = OracleRun(input: OracleInput(question: plan.question, profile: OracleProfile(), seed: 73), plan: plan)
@@ -255,6 +255,15 @@ final class OracleProgressTests: XCTestCase {
         XCTAssertEqual(store.runs.first?.activities?.last?.status, .cancelled)
         XCTAssertEqual(vault.load([OracleRun].self, from: "readings", fallback: []).first?.activities?.last?.status, .cancelled)
         XCTAssertEqual(store.runs.first?.input.seed, 73)
+
+        XCTAssertTrue(store.canRetryAnalysis)
+        store.retryAnalysis()
+        try await waitUntil { !store.isBusy }
+        XCTAssertEqual(store.runs.map(\.id), [run.id])
+        XCTAssertEqual(store.runs.first?.input.seed, 73)
+        XCTAssertEqual(store.runs.first?.results.map(\.method), [.xiaoliuren])
+        XCTAssertNotNil(store.runs.first?.synthesis)
+        XCTAssertFalse(store.canRetryAnalysis)
     }
 
     @MainActor func testCancelledQueuedSendCannotAppendCompressionProgressToRestoredLongChat() async throws {
@@ -286,4 +295,201 @@ final class OracleProgressTests: XCTestCase {
         XCTAssertEqual(store.messages.last?.activities, [finished])
         XCTAssertFalse(store.activities.contains { $0.text == "整理此前对话与已确认资料" })
     }
+
+    @MainActor func testSendingWhileWritingKeepsThePartialReplyAndAnswersTheNewQuestion() async throws {
+        let partial = "Here is the first part."
+        let newReply = "You're welcome."
+        let client = scriptedClient([.hold(partial), .complete(newReply)])
+        let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false, aiClient: client)
+        let conversationID = store.activeConversationID
+        defer { if store.isBusy { store.stop() } }
+
+        store.send("Hello!")
+        try await waitUntil { store.messages.last?.content == partial }
+        XCTAssertTrue(store.isBusy)
+        let interruptedReplyID = try XCTUnwrap(store.messages.last?.id)
+
+        store.send("Thank you!")
+        try await waitUntil { !store.isBusy }
+
+        XCTAssertEqual(store.activeConversationID, conversationID)
+        XCTAssertEqual(store.messages.filter { $0.role == .user }.map(\.content), ["Hello!", "Thank you!"])
+        let interrupted = try XCTUnwrap(store.messages.first { $0.id == interruptedReplyID })
+        XCTAssertTrue(interrupted.content.contains(partial))
+        XCTAssertEqual(interrupted.activities?.last?.status, .cancelled)
+        XCTAssertEqual(store.messages.last?.content, newReply)
+        XCTAssertFalse(store.canRetryAnalysis)
+    }
+
+    @MainActor func testRetryAfterTruncatedReadingReusesTheSavedRun() async throws {
+        let partial = "Confirm the schedule first."
+        let completed = "Confirm the schedule first. Then allow extra time."
+        let client = scriptedClient([.truncate(#"{"text":""# + partial),
+                                     .complete(#"{"text":""# + completed + #"","alternatives":[]}"#)])
+        let vault = try temporaryVault()
+        let plan = OraclePlan(intent: "Travel", subject: "事件", methods: [.xiaoliuren],
+                              requiredFields: [], note: "", question: "How should I plan this trip?")
+        let result = OracleResult(method: .xiaoliuren, headline: "Saved result", rows: [])
+        let run = OracleRun(input: OracleInput(question: plan.question, profile: OracleProfile(), seed: 42),
+                            plan: plan, results: [result])
+        let question = ChatMessage(role: .user, content: plan.question)
+        let intake = ChatMessage(role: .assistant, content: "Details confirmed.", kind: .intake, runID: run.id)
+        let conversation = OracleConversation(messages: [question, intake])
+        try vault.save([run], as: "readings")
+        try vault.save(OracleConversationArchive(activeConversationID: conversation.id, conversations: [conversation]),
+                       as: ConversationHistory.filename)
+        let store = OracleStore(vault: vault, bootstrapCredential: false, aiClient: client)
+        defer { if store.isBusy { store.stop() } }
+
+        store.retrySynthesis(run)
+        try await waitUntil { !store.isBusy }
+        XCTAssertTrue(store.canRetryAnalysis)
+        XCTAssertTrue(store.messages.last?.content.contains(partial) == true)
+        XCTAssertNil(store.runs.first?.synthesis)
+
+        store.retryAnalysis()
+        try await waitUntil { !store.isBusy }
+
+        XCTAssertEqual(store.messages.filter { $0.role == .user }.map(\.id), [question.id])
+        XCTAssertEqual(store.messages.last?.runID, run.id)
+        XCTAssertEqual(store.messages.last?.content, completed)
+        XCTAssertEqual(store.runs.map(\.id), [run.id])
+        XCTAssertEqual(store.runs.first?.results.map(\.id), [result.id])
+        XCTAssertEqual(store.runs.first?.input.seed, 42)
+        XCTAssertEqual(store.runs.first?.synthesis?.text, completed)
+        XCTAssertFalse(store.canRetryAnalysis)
+    }
+
+    @MainActor func testRetryAfterPlanningNetworkErrorReusesTheOriginalQuestion() async throws {
+        let question = "只用小六壬看看这次出行怎么安排？"
+        let plan = #"{"action":"intake","intent":"出行安排","subject":"事件","methods":["xiaoliuren"],"requiredFields":[],"note":"请核对资料。","question":"出行怎么安排？"}"#
+        let client = scriptedClient([.networkError, .plan(plan)])
+        let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false, aiClient: client)
+        defer { if store.isBusy { store.stop() } }
+
+        store.send(question)
+        try await waitUntil { !store.isBusy }
+        let originalID = try XCTUnwrap(store.messages.first?.id)
+        XCTAssertTrue(store.canRetryAnalysis)
+        XCTAssertNil(store.pendingPlan)
+
+        store.retryAnalysis()
+        try await waitUntil { !store.isBusy }
+        XCTAssertEqual(store.messages.filter { $0.role == .user }.map(\.id), [originalID])
+        XCTAssertEqual(store.pendingPlan?.question, question)
+        XCTAssertEqual(store.pendingPlan?.methods, [.xiaoliuren])
+        XCTAssertFalse(store.canRetryAnalysis)
+    }
+
+    @MainActor func testBackgroundExpirationPersistsFollowUpRetryAcrossRelaunch() async throws {
+        let partial = "I can help."
+        let completed = "I can help. What are you working on?"
+        let client = scriptedClient([.hold(partial), .complete(completed)])
+        let vault = try temporaryVault()
+        let store = OracleStore(vault: vault, bootstrapCredential: false, aiClient: client)
+        defer { if store.isBusy { store.stop() } }
+
+        store.send("Hello!")
+        try await waitUntil { store.messages.last?.content == partial }
+        store.checkpoint()
+        XCTAssertTrue(store.isBusy)
+
+        store.suspendAnalysisForBackgroundExpiration()
+        XCTAssertFalse(store.isBusy)
+        let restored = OracleStore(vault: vault, bootstrapCredential: false, aiClient: client)
+        defer { if restored.isBusy { restored.stop() } }
+        XCTAssertEqual(restored.activeConversationID, store.activeConversationID)
+        XCTAssertTrue(restored.messages.last?.content.contains(partial) == true)
+        XCTAssertTrue(restored.canRetryAnalysis)
+
+        restored.retryAnalysis()
+        try await waitUntil { !restored.isBusy }
+
+        XCTAssertEqual(restored.messages.filter { $0.role == .user }.map(\.content), ["Hello!"])
+        XCTAssertEqual(restored.messages.last?.content, completed)
+        XCTAssertFalse(restored.canRetryAnalysis)
+    }
+
+    @MainActor private func waitUntil(_ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now + .seconds(5)
+        while !condition() && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(condition(), "Timed out waiting for the analysis to reach the expected state.")
+    }
+
+    private func scriptedClient(_ responses: [AnalysisURLProtocol.Response]) -> DeepSeekClient {
+        let key = UUID().uuidString
+        AnalysisURLProtocol.install(responses, for: key)
+        addTeardownBlock { AnalysisURLProtocol.remove(key) }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisURLProtocol.self]
+        return DeepSeekClient(apiKey: key, sessionConfiguration: configuration)
+    }
+}
+
+private final class AnalysisURLProtocol: URLProtocol, @unchecked Sendable {
+    enum Response {
+        case hold(String)
+        case truncate(String)
+        case complete(String)
+        case networkError
+        case plan(String)
+    }
+
+    private static let lock = NSLock()
+    private static var scripts: [String: [Response]] = [:]
+
+    static func install(_ responses: [Response], for key: String) {
+        lock.withLock { scripts["Bearer " + key] = responses }
+    }
+
+    static func remove(_ key: String) {
+        lock.withLock { _ = scripts.removeValue(forKey: "Bearer " + key) }
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let key = request.value(forHTTPHeaderField: "Authorization") ?? ""
+        let response = Self.lock.withLock { () -> Response? in
+            guard Self.scripts[key]?.isEmpty == false else { return nil }
+            return Self.scripts[key]?.removeFirst()
+        }
+        guard let response else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        switch response {
+        case .networkError:
+            client?.urlProtocol(self, didFailWithError: URLError(.networkConnectionLost))
+        case .plan(let content):
+            let body: [String: Any] = ["choices": [["message": ["content": content], "finish_reason": "stop"]]]
+            if sendJSON(body, contentType: "application/json") { client?.urlProtocolDidFinishLoading(self) }
+        case .hold(let content), .truncate(let content), .complete(let content):
+            let body = ["choices": [["delta": ["content": content]]]]
+            guard sendJSON(body, contentType: "text/event-stream") else { return }
+            if case .hold = response { return }
+            if case .complete = response { client?.urlProtocol(self, didLoad: Data("data: [DONE]\n\n".utf8)) }
+            client?.urlProtocolDidFinishLoading(self)
+        }
+    }
+
+    private func sendJSON(_ body: [String: Any], contentType: String) -> Bool {
+        guard let url = request.url, request.value(forHTTPHeaderField: "Accept") == contentType,
+              let http = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1",
+                                         headerFields: ["Content-Type": contentType]),
+              let data = try? JSONSerialization.data(withJSONObject: body) else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return false
+        }
+        client?.urlProtocol(self, didReceive: http, cacheStoragePolicy: .notAllowed)
+        let payload = contentType == "text/event-stream"
+            ? Data(("data: " + String(decoding: data, as: UTF8.self) + "\n\n").utf8) : data
+        client?.urlProtocol(self, didLoad: payload)
+        return true
+    }
+
+    override func stopLoading() {}
 }
