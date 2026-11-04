@@ -2,6 +2,47 @@ import XCTest
 @testable import BlindOracle
 
 final class ProfileFormTests: XCTestCase {
+    func testLunarLeapMonthSelectionClampsDayAndPreservesBirthClock() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+        var profile = OracleProfile()
+        profile.birthDate = calendar.date(from: DateComponents(year: 2023, month: 3, day: 21, hour: 8, minute: 30))
+        var draft = ProfileFormDraft(profile: profile)
+        var lunar = try XCTUnwrap(BirthLunarDate(date: draft.birthDate, timeZone: draft.birthZone))
+        XCTAssertEqual(lunar.label, "2023年二月三十")
+        let leapMonth = try XCTUnwrap(lunar.months.first { $0.month == -2 })
+        lunar.selectMonth(leapMonth)
+        XCTAssertEqual(lunar.label, "2023年闰二月廿九")
+
+        draft.setBirthDate(try XCTUnwrap(lunar.solarDate(in: draft.birthZone)))
+        let saved = try draft.validatedProfile()
+        XCTAssertEqual(saved.birthDateText, "2023-04-19")
+        XCTAssertEqual(saved.birthTimeText, "08:30")
+        lunar.selectYear(2024)
+        XCTAssertEqual(lunar.month, 2)
+    }
+
+    func testLunarDateBoundsFollowLocalGregorianBirthYears() throws {
+        for zoneID in ["Asia/Shanghai", "America/New_York"] {
+            let zone = try XCTUnwrap(TimeZone(identifier: zoneID))
+            let dates = ProfileFormDraft.allowedBirthDates(in: zone)
+            let first = try XCTUnwrap(BirthLunarDate(date: dates.lowerBound, timeZone: zone))
+            let last = try XCTUnwrap(BirthLunarDate(date: dates.upperBound, timeZone: zone))
+            XCTAssertEqual(first.label, "1899年腊月初一")
+            XCTAssertEqual(first.months.map(\.month), [12])
+            XCTAssertEqual(last.label, "2100年腊月初一")
+            let lastMonth = try XCTUnwrap(last.months.last)
+            XCTAssertEqual(BirthLunarDate.days(in: lastMonth), 1...1)
+        }
+    }
+
+    func testLunarSelectionRejectsCivilDateSkippedInBirthZone() throws {
+        let zone = try XCTUnwrap(TimeZone(identifier: "Pacific/Apia"))
+        let sameDateElsewhere = try XCTUnwrap(ISO8601DateFormatter().date(from: "2011-12-30T12:00:00Z"))
+        let lunar = try XCTUnwrap(BirthLunarDate(date: sameDateElsewhere, timeZone: .gmt))
+        XCTAssertNil(lunar.solarDate(in: zone))
+    }
+
     func testLegacyProfileWithoutRecordedClockDoesNotDisplayOrSaveNoon() throws {
         var profile = OracleProfile()
         profile.name = "陈平"

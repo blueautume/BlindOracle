@@ -314,8 +314,14 @@ struct ProfileFormDraft: Identifiable {
         profile.updatedAt = Date()
         return profile
     }
-    static var allowedBirthDates: ClosedRange<Date> {
-        Date(timeIntervalSince1970: -2_208_988_800)...Date(timeIntervalSince1970: 4_133_980_799)
+    static let allowedBirthYears = 1900...2100
+
+    static func allowedBirthDates(in timeZone: TimeZone) -> ClosedRange<Date> {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let firstDay = calendar.date(from: DateComponents(year: allowedBirthYears.lowerBound, month: 1, day: 1))!
+        let nextYear = calendar.date(from: DateComponents(year: allowedBirthYears.upperBound + 1, month: 1, day: 1))!
+        return firstDay...nextYear.addingTimeInterval(-1)
     }
 }
 
@@ -383,12 +389,18 @@ struct IntakeView: View {
     }
 }
 
+private enum BirthDateCalendar: String {
+    case gregorian = "公历"
+    case lunar = "农历"
+}
+
 struct ProfileFieldsView: View {
     @Binding var draft: ProfileFormDraft
     @EnvironmentObject private var store: OracleStore
     @StateObject private var currentLocation = LocationService()
     @StateObject private var birthLocation = LocationService()
     @State private var picker: ProfilePicker?
+    @State private var birthDateCalendar: BirthDateCalendar = .gregorian
     @State private var birthResolution = LocationResolution()
     @State private var currentResolution = LocationResolution()
 
@@ -442,9 +454,7 @@ struct ProfileFieldsView: View {
                     SectionEyebrow(text: "出生与所在地").padding(.bottom, 8)
                     genderRow
                     Divider()
-                    pickerRow("出生日期", value: draft.birthDateKnown ? clockText("yyyy-MM-dd") : nil,
-                              placeholder: "选公历日期", id: "profileBirthDate", clearID: "clearProfileBirthDate",
-                              action: { picker = .date }, clear: { draft.setBirthDate(nil) })
+                    birthDateRow
                     Divider()
                     pickerRow("出生时刻", value: draft.profile.birthTimeKnown ? clockText("HH:mm") : nil,
                               placeholder: "选钟表时间", id: "profileBirthTime", clearID: "clearProfileBirthTime",
@@ -469,7 +479,8 @@ struct ProfileFieldsView: View {
             case .currentDistrict:
                 ChinaDistrictPicker(title: "选择当前所在地") { selectDistrict($0, purpose: .current) }
             case .date, .time:
-                BirthClockPicker(isDate: picker == .date, value: draft.birthDate, timeZone: draft.birthZone) { value in
+                BirthClockPicker(isDate: picker == .date, calendar: birthDateCalendar,
+                                 value: draft.birthDate, timeZone: draft.birthZone) { value in
                     if picker == .date { draft.setBirthDate(value) }
                     else { draft.setBirthTime(value) }
                 }
@@ -520,6 +531,61 @@ struct ProfileFieldsView: View {
                 clearButton("排盘性别", id: "clearProfileGender") { draft.setGender("未提供") }
             }
         }.frame(minHeight: 44)
+    }
+
+    private var birthDateRow: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                birthDateControls
+                Spacer(minLength: 0)
+                birthDateValue
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                birthDateControls
+                HStack {
+                    Spacer(minLength: 0)
+                    birthDateValue
+                }
+            }
+        }
+    }
+
+    private var birthDateControls: some View {
+        HStack(spacing: 8) {
+            Button("出生日期") { picker = .date }
+                .buttonStyle(.plain)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+                .fixedSize()
+                .accessibilityHidden(true)
+            Picker("出生日期历法", selection: $birthDateCalendar) {
+                Text("公历").tag(BirthDateCalendar.gregorian)
+                Text("农历").tag(BirthDateCalendar.lunar)
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 92)
+            .accessibilityIdentifier("profileBirthCalendar")
+        }
+    }
+
+    private var birthDateValue: some View {
+        let value: String? = if !draft.birthDateKnown { nil }
+        else if birthDateCalendar == .lunar {
+            BirthLunarDate(date: draft.birthDate, timeZone: draft.birthZone)?.label ?? "超出农历换算范围"
+        } else { clockText("yyyy-MM-dd") }
+        return HStack(spacing: 0) {
+            Button { picker = .date } label: {
+                pickerValue(value, placeholder: "选\(birthDateCalendar.rawValue)日期")
+                    .fixedSize()
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("出生日期")
+            .accessibilityValue(value ?? "未填写")
+            .accessibilityIdentifier("profileBirthDate")
+            if value != nil { clearButton("出生日期", id: "clearProfileBirthDate") { draft.setBirthDate(nil) } }
+        }
     }
 
     private func pickerRow(_ title: String, value: String?, placeholder: String, id: String, clearID: String,
@@ -704,24 +770,36 @@ private struct BirthClockPicker: View {
     let isDate: Bool
     let timeZone: TimeZone
     let onSelect: (Date) -> Void
+    private let allowed: ClosedRange<Date>
     @Environment(\.dismiss) private var dismiss
     @State private var value: Date
+    @State private var lunarDate: BirthLunarDate?
 
-    init(isDate: Bool, value: Date, timeZone: TimeZone, onSelect: @escaping (Date) -> Void) {
+    init(isDate: Bool, calendar: BirthDateCalendar, value: Date, timeZone: TimeZone, onSelect: @escaping (Date) -> Void) {
         self.isDate = isDate
         self.timeZone = timeZone
         self.onSelect = onSelect
-        let allowed = ProfileFormDraft.allowedBirthDates
-        _value = State(initialValue: isDate ? min(max(value, allowed.lowerBound), allowed.upperBound) : value)
+        allowed = ProfileFormDraft.allowedBirthDates(in: timeZone)
+        let initialValue = isDate ? min(max(value, allowed.lowerBound), allowed.upperBound) : value
+        _value = State(initialValue: initialValue)
+        _lunarDate = State(initialValue: isDate && calendar == .lunar ? BirthLunarDate(date: initialValue, timeZone: timeZone) : nil)
     }
 
     var body: some View {
+        let selected = lunarDate == nil ? value : lunarDate?.solarDate(in: timeZone)
         NavigationStack {
             VStack {
-                if isDate {
-                    DatePicker("公历日期", selection: $value, in: ProfileFormDraft.allowedBirthDates, displayedComponents: .date)
+                if let selection = Binding($lunarDate) {
+                    BirthLunarWheel(selection: selection)
+                } else if isDate {
+                    DatePicker("公历日期", selection: $value, in: allowed, displayedComponents: .date)
                 } else {
                     DatePicker("钟表时间", selection: $value, displayedComponents: .hourAndMinute)
+                }
+                if selected == nil {
+                    Text("所选日期在出生地时区中不存在。")
+                        .font(.footnote)
+                        .foregroundStyle(InkTheme.cinnabar)
                 }
             }
             .labelsHidden()
@@ -736,12 +814,114 @@ private struct BirthClockPicker: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("确定") { onSelect(value); dismiss() }.accessibilityIdentifier("confirmBirthClock")
+                    Button("确定") {
+                        guard let selected else { return }
+                        onSelect(selected)
+                        dismiss()
+                    }
+                    .disabled(selected == nil)
+                    .accessibilityIdentifier("confirmBirthClock")
                 }
             }
         }
         .presentationDetents([.medium, .large])
         .tint(InkTheme.cinnabar)
+    }
+}
+
+struct BirthLunarDate {
+    private(set) var year: Int
+    private(set) var month: Int
+    var day: Int
+
+    private static let firstSolar = Solar(year: ProfileFormDraft.allowedBirthYears.lowerBound, month: 1, day: 1, hour: 12)
+    private static let lastSolar = Solar(year: ProfileFormDraft.allowedBirthYears.upperBound, month: 12, day: 31, hour: 12)
+    static let years = firstSolar.lunar.year...lastSolar.lunar.year
+
+    init?(date: Date, timeZone: TimeZone) {
+        guard let solar = NativeCalendar.solar(date, timeZoneID: timeZone.identifier) else { return nil }
+        let lunar = solar.lunar
+        year = lunar.year; month = lunar.month; day = lunar.day
+    }
+
+    var label: String { "\(year)年\(Self.monthLabel(month))\(LunarUtil.DAY[day])" }
+
+    var months: [LunarMonth] {
+        LunarYear.fromYear(lunarYear: year).monthsInYear.filter { Self.days(in: $0) != nil }
+    }
+
+    static func monthLabel(_ month: Int) -> String {
+        (month < 0 ? "闰" : "") + LunarUtil.MONTH[abs(month)] + "月"
+    }
+
+    static func days(in month: LunarMonth) -> ClosedRange<Int>? {
+        let first = max(1, Int(ceil(firstSolar.julianDay - month.firstJulianDay)) + 1)
+        let last = min(month.dayCount, Int(floor(lastSolar.julianDay - month.firstJulianDay)) + 1)
+        return first <= last ? first...last : nil
+    }
+
+    mutating func selectYear(_ year: Int) {
+        self.year = year
+        let months = self.months
+        if let newMonth = months.first(where: { $0.month == month })
+            ?? months.first(where: { $0.month == abs(month) })
+            ?? months.first {
+            selectMonth(newMonth)
+        }
+    }
+
+    mutating func selectMonth(_ month: LunarMonth) {
+        guard let days = Self.days(in: month) else { return }
+        self.month = month.month
+        day = min(max(day, days.lowerBound), days.upperBound)
+    }
+
+    func solarDate(in timeZone: TimeZone) -> Date? {
+        guard let month = months.first(where: { $0.month == self.month }),
+              Self.days(in: month)?.contains(day) == true else { return nil }
+        let solar = Solar.fromJulianDay(julianDay: month.firstJulianDay + Double(day - 1))
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let civilDate = DateComponents(year: solar.year, month: solar.month, day: solar.day)
+        var noon = civilDate
+        noon.hour = 12
+        guard let date = calendar.date(from: noon),
+              calendar.dateComponents([.year, .month, .day], from: date) == civilDate else { return nil }
+        return date
+    }
+}
+
+private struct BirthLunarWheel: View {
+    @Binding var selection: BirthLunarDate
+
+    var body: some View {
+        let months = selection.months
+        HStack(spacing: 0) {
+            Picker("农历年", selection: Binding(get: { selection.year }, set: { selection.selectYear($0) })) {
+                ForEach(BirthLunarDate.years, id: \.self) { year in
+                    Text("\(String(year))年").tag(year)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .clipped()
+            Picker("农历月", selection: Binding(get: { selection.month }, set: { month in
+                if let selected = months.first(where: { $0.month == month }) { selection.selectMonth(selected) }
+            })) {
+                ForEach(months, id: \.month) { Text(BirthLunarDate.monthLabel($0.month)).tag($0.month) }
+            }
+            .frame(maxWidth: .infinity)
+            .clipped()
+            if let month = months.first(where: { $0.month == selection.month }),
+               let days = BirthLunarDate.days(in: month) {
+                Picker("农历日", selection: $selection.day) {
+                    ForEach(days, id: \.self) { Text(LunarUtil.DAY[$0]).tag($0) }
+                }
+                .frame(maxWidth: .infinity)
+                .clipped()
+            }
+        }
+        .pickerStyle(.wheel)
+        .labelsHidden()
     }
 }
 

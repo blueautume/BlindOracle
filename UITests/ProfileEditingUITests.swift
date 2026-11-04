@@ -72,6 +72,51 @@ final class ProfileEditingUITests: XCTestCase {
         XCTAssertEqual(time.value as? String, "未填写")
     }
 
+    @MainActor func testSwitchingBirthCalendarPreservesSelectedAndUnselectedDates() throws {
+        let app = launchFreshApp()
+        openNewProfile(in: app)
+        let alias = app.textFields["profileAlias"]
+        alias.tap(); alias.typeText("历法测试\n")
+        let calendar = element("profileBirthCalendar", in: app)
+        let gregorian = calendar.buttons["公历"]
+        let lunar = calendar.buttons["农历"]
+        let date = app.buttons["profileBirthDate"]
+        reveal(calendar, in: app)
+        XCTAssertTrue(gregorian.isSelected)
+        XCTAssertEqual(date.value as? String, "未填写")
+        lunar.tap()
+        XCTAssertTrue(lunar.isSelected)
+        XCTAssertEqual(date.value as? String, "未填写")
+        gregorian.tap()
+        XCTAssertEqual(date.value as? String, "未填写")
+
+        reveal(date, in: app); date.tap()
+        let confirm = app.buttons["confirmBirthClock"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10))
+        confirm.tap()
+        waitForValue("1995-01-01", of: date)
+
+        reveal(calendar, in: app); lunar.tap()
+        waitForValue("1994年腊月初一", of: date)
+        gregorian.tap()
+        waitForValue("1995-01-01", of: date)
+        lunar.tap()
+        waitForValue("1994年腊月初一", of: date)
+
+        reveal(date, in: app); date.tap()
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10))
+        XCTAssertEqual(app.pickerWheels.count, 3)
+        app.pickerWheels.element(boundBy: 2).adjust(toPickerWheelValue: "初二")
+        confirm.tap()
+        waitForValue("1994年腊月初二", of: date)
+        saveProfile(in: app)
+
+        reopenProfile("历法测试", in: app)
+        reveal(calendar, in: app)
+        XCTAssertTrue(gregorian.isSelected)
+        waitForValue("1995-01-02", of: date)
+    }
+
     @MainActor func testLocationPickersAndGPSAreIndependentAndPersist() throws {
         let app = launchFreshApp(locationFixture: true)
         openNewProfile(in: app)

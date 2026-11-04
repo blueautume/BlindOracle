@@ -38,8 +38,8 @@
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "2.0.4",
-  "build": "17",
+  "version": "2.0.5",
+  "build": "18",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",
@@ -599,6 +599,26 @@
     "archive_and_ipa_district_catalog_verified": true,
     "app_store_connect_upload_succeeded": true,
     "upload_log": "build-testflight-2.0.4-17/testflight-upload.log",
+    "apple_processing_status": "processing as reported at upload completion"
+  },
+  "birth_calendar_testflight_release": {
+    "date": "2026-11-03",
+    "version": "2.0.5",
+    "build": "18",
+    "unit_tests_passed": 328,
+    "opt_in_tests_skipped_in_unit_suite": 8,
+    "profile_ui_tests_passed": 1,
+    "test_result": "build-testflight-2.0.5-18/Tests.xcresult",
+    "bundle_identifier": "com.lihao.BlindOracle",
+    "release_archive_path": "build-testflight-2.0.5-18/BlindOracle.xcarchive",
+    "release_archive_signature_verified": true,
+    "app_store_distribution_ipa": "build-testflight-2.0.5-18/Export/瞎子.ipa",
+    "ipa_signature_verified": true,
+    "ipa_bytes": 15716345,
+    "archive_and_ipa_bundled_credential_verified": true,
+    "archive_and_ipa_district_catalog_verified": true,
+    "app_store_connect_upload_succeeded": true,
+    "upload_log": "build-testflight-2.0.5-18/testflight-upload.log",
     "apple_processing_status": "processing as reported at upload completion"
   }
 }
