@@ -5,6 +5,7 @@ enum AIProvider: String, CaseIterable, Sendable {
     case qwen
 
     static let selectionKey = "oracle.aiProvider"
+    static let qwenSnapshotModel = "qwen3.8-max-0902"
 
     var displayName: String {
         switch self {
@@ -23,7 +24,7 @@ enum AIProvider: String, CaseIterable, Sendable {
     func model(in defaults: UserDefaults = .standard) -> String {
         switch self {
         case .deepSeek: DeepSeekConfiguration.model(in: defaults)
-        case .qwen: "qwen3.8-max"
+        case .qwen: Self.qwenSnapshotModel
         }
     }
 

@@ -2,7 +2,7 @@
 
 一个以水墨宣纸为视觉语言的原生 SwiftUI iOS 应用。只有「对话」「数据」两个标签。十种方法在设备本地执行，所选的 DeepSeek 或千问模型负责选择适用插件、提出资料与交互需求、整合中文解读和回答追问。
 
-当前版本：**2.0.6（Build 19）**。
+当前版本：**2.0.7（Build 20）**。
 
 每批修改提交前同时递增补丁版本和 Build，运行一次 `python3 Scripts/version.py` 即可同步版本配置。单一版本源为 `Configuration/Version.json`，工程生成脚本也从这里读取；构建和测试不会自动加版本。`python3 Scripts/version.py --check` 检查工作区同步状态，提交钩子用 `--check-staged` 检查暂存区相对 HEAD 的递增。首次克隆后使用 `git config core.hooksPath .githooks` 启用密钥及版本检查。
 
@@ -11,7 +11,7 @@
 1. 用 Xcode 27.1 打开 `BlindOracle.xcodeproj`，选择 `BlindOracle` scheme。
 2. 选择 iOS 17 或更高版本的模拟器运行。真机需在 Signing & Capabilities 选择自己的开发团队；本项目的 bundle identifier 保持为 `com.lihao.BlindOracle`。
 3. Debug 与 Release 可分别随包提供 DeepSeek 和千问密钥。DeepSeek 可从 `Configuration/Secrets.local.json` 中的 `deepseek_api_key` 或原有 Finder 文本剪辑读取，千问默认读取工程上一级的 `key/qwen-bailian.key`。生成包内的 `dev-key.txt` 和 `qwen-key.txt` 后，应用分别导入设备的 ThisDeviceOnly 钥匙串。配置优先级和轮换规则见[本地与随包密钥](Configuration/README.md)。
-4. 在「数据 → 设置」切换 DeepSeek 或千问，也可以分别保存自己的 API 密钥。DeepSeek 默认使用 `deepseek-v4-pro`，在设置中可调整模型。千问通过阿里云百炼调用 `qwen3.8-max`。设置中的连接检查可核对请求模型、API 返回模型及推理和输出预算参数。
+4. 在「数据 → 设置」切换 DeepSeek 或千问，也可以分别保存自己的 API 密钥。DeepSeek 默认使用 `deepseek-v4-pro`，在设置中可调整模型。千问通过阿里云百炼调用 `qwen3.8-max-0902`。设置中的连接检查可核对请求模型、API 返回模型及推理和输出预算参数。
 
 没有 XcodeGen、CocoaPods 或 npm 安装步骤。全部运行依赖已随源码或资源提供；`iztro` 在构建前已打成 JavaScriptCore 可执行的本地 bundle，应用运行时不带 Node/Python。
 

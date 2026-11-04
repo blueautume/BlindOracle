@@ -77,10 +77,10 @@ final class BlindOracleUITests: XCTestCase {
         let feedback = app.staticTexts["connectionCheckFeedback"]
         XCTAssertTrue(feedback.waitForExistence(timeout: 120))
         XCTAssertTrue(feedback.label.contains("连接正常"), feedback.label)
-        let labels = app.staticTexts.matching(identifier: "connectionCheckReport").allElementsBoundByIndex.map(\.label).joined(separator: "\n")
-        XCTAssertTrue(labels.contains("请求模型：qwen3.8-max"))
-        XCTAssertTrue(labels.contains("实际模型：qwen3.8-max"))
-        XCTAssertTrue(labels.contains("dashscope.aliyuncs.com"))
+        let labels = app.staticTexts.matching(identifier: "connectionCheckReport").allElementsBoundByIndex.map(\.label)
+        XCTAssertTrue(labels.contains("请求模型：qwen3.8-max-0902"))
+        XCTAssertTrue(labels.contains("实际模型：qwen3.8-max-0902") || labels.contains("实际模型：qwen3.8-max-2026-09-02"))
+        XCTAssertTrue(labels.contains { $0.contains("dashscope.aliyuncs.com") })
 
         app.terminate()
         app.launch()

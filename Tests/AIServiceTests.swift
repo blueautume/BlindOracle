@@ -10,8 +10,15 @@ final class AIServiceTests: XCTestCase {
         XCTAssertFalse(DeepSeekClient.modelsMatch(requested: "deepseek-v4-pro", returned: "deepseek-v4-professional"))
         XCTAssertFalse(DeepSeekClient.modelsMatch(requested: "deepseek-v4-pro-0813", returned: "deepseek-v4-pro"))
         XCTAssertFalse(DeepSeekClient.modelsMatch(requested: "", returned: "-0813"))
-        XCTAssertTrue(DeepSeekClient.modelsMatch(requested: "qwen3.8-max", returned: "qwen3.8-max-0902"))
-        XCTAssertFalse(DeepSeekClient.modelsMatch(requested: "qwen3.8-max", returned: "qwen3.8-flash"))
+    }
+
+    func testQwenPinnedSnapshotAcceptsOnlyTheExactReleaseAndItsDateAlias() {
+        let requested = "qwen3.8-max-0902"
+        XCTAssertTrue(DeepSeekClient.modelsMatch(requested: requested, returned: requested))
+        XCTAssertTrue(DeepSeekClient.modelsMatch(requested: requested, returned: " qwen3.8-max-2026-09-02\n"))
+        for returned in ["qwen3.8-max", "qwen3.8-max-0903", "qwen3.8-max-2026-09-03", "qwen3.8-max-0902-preview", "qwen3.8-flash"] {
+            XCTAssertFalse(DeepSeekClient.modelsMatch(requested: requested, returned: returned), returned)
+        }
     }
 
     func testQwenRequestUsesBailianParametersForPlanningAndStreaming() {
@@ -25,7 +32,7 @@ final class AIServiceTests: XCTestCase {
         for streaming in [false, true] {
             let body = DeepSeekClient.requestBody(messages, model: provider.model(),
                 jsonMode: true, streaming: streaming, maxTokens: 2400, provider: provider)
-            XCTAssertEqual(body["model"] as? String, "qwen3.8-max")
+            XCTAssertEqual(body["model"] as? String, "qwen3.8-max-0902")
             XCTAssertEqual(body["messages"] as? [[String: String]], [
                 ["role": "assistant", "content": "此前的回答"],
                 ["role": "user", "content": "请输出 json"]
@@ -45,13 +52,14 @@ final class AIServiceTests: XCTestCase {
     func testBailianStreamSeparatesVisibleAnswerAndUsageFromHiddenReasoning() throws {
         var framer = DeepSeekSSEFramer()
         let lines = [
-            #"data: {"model":"qwen3.8-max","choices":[{"delta":{"content":null,"reasoning_content":"private"},"finish_reason":null}]}"#,
-            #"data: {"model":"qwen3.8-max","choices":[{"delta":{"content":"可先观察"},"finish_reason":null}]}"#,
-            #"data: {"model":"qwen3.8-max","choices":[{"delta":{},"finish_reason":"stop"}]}"#,
-            #"data: {"model":"qwen3.8-max","choices":[],"usage":{"prompt_tokens":12,"completion_tokens":8,"total_tokens":20,"completion_tokens_details":{"reasoning_tokens":5}}}"#,
+            #"data: {"model":"qwen3.8-max-0902","choices":[{"delta":{"content":null,"reasoning_content":"private"},"finish_reason":null}]}"#,
+            #"data: {"model":"qwen3.8-max-0902","choices":[{"delta":{"content":"可先观察"},"finish_reason":null}]}"#,
+            #"data: {"model":"qwen3.8-max-0902","choices":[{"delta":{},"finish_reason":"stop"}]}"#,
+            #"data: {"model":"qwen3.8-max-0902","choices":[],"usage":{"prompt_tokens":12,"completion_tokens":8,"total_tokens":20,"completion_tokens_details":{"reasoning_tokens":5}}}"#,
             "data: [DONE]"
         ]
         let chunks = try lines.compactMap { try framer.push($0) }
+        XCTAssertEqual(Set(chunks.compactMap(\.model)), ["qwen3.8-max-0902"])
         XCTAssertEqual(chunks.map(\.content).joined(), "可先观察")
         XCTAssertEqual(chunks.compactMap(\.finishReason), ["stop"])
         XCTAssertEqual(chunks.compactMap { $0.usage?.reasoningTokens }, [5])

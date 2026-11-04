@@ -21,7 +21,7 @@ API 使用 `https://api.deepseek.com/chat/completions`，默认模型为 DeepSee
 
 设置提供用户主动发起的连接检查，展示该设备实际请求模型、API 返回模型，以及 `thinking`、`reasoning_effort=max` 和 `max_tokens` 参数，用于区分请求配置与服务端响应。未连接真机并读取设备设置或检查报告时，不能将开发机的模型与密钥状态当作 iPhone 的诊断结论。
 
-DeepSeek 使用 `thinking.type=enabled`、`reasoning_effort=max` 和 `max_tokens`。千问使用百炼北京的 OpenAI 兼容端点和 `qwen3.8-max`，设置 `enable_thinking=true`、`reasoning_effort=xhigh` 和 `max_completion_tokens`。两种服务的 65,536 token 输出预算均包含推理和最终回答。`URLSession` 的请求超时为 300 秒，资源总超时为 900 秒。应用仅消费最终 `content`，隐藏推理不会写入聊天记录或后续请求。
+DeepSeek 使用 `thinking.type=enabled`、`reasoning_effort=max` 和 `max_tokens`。千问使用百炼北京的 OpenAI 兼容端点和 `qwen3.8-max-0902`，设置 `enable_thinking=true`、`reasoning_effort=xhigh` 和 `max_completion_tokens`。两种服务的 65,536 token 输出预算均包含推理和最终回答。`URLSession` 的请求超时为 300 秒，资源总超时为 900 秒。应用仅消费最终 `content`，隐藏推理不会写入聊天记录或后续请求。
 
 SSE 帧按每条完整 `data:` JSON 即时消费，不依赖 `AsyncBytes.lines` 是否保留空行；只有真正尚未闭合的 JSON 才跨行累积，避免把连续 JSON 对象拼接成无效响应。
 

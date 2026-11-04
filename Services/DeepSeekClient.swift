@@ -436,6 +436,9 @@ actor DeepSeekClient {
     static func modelsMatch(requested: String, returned: String) -> Bool {
         let requested = requested.trimmingCharacters(in: .whitespacesAndNewlines)
         let returned = returned.trimmingCharacters(in: .whitespacesAndNewlines)
+        if requested == AIProvider.qwenSnapshotModel {
+            return returned == requested || returned == "qwen3.8-max-2026-09-02"
+        }
         return !requested.isEmpty && (returned == requested || returned.hasPrefix(requested + "-"))
     }
 

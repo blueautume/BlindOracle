@@ -55,7 +55,7 @@ descriptor 声明版本、必填/选填资料、适用问题、输出说明、�
 
 ## 4. AI 与流式输出
 
-设置中的服务选择保存在 `oracle.aiProvider`，初始使用 DeepSeek Pro（`deepseek-v4-pro`）。DeepSeek 请求使用 `thinking.type=enabled` 和 `reasoning_effort=max`。千问通过百炼北京的 OpenAI 兼容端点调用 `qwen3.8-max`，使用 `enable_thinking=true` 和 `reasoning_effort=xhigh`。两种服务均提供 65,536 token 的推理及回答预算，请求超时为 300 秒，资源总超时为 900 秒。旧版 DeepSeek Flash 默认值会在首次升级时迁移，用户之后主动设置的 DeepSeek 模型继续保留。
+设置中的服务选择保存在 `oracle.aiProvider`，初始使用 DeepSeek Pro（`deepseek-v4-pro`）。DeepSeek 请求使用 `thinking.type=enabled` 和 `reasoning_effort=max`。千问通过百炼北京的 OpenAI 兼容端点调用 `qwen3.8-max-0902`，使用 `enable_thinking=true` 和 `reasoning_effort=xhigh`。两种服务均提供 65,536 token 的推理及回答预算，请求超时为 300 秒，资源总超时为 900 秒。旧版 DeepSeek Flash 默认值会在首次升级时迁移，用户之后主动设置的 DeepSeek 模型继续保留。
 
 设置中的连接检查由用户主动发起，展示当前设备的请求模型、API 返回模型以及 thinking、推理强度和输出预算参数。真机排查依据该设备的配置与检查结果；未连接、未取得设备配置时，不用本机或模拟器的状态代替手机诊断。
 
