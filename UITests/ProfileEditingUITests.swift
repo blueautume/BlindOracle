@@ -5,8 +5,11 @@ final class ProfileEditingUITests: XCTestCase {
         let app = launchFreshApp(locationFixture: true)
         openNewProfile(in: app)
         let preview = element("profileBaziPreview", in: app)
+        let copy = app.buttons["copyProfileBazi"]
         reveal(preview, in: app)
         XCTAssertTrue(preview.exists)
+        XCTAssertTrue(copy.exists)
+        XCTAssertFalse(copy.isEnabled)
         XCTAssertFalse(app.textFields["profileBaziPreview"].exists)
         XCTAssertFalse(app.buttons["profileBaziPreview"].exists)
         XCTAssertFalse(isFourPillars(preview.value as? String ?? ""))
@@ -21,13 +24,25 @@ final class ProfileEditingUITests: XCTestCase {
         }
         reveal(preview, in: app)
         XCTAssertFalse(isFourPillars(preview.value as? String ?? ""))
+        XCTAssertFalse(copy.isEnabled)
         let birthplace = app.buttons["profileBirthPlace"]
         reveal(birthplace, in: app); birthplace.tap()
         tapDistrictPath(["chinaDistrict-110000", "chinaDistrict-110101"], in: app)
         reveal(preview, in: app)
         let beijingPillars = try waitForFourPillars(of: preview)
+        XCTAssertTrue(copy.isEnabled)
         let current = app.buttons["profileCurrentPlace"]
         XCTAssertGreaterThan(preview.frame.minY, current.frame.minY)
+        let clearBirthplace = app.buttons["clearProfileBirthPlace"]
+        reveal(clearBirthplace, in: app)
+        let trailingButtonX = clearBirthplace.frame.midX
+        reveal(copy, in: app)
+        XCTAssertEqual(copy.frame.midX, trailingButtonX, accuracy: 1)
+        XCTAssertEqual(copy.frame.width, 44, accuracy: 1)
+        XCTAssertEqual(copy.frame.height, 44, accuracy: 1)
+        copy.tap()
+        waitForCopiedBaziFeedback(of: copy)
+        pasteCopiedBazi(beijingPillars, in: app)
 
         // At the same noon clock time, Urumqi's true solar hour differs from
         // Beijing's. The readonly value must refresh without saving the form.
@@ -38,6 +53,10 @@ final class ProfileEditingUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 10), .completed)
         let urumqiPillars = try waitForFourPillars(of: preview)
         XCTAssertNotEqual(urumqiPillars, beijingPillars)
+        XCTAssertTrue(copy.isEnabled)
+        reveal(copy, in: app); copy.tap()
+        waitForCopiedBaziFeedback(of: copy)
+        pasteCopiedBazi(urumqiPillars, in: app)
 
         let currentGPS = app.buttons["useCurrentLocation"]
         reveal(currentGPS, in: app); currentGPS.tap()
@@ -51,6 +70,7 @@ final class ProfileEditingUITests: XCTestCase {
         reveal(preview, in: app)
         XCTAssertNotEqual(preview.value as? String, urumqiPillars)
         XCTAssertFalse(isFourPillars(preview.value as? String ?? ""))
+        XCTAssertFalse(copy.isEnabled)
         XCTAssertFalse(app.textFields["profileBaziPreview"].exists)
         XCTAssertFalse(app.buttons["profileBaziPreview"].exists)
     }
@@ -247,6 +267,29 @@ final class ProfileEditingUITests: XCTestCase {
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value MATCHES %@", fourPillarsPattern), object: element)
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed)
         return try XCTUnwrap(element.value as? String)
+    }
+
+    @MainActor private func waitForCopiedBaziFeedback(of button: XCUIElement) {
+        let copied = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "已复制八字"), object: button)
+        XCTAssertEqual(XCTWaiter.wait(for: [copied], timeout: 5), .completed)
+    }
+
+    @MainActor private func pasteCopiedBazi(_ expected: String, in app: XCUIApplication) {
+        let alias = app.textFields["profileAlias"]
+        reveal(alias, in: app)
+        let clear = app.buttons["clear-profileAlias"]
+        if clear.exists {
+            reveal(clear, in: app); clear.tap()
+        }
+        alias.tap()
+        alias.press(forDuration: 1.2)
+        // Exercise the app's actual pasteboard through the native edit menu;
+        // no test hook or directly injected clipboard value is involved.
+        let paste = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "粘贴")).firstMatch
+        XCTAssertTrue(paste.waitForExistence(timeout: 5))
+        paste.tap()
+        waitForValue(expected, of: alias)
+        alias.typeText("\n")
     }
 
     @MainActor private func openNewProfile(in app: XCUIApplication) {

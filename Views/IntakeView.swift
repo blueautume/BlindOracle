@@ -414,6 +414,7 @@ struct ProfileFieldsView: View {
     @State private var calculatedBaziInput: BaziPreviewInput?
     @State private var baziPreviewText: String?
     @State private var baziPreviewHasPillars = false
+    @State private var copiedBaziInput: BaziPreviewInput?
 
     /// Only birth inputs belong to a birth chart. Name, sex and current-location
     /// edits must not invalidate the displayed Four Pillars.
@@ -499,7 +500,7 @@ struct ProfileFieldsView: View {
                             placeholder: draft.profile.anonymousCode)
                 }
             }
-            PaperCard {
+            PaperCard(bottomPadding: 8) {
                 VStack(alignment: .leading, spacing: 0) {
                     SectionEyebrow(text: L10n.text("出生与所在地", "Birth and location")).padding(.bottom, 8)
                     genderRow
@@ -551,6 +552,12 @@ struct ProfileFieldsView: View {
             baziPreviewHasPillars = calculation.rawPillars != nil
             calculatedBaziInput = input
         }
+        .task(id: copiedBaziInput) {
+            guard let copied = copiedBaziInput else { return }
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard !Task.isCancelled, copiedBaziInput == copied else { return }
+            copiedBaziInput = nil
+        }
         .onDisappear {
             cancelLocation(.birth)
             cancelLocation(.current)
@@ -561,25 +568,45 @@ struct ProfileFieldsView: View {
         let isCurrent = calculatedBaziInput == baziPreviewInput
         let text = isCurrent ? baziPreviewText : nil
         let value = text ?? L10n.text("根据出生资料自动生成", "Generated from birth details")
-        return HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(L10n.text("八字", "BaZi"))
-                .fixedSize(horizontal: true, vertical: false)
-            Spacer(minLength: 0)
-            Text(value)
-                .foregroundStyle(isCurrent && baziPreviewHasPillars ? InkTheme.ink : InkTheme.secondary)
-                .multilineTextAlignment(.trailing)
-                .lineLimit(3)
-                .minimumScaleFactor(0.85)
-                .fixedSize(horizontal: false, vertical: true)
+        let canCopy = isCurrent && baziPreviewHasPillars && text != nil
+        let copied = copiedBaziInput == baziPreviewInput
+        return HStack(spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(L10n.text("八字", "BaZi"))
+                    .fixedSize(horizontal: true, vertical: false)
+                Spacer(minLength: 0)
+                Text(value)
+                    .foregroundStyle(canCopy ? InkTheme.ink : InkTheme.secondary)
+                    .multilineTextAlignment(.trailing)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isStaticText)
+            .accessibilityLabel(L10n.text("八字", "BaZi"))
+            .accessibilityValue(value)
+            .accessibilityHint(L10n.text("按出生地真太阳时自动计算，随出生资料更新。", "Calculated using true solar time at the birthplace and updated with the birth details."))
+            .accessibilityIdentifier("profileBaziPreview")
+            Button {
+                guard calculatedBaziInput == baziPreviewInput,
+                      baziPreviewHasPillars, let rawPillars = baziPreviewText else { return }
+                UIPasteboard.general.string = rawPillars
+                copiedBaziInput = baziPreviewInput
+            } label: {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 14))
+                    .foregroundStyle(InkTheme.secondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!canCopy)
+            .opacity(canCopy ? 1 : 0.35)
+            .accessibilityLabel(copied ? L10n.text("已复制八字", "BaZi copied") : L10n.text("复制八字", "Copy BaZi"))
+            .accessibilityIdentifier("copyProfileBazi")
         }
         .frame(minHeight: 44)
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .ignore)
-        .accessibilityAddTraits(.isStaticText)
-        .accessibilityLabel(L10n.text("八字", "BaZi"))
-        .accessibilityValue(value)
-        .accessibilityHint(L10n.text("按出生地真太阳时自动计算，随出生资料更新。", "Calculated using true solar time at the birthplace and updated with the birth details."))
-        .accessibilityIdentifier("profileBaziPreview")
     }
 
     private func textRow(_ title: String, text: Binding<String>, contentType: UITextContentType, id: String,

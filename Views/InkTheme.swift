@@ -29,9 +29,11 @@ struct PaperBackground: View {
 }
 
 struct PaperCard<Content: View>: View {
+    var bottomPadding: CGFloat = 18
     @ViewBuilder var content: Content
     var body: some View {
-        content.padding(18).frame(maxWidth: .infinity, alignment: .leading)
+        content.padding(.horizontal, 18).padding(.top, 18).padding(.bottom, bottomPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(.white.opacity(0.35), in: RoundedRectangle(cornerRadius: 18))
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(InkTheme.line.opacity(0.65), lineWidth: 0.7))
     }
