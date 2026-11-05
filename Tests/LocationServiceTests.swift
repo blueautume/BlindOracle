@@ -165,7 +165,6 @@ final class LocationServiceTests: XCTestCase {
         let catalog = ChinaDistrictCatalog.shared
         let hubei = try XCTUnwrap(catalog.provinces.first { $0.id == "420000" })
         let xiangyang = try XCTUnwrap(catalog.children(of: hubei).first { $0.id == "420600" })
-        XCTAssertNil(xiangyang.localPlace)
         XCTAssertTrue(xiangyang.matchesGeocodedAddress("中国湖北省襄阳市", regionCode: "CN"))
         XCTAssertFalse(xiangyang.matchesGeocodedAddress("中国湖北省襄阳市襄城区", regionCode: "CN"))
         XCTAssertFalse(xiangyang.matchesGeocodedAddress("中国湖北省襄阳市长虹路 1 号", regionCode: "CN"))
@@ -185,14 +184,47 @@ final class LocationServiceTests: XCTestCase {
         let haidian = try XCTUnwrap(districts.first { $0.id == "110108" })
         let resolved = try await LocationService.resolveChinaDistrict(haidian)
         XCTAssertEqual(resolved, haidian.localPlace)
-        let miyun = try XCTUnwrap(districts.first { $0.id == "110118" })
-        XCTAssertNil(miyun.localPlace)
+        // Keep missing-source behavior covered independently of the bundled
+        // catalog, whose selectable districts all have offline coordinates.
+        let data = Data(#"{"version":1,"districts":[{"id":"110000","name":"北京市","country":"CN"},{"id":"110118","name":"密云区","parent":"110000"}]}"#.utf8)
+        let incomplete = try ChinaDistrictCatalog(data: data)
+        let parent = try XCTUnwrap(incomplete.provinces.first)
+        let missing = try XCTUnwrap(incomplete.children(of: parent).first)
+        XCTAssertNil(missing.localPlace)
         do {
-            _ = try await LocationService.resolveChinaDistrict(miyun)
+            _ = try await LocationService.resolveChinaDistrict(missing)
             XCTFail("No coordinates can be saved without a source")
         } catch LocationLookupError.districtCoordinatesUnavailable {
-            XCTAssertEqual(miyun.fullName, "北京市密云区")
+            XCTAssertEqual(missing.fullName, "北京市密云区")
         }
+    }
+
+    @MainActor
+    func testEveryBundledLeafDistrictResolvesWithoutAnOnlineClient() async throws {
+        let catalog = ChinaDistrictCatalog.shared
+        XCTAssertEqual(catalog.provinces.count, 34)
+        var pending = catalog.provinces
+        var visited = Set<String>()
+        var leafCount = 0
+        while let district = pending.popLast() {
+            guard visited.insert(district.id).inserted else {
+                XCTFail("Duplicate or cyclic district: \(district.id)")
+                continue
+            }
+            let children = catalog.children(of: district)
+            if !children.isEmpty {
+                pending.append(contentsOf: children)
+                continue
+            }
+            leafCount += 1
+            let expected = try XCTUnwrap(district.localPlace, district.fullName)
+            // No client is supplied: this must use bundled coordinates and
+            // cannot silently fall back to AI or a network geocoder.
+            let resolved = try await LocationService.resolveChinaDistrict(district)
+            XCTAssertEqual(resolved, expected, district.fullName)
+        }
+        XCTAssertEqual(visited.count, 3_633)
+        XCTAssertEqual(leafCount, 3_248)
     }
 
     @MainActor

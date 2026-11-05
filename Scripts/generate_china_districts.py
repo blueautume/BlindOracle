@@ -5,6 +5,7 @@ from collections import defaultdict
 import csv
 import io
 import json
+import math
 from pathlib import Path
 import re
 from zipfile import ZipFile
@@ -24,6 +25,7 @@ MO_NAMES = dict(zip(
 TW_CITIES = {"TPQ", "TAO", "TPE", "TNN", "HSQ", "CYI", "KEE", "KHH", "TXG"}
 CHINESE = re.compile(r"[\u3400-\u9fff]+")
 SYNTHETIC = {"市辖区", "县", "省直辖县级行政区划", "自治区直辖县级行政区划"}
+DEFAULT_COORDINATE_SUPPLEMENTS = Path(__file__).resolve().parent / "Data" / "china-coordinate-supplements.json"
 
 
 def records(source, country):
@@ -132,10 +134,50 @@ def regional(source, country, label):
                 yield district(f"{country}:{child[0]}", taiwan_name(child, suffix), code, child)
 
 
+def apply_coordinate_supplements(entries, supplement_path):
+    """Apply reviewed, source-linked WGS84 points without replacing upstream points."""
+    supplements = json.loads(supplement_path.read_text(encoding="utf-8"))
+    if supplements.get("version") != 1 or supplements.get("coordinateSystem") != "WGS84":
+        raise ValueError("Unsupported coordinate supplement version or coordinate system")
+    by_id = {entry["id"]: entry for entry in entries}
+    applied = set()
+    for point in supplements["entries"]:
+        code = point["id"]
+        if code in applied or code not in by_id:
+            raise ValueError(f"Duplicate or unknown coordinate supplement: {code}")
+        entry = by_id[code]
+        names = [entry["name"]]
+        parent = entry
+        while "parent" in parent:
+            parent = by_id[parent["parent"]]
+            names.append(parent["name"])
+        if point["name"] != entry["name"] or point["path"] != list(reversed(names)):
+            raise ValueError(f"Coordinate supplement does not match the district path: {code}")
+        if "latitude" in entry or "longitude" in entry:
+            raise ValueError(f"Coordinate supplement would replace an existing point: {code}")
+        latitude, longitude = point["latitude"], point["longitude"]
+        if (type(latitude) not in (float, int) or type(longitude) not in (float, int)
+                or not math.isfinite(latitude) or not math.isfinite(longitude)
+                or not 0 < latitude < 56 or not 70 < longitude < 140):
+            raise ValueError(f"Invalid supplemental coordinates: {code}")
+        source = point["source"]
+        if not source.get("provider") or not source.get("id") or not source.get("url", "").startswith("https://") or not point.get("note"):
+            raise ValueError(f"Missing coordinate provenance: {code}")
+        entry.update(latitude=latitude, longitude=longitude)
+        if source["provider"] == "GeoNames":
+            entry["geonameID"] = int(source["id"])
+        elif source["provider"] == "Wikidata":
+            entry["wikidataID"] = source["id"]
+        applied.add(code)
+    return applied
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path, help="directory with pca-code.json and CN/HK/MO/TW.zip")
     parser.add_argument("--output", type=Path, default=Path("Resources/Locations/china-districts.json"))
+    parser.add_argument("--coordinate-supplements", type=Path, default=DEFAULT_COORDINATE_SUPPLEMENTS,
+                        help="reviewed WGS84 coordinate supplements with per-district provenance")
     args = parser.parse_args()
     entries = list(mainland(args.source))
     for country, label in (("HK", "香港特别行政区"), ("MO", "澳门特别行政区"), ("TW", "台湾地区")):
@@ -145,9 +187,10 @@ def main():
         if entry["id"] in ids or ("parent" in entry and entry["parent"] not in ids):
             raise ValueError(f"Duplicate or missing parent: {entry}")
         ids.add(entry["id"])
+    applied = apply_coordinate_supplements(entries, args.coordinate_supplements)
     rows = [json.dumps(entry, ensure_ascii=False, separators=(",", ":")) for entry in entries]
     args.output.write_text('{"version":1,"districts":[\n' + ",\n".join(rows) + "\n]}\n", encoding="utf-8")
-    print(f"{len(entries)} districts, {sum('latitude' in entry for entry in entries)} with coordinates")
+    print(f"{len(entries)} districts, {sum('latitude' in entry for entry in entries)} with coordinates, {len(applied)} reviewed supplements")
 
 
 if __name__ == "__main__":

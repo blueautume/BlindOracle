@@ -13,6 +13,7 @@
   "local_plugin_count": 10,
   "release_is_signed": true,
   "notes": [
+    "Offline district coordinates 3.0.11 / Build 37 (2026-11-06): filled all 265 missing representative points (258 leaf areas and 7 city-level entries), preserving the 3,633-entry hierarchy and all 3,368 existing coordinate records. Sources: 160 GeoNames records and 105 non-deprecated Wikidata Earth/WGS84 statements, with per-entry provenance, revision and source-precision notes in Scripts/Data/china-coordinate-supplements.json. All 3,248 leaf areas resolve locally without an AI/geocoding client. Eight Python data/generator checks passed, including byte-for-byte rebuilding from pinned source inputs and malformed-supplement rejection; 64 focused iPhone simulator unit regressions passed with zero compiler warnings. Live geocoding tests now use explicitly incomplete fixtures but were not run against external services. No physical-device installation or store upload was performed. Evidence: /tmp/blindoracle-coordinate-completion-tests.xcresult and /tmp/blindoracle-coordinate-completion-tests.log. Earlier broader test evidence retains its actual tested version.",
     "TestFlight release 3.0.10 / Build 36: the data-page clipping/hierarchy refinement passed two iPhone UI regressions and screenshot review, and was installed and launched on 穷奇. The signed archive completed with zero warnings and passed version, signature, symbols and resource checks. App Store Connect reported Upload succeeded and the uploaded package entered processing on 2026-11-05; final TestFlight processing/tester availability was not asserted. Evidence: build-testflight-3.0.10-36/testflight-upload.log.",
     "Data library hierarchy fix 3.0.10 / Build 36: a temporary padding-only 3.0.9 variant confirmed that the subtitle first glyph was cut by the native inset-grouped cell corner. The subtitle was then removed, safe heading insets restored, and Saved profiles / Reading methods unified as peer section headers with matching cards. Two iPhone UI regressions passed, covering navigation, direct swipe deletion/persistence, another editable profile and preserved reading snapshots. Final screenshots were visually reviewed. Signed device build and archive passed with zero warnings; 3.0.10 / 36 was installed and launched on 穷奇. TestFlight upload evidence is recorded separately once complete; broader tests remain under their actual previous versions.",
     "TestFlight release 3.0.9 / Build 35: the signed Release archive completed with zero warnings. Version, bundle ID, signature, symbols, required service resource presence and retired-provider resource absence were verified. App Store Connect upload succeeded on 2026-11-05; Apple explicitly reported the uploaded package had entered processing. This does not verify completed TestFlight processing or tester availability. The archive includes the Agent/dialogue fixes and both subsequent UI refinements; each functional test set remains recorded under its actual tested version. Upload evidence: build-testflight-3.0.9-35/testflight-upload.log.",
@@ -54,8 +55,8 @@
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "3.0.10",
-  "build": "36",
+  "version": "3.0.11",
+  "build": "37",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",

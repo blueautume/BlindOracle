@@ -19,7 +19,10 @@ final class LiveIntegrationTests: XCTestCase {
 
     @MainActor func testMissingChinaDistrictUsesDeepSeekAndAppleGeocoding() async throws {
         let client = try liveClient()
-        let catalog = ChinaDistrictCatalog.shared
+        // Exercise the online fallback using a deliberately incomplete catalog;
+        // production catalog entries now resolve entirely from bundled points.
+        let data = Data(#"{"version":1,"districts":[{"id":"110000","name":"北京市","country":"CN"},{"id":"110118","name":"密云区","parent":"110000"}]}"#.utf8)
+        let catalog = try ChinaDistrictCatalog(data: data)
         let beijing = try XCTUnwrap(catalog.provinces.first { $0.id == "110000" })
         let miyun = try XCTUnwrap(catalog.children(of: beijing).first { $0.id == "110118" })
         XCTAssertNil(miyun.localPlace)
@@ -42,7 +45,8 @@ final class LiveIntegrationTests: XCTestCase {
 
     @MainActor func testMissingChinaCityUsesDeepSeekAndAppleGeocoding() async throws {
         let client = try liveClient()
-        let catalog = ChinaDistrictCatalog.shared
+        let data = Data(#"{"version":1,"districts":[{"id":"420000","name":"湖北省","country":"CN"},{"id":"420600","name":"襄阳市","parent":"420000"},{"id":"420602","name":"襄城区","parent":"420600"}]}"#.utf8)
+        let catalog = try ChinaDistrictCatalog(data: data)
         let hubei = try XCTUnwrap(catalog.provinces.first { $0.id == "420000" })
         let xiangyang = try XCTUnwrap(catalog.children(of: hubei).first { $0.id == "420600" })
         XCTAssertEqual(xiangyang.wholeAreaSelectionTitle, "全市")
