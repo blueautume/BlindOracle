@@ -10,7 +10,7 @@ import unittest
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
-from development_key import DEEPSEEK_RESOURCE, QWEN_KEY_FILE, QWEN_RESOURCE, read_keys
+from development_key import DEEPSEEK_RESOURCE, RETIRED_KEY_FILE, RETIRED_RESOURCE, read_keys
 from check_secrets import credential_issue
 
 
@@ -23,7 +23,7 @@ class DevelopmentKeyTests(unittest.TestCase):
         (self.root / 'Configuration').mkdir(parents=True)
         self.file = self.root / 'Configuration/Secrets.local.json'
         self.key = 'sk-' + 'x' * 32
-        self.qwen_file = self.parent / 'key' / QWEN_KEY_FILE
+        self.qwen_file = self.parent / 'key' / RETIRED_KEY_FILE
         self.qwen_key = 'sk-ws-' + '.'.join(['a', 'b' * 5, 'c' * 64])
         self.private_values = [self.key, 'sk-' + 'y' * 32, self.qwen_key]
 
@@ -91,42 +91,38 @@ class DevelopmentKeyTests(unittest.TestCase):
         self.assertEqual(target.read_text(), self.key)
         self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
 
-    def test_release_build_packages_qwen_workspace_file_with_existing_deepseek_config(self):
-        self.write_config(self.key)
-        self.write_qwen_file()
-        deepseek = self.build('Release')
-        qwen = deepseek.with_name(QWEN_RESOURCE)
-        self.assertEqual(deepseek.read_text(), self.key)
-        self.assertEqual(qwen.read_text(), self.qwen_key)
-        self.assertEqual(stat.S_IMODE(qwen.stat().st_mode), 0o600)
-
-    def test_qwen_key_file_does_not_fill_missing_deepseek_credential(self):
+    def test_retired_key_file_never_supplies_the_reading_credential(self):
         self.qwen_file.parent.mkdir()
         self.qwen_file.write_text(self.key)
-        self.assertEqual(read_keys(self.root), {DEEPSEEK_RESOURCE: None, QWEN_RESOURCE: self.key})
+        self.assertEqual(read_keys(self.root), {DEEPSEEK_RESOURCE: None})
 
-    def test_qwen_local_override_and_empty_value_take_precedence_over_file(self):
+    def test_legacy_provider_field_is_ignored_and_only_deepseek_is_bundled(self):
         self.write_qwen_file()
-        for value in [self.key, '']:
-            with self.subTest(empty=not value):
-                self.file.write_text(json.dumps({'deepseek_api_key': self.key, 'qwen_api_key': value}))
-                deepseek = self.build('Release')
-                qwen = deepseek.with_name(QWEN_RESOURCE)
-                self.assertEqual(deepseek.read_text(), self.key)
-                if value:
-                    self.assertEqual(qwen.read_text(), value)
-                else:
-                    self.assertFalse(qwen.exists())
-
-    def test_invalid_qwen_key_fails_build_and_clears_both_resources(self):
-        self.write_config(self.key)
-        self.write_qwen_file()
+        self.file.write_text(json.dumps({'deepseek_api_key': self.key, 'qwen_api_key': 'retired-invalid-value'}))
         deepseek = self.build('Release')
-        qwen = deepseek.with_name(QWEN_RESOURCE)
-        self.qwen_file.write_text(self.qwen_key + '\ninvalid')
+        self.assertEqual(deepseek.read_text(), self.key)
+        self.assertEqual(list(deepseek.parent.iterdir()), [deepseek])
+
+    def test_every_build_removes_retired_bundled_resource(self):
+        for configuration in ['Debug', 'Release']:
+            with self.subTest(configuration=configuration):
+                self.write_config(self.key)
+                target = self.build(configuration)
+                retired = target.with_name(RETIRED_RESOURCE)
+                retired.write_text(self.qwen_key)
+                self.build(configuration)
+                self.assertFalse(retired.exists())
+                self.assertEqual(target.read_text(), self.key)
+
+    def test_invalid_configuration_removes_active_and_retired_resources(self):
+        self.write_config(self.key)
+        target = self.build('Release')
+        retired = target.with_name(RETIRED_RESOURCE)
+        retired.write_text(self.qwen_key)
+        self.file.write_text(self.key + '{')
         self.build('Release', succeeds=False)
-        self.assertFalse(deepseek.exists())
-        self.assertFalse(qwen.exists())
+        self.assertFalse(target.exists())
+        self.assertFalse(retired.exists())
 
     def test_rotation_updates_the_packaged_credential_across_build_configurations(self):
         values = [self.key, 'sk-' + 'z' * 32, 'sk-' + 'w' * 32]
@@ -182,11 +178,11 @@ class DevelopmentKeyTests(unittest.TestCase):
 
     def test_staged_scan_rejects_private_file_and_embedded_value(self):
         self.assertIsNotNone(credential_issue('Configuration/Secrets.local.json', b'{}'))
-        self.assertIsNotNone(credential_issue(QWEN_KEY_FILE, b''))
-        self.assertIsNotNone(credential_issue(QWEN_RESOURCE, b''))
+        self.assertIsNotNone(credential_issue(RETIRED_KEY_FILE, b''))
+        self.assertIsNotNone(credential_issue(RETIRED_RESOURCE, b''))
         self.assertIsNotNone(credential_issue('example.swift', self.key.encode()))
         self.assertIsNotNone(credential_issue('example.swift', self.qwen_key.encode()))
-        self.assertIsNone(credential_issue('Configuration/Secrets.example.json', b'{"deepseek_api_key":"","qwen_api_key":""}'))
+        self.assertIsNone(credential_issue('Configuration/Secrets.example.json', b'{"deepseek_api_key":""}'))
 
 
 if __name__ == '__main__':

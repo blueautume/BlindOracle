@@ -51,6 +51,62 @@ final class LocationServiceTests: XCTestCase {
         XCTAssertFalse(shaanxiChangan.acceptsLookupQuery(shaanxiChangan.fullName + "某路"))
     }
 
+    func testEnglishDistrictPathsResolveUsingTheirActualParentCity() throws {
+        let catalog = ChinaDistrictCatalog.shared
+        let samples = [
+            ("Chaoyang District, Beijing", "110105", "北京市朝阳区"),
+            ("Chaoyang District, Changchun, Jilin, China", "220104", "吉林省长春市朝阳区"),
+            ("Nanshan District, Shenzhen, Guangdong, China", "440305", "广东省深圳市南山区"),
+            ("Xuhui District, Shanghai, China", "310104", "上海市徐汇区"),
+            ("Tianhe District, Guangzhou, Guangdong", "440106", "广东省广州市天河区"),
+            ("Xihu District, Hangzhou, Zhejiang, China", "330106", "浙江省杭州市西湖区"),
+            ("Wuhou District, Chengdu, Sichuan", "510107", "四川省成都市武侯区"),
+            ("Pudong New Area, Shanghai, China", "310115", "上海市浦东新区")
+        ]
+        for language in [AppLanguage.english, .simplifiedChinese] {
+            try AppLanguage.$override.withValue(language) {
+                for (place, id, canonical) in samples {
+                    let district = try XCTUnwrap(catalog.matchingDistrict(for: place), place)
+                    XCTAssertEqual(district.id, id, place)
+                    XCTAssertEqual(district.fullName, canonical, place)
+                    XCTAssertNotNil(district.localPlace, place)
+                }
+            }
+        }
+        XCTAssertEqual(catalog.matchingDistrict(for: "Pudongxin District, Shanghai")?.id, "310115")
+        XCTAssertEqual(catalog.matchingDistrict(for: "China, Guangdong, Shenzhen, Nanshan District")?.id, "440305")
+        XCTAssertEqual(catalog.matchingDistrict(for: "Shanghai Xuhui District")?.id, "310104")
+        XCTAssertEqual(catalog.matchingDistrict(for: "  xIhU district , HANGZHOU  ")?.id, "330106")
+        XCTAssertEqual(catalog.matchingDistrict(for: "北京市朝阳区")?.id, "110105")
+        XCTAssertEqual(catalog.matchingDistrict(for: "中國廣東省深圳市南山區")?.id, "440305")
+    }
+
+    func testDistrictMatchingRejectsAmbiguousContradictoryAndExtendedPlaces() {
+        let catalog = ChinaDistrictCatalog.shared
+        for place in [
+            "Chaoyang District", "Nanshan District", "Xihu District", "Shanghai", "Shenzhen, Guangdong, China",
+            "Chaoyang District, Beijing, Jilin", "Chaoyang District, Changchun, Beijing",
+            "Nanshan District, Shenzhen, Fujian", "Xihu District, Hangzhou, Jiangxi",
+            "Nanshan District, Shenzhen, Guangdong, Japan",
+            "Nanshan District, Shenzhen, Guangdong, China, I work in Shanghai",
+            "Nanshan District, Shenzhen, Guangdong, China, current location Shanghai",
+            "Nanshan District, Shenzhen, Guangdong Road",
+            "Nanshan District, Shenzhen, Guangdong, 1 Main Street",
+            "Nanshan District, Shenzhen, Guangdong. China",
+            "Nanshan District, Shenzhen, Guangdong\nChina",
+            "广东省深圳市南山区科技路", "广东省广州市南山区"
+        ] {
+            XCTAssertNil(catalog.matchingDistrict(for: place), place)
+        }
+    }
+
+    func testDistrictMatchingRequiresAUniqueCompleteAlias() throws {
+        let data = Data(#"{"version":1,"districts":[{"id":"110000","name":"北京市","country":"CN"},{"id":"110105","name":"朝阳区","parent":"110000"},{"id":"110106","name":"朝阳区","parent":"110000"}]}"#.utf8)
+        let catalog = try ChinaDistrictCatalog(data: data)
+        XCTAssertNil(catalog.matchingDistrict(for: "Chaoyang District, Beijing"))
+        XCTAssertNil(catalog.matchingDistrict(for: "北京市朝阳区"))
+    }
+
     func testRegionalDistrictsAndCountylessCityAreSelectable() throws {
         let catalog = ChinaDistrictCatalog.shared
         let hongKong = try XCTUnwrap(catalog.provinces.first { $0.countryCode == "HK" })

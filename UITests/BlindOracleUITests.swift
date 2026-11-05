@@ -1,95 +1,32 @@
 import XCTest
 
 final class BlindOracleUITests: XCTestCase {
-    /// Opt-in on a dedicated fresh simulator: exercises the shipped app and its
-    /// bundled credential without creating profiles or sending a reading.
-    @MainActor func testReleaseBundledCredentialConnectsToTheActualProModel() throws {
-        guard ProcessInfo.processInfo.environment["BLINDORACLE_RELEASE_CONNECTION_SMOKE"] == "1" else {
-            throw XCTSkip("Release connection smoke is opt-in")
+    @MainActor func testSettingsExposeNoModelProviderCredentialOrLocalModeControls() {
+        for language in ["zh-Hans", "en"] {
+            let app = XCUIApplication()
+            app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "-oracle.appLanguage", language]
+            app.launch()
+            openSettings(in: app)
+            let scroll = app.scrollViews["settingsScroll"]
+            XCTAssertTrue(scroll.waitForExistence(timeout: 10))
+            let removedIDs = ["aiProviderPicker", "settingsAIConnectionStatus", "restoreProConnection",
+                              "checkAIConnection", "connectionCheckReport", "connectionCheckFeedback"]
+            let removedLabels = ["解读模型", "AI provider", "模型 ID", "Model ID", "输入 API 密钥", "Enter API key",
+                                 "输入新密钥以替换", "Enter a replacement key", "仅本地试算", "Local calculations only"]
+            for _ in 0..<5 {
+                for identifier in removedIDs {
+                    XCTAssertFalse(app.descendants(matching: .any).matching(identifier: identifier).firstMatch.exists, identifier)
+                }
+                for label in removedLabels {
+                    XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch.exists, label)
+                }
+                XCTAssertEqual(app.secureTextFields.count, 0)
+                scroll.swipeUp()
+            }
+            XCTAssertTrue(app.buttons["userAgreementLink"].exists)
+            XCTAssertTrue(app.buttons["privacyPolicyLink"].exists)
+            app.terminate()
         }
-        let app = XCUIApplication()
-        app.launchArguments = []
-        app.launch()
-        let data = app.tabBars.buttons["数据"]
-        XCTAssertTrue(data.waitForExistence(timeout: 15))
-        data.tap()
-        let settings = app.buttons["设置"]
-        XCTAssertTrue(settings.waitForExistence(timeout: 10))
-        settings.tap()
-
-        let savedKey = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "已保存密钥")).firstMatch
-        XCTAssertTrue(savedKey.waitForExistence(timeout: 10))
-        let status = app.staticTexts["settingsAIConnectionStatus"]
-        XCTAssertTrue(status.waitForExistence(timeout: 10))
-        XCTAssertTrue(status.label.contains("DeepSeek Pro"))
-        XCTAssertTrue(status.label.contains("max"))
-        XCTAssertFalse(status.label.contains("仅本地"))
-        let check = app.buttons["checkAIConnection"]
-        XCTAssertTrue(check.waitForExistence(timeout: 10))
-        XCTAssertTrue(check.isEnabled)
-        for _ in 0..<6 where !check.isHittable { app.swipeUp() }
-        XCTAssertTrue(check.isHittable)
-        check.tap()
-
-        let report = app.descendants(matching: .any).matching(identifier: "connectionCheckReport").firstMatch
-        XCTAssertTrue(report.waitForExistence(timeout: 120))
-        guard report.exists else { return }
-        // SwiftUI can propagate the group's identifier to its Text children;
-        // the first match may itself be a StaticText rather than a container.
-        let labels = app.staticTexts.matching(identifier: "connectionCheckReport").allElementsBoundByIndex.map(\.label).joined(separator: "\n")
-        XCTAssertTrue(labels.contains("请求模型：deepseek-v4-pro"))
-        XCTAssertTrue(labels.contains("实际模型：deepseek-v4-pro"))
-        XCTAssertTrue(labels.contains("深度思考") && labels.contains("max") && labels.contains("65,536"))
-        XCTAssertTrue(labels.contains("api.deepseek.com"))
-        let feedback = app.staticTexts["connectionCheckFeedback"]
-        XCTAssertTrue(feedback.exists)
-        XCTAssertTrue(feedback.label.contains("连接正常"))
-        for _ in 0..<6 where !report.isHittable { app.swipeUp() }
-        let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = "release-pro-connection-report"
-        attachment.lifetime = .keepAlways
-        add(attachment)
-    }
-
-    @MainActor func testReleaseBundledQwenConnectsAndSelectionPersists() throws {
-        guard ProcessInfo.processInfo.environment["BLINDORACLE_RELEASE_CONNECTION_SMOKE"] == "1" else {
-            throw XCTSkip("Release connection smoke is opt-in")
-        }
-        let app = XCUIApplication()
-        app.launch()
-        openSettings(in: app)
-
-        let picker = app.segmentedControls["aiProviderPicker"]
-        let qwen = picker.buttons["千问"]
-        XCTAssertTrue(qwen.waitForExistence(timeout: 10))
-        qwen.tap()
-        XCTAssertTrue(qwen.isSelected)
-        let status = app.staticTexts["settingsAIConnectionStatus"]
-        XCTAssertTrue(status.waitForExistence(timeout: 10))
-        XCTAssertTrue(status.label.contains("千问"))
-
-        let check = app.buttons["checkAIConnection"]
-        for _ in 0..<6 where !check.isHittable { app.swipeUp() }
-        XCTAssertTrue(check.isHittable)
-        XCTAssertTrue(check.isEnabled)
-        check.tap()
-
-        let feedback = app.staticTexts["connectionCheckFeedback"]
-        XCTAssertTrue(feedback.waitForExistence(timeout: 120))
-        XCTAssertTrue(feedback.label.contains("连接正常"), feedback.label)
-        let labels = app.staticTexts.matching(identifier: "connectionCheckReport").allElementsBoundByIndex.map(\.label)
-        XCTAssertTrue(labels.contains("请求模型：qwen3.8-max-0902"))
-        XCTAssertTrue(labels.contains("实际模型：qwen3.8-max-0902") || labels.contains("实际模型：qwen3.8-max-2026-09-02"))
-        XCTAssertTrue(labels.contains { $0.contains("dashscope.aliyuncs.com") })
-
-        app.terminate()
-        app.launch()
-        openSettings(in: app)
-        XCTAssertTrue(qwen.waitForExistence(timeout: 10))
-        XCTAssertTrue(qwen.isSelected)
-        let deepSeek = picker.buttons["DeepSeek"]
-        deepSeek.tap()
-        XCTAssertTrue(deepSeek.isSelected)
     }
 
     @MainActor func testReadingStylePickerFallsBackToDeadpanForUnknownPreference() {
@@ -101,6 +38,32 @@ final class BlindOracleUITests: XCTestCase {
         let detail = app.staticTexts["oracleVoiceStyleDetail"]
         XCTAssertTrue(detail.waitForExistence(timeout: 5))
         XCTAssertEqual(detail.label, "直给判断，带一点冷幽默。")
+    }
+
+    @MainActor func testZiweiMarksChartSexRequiredWhileBaziAllowsItToBeUnknown() {
+        for (method, requirement, explanation) in [("紫微", "必填", "紫微斗数需要这一项"), ("八字", "可选", "八字可留空")] {
+            let app = XCUIApplication()
+            app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "-oracle.appLanguage", "zh-Hans"]
+            app.launch()
+            let input = app.textFields["questionInput"]
+            XCTAssertTrue(input.waitForExistence(timeout: 15))
+            input.tap(); input.typeText("只用\(method)看看今年工作的方向")
+            app.buttons["sendQuestion"].tap()
+            let scroll = app.scrollViews["intakeFormScroll"]
+            XCTAssertTrue(scroll.waitForExistence(timeout: 10))
+            let marker = app.staticTexts["profileGenderRequirement"].firstMatch
+            for _ in 0..<20 where !marker.isHittable { scroll.swipeUp() }
+            XCTAssertTrue(marker.exists)
+            XCTAssertEqual(marker.label, requirement)
+            XCTAssertTrue(app.staticTexts["profileGenderExplanation"].firstMatch.label.contains(explanation))
+            XCTAssertEqual(app.buttons["profileGender"].firstMatch.value as? String, "未填写")
+            let cancel = app.buttons["cancelPendingIntake"]
+            XCTAssertTrue(cancel.exists)
+            cancel.tap()
+            XCTAssertTrue(scroll.waitForNonExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["openIntake"].exists)
+            app.terminate()
+        }
     }
 
     @MainActor func testReadingStyleSelectionPersistsAcrossRelaunch() throws {
@@ -143,13 +106,54 @@ final class BlindOracleUITests: XCTestCase {
         XCTAssertEqual(detail.label, newStyle.detail)
     }
 
+    @MainActor func testSettingsLegalDocumentsScrollAndReturnInChineseAndEnglish() {
+        for language in ["zh-Hans", "en"] {
+            let app = XCUIApplication()
+            app.launchArguments = ["--ui-testing-local", "-oracle.appLanguage", language]
+            app.launch()
+            openSettings(in: app)
+            let settings = app.scrollViews["settingsScroll"]
+            XCTAssertTrue(settings.waitForExistence(timeout: 10))
+            let documents = [
+                (id: "userAgreementLink", title: language == "en" ? "User Agreement" : "用户协议"),
+                (id: "privacyPolicyLink", title: language == "en" ? "Privacy Policy" : "隐私政策")
+            ]
+            for document in documents {
+                let link = app.buttons[document.id]
+                for _ in 0..<16 where !link.isHittable { settings.swipeUp() }
+                XCTAssertTrue(link.isHittable, "\(language) \(document.title)")
+                XCTAssertTrue(link.label.contains(document.title))
+                link.tap()
+
+                let scroll = app.scrollViews["legalDocumentScroll"]
+                XCTAssertTrue(scroll.waitForExistence(timeout: 10))
+                let navigation = app.navigationBars[document.title]
+                XCTAssertTrue(navigation.exists)
+                XCTAssertFalse(app.webViews.firstMatch.exists)
+                let contact = scroll.descendants(matching: .any).matching(identifier: "legalDocumentContact").firstMatch
+                scroll.swipeUp()
+                for _ in 0..<20 where !contact.isHittable { scroll.swipeUp() }
+                XCTAssertTrue(contact.isHittable, "\(language) \(document.title) contact section")
+                let email = scroll.descendants(matching: .any).matching(identifier: "legalContactEmail").firstMatch
+                XCTAssertTrue(email.exists)
+                XCTAssertTrue(email.label.contains("2114581274@qq.com"))
+
+                navigation.buttons.firstMatch.tap()
+                XCTAssertTrue(scroll.waitForNonExistence(timeout: 5))
+                XCTAssertTrue(settings.waitForExistence(timeout: 5))
+            }
+            app.terminate()
+        }
+    }
+
     @MainActor private func openSettings(in app: XCUIApplication) {
         // iPadOS exposes the floating tabs without a TabBar ancestor.
-        let data = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label IN %@", ["数据", "Data"])).firstMatch
+        let taggedData = app.buttons["dataTab"].firstMatch
+        let data = taggedData.exists ? taggedData : app.buttons.matching(NSPredicate(format: "label IN %@", ["数据", "Data"])).firstMatch
         guard data.waitForExistence(timeout: 15) else { return XCTFail("Data tab was not shown") }
         data.tap()
-        let settings = app.buttons.matching(NSPredicate(format: "label IN %@", ["设置", "Settings"])).firstMatch
+        let taggedSettings = app.buttons["settingsButton"].firstMatch
+        let settings = taggedSettings.exists ? taggedSettings : app.buttons.matching(NSPredicate(format: "label IN %@", ["设置", "Settings"])).firstMatch
         guard settings.waitForExistence(timeout: 10) else { return XCTFail("Settings button was not shown") }
         settings.tap()
     }
@@ -175,7 +179,7 @@ final class BlindOracleUITests: XCTestCase {
         app.tabBars.buttons["数据"].tap()
         XCTAssertTrue(app.staticTexts["张小明"].waitForExistence(timeout: 10))
     }
-    @MainActor func testTwoTabsAndLocalReadingFlow() throws {
+    @MainActor func testTwoTabsAndReadingFlow() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]
         app.launch()
@@ -196,7 +200,7 @@ final class BlindOracleUITests: XCTestCase {
         XCTAssertTrue(confirm.isHittable)
         confirm.tap()
         completeCoinInteraction(in: app)
-        let localSummary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "当前为本地试算")).firstMatch
+        let localSummary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "这次推演已完成。")).firstMatch
         XCTAssertTrue(localSummary.waitForExistence(timeout: 30))
         let reference = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "readingData-")).firstMatch
         for _ in 0..<3 where !reference.isHittable { app.swipeUp() }
@@ -274,6 +278,63 @@ final class BlindOracleUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts[second].exists)
     }
 
+    @MainActor func testClearAllHistoryRequiresConfirmationAndPersistsAcrossRelaunch() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "-oracle.appLanguage", "zh-Hans"]
+        app.launch()
+        let first = "只用八字看看今年换工作的方向"
+        let current = "只用紫微看看下半年的工作机会"
+        for question in [first, current] {
+            let input = app.textFields["questionInput"]
+            XCTAssertTrue(input.waitForExistence(timeout: 15))
+            input.tap(); input.typeText(question)
+            app.buttons["sendQuestion"].tap()
+            XCTAssertTrue(app.buttons["confirmIntake"].waitForExistence(timeout: 15))
+            cancelForm(in: app)
+            if question == first { startNewConversation(app) }
+        }
+        let input = app.textFields["questionInput"]
+        input.tap(); input.typeText("尚未发送的聊天草稿")
+        app.buttons["historyButton"].tap()
+        XCTAssertTrue(historyRow(in: app, titled: first).waitForExistence(timeout: 5))
+        XCTAssertTrue(historyRow(in: app, titled: current).exists)
+        let clear = app.buttons["clearConversationHistory"]
+        XCTAssertTrue(clear.exists)
+        clear.tap()
+        let cancel = app.buttons["cancelClearConversationHistory"].firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+        cancel.tap()
+        XCTAssertTrue(historyRow(in: app, titled: first).exists)
+        XCTAssertTrue(historyRow(in: app, titled: current).exists)
+        app.buttons["closeHistory"].firstMatch.tap()
+        XCTAssertTrue((input.value as? String)?.contains("尚未发送的聊天草稿") == true)
+
+        app.buttons["historyButton"].tap()
+        clear.tap()
+        let confirm = app.buttons["confirmClearConversationHistory"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "conversationHistorySidebar").firstMatch.waitForNonExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["openIntake"].exists)
+        XCTAssertFalse(app.buttons["interactionCard"].exists)
+        XCTAssertFalse((input.value as? String)?.contains("尚未发送的聊天草稿") ?? false)
+        app.buttons["historyButton"].tap()
+        XCTAssertTrue(app.staticTexts["往日问事，都会留在这里。"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "historyRow-")).count, 0)
+        app.buttons["closeHistory"].firstMatch.tap()
+
+        app.terminate()
+        app.launchArguments = ["--ui-testing-local", "-oracle.appLanguage", "zh-Hans"]
+        app.launch()
+        XCTAssertTrue(app.buttons["historyButton"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["confirmIntake"].exists)
+        XCTAssertFalse(app.buttons["openIntake"].exists)
+        XCTAssertFalse(app.buttons["retryAnalysis"].exists)
+        app.buttons["historyButton"].tap()
+        XCTAssertTrue(app.staticTexts["往日问事，都会留在这里。"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "historyRow-")).count, 0)
+    }
+
     @MainActor private func cancelForm(in app: XCUIApplication) {
         let cancel = app.buttons["cancelIntake"]
         XCTAssertTrue(cancel.waitForExistence(timeout: 10))
@@ -284,9 +345,12 @@ final class BlindOracleUITests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "historyRow-", title)).firstMatch
     }
     @MainActor private func startNewConversation(_ app: XCUIApplication) {
-        XCTAssertTrue(app.buttons["newConversationButton"].waitForExistence(timeout: 10))
-        app.buttons["newConversationButton"].tap()
-        XCTAssertTrue(app.buttons["confirmNewConversation"].firstMatch.waitForExistence(timeout: 10)); app.buttons["confirmNewConversation"].firstMatch.tap()
+        let button = app.buttons["newConversationButton"]
+        XCTAssertTrue(button.waitForExistence(timeout: 10))
+        button.tap()
+        let welcome = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label IN %@", ["水墨绘制的瞎子", "Ink portrait of the Oracle"])).firstMatch
+        XCTAssertTrue(welcome.waitForExistence(timeout: 10))
     }
     @MainActor private func completeLocalQuestion(_ question: String, in app: XCUIApplication) {
         let input = app.textFields["questionInput"]
@@ -297,7 +361,7 @@ final class BlindOracleUITests: XCTestCase {
         for _ in 0..<24 where !confirm.isHittable { app.scrollViews["intakeFormScroll"].swipeUp() }
         XCTAssertTrue(confirm.isHittable); confirm.tap()
         completeCoinInteraction(in: app)
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "当前为本地试算")).firstMatch.waitForExistence(timeout: 30))
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "这次推演已完成。")).firstMatch.waitForExistence(timeout: 30))
     }
 
     @MainActor private func completeCoinInteraction(in app: XCUIApplication) {

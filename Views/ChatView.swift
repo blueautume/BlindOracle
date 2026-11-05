@@ -4,10 +4,10 @@ struct ChatView: View {
     @EnvironmentObject private var store: OracleStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var draft: String
-    @State private var confirmNew = false
     @State private var showHistory = false
     @State private var selectedReading: ReadingReference?
     @State private var inspectingActivities = false
+    @State private var followsLatest = true
     @FocusState private var composing: Bool
     private let suggestions = [L10n.text("最近的工作，该进还是该守？", "Is it time to make a move at work, or should I stay put?"), L10n.text("这段关系，我该如何往前走？", "How should I move forward in this relationship?"), L10n.text("心里有件事，想听一句建议。", "Something’s on my mind. Can you offer some advice?")]
 
@@ -34,10 +34,11 @@ struct ChatView: View {
                                 if !store.activities.isEmpty {
                                     OracleProcessingView(activities: store.activities, isBusy: store.isBusy, onExpansionChanged: { expanded in
                                         inspectingActivities = expanded
+                                        if !expanded { followsLatest = true }
                                         let sessionID = store.activitySessionID
                                         Task { @MainActor in
                                             await Task.yield()
-                                            guard store.activitySessionID == sessionID, inspectingActivities == expanded else { return }
+                                            guard store.activitySessionID == sessionID, inspectingActivities == expanded, selectedReading == nil else { return }
                                             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
                                                 if expanded { proxy.scrollTo(sessionID, anchor: .top) }
                                                 else { proxy.scrollTo("bottom", anchor: .bottom) }
@@ -70,32 +71,43 @@ struct ChatView: View {
                     .modifier(TranscriptEdgeEffect())
                     .contentShape(Rectangle())
                     .simultaneousGesture(TapGesture().onEnded { composing = false })
+                    .simultaneousGesture(DragGesture(minimumDistance: 12).onChanged { value in
+                        guard abs(value.translation.height) > abs(value.translation.width) else { return }
+                        followsLatest = false
+                    })
                     .accessibilityIdentifier("chatTranscript")
                     .onAppear {
                         Task { @MainActor in
                             await Task.yield()
+                            guard followsLatest, selectedReading == nil else { return }
                             proxy.scrollTo("bottom", anchor: .bottom)
                         }
                     }
                     .onChange(of: store.messages.last?.content) { _, _ in
-                        guard !inspectingActivities else { return }
+                        guard followsLatest, !inspectingActivities, selectedReading == nil, !showHistory else { return }
                         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
                     }
                     .onChange(of: store.messages.count) { _, _ in
-                        guard !inspectingActivities else { return }
+                        guard followsLatest, !inspectingActivities, selectedReading == nil, !showHistory else { return }
                         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { proxy.scrollTo("bottom", anchor: .bottom) }
                     }
                     .onChange(of: store.activities.last?.id) { _, _ in
-                        guard !inspectingActivities else { return }
+                        guard followsLatest, !inspectingActivities, selectedReading == nil, !showHistory else { return }
                         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
                     }
                     .onChange(of: store.activitySessionID) { _, _ in inspectingActivities = false }
                     .onChange(of: store.activeConversationID) { _, _ in
                         draft = ""; selectedReading = nil; inspectingActivities = false
+                        followsLatest = true
                         Task { @MainActor in
                             await Task.yield()
                             proxy.scrollTo("bottom", anchor: .bottom)
                         }
+                    }
+                    .onChange(of: store.historyResetID) { _, _ in
+                        draft = ""; selectedReading = nil; inspectingActivities = false
+                        composing = false; showHistory = false
+                        followsLatest = true
                     }
                   }
                   .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -114,19 +126,20 @@ struct ChatView: View {
                     .accessibilityHidden(showHistory)
                 }
                 ToolbarItem(placement: .principal) {
-                    HStack(spacing: 10) {
-                        Text(L10n.text("瞎子", "BlindOracle")).font(.system(size: 20, weight: .medium, design: .serif))
-                            .tracking(AppLanguage.current.isEnglish ? 0.7 : 3)
-                        Text(L10n.text("问", "Ask")).font(.system(size: 10, weight: .medium, design: .serif)).foregroundStyle(InkTheme.cinnabar)
-                            .padding(5).overlay(RoundedRectangle(cornerRadius: 2).stroke(InkTheme.cinnabar.opacity(0.55), lineWidth: 0.8))
-                    }.foregroundStyle(InkTheme.ink)
+                    Text(L10n.text("瞎子", "BlindOracle"))
+                        .font(.system(size: 20, weight: .medium, design: .serif))
+                        .tracking(AppLanguage.current.isEnglish ? 0.7 : 3)
+                        .foregroundStyle(InkTheme.ink)
                         .contentShape(Rectangle())
                         .onTapGesture { composing = false }
                         .accessibilityIdentifier("chatTitle")
                         .accessibilityHidden(showHistory)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { composing = false; confirmNew = true } label: { Image(systemName: "square.and.pencil").font(.system(size: 17)).foregroundStyle(InkTheme.secondary) }
+                    Button {
+                        composing = false
+                        store.newConversation()
+                    } label: { Image(systemName: "square.and.pencil").font(.system(size: 17)).foregroundStyle(InkTheme.secondary) }
                         .disabled(store.isBusy || store.messages.isEmpty).accessibilityLabel(L10n.text("开启新对话", "New conversation"))
                         .accessibilityIdentifier("newConversationButton")
                         .accessibilityHidden(showHistory)
@@ -143,17 +156,16 @@ struct ChatView: View {
                     let sessionID = store.intakeSessionID
                     GroupIntakeView(plan: plan, profiles: store.intakeParticipants, numbers: store.intakeNumbers, onDraftChange: { profiles, numbers in
                         store.saveIntakeDraft(profiles: profiles, numbers: numbers, sessionID: sessionID)
-                    }, onConfirm: { profiles, numbers, save, useLocalFallback in
-                        store.confirmGroupIntake(profiles: profiles, numbers: numbers, save: save, sessionID: sessionID,
-                                                 useLocalFallback: useLocalFallback)
+                    }, onConfirm: { profiles, numbers, save in
+                        store.confirmGroupIntake(profiles: profiles, numbers: numbers, save: save, sessionID: sessionID)
                     }).id(sessionID)
                 } else if let session = store.pendingInteraction {
                     OracleInteractionView(session: session, onProgress: { response in
                         store.saveInteractionProgress(response, sessionID: session.id)
                     }, onComplete: { response in
                         store.completeInteraction(response, sessionID: session.id)
-                    }, onCancelClarification: {
-                        store.cancelTarotClarification(sessionID: session.id)
+                    }, onCancel: {
+                        store.cancelPendingReading()
                     })
                     .id("\(session.id.uuidString)-\(session.currentIndex)")
                     .interactiveDismissDisabled(false)
@@ -162,10 +174,6 @@ struct ChatView: View {
             .sheet(item: $selectedReading) { reference in
                 ReadingResultsSheet(runID: reference.id)
             }
-            .confirmationDialog(L10n.text("另开一卷对话？", "Start a new conversation?"), isPresented: $confirmNew, titleVisibility: .visible) {
-                Button(L10n.text("开启新对话", "New conversation")) { store.newConversation() }.accessibilityIdentifier("confirmNewConversation")
-                Button(L10n.text("取消", "Cancel"), role: .cancel) { }
-            } message: { Text(L10n.text("当前对话归档，基础资料、推演和偏好仍保留。", "The current conversation will be saved to history. Your profiles, readings, and preferences will be kept.")) }
         }
         .toolbar(showHistory ? .hidden : .visible, for: .tabBar)
         .onChange(of: store.selectedTab) { _, _ in composing = false }
@@ -265,7 +273,6 @@ struct ChatView: View {
                     HStack(spacing: 18) {
                         Button { selectedReading = ReadingReference(id: runID) } label: { Label(L10n.text("翻看数据", "View reading"), systemImage: "books.vertical") }
                             .accessibilityIdentifier("readingData-\(message.id.uuidString)")
-                            .disabled(store.phase == .planning)
                         if !store.isBusy {
                             if let run = store.runs.first(where: { $0.id == runID }), run.synthesis == nil {
                                 if !store.canRetryAnalysis(for: message.id) {
@@ -420,9 +427,6 @@ struct ChatView: View {
             }.padding(.horizontal, 13).padding(.vertical, 8)
                 .background(Color(red: 0.982, green: 0.975, blue: 0.959), in: RoundedRectangle(cornerRadius: 22))
                 .overlay(RoundedRectangle(cornerRadius: 22).stroke(InkTheme.line, lineWidth: 0.8))
-            Text(store.connectionStatus).font(.system(size: 10))
-                .foregroundStyle(store.localOnly || !store.hasCredential ? InkTheme.cinnabar : InkTheme.secondary)
-                .accessibilityIdentifier("aiConnectionStatus")
         }.frame(maxWidth: 720).padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 8).frame(maxWidth: .infinity)
             .background {
                 InkTheme.paper.ignoresSafeArea(.container, edges: .bottom)
@@ -435,13 +439,9 @@ struct ChatView: View {
     private func submit() {
         let question = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty else { return }
-        if store.pendingInteraction != nil, !store.canSendWhileAwaitingInteraction(question) {
-            composing = false
-            store.showInteraction = true
-            return
-        }
         draft = ""
         composing = false
+        followsLatest = true
         store.send(question)
     }
 }

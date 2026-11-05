@@ -56,28 +56,24 @@ struct DeepSeekTokenUsage: Decodable, Sendable {
 }
 
 enum DeepSeekError: LocalizedError, Sendable {
-    case missingKey(AIProvider)
+    case missingKey
     case invalidResponse
     case malformedJSON
     case truncated
-    case http(Int, AIProvider)
+    case http(Int)
     case provider(String)
     case missingResponseModel
     case unexpectedModel(requested: String, actual: String)
     var errorDescription: String? {
         switch self {
-        case .missingKey(let provider): L10n.text("尚未设置 \(provider.displayName) 密钥，可在「数据」里的设置中添加。", "Add a \(provider.displayName) API key in Settings.")
-        case .invalidResponse: L10n.text("大师暂时没接上话，请稍后再试。", "The assistant couldn’t reply. Try again in a moment.")
-        case .malformedJSON: L10n.text("收到的回答格式不完整，请再试一次；本地资料已保留。", "The reply was incomplete. Try again. Your local details are saved.")
-        case .truncated: L10n.text("回答在传输中被截断，请重试；本地推演结果已保留。", "The reply was interrupted in transit. Try again. Your local results are saved.")
-        case .http(401, let provider), .http(403, let provider): L10n.text("密钥验证未通过，请在设置中检查 \(provider.displayName) 密钥。", "The key couldn’t be verified. Check your \(provider.displayName) key in Settings.")
-        case .http(402, let provider): L10n.text("\(provider.displayName) 账户余额不足，请检查账户。", "Your \(provider.displayName) account has insufficient credit.")
-        case .http(429, let provider): L10n.text("\(provider.displayName) 请求较多，请稍后再试。", "\(provider.displayName) is receiving too many requests. Try again in a moment.")
-        case .http(let code, let provider) where code >= 500: L10n.text("\(provider.displayName) 暂时繁忙，请稍后再试。", "\(provider.displayName) is busy. Try again in a moment.")
-        case .http: L10n.text("网络请求未完成，请稍后再试。", "The request couldn’t finish. Try again in a moment.")
-        case .provider(let message): message
-        case .missingResponseModel: L10n.text("服务未返回实际模型信息，暂时无法确认解读连接。", "The service didn’t report the model it used, so the connection couldn’t be verified.")
-        case .unexpectedModel(let requested, let actual): L10n.text("模型校验未通过：请求 \(requested)，服务返回 \(actual)。请检查模型设置后重试。", "Model verification failed. The request used \(requested) and the service returned \(actual). Check the model in Settings and try again.")
+        case .malformedJSON:
+            L10n.text("收到的回答不完整，请重试；已填写的资料仍保留。", "The reply was incomplete. Try again. Your details are saved.")
+        case .truncated:
+            L10n.text("回答在传输中中断，请重试；推演结果已保留。", "The reply was interrupted in transit. Try again. Your reading is saved.")
+        case .http(429):
+            L10n.text("解读服务暂时繁忙，请稍后再试。", "The reading service is busy. Try again in a moment.")
+        case .missingKey, .invalidResponse, .http, .provider, .missingResponseModel, .unexpectedModel:
+            L10n.text("解读服务暂时无法完成回答，请检查网络后重试。", "The reading service couldn’t finish this reply. Check your connection and try again.")
         }
     }
 }
@@ -85,8 +81,7 @@ enum DeepSeekError: LocalizedError, Sendable {
 /// Remote language-only orchestration. All numeric charts are produced by local plugins.
 actor DeepSeekClient {
     private let session: URLSession
-    private let provider: AIProvider
-    private let endpoint: URL
+    private let endpoint = DeepSeekConfiguration.endpoint
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private let credential: String?
@@ -99,6 +94,11 @@ actor DeepSeekClient {
     只问一个判断、一个取舍或一个动作（包括“靠谱吗”“今天怎么回”），就用一小段两到三句话答完。最多挑一条依据，不逐项解释所有结果，不把同一个建议说两遍。问怎么回，就先给能直接发出去的话，不先铺垫，也不在后面重新复盘。用户要求展开，或问了多个需要分别作答的问题，再写详细。
     用实际返回的盘面线索和用户已说过的事实解释判断。普通娱乐问题可以给鲜明的象征性倾向。别编造盘面、日期、金额、成功率、他人心思或未来事实，也别把“两次取消且没约新时间”说成“关系已经断裂”。
     有分歧就说目前倾向哪边，以及哪一条现实条件会让判断反转。只能判断到一部分时，首句说清能回答到哪一步。只交代会改变结论的限制一次，避免“各有利弊”“顺其自然”或连用几个“可能”。
+    """
+
+    private static let methodReadinessGuidelines = """
+    方法能否执行以应用给出的资料与准备状态为准，不把可选资料说成必需：八字只必需出生日期和出生时区，时辰未知仍可给三柱或交节候选；出生时辰与排盘性别只影响起运、大运。称骨必需出生日期和出生时区，未知时辰可给骨重范围。紫微必需出生日期、出生时辰、排盘性别和出生时区，缺项时才不能生成唯一命盘。西方占星必需出生日期和出生时区，未知时刻可给全天星位区间；准确出生时刻和经纬度用于上升点、天顶和宫位，不是全部占星结果的前提。塔罗、六爻、梅花、奇门、小六壬不索取出生日期或排盘性别；姓名五格只必需分别提供姓和名。
+    用户问“需要准备什么”“为什么要性别”“能不能先算”“这是什么”属于能力或资料咨询，先回答问题，不因提到方法就发起推演、补算、抽牌或收集新档案。咨询和明确执行命令分在不同分句时分别处理。没有关联推演时也要依据已有人员资料和待表单的实际缺项回答，不说完全没有资料；缺少可选字段应说明可做的范围，不笼统说不能继续。既有结果仍按当时已确认的快照解释，不能用后来修改的资料冒充原结果。
     """
 
     private static func voiceInstructions(_ voice: OracleVoiceStyle, language: AppLanguage) -> String {
@@ -142,9 +142,7 @@ actor DeepSeekClient {
     Example: {"action":"intake","intent":"Career decision","subject":"本人","methods":["tarot"],"requiredFields":[],"note":"Let's review the details before we draw.","question":"Should I apply for the new job?","understanding":{"relation":"newQuestion","resolvedQuestion":"Should I apply for the new job?"},"interactions":[{"method":"tarot","kind":"tarot","prompt":"Choose three cards."}]}
     """
 
-    init(provider: AIProvider = .deepSeek, apiKey: String? = nil, sessionConfiguration: URLSessionConfiguration? = nil) {
-        self.provider = provider
-        endpoint = provider.endpoint
+    init(apiKey: String? = nil, sessionConfiguration: URLSessionConfiguration? = nil) {
         credential = apiKey
         let configuration = sessionConfiguration ?? URLSessionConfiguration.ephemeral
         configuration.urlCache = nil
@@ -155,7 +153,7 @@ actor DeepSeekClient {
     }
 
     private var model: String {
-        provider.model()
+        DeepSeekConfiguration.defaultModel
     }
 
     func plan(question: String, profile: OracleProfile, plugins: [OraclePluginDescriptor],
@@ -166,6 +164,7 @@ actor DeepSeekClient {
         let profileJSON = try profileContext(profile)
         let system = """
         你是瞎子的对话路由与本地插件调度器。只输出一个合法 json 对象，不输出 Markdown。
+        \(Self.methodReadinessGuidelines)
         先结合历史和可引用消息判断用户此刻在做什么，再决定 action。每个 action 都要返回 understanding 对象，字段为 relation、resolvedQuestion、可选 referenceMessageID。
         relation 只能为 newQuestion、continuation、changedConditions、changedParticipants、ambiguous：
         newQuestion 是独立的新问题、闲聊等独立消息，不带 referenceMessageID。
@@ -340,13 +339,16 @@ actor DeepSeekClient {
         await onProgress?(.preparing)
         let eligible = run.results.filter { $0.status == .complete || $0.status == .partial }
         guard !eligible.isEmpty else {
-            throw DeepSeekError.provider(L10n.text("这次资料不足，尚未得到可解读的本地结果。请在「数据」里查看需要补充的项目。", "There are no local results to interpret yet. Open Data to see which details are needed."))
+            throw DeepSeekError.provider(L10n.text("这次资料不足，尚未得到可解读的推演结果。请在「数据」里查看需要补充的项目。", "There are no reading results to interpret yet. Open Data to see which details are needed."))
         }
         let system = """
         你是“瞎子”，一位敏锐的盲眼先生。用自然的语言回应问题，不卖弄术语，不说自己看到了用户。
         \(Self.answerGuidelines)
+        \(Self.methodReadinessGuidelines)
         \(Self.voiceInstructions(voice, language: language))
         如上下文包含补充追问，优先回答本条追问，结合已复用的结果与实际补充完成的结果；方法是否补充、哪些输入变化及哪些结果可复用已由客户端路由和执行。不能把仅提出的方法当成已完成，也不能声称重复计算或改动了仍沿用的牌面、爻值及人员快照。
+        本次结果和已确认资料优先于历史回答。资料更正或撤回后重新计算的项目，只能按本次结果解读；出生时刻未知时不得沿用旧回答里的时柱、起运岁数或大运，历史中的精确结论不能作为本次依据。
+        当前阶段是可用结果计算完成后的解读。只按本轮实际可用的结果和确认状态判断完成了哪些方法；有已确认可用牌面或爻值时，其对应的历史“重抽”“再掷”等操作请求已经完成。直接解读本轮结果来回答问事，不再要求用户完成已有结果对应的抽牌、投掷或提供牌面，也不回答自己能否操作抽牌。没有已确认可用结果的方法仍不得作为判断依据。
         本条补充问题记录用户的实际追问或操作请求，本次确认的补牌焦点另列。有本次确认焦点时，首句直接回答焦点。用户有具体追问时，接着说明这如何细化该追问的答案。用户只说“补一张”等操作指令时，按焦点解读即可。本次没有确认补牌时，已存补牌只作为回答当前问题的背景。
         解读正文不堆砌方法名称，不输出盘面推演步骤。详细结果可通过对应回复下方的「翻看数据」查看。资料不足的说明可以明确写出相关方法名称及缺项。
         若 omittedMethods、partial 结果的 limitations 或资料说明会影响当前结论，点明影响的具体部分。unavailable/failed 不得参与判断。
@@ -366,7 +368,11 @@ actor DeepSeekClient {
         或 {"text":"先给当前判断，再说明具体分歧及反转条件。","alternatives":[{"id":"a","title":"第一项具体判断","body":"对应依据及成立条件","supportingMethods":["bazi"]},{"id":"b","title":"第二项具体判断","body":"对应依据及成立条件","supportingMethods":["meihua"]}]}
         有可选补牌时：{"text":"直接回答，并说明现有牌面支持的建议。","alternatives":[],"tarotClarification":{"focus":"眼下应先确认双方的分工，还是先解决资源不足？","originalPosition":"Influences"}}
         """
-        let payload = try ReadingContextBuilder.payload(run: run, weights: weights, language: language)
+        let readingData = try ReadingContextBuilder.payload(run: run, weights: weights, language: language)
+        let task = run.plan.followUpQuestion == nil
+            ? "本轮可用结果已计算完成。现在请依据以上本轮结果回答这个问事：\(try json(run.input.question))。不要把历史中的重抽操作句当成本轮问事。"
+            : "本轮可用的补充结果已计算完成。现在依据以上本轮结果、已确认补牌焦点及实际追问给出解读，不要求重复已经完成的操作。"
+        let payload = readingData + "\n\n" + task
         let turns = [AIConversationTurn(role: "system", content: system)]
             + sanitizedHistory(history)
             + [AIConversationTurn(role: "user", content: payload)]
@@ -394,11 +400,13 @@ actor DeepSeekClient {
 
     func followUp(question: String, run: OracleRun?, profile: OracleProfile,
                   history: [AIConversationTurn], resolvedQuestion: String? = nil, citedQuestion: String? = nil,
+                  preparationContext: String? = nil,
                   language: AppLanguage = .current, voice: OracleVoiceStyle = .defaultStyle,
                   onDelta: @escaping @Sendable (String) async -> Void) async throws -> String {
         let system = """
         你是“瞎子”，一位敏锐的盲眼先生。用自然的语言回应问题，不卖弄术语。用户问卦象、爻辞或牌义时，直接解释相关术语。
         \(Self.answerGuidelines)
+        \(Self.methodReadinessGuidelines)
         \(Self.voiceInstructions(voice, language: language))
         追问首句就回答本条具体问题，不先重述整份解读，不用反问代替已有结果能够支持的回答。普通问候、感谢或闲聊简短自然回应，不套解读结构。
         用户要详细解读时，依据本次已有结果进一步展开；普通追问只回答所问。可以解释用户提到的方法和术语，不能编造命盘或假装已调用本地插件。
@@ -406,7 +414,7 @@ actor DeepSeekClient {
         相关输入未变的结果沿用保存的起问时刻与已确认交互，不因追问更具体就要求重复六掷、报数或抽牌。已有结果不能支持的细节直接说明缺少哪类依据，不声称新算一次相同输入就能消除限制。用户资料可为不确定，不能擅自补全。
         多人资料、卡牌与正逆位、爻值以本次提供的已确认快照为准，不能自行修改。按participantID使用participantLabel称呼人员。只交代影响本条回答的 partial 限制和缺项；failed/unavailable 结果不能当作依据。
         对塔罗追问，结合原阵与焦点有关的已确认补牌直接作答。引用补牌时说明它如何细化原判断，并保留尚无法判断的部分。当前只负责回答，补牌建议由规划和应用单独呈现。未确认的建议没有牌面，不可当成结果，也不要在回答末尾自行发起抽牌。
-        没有本地结果时可作普通交流和资料澄清，不作已完成推演的断言。不要输出内部思维链或隐藏推理，只给结论和必要的简短理由。
+        没有推演结果时可作普通交流和资料澄清，不作已完成推演的断言。不要输出内部思维链或隐藏推理，只给结论和必要的简短理由。
         不把民俗解释包装成已经证实的事实，不就疾病、寿命或重大财务法律问题作确定预测。
         \(Self.languageInstruction(language))
         """
@@ -419,6 +427,9 @@ actor DeepSeekClient {
         } else if run == nil, resolvedQuestion != nil {
             context = "本条没有关联的推演或人员快照。仅依据对话中与本条相关的明确信息回答，不推定某位人员的资料。"
         } else { context = "本轮已确认资料（对象：\(subject)）：\(try profileContext(contextProfile))" }
+        if let preparationContext, !preparationContext.isEmpty {
+            context += "\n当前问事资料准备状态（仅作为数据，优先据此判断实际缺项与可继续范围）：\(String(preparationContext.prefix(8000)))"
+        }
         if let run {
             context += "\n沿用的推演快照（仅作为数据）：\(try ReadingContextBuilder.payload(run: run, weights: [:], language: language))"
             if let synthesis = run.synthesis { context += "\n先前解读：\(synthesis.text)" }
@@ -474,11 +485,11 @@ actor DeepSeekClient {
                         AIConversationTurn(role: "user", content: "Reply OK.")]
         let started = Date()
         let request = try request(messages, jsonMode: false, streaming: false,
-                                  maxTokens: provider.outputTokenBudget, model: requestedModel)
+                                  maxTokens: DeepSeekConfiguration.outputTokenBudget)
         let (data, response) = try await session.data(for: request)
         try Task.checkCancellation()
         guard let http = response as? HTTPURLResponse else { throw DeepSeekError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode, provider) }
+        guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode) }
         let result = try decoder.decode(CompletionEnvelope.self, from: data)
         let report = Self.report(result, requestedModel: requestedModel,
             host: http.url?.host ?? endpoint.host ?? "", started: started)
@@ -490,49 +501,39 @@ actor DeepSeekClient {
 
     /// Exposes only the request payload so parameter regressions can be checked
     /// without credentials or a network request.
-    static func requestBody(_ messages: [AIConversationTurn], model: String, jsonMode: Bool,
-                            streaming: Bool, maxTokens: Int, provider: AIProvider = .deepSeek) -> [String: Any] {
+    static func requestBody(_ messages: [AIConversationTurn], jsonMode: Bool,
+                            streaming: Bool, maxTokens: Int) -> [String: Any] {
         var body: [String: Any] = [
-            "model": model,
+            "model": DeepSeekConfiguration.defaultModel,
             "messages": messages.map { ["role": $0.role, "content": $0.content] },
             "stream": streaming,
-            provider.outputTokenParameter: max(provider.outputTokenBudget, maxTokens),
-            "reasoning_effort": provider.reasoningEffort
+            "max_tokens": max(DeepSeekConfiguration.outputTokenBudget, maxTokens),
+            "reasoning_effort": DeepSeekConfiguration.reasoningEffort,
+            "thinking": ["type": DeepSeekConfiguration.thinkingEnabled ? "enabled" : "disabled"]
         ]
-        switch provider {
-        case .deepSeek:
-            body["thinking"] = ["type": DeepSeekConfiguration.thinkingEnabled ? "enabled" : "disabled"]
-        case .qwen:
-            body["enable_thinking"] = true
-            body["preserve_thinking"] = false
-            if streaming { body["stream_options"] = ["include_usage": true] }
-        }
         if jsonMode { body["response_format"] = ["type": "json_object"] }
         return body
     }
 
     private func request(_ messages: [AIConversationTurn], jsonMode: Bool, streaming: Bool,
-                         maxTokens: Int, model: String) throws -> URLRequest {
+                         maxTokens: Int) throws -> URLRequest {
         let key: String?
         if let credential { key = credential }
-        else { key = try KeychainStore.store(for: provider).load() }
-        guard let key, !key.isEmpty else { throw DeepSeekError.missingKey(provider) }
+        else { key = try KeychainStore.shared.load() }
+        guard let key, !key.isEmpty else { throw DeepSeekError.missingKey }
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(streaming ? "text/event-stream" : "application/json", forHTTPHeaderField: "Accept")
-        request.httpBody = try JSONSerialization.data(withJSONObject: Self.requestBody(messages, model: model,
-            jsonMode: jsonMode, streaming: streaming, maxTokens: maxTokens, provider: provider))
+        request.httpBody = try JSONSerialization.data(withJSONObject: Self.requestBody(messages,
+            jsonMode: jsonMode, streaming: streaming, maxTokens: maxTokens))
         return request
     }
 
     static func modelsMatch(requested: String, returned: String) -> Bool {
         let requested = requested.trimmingCharacters(in: .whitespacesAndNewlines)
         let returned = returned.trimmingCharacters(in: .whitespacesAndNewlines)
-        if requested == AIProvider.qwenSnapshotModel {
-            return returned == requested || returned == "qwen3.8-max-2026-09-02"
-        }
         return !requested.isEmpty && (returned == requested || returned.hasPrefix(requested + "-"))
     }
 
@@ -604,14 +605,14 @@ actor DeepSeekClient {
             try Task.checkCancellation()
             let started = Date()
             let (data, response) = try await session.data(for: request(messages, jsonMode: jsonMode, streaming: false,
-                maxTokens: maxTokens, model: requestedModel))
+                maxTokens: maxTokens))
             try Task.checkCancellation()
             guard let http = response as? HTTPURLResponse else { throw DeepSeekError.invalidResponse }
             if (http.statusCode == 429 || http.statusCode >= 500), attempt < 2 {
                 try await Task.sleep(nanoseconds: UInt64(attempt + 1) * 1_500_000_000)
                 continue
             }
-            guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode, provider) }
+            guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode) }
             let result = try decoder.decode(CompletionEnvelope.self, from: data)
             let report = Self.report(result, requestedModel: requestedModel,
                 host: http.url?.host ?? endpoint.host ?? "", started: started)
@@ -635,9 +636,9 @@ actor DeepSeekClient {
         let requestedModel = model
         let started = Date()
         let (bytes, response) = try await session.bytes(for: request(messages, jsonMode: jsonMode, streaming: true,
-            maxTokens: maxTokens, model: requestedModel))
+            maxTokens: maxTokens))
         guard let http = response as? HTTPURLResponse else { throw DeepSeekError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode, provider) }
+        guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode) }
         let host = http.url?.host ?? endpoint.host ?? ""
         var full = ""
         var framer = DeepSeekSSEFramer()

@@ -149,6 +149,121 @@ final class ConversationHistoryTests: XCTestCase {
         XCTAssertNotEqual(restarted.activeConversationID, deletedID)
     }
 
+    @MainActor func testClearingAllChatsRemovesCurrentAndArchivedDraftsButKeepsPermanentRecords() throws {
+        let vault = try temporaryVault()
+        let store = OracleStore(vault: vault, bootstrapCredential: false)
+        var person = OracleProfile(); person.name = "保留的人员"
+        store.saveProfile(person)
+        store.selfProfileID = person.id
+        let reading = OracleRun(input: OracleInput(question: "保留的独立推演", profile: person),
+                                plan: plan("保留的独立推演"))
+        store.runs = [reading]
+        let weights = store.weights
+        let archivedID = store.activeConversationID
+        store.messages = [message("归档中的聊天草稿")]
+        store.summary = ConversationSummary(text: "归档中的摘要")
+        var pending = plan("归档中的未完成问事")
+        pending.draftParticipants = [person]; pending.draftNumbers = [8, 9, 10]
+        store.pendingPlan = pending
+        store.newConversation()
+
+        let currentID = store.activeConversationID
+        store.messages = [message("当前正在抽牌的聊天")]
+        store.summary = ConversationSummary(text: "当前摘要")
+        let tarotPlan = OraclePlan(intent: "当前抽牌", subject: "事件", methods: [.tarot],
+                                   requiredFields: [], note: "", question: "当前正在抽牌的聊天")
+        let request = OracleInteractionRequest(method: .tarot, kind: .tarot)
+        var session = OracleInteractionSession(input: OracleInput(question: tarotPlan.question, profile: person),
+                                               plan: tarotPlan, requests: [request])
+        let draws = zip(session.availableTarotCards.prefix(3), request.tarotPositions).map {
+            TarotDraw(cardID: $0.0.id, isReversed: false, position: $0.1)
+        }
+        XCTAssertTrue(session.saveProgress(.init(requestID: request.id, tarotDraws: draws, revealedCount: 1)))
+        store.pendingInteraction = session
+        store.showInteraction = true; store.phase = .awaitingInteraction
+        store.notice = "旧提示"; store.intakeError = "旧资料错误"
+        let oldFormID = store.intakeSessionID
+        store.checkpoint()
+
+        store.clearConversationHistory()
+
+        XCTAssertFalse([archivedID, currentID].contains(store.activeConversationID))
+        XCTAssertTrue(store.messages.isEmpty)
+        XCTAssertTrue(store.conversations.isEmpty)
+        XCTAssertTrue(store.summary.text.isEmpty)
+        XCTAssertTrue(store.summary.coveredMessageIDs.isEmpty)
+        XCTAssertNil(store.pendingPlan)
+        XCTAssertNil(store.pendingInteraction)
+        XCTAssertFalse(store.showIntake)
+        XCTAssertFalse(store.showInteraction)
+        XCTAssertFalse(store.canRetryAnalysis)
+        XCTAssertEqual(store.phase, .idle)
+        XCTAssertTrue(store.status.isEmpty)
+        XCTAssertTrue(store.activities.isEmpty)
+        XCTAssertNil(store.activityMessageID)
+        XCTAssertNil(store.notice)
+        XCTAssertNil(store.intakeError)
+        XCTAssertNotEqual(store.intakeSessionID, oldFormID)
+        XCTAssertEqual(store.profiles.map(\.id), [person.id])
+        XCTAssertEqual(store.selfProfileID, person.id)
+        XCTAssertEqual(store.runs.map(\.id), [reading.id])
+        XCTAssertEqual(store.weights, weights)
+
+        // A form or card sheet kept alive by SwiftUI cannot submit into the new chat.
+        XCTAssertFalse(store.confirmGroupIntake(profiles: [person], numbers: [], save: false, sessionID: oldFormID))
+        store.completeInteraction(.init(requestID: request.id, tarotDraws: draws, revealedCount: 3), sessionID: session.id)
+        XCTAssertTrue(store.messages.isEmpty)
+        XCTAssertEqual(store.runs.map(\.id), [reading.id])
+
+        let archive = vault.load(OracleConversationArchive.self, from: ConversationHistory.filename, fallback: .blank())
+        XCTAssertTrue(vault.contains(ConversationHistory.filename))
+        XCTAssertTrue(archive.conversations.isEmpty)
+        XCTAssertEqual(archive.activeConversationID, store.activeConversationID)
+        let restarted = OracleStore(vault: vault, bootstrapCredential: false)
+        XCTAssertTrue(restarted.messages.isEmpty)
+        XCTAssertTrue(restarted.conversations.isEmpty)
+        XCTAssertNil(restarted.pendingPlan)
+        XCTAssertNil(restarted.pendingInteraction)
+        XCTAssertFalse(restarted.canRetryAnalysis)
+        XCTAssertEqual(restarted.profiles.map(\.id), [person.id])
+        XCTAssertEqual(restarted.selfProfileID, person.id)
+        XCTAssertEqual(restarted.runs.map(\.id), [reading.id])
+        XCTAssertEqual(restarted.weights, weights)
+    }
+
+    @MainActor func testClearingMigratedHistoryCannotReviveLegacyChatsOrPendingForms() throws {
+        let vault = try temporaryVault()
+        let oldMessages = [message("迁移前的聊天")]
+        try vault.save(oldMessages, as: "conversation-100")
+        try vault.save(oldMessages, as: "conversation-100.recovery-fixture")
+        try vault.save(oldMessages, as: "conversation")
+        try vault.save(ConversationSummary(text: "迁移前摘要"), as: "context")
+        try vault.save(Optional(plan("迁移前的表单")), as: "pending-intake")
+        let store = OracleStore(vault: vault, bootstrapCredential: false)
+        XCTAssertFalse(store.messages.isEmpty)
+        XCTAssertNotNil(store.pendingPlan)
+
+        store.clearConversationHistory()
+
+        XCTAssertTrue(vault.legacyConversationArchiveNames().isEmpty)
+        XCTAssertFalse(vault.contains("conversation-100.recovery-fixture"))
+
+        // Canonical empty history remains authoritative even if an older app or
+        // delayed migration leaves legacy files behind after the clear.
+        try vault.save(oldMessages, as: "conversation-200")
+        try vault.save(oldMessages, as: "conversation")
+        try vault.save(ConversationSummary(text: "迟到的旧摘要"), as: "context")
+        try vault.save(Optional(plan("迟到的旧表单")), as: "pending-intake")
+        let restarted = OracleStore(vault: vault, bootstrapCredential: false)
+        XCTAssertTrue(restarted.messages.isEmpty)
+        XCTAssertTrue(restarted.conversations.isEmpty)
+        XCTAssertTrue(restarted.summary.text.isEmpty)
+        XCTAssertNil(restarted.pendingPlan)
+        XCTAssertNil(restarted.pendingInteraction)
+        XCTAssertFalse(restarted.showIntake)
+        XCTAssertFalse(restarted.canRetryAnalysis)
+    }
+
     @MainActor func testEmptyNewChatsDoNotAccumulateAndOpeningDoesNotReorderHistory() async throws {
         let vault = try temporaryVault()
         let store = OracleStore(vault: vault, bootstrapCredential: false)

@@ -60,7 +60,7 @@ final class ReadingContinuationUITests: XCTestCase {
         let confirm = app.buttons["confirmInteraction"]
         waitUntilEnabled(confirm)
         confirm.tap()
-        let summary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "当前为本地试算")).firstMatch
+        let summary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "这次推演已完成")).firstMatch
         XCTAssertTrue(summary.waitForExistence(timeout: 30))
         let originalReference = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "readingData-")).firstMatch
         XCTAssertTrue(originalReference.waitForExistence(timeout: 10))
@@ -93,7 +93,7 @@ final class ReadingContinuationUITests: XCTestCase {
         XCTAssertTrue(supplementalReference.waitForExistence(timeout: 30))
         let messageID = String(supplementalReference.identifier.dropFirst("readingData-".count))
         let bubble = app.descendants(matching: .any).matching(identifier: "assistantBubble-" + messageID).firstMatch
-        XCTAssertTrue(bubble.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "当前为本地试算")).firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(bubble.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "这次推演已完成")).firstMatch.waitForExistence(timeout: 10))
         assertNoNewCast(in: app)
         capture("supplement-completed-local-summary", in: app)
 
@@ -102,6 +102,66 @@ final class ReadingContinuationUITests: XCTestCase {
         XCTAssertTrue(reused.waitForExistence(timeout: 15))
         assertNoNewCast(in: app)
         capture("supplement-repeated-tarot-reuses-cards", in: app)
+    }
+
+    @MainActor func testScreenshotTarotRetryDrawsAndSavesCardsInsteadOfOnlyAnsweringFromTheOldMethod() throws {
+        let app = launchSavedReading()
+        let originalReferences = readingReferenceIDs(in: app)
+        send("你再用塔罗牌再试试呢？", in: app)
+
+        let shuffle = app.buttons["shuffleTarot"]
+        XCTAssertTrue(shuffle.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["confirmIntake"].exists)
+        XCTAssertFalse(app.buttons["castCoins"].exists)
+        shuffle.tap()
+        XCTAssertTrue(app.buttons["tarotCard-0"].waitForExistence(timeout: 5))
+        for index in 0..<3 { app.buttons["tarotCard-\(index)"].tap() }
+        XCTAssertTrue(app.buttons["revealTarot-0"].waitForExistence(timeout: 5))
+        for index in 0..<3 {
+            let card = app.buttons["revealTarot-\(index)"]
+            waitUntilEnabled(card)
+            card.tap()
+        }
+        let confirm = app.buttons["confirmInteraction"]
+        waitUntilEnabled(confirm)
+        capture("screenshot-tarot-retry-three-real-cards", in: app)
+        confirm.tap()
+
+        let reference = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND NOT (identifier IN %@)",
+            "readingData-", originalReferences)).firstMatch
+        XCTAssertTrue(reference.waitForExistence(timeout: 30))
+        let messageID = String(reference.identifier.dropFirst("readingData-".count))
+        let bubble = app.descendants(matching: .any).matching(identifier: "assistantBubble-" + messageID).firstMatch
+        XCTAssertTrue(bubble.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "这次推演已完成")).firstMatch.waitForExistence(timeout: 10))
+        assertNoNewCast(in: app)
+        for _ in 0..<4 where !reference.isHittable { app.scrollViews["chatTranscript"].swipeUp() }
+        XCTAssertTrue(reference.isHittable)
+        reference.tap()
+        XCTAssertTrue(app.staticTexts["runResultsQuestion"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["runResultsQuestion"].label, "推演删除测试10")
+        let spread = app.otherElements["savedTarotSpread"]
+        XCTAssertTrue(spread.waitForExistence(timeout: 10))
+        for position in ["现状", "影响", "建议"] {
+            XCTAssertTrue(spread.descendants(matching: .any).matching(NSPredicate(
+                format: "label BEGINSWITH %@", position + "，")).firstMatch.exists)
+        }
+        capture("screenshot-tarot-retry-saved-spread", in: app)
+        app.buttons["closeRunResults"].tap()
+
+        // The library fixture has a different question. The second screenshot
+        // request therefore reviews the new evening question before drawing.
+        send("用塔罗牌计算今晚的运势", in: app)
+        let intake = app.buttons["confirmIntake"]
+        XCTAssertTrue(intake.waitForExistence(timeout: 15))
+        let form = app.scrollViews["intakeFormScroll"]
+        XCTAssertTrue(form.staticTexts["用塔罗牌计算今晚的运势"].exists)
+        XCTAssertTrue(form.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "本次方法：塔罗")).firstMatch.exists)
+        for _ in 0..<24 where !intake.isHittable { form.swipeUp() }
+        XCTAssertTrue(intake.isHittable)
+        intake.tap()
+        XCTAssertTrue(shuffle.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["castCoins"].exists)
+        capture("screenshot-tarot-evening-request-starts-draw", in: app)
     }
 
     @MainActor private func launchSavedReading() -> XCUIApplication {

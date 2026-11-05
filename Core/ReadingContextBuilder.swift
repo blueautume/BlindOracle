@@ -13,6 +13,9 @@ enum ReadingContextBuilder {
         encoder.outputFormatting = [.sortedKeys]
         func json<T: Encodable>(_ value: T) throws -> String { String(decoding: try encoder.encode(value), as: UTF8.self) }
         let eligible = run.results.filter { $0.status == .complete || $0.status == .partial }
+        let confirmedTarot = TarotDeck.isValidInitialSpread(run.input.tarotDraws ?? []) && eligible.contains {
+            $0.method == .tarot && $0.status == .complete && $0.tarotDraws == run.input.tarotDraws
+        }
         let tarotRounds = run.input.tarotClarificationRounds ?? []
         let currentTarotFocus = tarotRounds.last.flatMap { round -> String? in
             if let question = round.request.question, run.plan.followUpQuestion != question { return nil }
@@ -26,6 +29,7 @@ enum ReadingContextBuilder {
         return """
         \(label("用户问题：", "Original question: "))\(run.input.question)
         \(label("本条补充问题（用户的实际追问或操作请求）：", "Actual follow-up or action request: "))\(followUp)\(understoodFollowUp.map { "\n" + label("结合对话理解的追问：", "Follow-up resolved from the conversation: ") + $0 } ?? "")
+        \(label("本轮塔罗初阵确认状态：", "Current initial Tarot spread state: "))\(confirmedTarot ? label("已确认3张有效初阵牌，抽牌和计算均已完成", "Three valid initial cards are confirmed; the draw and calculation are complete.") : label("没有已确认可用的塔罗初阵结果", "No confirmed usable initial Tarot result."))
         \(label("询问对象：", "Subject: "))\(run.input.subject)
         \(label("关系主题：", "Relationship: "))\(run.input.relationship ?? label("未指定", "Unspecified"))
         \(label("参与人员（本次已确认快照） json：", "Confirmed participants JSON: "))\(try json(run.input.readingParticipants))

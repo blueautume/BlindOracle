@@ -43,6 +43,95 @@ final class FormIntakeTests: XCTestCase {
         XCTAssertEqual(store.messages.filter { $0.kind == .intake }.count, 1)
     }
 
+    @MainActor func testEnglishCareerQuestionPrefillsTheConfirmationForm() async throws {
+        try await AppLanguage.$override.withValue(.english) {
+            let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
+            let question = "Please use BaZi to explore my career strengths and what kind of work would suit me best. My name is Alex Chen, and I’m male. I was born on June 15, 1995, at 9:30 a.m. in Shanghai, China."
+            store.send(question)
+            try await waitUntilIdle(store)
+
+            XCTAssertTrue(store.showIntake)
+            XCTAssertEqual(store.phase, .awaitingIntake)
+            XCTAssertEqual(store.pendingPlan?.question, question)
+            XCTAssertTrue(store.pendingPlan?.methods.contains(.bazi) == true)
+            XCTAssertEqual(store.intakeParticipants.count, 1)
+            let person = try XCTUnwrap(store.intakeParticipants.first)
+            XCTAssertEqual(person.resolvedName, "Alex Chen")
+            XCTAssertEqual(person.sex, "男")
+            XCTAssertEqual(person.birthDateText, "1995-06-15")
+            XCTAssertEqual(person.birthTimeText, "09:30")
+            XCTAssertTrue(person.birthTimeKnown)
+            XCTAssertEqual(person.birthPlace, "Shanghai")
+            XCTAssertEqual(person.birthTimeZoneID, "Asia/Shanghai")
+            let saved = try XCTUnwrap(store.profiles.first)
+            XCTAssertEqual(saved.birthTimeZoneID, "UTC", "Reading the form applies its default to a copy of the raw profile.")
+            XCTAssertTrue(saved.unknownFields.contains(.birthTimeZone))
+
+            let draft = ProfileFormDraft(profile: person)
+            XCTAssertTrue(draft.birthDateKnown)
+            XCTAssertEqual(draft.legacyUnsplitName, "Alex Chen")
+            XCTAssertEqual(draft.profile.birthPlace, "Shanghai")
+            XCTAssertFalse(draft.profile.unknownFields.contains(.birthDate))
+            XCTAssertFalse(draft.profile.unknownFields.contains(.birthTime))
+            XCTAssertFalse(draft.profile.unknownFields.contains(.birthPlace))
+            let calendar = Calendar(identifier: .gregorian)
+            let localParts = calendar.dateComponents(in: draft.birthZone, from: draft.birthDate)
+            XCTAssertEqual(localParts.year, 1995)
+            XCTAssertEqual(localParts.month, 6)
+            XCTAssertEqual(localParts.day, 15)
+            XCTAssertEqual(localParts.hour, 9)
+            XCTAssertEqual(localParts.minute, 30)
+            XCTAssertTrue(store.runs.isEmpty, "Prefilling still waits for the user to confirm the form.")
+        }
+    }
+
+    @MainActor func testEnglishDistrictAndClockMatrixPrefillsTheConfirmationForm() async throws {
+        try await AppLanguage.$override.withValue(.english) {
+            for scenario in EnglishDistrictBirthFixtures.scenarios {
+                let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
+                store.send(scenario.question)
+                try await waitUntilIdle(store)
+                XCTAssertTrue(store.showIntake, scenario.question)
+                XCTAssertEqual(store.phase, .awaitingIntake, scenario.question)
+                XCTAssertEqual(store.intakeParticipants.count, 1, scenario.question)
+                let profile = try XCTUnwrap(store.intakeParticipants.first, scenario.question)
+                XCTAssertEqual(profile.birthDateText, scenario.expectedDate, scenario.question)
+                XCTAssertEqual(profile.birthTimeText, scenario.expectedClock, scenario.question)
+                XCTAssertEqual(profile.birthPlace, scenario.canonicalPlace, scenario.question)
+                XCTAssertEqual(profile.birthDistrictCode, scenario.districtCode, scenario.question)
+                XCTAssertEqual(profile.birthTimeZoneID, "Asia/Shanghai", scenario.question)
+                XCTAssertTrue(profile.currentPlace.isEmpty, scenario.question)
+
+                let draft = ProfileFormDraft(profile: profile)
+                XCTAssertTrue(draft.birthDateKnown, scenario.question)
+                XCTAssertTrue(draft.profile.birthTimeKnown, scenario.question)
+                XCTAssertEqual(draft.profile.birthDistrictCode, scenario.districtCode, scenario.question)
+                let parts = Calendar(identifier: .gregorian).dateComponents(in: draft.birthZone, from: draft.birthDate)
+                let expectedDay = scenario.expectedDate.split(separator: "-").compactMap { Int($0) }
+                let expectedClock = scenario.expectedClock.split(separator: ":").compactMap { Int($0) }
+                XCTAssertEqual(parts.year, expectedDay[0], scenario.question)
+                XCTAssertEqual(parts.month, expectedDay[1], scenario.question)
+                XCTAssertEqual(parts.day, expectedDay[2], scenario.question)
+                XCTAssertEqual(parts.hour, expectedClock[0], scenario.question)
+                XCTAssertEqual(parts.minute, expectedClock[1], scenario.question)
+                XCTAssertEqual(parts.second, expectedClock.count > 2 ? expectedClock[2] : 0, scenario.question)
+                XCTAssertTrue(store.runs.isEmpty, "The populated form still waits for confirmation.")
+            }
+        }
+    }
+
+    @MainActor func testIntakePrefillPreservesAnExplicitNonDefaultZoneAndLocalClock() throws {
+        let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
+        var person = try person()
+        person = try XCTUnwrap(ProfileDirectory.applying([ProfileUpdate(id: person.id, birthTimeZoneID: "America/New_York")], to: [person]).profiles.first)
+        store.saveProfile(person)
+        store.pendingPlan = plan([.bazi], people: [person])
+        let candidate = try XCTUnwrap(store.intakeParticipants.first)
+        XCTAssertEqual(candidate.birthTimeZoneID, "America/New_York")
+        XCTAssertEqual(candidate.birthDateText, person.birthDateText)
+        XCTAssertEqual(candidate.birthTimeText, person.birthTimeText)
+    }
+
     @MainActor func testOneCompleteSubmissionStartsCalculationOnceWithoutASecondChatConfirmation() async throws {
         let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
         let person = try person()
@@ -140,7 +229,10 @@ final class FormIntakeTests: XCTestCase {
         store.pendingPlan = plan([.bazi], people: [person], strict: true)
         XCTAssertFalse(store.confirmGroupIntake(profiles: [person], numbers: [], save: false))
         XCTAssertEqual(store.runs.count, 1)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [person], numbers: [], save: false, useLocalFallback: true))
+        store.send("改用小六壬")
+        try await waitUntilIdle(store)
+        XCTAssertEqual(store.pendingPlan?.methods, [.xiaoliuren])
+        XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], save: false))
         try await waitUntilIdle(store)
         let explicit = try XCTUnwrap(store.runs.last)
         XCTAssertEqual(explicit.plan.methods, [.xiaoliuren])
@@ -148,7 +240,7 @@ final class FormIntakeTests: XCTestCase {
 
         let group = plan([.bazi], people: [person, OracleProfile()], strict: true)
         store.pendingPlan = group
-        XCTAssertFalse(store.confirmGroupIntake(profiles: [person], numbers: [], save: false, useLocalFallback: true))
+        XCTAssertFalse(store.confirmGroupIntake(profiles: [person], numbers: [], save: false))
         XCTAssertEqual(store.pendingPlan?.mandatoryMethods, [.bazi])
         XCTAssertEqual(store.pendingPlan?.draftParticipants?.map(\.id), [person.id])
     }

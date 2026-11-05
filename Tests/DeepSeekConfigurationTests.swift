@@ -20,71 +20,51 @@ final class DeepSeekConfigurationTests: XCTestCase {
         return defaults
     }
 
-    func testFreshInstallUsesPro() throws {
+    func testFreshInstallUsesFixedOnlineInterpretationSettings() throws {
         let defaults = try isolatedDefaults()
         XCTAssertEqual(DeepSeekConfiguration.model(in: defaults), "deepseek-v4-pro")
-        XCTAssertEqual(defaults.string(forKey: "deepseek.model"), "deepseek-v4-pro")
+        XCTAssertEqual(DeepSeekConfiguration.endpoint.absoluteString, "https://api.deepseek.com/chat/completions")
+        XCTAssertTrue(DeepSeekConfiguration.thinkingEnabled)
+        XCTAssertEqual(DeepSeekConfiguration.reasoningEffort, "max")
+        XCTAssertEqual(DeepSeekConfiguration.outputTokenBudget, 65_536)
+        XCTAssertNil(defaults.object(forKey: "deepseek.model"))
     }
 
-    func testRepeatedConnectionStatusReadsDoNotRewriteCompletedMigrations() throws {
+    func testRetiredModelAndProviderPreferencesCannotOverrideTheBuiltInService() throws {
+        for previous in ["deepseek-flash", "deepseek-v4-flash", "deepseek-chat", "custom-compatible-model", "  "] {
+            let defaults = try isolatedDefaults()
+            defaults.set(previous, forKey: "deepseek.model")
+            defaults.set(previous, forKey: "deepseek.model.explicit-selection")
+            defaults.set("qwen", forKey: "oracle.aiProvider")
+            defaults.set(true, forKey: "oracle.localOnly")
+            XCTAssertEqual(DeepSeekConfiguration.model(in: defaults), "deepseek-v4-pro", previous)
+        }
+    }
+
+    func testFixedModelReadsNeverWriteUserPreferences() throws {
         let suite = "DeepSeekConfigurationTests.reads." + UUID().uuidString
         let defaults = try XCTUnwrap(RecordingDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        XCTAssertEqual(DeepSeekConfiguration.model(in: defaults), DeepSeekConfiguration.defaultModel)
         let initialWrites = defaults.writes
         for _ in 0..<20 { XCTAssertEqual(DeepSeekConfiguration.model(in: defaults), DeepSeekConfiguration.defaultModel) }
         XCTAssertEqual(defaults.writes, initialWrites)
     }
 
-    func testPreviousShippedDefaultsMigrateToPro() throws {
-        for previous in ["deepseek-flash", "deepseek-v4-flash", "deepseek-chat", "  deepseek-flash\n", "  "] {
-            let defaults = try isolatedDefaults()
-            defaults.set(previous, forKey: "deepseek.model")
-            XCTAssertEqual(DeepSeekConfiguration.model(in: defaults), "deepseek-v4-pro", previous)
-        }
-    }
-
-    func testLegacyFlashRestoredWithOldMigrationFlagStillUpgradesToPro() throws {
+    func testMigrationRemovesRetiredControlsAndPreservesLanguageVoiceAndUnrelatedPreferences() throws {
         let defaults = try isolatedDefaults()
-        defaults.set(true, forKey: "deepseek.pro-default-migrated")
-        defaults.set("deepseek-v4-flash", forKey: "deepseek.model")
-        XCTAssertEqual(DeepSeekConfiguration.model(in: defaults), DeepSeekConfiguration.defaultModel)
-    }
-
-    func testKnownExplicitModelSelectionSurvivesQualityMigration() throws {
-        let defaults = try isolatedDefaults()
-        defaults.set(true, forKey: "deepseek.pro-default-migrated")
-        defaults.set("deepseek-v4-flash", forKey: "deepseek.model")
-        DeepSeekConfiguration.recordUserModelSelection("deepseek-v4-flash", in: defaults)
-        XCTAssertEqual(DeepSeekConfiguration.model(in: defaults), "deepseek-v4-flash")
-    }
-
-    func testRestoreRecommendedSettingsEnablesOnlineProWithoutRemovingOtherPreferences() throws {
-        let defaults = try isolatedDefaults()
-        defaults.set("deepseek-v4-flash", forKey: "deepseek.model")
-        defaults.set(true, forKey: "oracle.localOnly")
+        let retired = ["oracle.aiProvider", "oracle.localOnly", "deepseek.model", "deepseek.model.explicit-selection",
+                       "deepseek.pro-default-migrated", "deepseek.pro-quality-defaults-v2"]
+        for key in retired { defaults.set("retired-value", forKey: key) }
+        defaults.set("en", forKey: "oracle.appLanguage")
+        defaults.set("warm", forKey: "oracle.voiceStyle")
         defaults.set("keep", forKey: "unrelated.preference")
-        DeepSeekConfiguration.restoreRecommendedSettings(in: defaults)
-        XCTAssertEqual(DeepSeekConfiguration.model(in: defaults), "deepseek-v4-pro")
-        XCTAssertFalse(defaults.bool(forKey: "oracle.localOnly"))
-        XCTAssertEqual(defaults.string(forKey: "unrelated.preference"), "keep")
-    }
-
-    func testExplicitModelSelectedAfterMigrationIsPreserved() throws {
-        let defaults = try isolatedDefaults()
-        defaults.set("deepseek-flash", forKey: "deepseek.model")
-        XCTAssertEqual(DeepSeekConfiguration.model(in: defaults), "deepseek-v4-pro")
-        defaults.set("deepseek-v4-flash", forKey: "deepseek.model")
         DeepSeekConfiguration.migrateDefault(in: defaults)
-        XCTAssertEqual(DeepSeekConfiguration.model(in: defaults), "deepseek-v4-flash")
-    }
-
-    func testExistingCustomModelIsPreservedAndEmptySettingFallsBackToPro() throws {
-        let defaults = try isolatedDefaults()
-        defaults.set("  custom-compatible-model  ", forKey: "deepseek.model")
-        XCTAssertEqual(DeepSeekConfiguration.model(in: defaults), "custom-compatible-model")
-        defaults.set("\n ", forKey: "deepseek.model")
-        XCTAssertEqual(DeepSeekConfiguration.model(in: defaults), "deepseek-v4-pro")
+        for key in retired { XCTAssertNil(defaults.object(forKey: key), key) }
+        XCTAssertEqual(defaults.string(forKey: "oracle.appLanguage"), "en")
+        XCTAssertEqual(defaults.string(forKey: "oracle.voiceStyle"), "warm")
+        XCTAssertEqual(defaults.string(forKey: "unrelated.preference"), "keep")
+        DeepSeekConfiguration.migrateDefault(in: defaults)
+        XCTAssertEqual(DeepSeekConfiguration.model(in: defaults), DeepSeekConfiguration.defaultModel)
     }
 
     func testBundledCredentialTrimsFileWhitespaceAndRejectsEmptyOrMalformedValues() throws {

@@ -1,6 +1,81 @@
 import XCTest
 
 final class FormIntakeUITests: XCTestCase {
+    @MainActor func testEnglishCareerQuestionShowsPrefilledBirthDetails() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "-oracle.appLanguage", "en",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let input = app.textFields["questionInput"]
+        XCTAssertTrue(input.waitForExistence(timeout: 15))
+        input.tap()
+        input.typeText("Please use BaZi to explore my career strengths and what kind of work would suit me best. My name is Alex Chen, and I’m male. I was born on June 15, 1995, at 9:30 a.m. in Shanghai, China.")
+        app.buttons["sendQuestion"].tap()
+
+        XCTAssertTrue(app.scrollViews["intakeFormScroll"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.navigationBars["Reading details"].exists)
+        let savedName = element("legacyProfileName", in: app)
+        reveal(savedName, in: app)
+        let nameContents = ([savedName] + savedName.descendants(matching: .any).allElementsBoundByIndex)
+            .flatMap { [$0.label, $0.value as? String ?? ""] }.joined(separator: " ")
+        XCTAssertTrue(nameContents.contains("Alex Chen"))
+        let gender = element("profileGender", in: app)
+        reveal(gender, in: app)
+        XCTAssertEqual(gender.value as? String, "Male")
+
+        let birthDate = element("profileBirthDate", in: app)
+        reveal(birthDate, in: app)
+        XCTAssertEqual(birthDate.value as? String, "Jun 15, 1995")
+        let birthTime = element("profileBirthTime", in: app)
+        reveal(birthTime, in: app)
+        let clock = (birthTime.value as? String)?.filter { !$0.isWhitespace }.lowercased()
+        XCTAssertEqual(clock, "9:30am")
+        let birthplace = app.buttons["profileBirthPlace"]
+        reveal(birthplace, in: app)
+        XCTAssertEqual(birthplace.value as? String, "Shanghai")
+        capture("english-career-question-prefilled-birth-details", in: app)
+        XCTAssertFalse(app.buttons["castCoins"].exists)
+        XCTAssertFalse(app.buttons["shuffleTarot"].exists)
+    }
+
+    @MainActor func testEnglishDistrictAndClockCombinationsShowPrefilledBirthDetails() {
+        let scenarios = [
+            (date: "June 15, 1995", clock: "9:30 a.m.", place: "Xuhui District, Shanghai", dateValue: "Jun 15, 1995", clockValue: "9:30am", code: "310104"),
+            (date: "15 June 1995", clock: "8:45 PM", place: "Chaoyang District, Beijing", dateValue: "Jun 15, 1995", clockValue: "8:45pm", code: "110105"),
+            (date: "February 29, 2000", clock: "12 a.m.", place: "Tianhe District, Guangzhou, Guangdong", dateValue: "Feb 29, 2000", clockValue: "12:00am", code: "440106"),
+            (date: "Feb 29, 2000", clock: "23:59:30", place: "Chaoyang District, Changchun, Jilin", dateValue: "Feb 29, 2000", clockValue: "11:59pm", code: "220104")
+        ]
+        for scenario in scenarios {
+            XCTContext.runActivity(named: scenario.place + " · " + scenario.clock) { _ in
+                let app = XCUIApplication()
+                app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "-oracle.appLanguage", "en",
+                                       "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+                app.launch()
+                defer { app.terminate() }
+                let input = app.textFields["questionInput"]
+                XCTAssertTrue(input.waitForExistence(timeout: 15))
+                input.tap()
+                input.typeText("Please use BaZi to explore my career strengths. My name is Alex Chen, and I’m male. I was born on \(scenario.date), at \(scenario.clock) in \(scenario.place), China.")
+                app.buttons["sendQuestion"].tap()
+
+                XCTAssertTrue(app.scrollViews["intakeFormScroll"].waitForExistence(timeout: 15))
+                let birthDate = element("profileBirthDate", in: app)
+                reveal(birthDate, in: app)
+                XCTAssertEqual(birthDate.value as? String, scenario.dateValue)
+                let birthTime = element("profileBirthTime", in: app)
+                reveal(birthTime, in: app)
+                let clock = (birthTime.value as? String)?.filter { !$0.isWhitespace }.lowercased()
+                XCTAssertEqual(clock, scenario.clockValue)
+                let birthplace = app.buttons["profileBirthPlace"]
+                reveal(birthplace, in: app)
+                XCTAssertEqual(birthplace.value as? String, scenario.place)
+                capture("english-district-prefilled-" + scenario.code, in: app)
+                XCTAssertFalse(app.buttons["castCoins"].exists)
+                XCTAssertFalse(app.buttons["shuffleTarot"].exists)
+            }
+        }
+    }
+
     @MainActor func testNewEventQuestionOpensOneFormAndSingleConfirmationStartsCoins() {
         let app = launchFreshApp()
         send("明天是否适合出行？", in: app)
@@ -19,7 +94,7 @@ final class FormIntakeUITests: XCTestCase {
         XCTAssertTrue(app.buttons["castCoins"].waitForExistence(timeout: 15))
         XCTAssertFalse(form.exists)
         completeCoins(in: app)
-        let summary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "当前为本地试算")).firstMatch
+        let summary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "这次推演已完成")).firstMatch
         XCTAssertTrue(summary.waitForExistence(timeout: 30))
         XCTAssertEqual(app.sheets.count, 0)
     }
@@ -52,7 +127,7 @@ final class FormIntakeUITests: XCTestCase {
         let fallback = app.buttons["confirmIntakeWithLocalFallback"]
         reveal(fallback, in: app)
         fallback.tap()
-        let summary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "当前为本地试算")).firstMatch
+        let summary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "这次推演已完成")).firstMatch
         XCTAssertTrue(summary.waitForExistence(timeout: 30))
         XCTAssertTrue(form.waitForNonExistence(timeout: 5))
     }
@@ -124,7 +199,7 @@ final class FormIntakeUITests: XCTestCase {
         confirm.tap()
         XCTAssertTrue(app.buttons["castCoins"].waitForExistence(timeout: 15))
         completeCoins(in: app)
-        let summary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "当前为本地试算")).firstMatch
+        let summary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "这次推演已完成")).firstMatch
         XCTAssertTrue(summary.waitForExistence(timeout: 30))
     }
 

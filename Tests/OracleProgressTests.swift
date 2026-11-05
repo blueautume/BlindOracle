@@ -321,6 +321,100 @@ final class OracleProgressTests: XCTestCase {
         XCTAssertFalse(store.canRetryAnalysis)
     }
 
+    @MainActor func testClearingHistoryDuringAStreamRejectsLateOutputAndKeepsSavedReadings() async throws {
+        let token = UUID().uuidString
+        let partial = "This answer will be cleared."
+        let client = scriptedClient([.delayedTail(partial, " This old tail must never return.", 0.3, token),
+                                     .complete("A fresh conversation.")])
+        let vault = try temporaryVault()
+        let saved = savedReading(question: "保留的推演", evidence: "保留的计算结果", seed: 42)
+        let store = OracleStore(vault: vault, bootstrapCredential: false, aiClient: client)
+        store.runs = [saved]
+        store.send("Hello!")
+        try await waitUntil { store.messages.last?.content == partial }
+        let oldID = store.activeConversationID
+        XCTAssertTrue(store.isBusy)
+
+        store.clearConversationHistory()
+
+        XCTAssertFalse(store.isBusy)
+        XCTAssertFalse(store.canRetryAnalysis)
+        XCTAssertTrue(store.messages.isEmpty)
+        XCTAssertTrue(store.conversations.isEmpty)
+        XCTAssertTrue(store.activities.isEmpty)
+        XCTAssertNil(store.pendingPlan)
+        XCTAssertNil(store.pendingInteraction)
+        XCTAssertNotEqual(store.activeConversationID, oldID)
+        XCTAssertEqual(store.runs.map(\.id), [saved.id])
+
+        store.send("Hi!")
+        try await waitUntil { !store.isBusy }
+        try await waitUntil { AnalysisURLProtocol.didDeliverDelayedResponse(token) }
+        XCTAssertEqual(store.messages.filter { $0.role == .user }.map(\.content), ["Hi!"])
+        XCTAssertEqual(store.messages.last?.content, "A fresh conversation.")
+        XCTAssertFalse(store.messages.contains { $0.content.contains("old tail") || $0.content == partial })
+        XCTAssertFalse(store.conversations.contains { $0.id == oldID })
+        XCTAssertFalse(store.canRetryAnalysis)
+
+        let restored = OracleStore(vault: vault, bootstrapCredential: false, aiClient: client)
+        XCTAssertEqual(restored.messages.map(\.content), store.messages.map(\.content))
+        XCTAssertFalse(restored.conversations.contains { $0.id == oldID })
+        XCTAssertEqual(restored.runs.map(\.id), [saved.id])
+        XCTAssertFalse(restored.canRetryAnalysis)
+    }
+
+    @MainActor func testClearingHistoryDuringPlanningRejectsALateIntakeAndAllowsANewChat() async throws {
+        let token = UUID().uuidString
+        let proposal = #"{"action":"intake","intent":"旧问题","subject":"本人","methods":["bazi"],"requiredFields":["birthDate"],"note":"不应出现的旧表单"}"#
+        let client = scriptedClient([.delayedPlan(proposal, 0.3, token), .complete("The new chat is ready.")])
+        let vault = try temporaryVault()
+        let store = OracleStore(vault: vault, bootstrapCredential: false, aiClient: client)
+        store.send("只用八字看看今年工作的方向")
+        try await waitUntil { AnalysisURLProtocol.didStartDelayedResponse(token) }
+        XCTAssertTrue(store.isBusy)
+
+        store.clearConversationHistory()
+        store.send("Hello!")
+        try await waitUntil { !store.isBusy }
+        try await waitUntil { AnalysisURLProtocol.didDeliverDelayedResponse(token) }
+
+        XCTAssertNil(store.pendingPlan)
+        XCTAssertNil(store.pendingInteraction)
+        XCTAssertFalse(store.showIntake)
+        XCTAssertFalse(store.showInteraction)
+        XCTAssertFalse(store.canRetryAnalysis)
+        XCTAssertEqual(store.messages.filter { $0.role == .user }.map(\.content), ["Hello!"])
+        XCTAssertEqual(store.messages.last?.content, "The new chat is ready.")
+        XCTAssertTrue(store.runs.isEmpty)
+        let restored = OracleStore(vault: vault, bootstrapCredential: false, aiClient: client)
+        XCTAssertNil(restored.pendingPlan)
+        XCTAssertEqual(restored.messages.map(\.content), store.messages.map(\.content))
+    }
+
+    @MainActor func testNetworkFailureNeverBecomesALocalReadingWhenAnOldLocalPreferenceIsSet() async throws {
+        let defaults = UserDefaults.standard
+        let previous = defaults.object(forKey: "oracle.localOnly")
+        defaults.set(true, forKey: "oracle.localOnly")
+        defer {
+            if let previous { defaults.set(previous, forKey: "oracle.localOnly") }
+            else { defaults.removeObject(forKey: "oracle.localOnly") }
+        }
+        let client = scriptedClient([.networkError])
+        let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false, aiClient: client)
+        let run = savedReading(question: "今晚的安排", evidence: "已完成的本地计算", seed: 42)
+        store.runs = [run]
+
+        store.retrySynthesis(run)
+        try await waitUntil { !store.isBusy }
+
+        XCTAssertNil(store.runs.first?.synthesis)
+        XCTAssertTrue(store.canRetryAnalysis)
+        XCTAssertNotNil(store.notice)
+        XCTAssertEqual(store.runs.first?.results.map(\.id), run.results.map(\.id))
+        XCTAssertFalse(store.messages.contains { $0.content.contains("当前为本地试算") || $0.content.contains("这次推演已完成。") })
+        XCTAssertTrue(store.activities.contains { $0.status == .failed })
+    }
+
     @MainActor func testRetryAfterTruncatedReadingReusesTheSavedRun() async throws {
         let partial = "Confirm the schedule first."
         let completed = "Confirm the schedule first. Then allow extra time."
@@ -570,6 +664,117 @@ final class OracleProgressTests: XCTestCase {
         XCTAssertTrue(store.messages.contains { $0.role == .user && $0.content == raw })
     }
 
+    @MainActor func testExplicitMethodsOverrideAPlannerReplyOrUnrelatedIntake() async throws {
+        let cases: [(OracleMethod, String)] = [
+            (.tarot, "用塔罗牌计算今晚的运势"), (.liuyao, "再用六爻再试试呢？"),
+            (.meihua, "再用梅花易数分析一下"), (.qimen, "再用奇门遁甲计算一下"),
+            (.xiaoliuren, "再用小六壬试试看"), (.bazi, "再用八字分析一下"),
+            (.ziwei, "再用紫微斗数试试"), (.chenggu, "再用称骨计算一下"),
+            (.xingming, "再用姓名五格分析一下"), (.astrology, "再用西方占星试试")
+        ]
+        for action in ["reply", "intake"] {
+            for (method, raw) in cases {
+                var original = savedReading(question: "今晚的运势如何？", evidence: "原推演", seed: 41)
+                if method != .meihua {
+                    original.plan.methods = [.meihua]
+                    original.results[0].method = .meihua
+                }
+                let question = ChatMessage(role: .user, content: original.input.question)
+                let reading = ChatMessage(role: .assistant, content: "先确认安排。", kind: .reading, runID: original.id)
+                let expanded = "用指定方法分析今晚的运势。"
+                var proposal = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(
+                    contextualIntake(anchoredTo: reading, expanded: expanded, relation: .continuation).utf8)) as? [String: Any])
+                proposal["action"] = action
+                proposal["methods"] = action == "reply" ? [] : original.plan.methods.map(\.rawValue) + ["bazi"]
+                let body = String(decoding: try JSONSerialization.data(withJSONObject: proposal), as: UTF8.self)
+                let client = scriptedClient([.plan(body, requiringReference: reading.id),
+                                             .complete(#"{"text":"新方法已完成。","alternatives":[]}"#)])
+                let store = try routedStore(conversation: OracleConversation(messages: [question, reading]),
+                                            runs: [original], client: client, vault: temporaryVault())
+                defer { if store.isBusy { store.stop() } }
+
+                store.send(raw)
+                try await waitUntil { !store.isBusy }
+
+                let label = "\(action): \(raw)"
+                if method == .tarot || method == .liuyao {
+                    let session = try XCTUnwrap(store.pendingInteraction, label)
+                    XCTAssertEqual(session.currentRequest?.method, method, label)
+                    XCTAssertEqual(session.plan.baseRunID, original.id, label)
+                    XCTAssertTrue(session.plan.mandatoryMethods?.contains(method) == true, label)
+                    XCTAssertEqual(Set(session.plan.methods), Set(original.plan.methods + [method]), label)
+                    if method == .tarot {
+                        let request = try XCTUnwrap(session.currentRequest)
+                        let draws = zip(["major-00", "cups-01", "swords-14"], request.tarotPositions).map {
+                            TarotDraw(cardID: $0.0, isReversed: false, position: $0.1)
+                        }
+                        store.completeInteraction(.init(requestID: request.id, tarotDraws: draws, revealedCount: draws.count), sessionID: session.id)
+                        try await waitUntil { !store.isBusy }
+                        XCTAssertEqual(store.runs.last?.results.first { $0.method == .tarot }?.tarotDraws, draws, label)
+                        XCTAssertEqual(store.runs.last?.synthesis?.text, "新方法已完成。", label)
+                    }
+                } else if method.usesPersonalProfile {
+                    let pending = try XCTUnwrap(store.pendingPlan, label)
+                    XCTAssertTrue(pending.methods.contains(method), label)
+                    XCTAssertTrue(pending.mandatoryMethods?.contains(method) == true, label)
+                    XCTAssertEqual(Set(pending.methods), Set(original.plan.methods + [method]), label)
+                    XCTAssertTrue(store.showIntake, label)
+                    XCTAssertFalse(store.canConfirmIntake, label)
+                } else {
+                    let calculated = try XCTUnwrap(store.runs.last, label)
+                    XCTAssertNotEqual(calculated.id, original.id, label)
+                    XCTAssertEqual(Set(calculated.plan.methods), Set(original.plan.methods + [method]), label)
+                    XCTAssertTrue(calculated.results.contains { $0.method == method && [.complete, .partial].contains($0.status) }, label)
+                    XCTAssertEqual(calculated.synthesis?.text, "新方法已完成。", label)
+                }
+                XCTAssertEqual(store.runs.first?.results.map(\.id), original.results.map(\.id), label)
+            }
+        }
+    }
+
+    @MainActor func testExplicitTarotRequestStartsIntakeWhenPlannerRepliesToATextOnlyOrNewTopic() async throws {
+        for relation in [ConversationUnderstanding.Relation.continuation, .newQuestion] {
+            for raw in ["用塔罗牌计算今晚的运势", "改用塔罗"] {
+                let previous = ChatMessage(role: .user, content: "今晚的运势如何？")
+                var proposal = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(
+                    contextualIntake(anchoredTo: previous, expanded: raw, relation: relation).utf8)) as? [String: Any])
+                proposal["action"] = "reply"
+                proposal["methods"] = []
+                let body = String(decoding: try JSONSerialization.data(withJSONObject: proposal), as: UTF8.self)
+                let client = scriptedClient([.plan(body)])
+                let store = try routedStore(conversation: OracleConversation(messages: [previous]), runs: [],
+                                            client: client, vault: temporaryVault())
+
+                store.send(raw)
+                try await waitUntil { !store.isBusy }
+
+                let pending = try XCTUnwrap(store.pendingPlan)
+                XCTAssertEqual(pending.methods, [.tarot])
+                XCTAssertEqual(pending.mandatoryMethods, [.tarot])
+                XCTAssertTrue(store.showIntake)
+                XCTAssertNil(pending.baseRunID)
+                XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], save: false))
+                XCTAssertEqual(store.pendingInteraction?.currentRequest?.kind, .tarot)
+            }
+        }
+    }
+
+    @MainActor func testEnglishNewQuestionKeepsTheOnlyRequestedMethodWhenPlannerAddsAnother() async throws {
+        let raw = "New question: use only Tarot to examine tonight's plans."
+        let proposal = #"{"action":"intake","intent":"Tonight","subject":"事件","methods":["tarot","bazi"],"requiredFields":[],"note":"Review details","understanding":{"relation":"newQuestion","resolvedQuestion":"New question: use only Tarot to examine tonight's plans."}}"#
+        let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false,
+                                aiClient: scriptedClient([.plan(proposal)]))
+
+        store.send(raw)
+        try await waitUntil { !store.isBusy }
+
+        XCTAssertEqual(store.pendingPlan?.methods, [.tarot])
+        XCTAssertEqual(store.pendingPlan?.mandatoryMethods, [.tarot])
+        XCTAssertTrue(store.intakeParticipants.isEmpty)
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertEqual(store.pendingInteraction?.currentRequest?.kind, .tarot)
+    }
+
     @MainActor func testBackgroundExpirationPersistsFollowUpRetryAcrossRelaunch() async throws {
         let partial = "I can help."
         let completed = "I can help. What are you working on?"
@@ -658,6 +863,8 @@ final class OracleProgressTests: XCTestCase {
 private final class AnalysisURLProtocol: URLProtocol, @unchecked Sendable {
     enum Response {
         case hold(String)
+        case delayedTail(String, String, TimeInterval, String)
+        case delayedPlan(String, TimeInterval, String)
         case truncate(String)
         case complete(String)
         case checkedReply(String, questionIncludes: [String], priorTurn: String, includesEvidence: String?, excludesEvidence: String,
@@ -668,6 +875,16 @@ private final class AnalysisURLProtocol: URLProtocol, @unchecked Sendable {
 
     private static let lock = NSLock()
     private static var scripts: [String: [Response]] = [:]
+    private static var startedDelayedResponses: Set<String> = []
+    private static var deliveredDelayedResponses: Set<String> = []
+
+    static func didStartDelayedResponse(_ token: String) -> Bool {
+        lock.withLock { startedDelayedResponses.contains(token) }
+    }
+
+    static func didDeliverDelayedResponse(_ token: String) -> Bool {
+        lock.withLock { deliveredDelayedResponses.contains(token) }
+    }
 
     static func install(_ responses: [Response], for key: String) {
         lock.withLock { scripts["Bearer " + key] = responses }
@@ -691,6 +908,24 @@ private final class AnalysisURLProtocol: URLProtocol, @unchecked Sendable {
             return
         }
         switch response {
+        case .delayedTail(let initial, let tail, let delay, let token):
+            sendStream(initial, hold: true, complete: false)
+            Self.lock.withLock { _ = Self.startedDelayedResponses.insert(token) }
+            DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [self] in
+                let body = ["choices": [["delta": ["content": tail]]]]
+                if let bytes = try? JSONSerialization.data(withJSONObject: body) {
+                    client?.urlProtocol(self, didLoad: Data(("data: " + String(decoding: bytes, as: UTF8.self) + "\n\ndata: [DONE]\n\n").utf8))
+                    client?.urlProtocolDidFinishLoading(self)
+                }
+                Self.lock.withLock { _ = Self.deliveredDelayedResponses.insert(token) }
+            }
+        case .delayedPlan(let content, let delay, let token):
+            Self.lock.withLock { _ = Self.startedDelayedResponses.insert(token) }
+            DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [self] in
+                let body: [String: Any] = ["choices": [["message": ["content": content], "finish_reason": "stop"]]]
+                if sendJSON(body, contentType: "application/json") { client?.urlProtocolDidFinishLoading(self) }
+                Self.lock.withLock { _ = Self.deliveredDelayedResponses.insert(token) }
+            }
         case .networkError:
             client?.urlProtocol(self, didFailWithError: URLError(.networkConnectionLost))
         case .plan(let content, let requiringReference, let excludingReference):

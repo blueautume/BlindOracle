@@ -10,7 +10,7 @@ struct GroupIntakeView: View {
 
     let plan: OraclePlan
     let onDraftChange: (([OracleProfile], [Int]) -> Void)?
-    let onConfirm: ([OracleProfile], [Int], Bool, Bool) -> Bool
+    let onConfirm: ([OracleProfile], [Int], Bool) -> Bool
     @EnvironmentObject private var store: OracleStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -24,7 +24,7 @@ struct GroupIntakeView: View {
 
     init(plan: OraclePlan, profiles: [OracleProfile], numbers: [Int] = [],
          onDraftChange: (([OracleProfile], [Int]) -> Void)? = nil,
-         onConfirm: @escaping ([OracleProfile], [Int], Bool, Bool) -> Bool) {
+         onConfirm: @escaping ([OracleProfile], [Int], Bool) -> Bool) {
         self.plan = plan; self.onDraftChange = onDraftChange; self.onConfirm = onConfirm
         var values: [UUID: ProfileFormDraft] = [:]
         var ids: [UUID] = []
@@ -49,9 +49,6 @@ struct GroupIntakeView: View {
     private var report: ReadingPreparationReport {
         let participants = selectedProfiles.map(ProfileDirectory.assigningDefaultBirthTimeZone(to:))
         return ReadingPreparationPolicy.evaluate(plan: plan, participants: participants, descriptors: store.registry.descriptors)
-    }
-    private var offersLocalFallback: Bool {
-        report.blockedMandatoryMethods.contains(where: \.usesPersonalProfile) && store.registry.plugin(.xiaoliuren) != nil
     }
     private var requestsNumbers: Bool {
         plan.methods.contains(.meihua) && (plan.requiredFields.contains(.numbers) || (plan.interactions ?? []).contains { $0.kind == .numbers })
@@ -95,13 +92,6 @@ struct GroupIntakeView: View {
                             HStack { Text(L10n.text("确认资料并开始", "Confirm and begin")); Image(systemName: "arrow.right") }
                         }.buttonStyle(InkPrimaryButton()).accessibilityIdentifier("confirmIntake")
                             .disabled(store.isBusy)
-                        if offersLocalFallback {
-                            Button(L10n.text("改用小六壬", "Use Xiao Liu Ren instead")) { confirm(useLocalFallback: true) }
-                                .font(.system(size: 14, design: .serif)).tint(InkTheme.cinnabar)
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                                .disabled(store.isBusy)
-                                .accessibilityIdentifier("confirmIntakeWithLocalFallback")
-                        }
                         Text(L10n.text("每人的资料分别保存、分别推演。确认后，抽牌或投掷会接着进行。", "Each person’s details are saved and used separately. After you confirm, you can draw cards or cast if needed."))
                             .font(.system(size: 10)).lineSpacing(4).foregroundStyle(InkTheme.secondary)
                     }.padding(24).frame(maxWidth: 760).frame(maxWidth: .infinity)
@@ -109,6 +99,14 @@ struct GroupIntakeView: View {
             }
             .navigationTitle(L10n.text("问事资料", "Reading details")).navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.text("取消本次问事", "Cancel reading"), role: .cancel) {
+                        submitted = true
+                        store.cancelPendingReading()
+                        dismiss()
+                    }.font(.system(size: 13)).foregroundStyle(InkTheme.secondary)
+                        .accessibilityIdentifier("cancelPendingIntake")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(L10n.text("稍后填写", "Finish later")) { saveUnsubmittedDraft(); dismiss() }.font(.system(size: 13)).foregroundStyle(InkTheme.secondary)
                         .accessibilityIdentifier("cancelIntake")
@@ -149,7 +147,8 @@ struct GroupIntakeView: View {
             VStack(alignment: .leading, spacing: 13) {
                 SectionEyebrow(text: L10n.text("此次所问", "Your question"))
                 Text(plan.question).font(.system(size: 19, design: .serif)).lineSpacing(7).foregroundStyle(InkTheme.ink)
-                Text(L10n.text("填写已知的资料，其余可以留空。", "Enter what you know. You can leave the rest blank."))
+                    .accessibilityIdentifier("intakeQuestion")
+                Text(L10n.text("填写已知资料；所选方法缺少必要信息时，会在下方说明。", "Enter what you know. Missing details required by the selected methods are listed below."))
                     .font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.secondary).lineSpacing(4)
                 let methods = OracleMethod.allCases.filter { plan.methods.contains($0) }.map(\.progressName)
                     .joined(separator: L10n.text("、", ", "))
@@ -205,7 +204,7 @@ struct GroupIntakeView: View {
                             .accessibilityLabel(L10n.text("移除\(title(drafts[id]?.profile))", "Remove \(title(drafts[id]?.profile))"))
                             .accessibilityIdentifier("removeParticipant-\(id.uuidString)")
                     }
-                    ProfileFieldsView(draft: binding(for: id))
+                    ProfileFieldsView(draft: binding(for: id), genderRequired: plan.methods.contains(.ziwei))
                 }.accessibilityElement(children: .contain).accessibilityIdentifier("participantForm-\(id.uuidString)")
             }
         }.accessibilityElement(children: .contain).accessibilityIdentifier("selectedParticipants")
@@ -290,10 +289,10 @@ struct GroupIntakeView: View {
         }
     }
 
-    private func confirm(useLocalFallback: Bool = false) {
+    private func confirm() {
         var people: [OracleProfile] = []
         var errors: [String] = []
-        let requiredCount = useLocalFallback && plan.subject != "多人" ? 0 : minimumCount
+        let requiredCount = minimumCount
         if selectedIDs.count < requiredCount {
             errors.append(requiredCount > 1 ? L10n.text("请选好至少两位人员。", "Choose at least two people.") : L10n.text("请选择或新增这次要看的人员。", "Choose or add a person for this reading."))
         }
@@ -306,11 +305,11 @@ struct GroupIntakeView: View {
             catch { errors.append(title(draft.profile) + L10n.text("：", ": ") + error.localizedDescription) }
         }
         let numbers = draftNumbers
-        if !useLocalFallback, requestsNumbers && (numbers.count != 3 || !numbers.allSatisfy { (1...999).contains($0) }) {
+        if requestsNumbers && (numbers.count != 3 || !numbers.allSatisfy { (1...999).contains($0) }) {
             errors.append(L10n.text("请填写三个1到999的整数。", "Enter three whole numbers from 1 to 999."))
         }
         let review = ReadingPreparationPolicy.evaluate(plan: plan, participants: people, descriptors: store.registry.descriptors)
-        if !useLocalFallback, !review.canProceed {
+        if !review.canProceed {
             let blocked = review.assessments.filter { (plan.mandatoryMethods ?? []).contains($0.method) && !$0.canExecute }
             errors += blocked.map { assessment in
                 let reasons = assessment.blocking.map(\.reason) + [assessment.unavailableReason].compactMap { $0 }
@@ -321,7 +320,7 @@ struct GroupIntakeView: View {
         }
         guard errors.isEmpty else { error = errors.joined(separator: "\n"); return }
         error = nil
-        if onConfirm(people, requestsNumbers && !useLocalFallback ? numbers : [], keepProfiles, useLocalFallback) {
+        if onConfirm(people, requestsNumbers ? numbers : [], keepProfiles) {
             submitted = true
         } else {
             error = store.intakeError ?? L10n.text("资料尚未确认，请核对后再试。", "Couldn’t confirm the details. Review them and try again.")

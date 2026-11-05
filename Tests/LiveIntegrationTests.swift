@@ -1,22 +1,20 @@
 import XCTest
 @testable import BlindOracle
 
-/// Opt in using BLINDORACLE_LIVE_SMOKE=1 or BLINDORACLE_LIVE_QWEN_SMOKE=1.
+/// Opt in using BLINDORACLE_LIVE_SMOKE=1.
 /// These requests use synthetic fixture data.
 final class LiveIntegrationTests: XCTestCase {
-    private func liveClient(provider: AIProvider = .deepSeek) throws -> DeepSeekClient {
-        let optIn = provider == .qwen ? "BLINDORACLE_LIVE_QWEN_SMOKE" : "BLINDORACLE_LIVE_SMOKE"
-        guard ProcessInfo.processInfo.environment[optIn] == "1" else { throw XCTSkip("Live API smoke is opt-in") }
-        // Unsigned simulator hosts cannot always access the keychain. The
-        // ignored bundled fixture is read in memory and never logged.
-        let resource = provider == .qwen ? "qwen-key" : "dev-key"
-        let bundled = Bundle.main.url(forResource: resource, withExtension: "txt")
+    private func liveClient() throws -> DeepSeekClient {
+        guard ProcessInfo.processInfo.environment["BLINDORACLE_LIVE_SMOKE"] == "1" else {
+            throw XCTSkip("Live API smoke is opt-in")
+        }
+        // Read the ignored bundled fixture in memory; never log credentials.
+        let bundled = Bundle.main.url(forResource: "dev-key", withExtension: "txt")
             .flatMap { try? String(contentsOf: $0, encoding: .utf8) }
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        let stored = KeychainStore.store(for: provider).string()
-        let key = provider == .qwen ? bundled ?? stored : stored ?? bundled
+        let key = KeychainStore.shared.string() ?? bundled
         guard let key, !key.isEmpty else { throw XCTSkip("Development key unavailable") }
-        return DeepSeekClient(provider: provider, apiKey: key)
+        return DeepSeekClient(apiKey: key)
     }
 
     @MainActor func testMissingChinaDistrictUsesDeepSeekAndAppleGeocoding() async throws {
@@ -60,31 +58,98 @@ final class LiveIntegrationTests: XCTestCase {
     }
 
     func testTarotInteractivePlanAndChineseReadingWithPro() async throws {
-        try await assertLiveTarotPlanAndReading(provider: .deepSeek)
+        try await assertLiveTarotPlanAndReading()
     }
 
-    func testTarotInteractivePlanAndChineseReadingWithQwen() async throws {
-        try await assertLiveTarotPlanAndReading(provider: .qwen)
+
+    @MainActor func testScreenshotTarotActivationAfterMeihuaWithDeepSeek() async throws {
+        try await assertLiveScreenshotTarotActivationAfterMeihua()
+    }
+
+
+    @MainActor private func assertLiveScreenshotTarotActivationAfterMeihua() async throws {
+        let client = try liveClient()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("live-tarot-activation-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = LocalVault(directory: directory)
+        var profile = OracleProfile(); profile.currentTimeZoneID = "Asia/Shanghai"
+        let originalQuestion = "这是虚构的功能测试。今晚打算进入线上语聊房与朋友短聊，请用梅花易数看今晚的运势和参与时的注意事项。"
+        let plan = OraclePlan(intent: "今晚的安排", subject: "事件", methods: [.meihua],
+            requiredFields: [], note: "", question: originalQuestion)
+        let input = OracleInput(question: originalQuestion, profile: profile, castingDate: Date(), seed: 73,
+            subject: "事件", participants: [])
+        let meihua = try await MeihuaPlugin().calculate(input)
+        XCTAssertTrue([.complete, .partial].contains(meihua.status))
+        XCTAssertFalse(meihua.rows.isEmpty)
+        var original = OracleRun(input: input, plan: plan, results: [meihua])
+        original.synthesis = ReadingSynthesis(text: "现有梅花盘可供安排今晚的交流作参考，先交代交流目的，再决定停留多久。", alternatives: [])
+        original.completedAt = input.castingDate
+        let conversation = OracleConversation(messages: [ChatMessage(role: .user, content: originalQuestion),
+            ChatMessage(role: .assistant, content: original.synthesis!.text, kind: .reading, runID: original.id)])
+        try vault.save([original], as: "readings")
+        try vault.save(OracleConversationArchive(activeConversationID: conversation.id, conversations: [conversation]),
+            as: ConversationHistory.filename)
+        let store = OracleStore(vault: vault, bootstrapCredential: false, aiClient: client)
+        defer { if store.isBusy { store.stop() } }
+        XCTAssertTrue(store.hasCredential)
+
+        let planningStarted = Date()
+        store.send("用塔罗牌计算今晚的运势")
+        try await waitForLiveTarot(store, stage: "DeepSeek screenshot Tarot activation")
+        let planningReport = await client.lastSuccessfulConnection
+        assertLiveResponse(planningReport)
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(planningReport?.checkedAt), planningStarted)
+        XCTAssertNil(store.notice)
+        XCTAssertEqual(store.runs.map(\.id), [original.id], "The missing Tarot spread must be drawn before interpretation")
+        if let pending = store.pendingPlan {
+            XCTAssertTrue(pending.methods.contains(.tarot))
+            XCTAssertTrue(Set(pending.methods).isSubset(of: [.meihua, .tarot]))
+            XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false,
+                sessionID: store.intakeSessionID))
+            try await waitForLiveTarot(store, stage: "DeepSeek screenshot Tarot intake")
+        }
+        let session = try XCTUnwrap(store.pendingInteraction, "The screenshot request must activate Tarot instead of only replying from Meihua")
+        XCTAssertEqual(session.requests.map(\.kind), [.tarot])
+        XCTAssertEqual(session.currentRequest?.tarotPositions, TarotDeck.positions)
+        XCTAssertNil(session.input.tarotDraws)
+        let synthesisStarted = Date()
+        let draws = try confirmLiveTarotCards(["cups-02", "pentacles-06", "swords-04"], in: store)
+        try await waitForLiveTarot(store, stage: "DeepSeek screenshot Tarot synthesis")
+
+        let run = try XCTUnwrap(store.latestRun)
+        XCTAssertNotEqual(run.id, original.id)
+        let tarot = try XCTUnwrap(run.results.first { $0.method == .tarot })
+        XCTAssertEqual(tarot.status, .complete)
+        XCTAssertEqual(tarot.tarotDraws, draws)
+        XCTAssertEqual(run.input.tarotDraws, draws)
+        XCTAssertEqual(tarot.evidence.count, 3)
+        let synthesis = try XCTUnwrap(run.synthesis, "The activated Tarot reading must finish its real provider synthesis")
+        XCTAssertFalse(synthesis.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        XCTAssertEqual(store.messages.last?.runID, run.id)
+        XCTAssertEqual(store.messages.last?.content, synthesis.text)
+        XCTAssertEqual(store.runs.first?.results.map(\.id), [meihua.id])
+        XCTAssertEqual(store.runs.first?.results.first?.rows, meihua.rows)
+        XCTAssertNil(store.pendingPlan)
+        XCTAssertNil(store.pendingInteraction)
+        XCTAssertNil(store.notice)
+        let synthesisReport = await client.lastSuccessfulConnection
+        assertLiveResponse(synthesisReport)
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(synthesisReport?.checkedAt), synthesisStarted)
+        recordJourneyText(synthesis.text, stage: "DeepSeek screenshot Tarot activation after Meihua")
     }
 
     @MainActor func testReadingVoiceMatrixWithDeepSeek() async throws {
-        try await assertLiveReadingVoiceMatrix(provider: .deepSeek)
+        try await assertLiveReadingVoiceMatrix()
     }
 
-    @MainActor func testReadingVoiceMatrixWithQwen() async throws {
-        try await assertLiveReadingVoiceMatrix(provider: .qwen)
-    }
 
     @MainActor func testConversationUnderstandingWithDeepSeek() async throws {
-        try await assertLiveConversationUnderstanding(provider: .deepSeek)
+        try await assertLiveConversationUnderstanding()
     }
 
-    @MainActor func testConversationUnderstandingWithQwen() async throws {
-        try await assertLiveConversationUnderstanding(provider: .qwen)
-    }
 
-    @MainActor private func assertLiveConversationUnderstanding(provider: AIProvider) async throws {
-        let client = try liveClient(provider: provider)
+    @MainActor private func assertLiveConversationUnderstanding() async throws {
+        let client = try liveClient()
         var chen = OracleProfile(); chen.name = "陈平"
         var li = OracleProfile(); li.name = "李岚"
         let marketQuestion = ChatMessage(role: .user, content: "我们一起办周末市集，应该怎么谈合作？")
@@ -113,7 +178,7 @@ final class LiveIntegrationTests: XCTestCase {
                 let plan = try await client.plan(question: scenario.raw, profile: OracleProfile(), plugins: plugins,
                                                  history: history, profiles: [chen, li], existingRun: workRun,
                                                  references: references, language: .simplifiedChinese)
-                let stage = "\(provider.rawValue) \(scenario.name)"
+                let stage = "DeepSeek \(scenario.name)"
                 let understanding = try XCTUnwrap(plan.understanding, stage)
                 let anchored = understanding.referenceMessageID.map { id in scenario.anchors.contains { $0.id == id } } == true
                 print("[CONVERSATION_PLAN] \(stage) | \(plan.action ?? "nil") | \(understanding.relation.rawValue) | anchored=\(anchored) | \(understanding.resolvedQuestion)")
@@ -128,17 +193,17 @@ final class LiveIntegrationTests: XCTestCase {
                     XCTAssertFalse(understanding.resolvedQuestion.contains("陈平"), stage)
                 }
                 let report = await client.lastSuccessfulConnection
-                assertLiveResponse(report, provider: provider)
+                assertLiveResponse(report)
             }
         }
         for (scenario, task) in zip(scenarios, tasks) {
             do { try await task.value }
-            catch { XCTFail("\(provider.rawValue) \(scenario.name): \(error.localizedDescription)") }
+            catch { XCTFail("DeepSeek \(scenario.name): \(error.localizedDescription)") }
         }
     }
 
-    @MainActor private func assertLiveReadingVoiceMatrix(provider: AIProvider) async throws {
-        let clients = try OracleVoiceStyle.allCases.map { voice in (voice, try liveClient(provider: provider)) }
+    @MainActor private func assertLiveReadingVoiceMatrix() async throws {
+        let clients = try OracleVoiceStyle.allCases.map { voice in (voice, try liveClient()) }
         let question = "这是虚构练习。朋友邀我一起办周末创意市集，场地已定，费用分摊和当天分工还没说清。这个项目靠谱吗？"
         let followUp = "对方说先开工，费用和分工以后再谈。我今天该怎么回复？"
         let draws = zip([("wands-03", false), ("pentacles-06", true), ("major-11", false)], TarotDeck.positions)
@@ -159,14 +224,14 @@ final class LiveIntegrationTests: XCTestCase {
         // Retain every sample as an attachment for comparison without brittle word matching.
         let tasks = clients.map { voice, client in
             Task { @MainActor in
-                let stage = "voice \(provider.rawValue) \(voice.rawValue)"
+                let stage = "voice DeepSeek \(voice.rawValue)"
                 let initialStream = StreamCollector()
                 let initial = try await client.synthesize(run: run, weights: [:], history: [],
                                                           language: .simplifiedChinese, voice: voice) { initialStream.append($0) }
                 XCTAssertEqual(initialStream.text, initial.text, stage)
                 XCTAssertTrue(initial.alternatives.isEmpty, stage)
                 let initialReport = await client.lastSuccessfulConnection
-                assertLiveResponse(initialReport, provider: provider)
+                assertLiveResponse(initialReport)
                 recordJourneyText(initial.text, stage: "\(stage) initial")
 
                 let followUpStream = StreamCollector()
@@ -174,27 +239,24 @@ final class LiveIntegrationTests: XCTestCase {
                                                       history: history, language: .simplifiedChinese, voice: voice) { followUpStream.append($0) }
                 XCTAssertEqual(followUpStream.text, reply, stage)
                 let followUpReport = await client.lastSuccessfulConnection
-                assertLiveResponse(followUpReport, provider: provider)
+                assertLiveResponse(followUpReport)
                 recordJourneyText(reply, stage: "\(stage) follow-up")
             }
         }
         for ((voice, _), task) in zip(clients, tasks) {
             do { try await task.value }
-            catch { XCTFail("\(provider.rawValue) \(voice.rawValue): \(error.localizedDescription)") }
+            catch { XCTFail("DeepSeek \(voice.rawValue): \(error.localizedDescription)") }
         }
     }
 
-    private func assertLiveTarotPlanAndReading(provider: AIProvider) async throws {
-        let client = try liveClient(provider: provider)
+    private func assertLiveTarotPlanAndReading() async throws {
+        let client = try liveClient()
         let registry = PluginRegistry()
         let question = "请只用塔罗三张牌，帮我梳理是否接下一个新工作项目，以及接之前需要考虑什么。请先让我抽牌，最后用中文解读。"
-        let history: [AIConversationTurn] = provider == .qwen ? [
-            .init(role: "user", content: "我在考虑接一个新的工作项目。"),
-            .init(role: "assistant", content: "你希望用哪种方法梳理这个决定？")
-        ] : []
+        let history: [AIConversationTurn] = []
         let plan = try await client.plan(question: question, profile: OracleProfile(), plugins: registry.descriptors, history: history)
         let planningReport = await client.lastSuccessfulConnection
-        assertLiveResponse(planningReport, provider: provider)
+        assertLiveResponse(planningReport)
         XCTAssertEqual(plan.action, "intake")
         XCTAssertEqual(plan.methods, [.tarot])
         XCTAssertTrue(plan.requiredFields.isEmpty)
@@ -217,13 +279,13 @@ final class LiveIntegrationTests: XCTestCase {
         let stages = await progress.snapshot()
         XCTAssertEqual(stages, [.preparing, .requesting, .writing, .validating])
         let readingReport = await client.lastSuccessfulConnection
-        assertLiveResponse(readingReport, provider: provider)
+        assertLiveResponse(readingReport)
     }
 
-    private func assertLiveResponse(_ report: AIConnectionReport?, provider: AIProvider) {
-        XCTAssertEqual(report?.host, provider.endpoint.host)
+    private func assertLiveResponse(_ report: AIConnectionReport?) {
+        XCTAssertEqual(report?.host, DeepSeekConfiguration.endpoint.host)
         XCTAssertEqual(report?.finishReason, "stop")
-        XCTAssertTrue(DeepSeekClient.modelsMatch(requested: provider.model(), returned: report?.actualModel ?? ""))
+        XCTAssertTrue(DeepSeekClient.modelsMatch(requested: DeepSeekConfiguration.defaultModel, returned: report?.actualModel ?? ""))
     }
 
     @MainActor func testStagedTarotUsesRealPlannerAndSynthesisAcrossFiveSavedCards() async throws {
@@ -234,7 +296,6 @@ final class LiveIntegrationTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = OracleStore(vault: LocalVault(directory: directory))
         guard store.hasCredential else { throw XCTSkip("The test host could not load the bundled credential") }
-        guard !store.localOnly else { throw XCTSkip("The test host is configured for local-only answers") }
         XCTAssertEqual(DeepSeekConfiguration.model(), "deepseek-v4-pro")
         defer { if store.isBusy { store.stop() } }
 
@@ -378,7 +439,7 @@ final class LiveIntegrationTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("live-\(name)-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = OracleStore(vault: LocalVault(directory: directory))
-        _ = try XCTUnwrap(store.hasCredential && !store.localOnly ? true : nil, "The test host needs a usable credential and network mode")
+        _ = try XCTUnwrap(store.hasCredential ? true : nil, "The test host needs a usable credential and network mode")
         defer { if store.isBusy { store.stop() } }
 
         let initialRequest = Date()

@@ -27,13 +27,13 @@ final class ReadingContinuationTests: XCTestCase {
     }
 
     func testBareRecastCommandsKeepTheOriginalQuestionScope() {
-        for question in ["重新起卦", "再算一卦", "重新抽一次牌", "再掷六次", "请重新算一次", "再来一卦", "重新抽三张牌。", "麻烦你再抽一次，谢谢！", "只用六爻再帮我算一次", "重新起卦，只用六爻", "请重新六掷成卦吧"] {
+        for question in ["重新起卦", "再算一卦", "重新抽一次牌", "再掷六次", "请重新算一次", "再来一卦", "重新抽三张牌。", "麻烦你再抽一次，谢谢！", "只用六爻再帮我算一次", "重新起卦，只用六爻", "请重新六掷成卦吧", "我是想重新抽三张牌，不是解释旧结果。"] {
             XCTAssertTrue(ReadingContinuationPolicy.isBareRecastRequest(question), question)
         }
     }
 
     func testRecastWithANewQuestionOrProfileUpdateIsNotABareCommand() {
-        for question in ["重新起卦只用六爻看看明天出行是否顺利", "再帮我算一下下个月的事业", "重新抽一次牌，看看我和李四的感情", "陈平出生时间改为09:30，重新起卦", "换个问题", "我想另问一件事", "不要重新起卦", "为什么要重新抽一次牌？", "这个卦是什么意思？"] {
+        for question in ["重新起卦只用六爻看看明天出行是否顺利", "再帮我算一下下个月的事业", "重新抽一次牌，看看我和李四的感情", "陈平出生时间改为09:30，重新起卦", "换个问题", "我想另问一件事", "不要重新起卦", "为什么要重新抽一次牌？", "这个卦是什么意思？", "我是想重新抽三张牌看看下个月的工作，不是解释旧结果。"] {
             XCTAssertFalse(ReadingContinuationPolicy.isBareRecastRequest(question), question)
         }
     }
@@ -123,6 +123,119 @@ final class ReadingContinuationTests: XCTestCase {
     func testMentioningExplainingOrRejectingAdditionalMethodsDoesNotCalculateThem() {
         for question in ["解释八字是什么", "八字和紫微有什么区别", "不要补算八字", "不要补算", "不用再用占星算一下", "不用八字看看", "不要用占星排盘分析", "用六爻解释一下这卦", "用八字排盘的原理是什么", "加上张三的姓名资料", "为什么要补算八字？", "补算八字是什么意思", "我想了解补算紫微的步骤", "再用六爻起一卦", "改用塔罗抽牌看看", "再用TAROT抽三张牌"] {
             XCTAssertTrue(ReadingContinuationPolicy.requestedAdditionalMethods(in: question).isEmpty, question)
+        }
+    }
+
+    func testNaturalCalculationCommandsRecognizeEveryMethod() {
+        let names: [(OracleMethod, String)] = [
+            (.bazi, "八字"), (.ziwei, "紫微斗数"), (.liuyao, "六爻"), (.meihua, "梅花易数"),
+            (.qimen, "奇门遁甲"), (.xiaoliuren, "小六壬"), (.chenggu, "称骨"),
+            (.xingming, "姓名五格"), (.astrology, "西方占星"), (.tarot, "塔罗牌")
+        ]
+        XCTAssertEqual(Set(names.map(\.0)), Set(OracleMethod.allCases))
+        for (method, name) in names {
+            for verb in ["计算", "分析", "试试", "算算", "看看"] {
+                let question = "请用\(name)\(verb)今晚的运势"
+                XCTAssertEqual(ReadingContinuationPolicy.requestedCalculationMethods(in: question), [method], question)
+                XCTAssertEqual(ReadingContinuationPolicy.requestedAdditionalMethods(in: question), [method], question)
+                XCTAssertTrue(ReadingContinuationPolicy.requestedAdditionalMethods(in: question, requiresAdditiveWording: true).isEmpty, question)
+                XCTAssertFalse(ReadingContinuationPolicy.shouldReuse(question: question, run: reading(), pendingPlan: nil), question)
+                XCTAssertFalse(ReadingContinuationPolicy.isMethodOnlyRequest(question), question)
+            }
+        }
+    }
+
+    func testTarotActivationRequestsKeepBareMethodCommandsDistinctFromANewSubject() {
+        let retry = "你再用塔罗牌再试试呢？"
+        XCTAssertEqual(ReadingContinuationPolicy.requestedCalculationMethods(in: retry), [.tarot])
+        XCTAssertEqual(ReadingContinuationPolicy.requestedAdditionalMethods(in: retry, requiresAdditiveWording: true), [.tarot])
+        XCTAssertTrue(ReadingContinuationPolicy.isMethodOnlyRequest(retry))
+        XCTAssertFalse(ReadingContinuationPolicy.explicitlyRequestsNewReading(retry))
+
+        let tonight = "用塔罗牌计算今晚的运势"
+        XCTAssertEqual(ReadingContinuationPolicy.requestedAdditionalMethods(in: tonight), [.tarot])
+        XCTAssertFalse(ReadingContinuationPolicy.isMethodOnlyRequest(tonight))
+        for question in ["请用塔罗牌计算吧", "你用塔罗牌仔细分析一下", "再用八字试一试呢", "请用紫微斗数算算吧",
+                         "再用小六壬试试看", "再用梅花易数分析一下", "再用塔罗牌再试试呢"] {
+            XCTAssertTrue(ReadingContinuationPolicy.isMethodOnlyRequest(question), question)
+            XCTAssertFalse(ReadingContinuationPolicy.requestedCalculationMethods(in: question).isEmpty, question)
+        }
+    }
+
+    func testActivationTroubleshootingAndMethodExplanationsDoNotAuthorizeCalculation() {
+        for question in ["为什么不启动塔罗牌呢？", "现在无法激活塔罗牌", "其他方法能不能正常激活？",
+                         "不要用塔罗牌计算", "不用再用塔罗牌试试", "别用八字分析",
+                         "如何用八字计算？", "怎样用塔罗牌分析？", "你再用塔罗牌怎么计算？",
+                         "用塔罗牌计算是什么意思？", "我想了解用塔罗牌计算的步骤", "请解释用塔罗牌计算运势的原理"] {
+            XCTAssertTrue(ReadingContinuationPolicy.requestedCalculationMethods(in: question).isEmpty, question)
+            XCTAssertTrue(ReadingContinuationPolicy.requestedAdditionalMethods(in: question).isEmpty, question)
+            XCTAssertFalse(ReadingContinuationPolicy.isMethodOnlyRequest(question), question)
+        }
+        XCTAssertEqual(ReadingContinuationPolicy.requestedCalculationMethods(in: "不用塔罗牌计算，改用八字分析我的工作"), [.bazi])
+    }
+
+    func testExplicitMethodCommandsRemainAvailableAfterFreshScopeIsExcludedFromSupplements() {
+        for (question, method) in [("换个问题，用塔罗牌计算明天的工作", OracleMethod.tarot),
+                                   ("重新起卦，再用六爻计算", .liuyao),
+                                   ("再用塔罗抽三张牌", .tarot),
+                                   ("New question: use Tarot to examine tomorrow's interview.", .tarot),
+                                   ("Please redraw. Use Tarot.", .tarot)] {
+            XCTAssertTrue(ReadingContinuationPolicy.requestedAdditionalMethods(in: question).isEmpty, question)
+            XCTAssertEqual(ReadingContinuationPolicy.requestedCalculationMethods(in: question), [method], question)
+        }
+    }
+
+    func testPreparationConsultationsDoNotStartCalculationsButSeparateCommandsStillDo() {
+        for question in ["我先问问，用塔罗算要准备什么资料？", "我先问问用塔罗计算要准备什么",
+                         "用八字算需要出生时间吗？", "用塔罗要不要提供生日？", "为什么需要排盘性别？",
+                         "塔罗是干什么的？", "八字怎么算？", "我只是问问，不是现在算。",
+                         "先别发起抽牌，告诉我塔罗和六爻有什么区别。"] {
+            XCTAssertTrue(ReadingContinuationPolicy.isMethodConsultation(question), question)
+            XCTAssertTrue(ReadingContinuationPolicy.requestedCalculationMethods(in: question).isEmpty, question)
+            XCTAssertTrue(ReadingContinuationPolicy.requestedAdditionalMethods(in: question).isEmpty, question)
+            XCTAssertFalse(ReadingContinuationPolicy.isMethodOnlyRequest(question), question)
+        }
+        for question in ["先解释塔罗是什么，然后用八字算算今晚的运势", "性别是必填吗？只先用八字算算"] {
+            XCTAssertFalse(ReadingContinuationPolicy.isMethodConsultation(question), question)
+            XCTAssertEqual(ReadingContinuationPolicy.requestedCalculationMethods(in: question), [.bazi], question)
+        }
+        XCTAssertFalse(ReadingContinuationPolicy.isMethodConsultation("用塔罗看看我下周面试应该准备什么材料"))
+        XCTAssertEqual(ReadingContinuationPolicy.requestedCalculationMethods(in: "用塔罗看看我下周面试应该准备什么材料"), [.tarot])
+    }
+
+    func testParallelMethodCommandsAndOnlySelectionsRespectExplicitExclusions() {
+        let cases: [(String, [OracleMethod])] = [
+            ("用塔罗和八字一起看看", [.bazi, .tarot]),
+            ("请用塔罗、八字、占星一起分析", [.bazi, .astrology, .tarot]),
+            ("用八字和紫微一起排盘", [.bazi, .ziwei]),
+            ("只要塔罗不要八字", [.tarot]),
+            ("只用塔罗，不要八字", [.tarot]),
+            ("用塔罗和八字一起看看，不要八字", [.tarot]),
+            ("先不抽了，改用梅花", [.meihua]),
+            ("不用旧方法，换成小六壬", [.xiaoliuren])
+        ]
+        for (question, expected) in cases {
+            XCTAssertEqual(ReadingContinuationPolicy.requestedCalculationMethods(in: question), expected, question)
+            XCTAssertFalse(ReadingContinuationPolicy.shouldReuse(question: question, run: reading(), pendingPlan: nil), question)
+        }
+        for question in ["用塔罗和八字一起看看", "只要塔罗不要八字", "只用塔罗，不要八字"] {
+            XCTAssertTrue(ReadingContinuationPolicy.isMethodOnlyRequest(question), question)
+        }
+        for question in ["不要用塔罗和八字一起看看", "塔罗和八字有什么区别", "请解释只用塔罗是什么意思"] {
+            XCTAssertTrue(ReadingContinuationPolicy.requestedCalculationMethods(in: question).isEmpty, question)
+        }
+    }
+
+    func testRejectingOldCardsAndRequestingNewOnesRedrawsWithoutChangingTheQuestion() {
+        for question in ["别用旧牌，换一组新的", "不要旧牌再用塔罗看看", "请别用旧牌，重新用塔罗算算吧"] {
+            XCTAssertTrue(ReadingContinuationPolicy.explicitlyRequestsNewReading(question), question)
+            XCTAssertTrue(ReadingContinuationPolicy.isBareRecastRequest(question), question)
+            XCTAssertTrue(ReadingContinuationPolicy.requestedAdditionalMethods(in: question).isEmpty, question)
+            XCTAssertFalse(ReadingContinuationPolicy.shouldReuse(question: question, run: reading(method: .tarot), pendingPlan: nil), question)
+        }
+        XCTAssertFalse(ReadingContinuationPolicy.isBareRecastRequest("别用旧牌，再用塔罗看看我下周的面试"))
+        for question in ["不要重抽", "别用旧牌，也不要重新抽", "不是不要旧牌，只解释原牌阵"] {
+            XCTAssertFalse(ReadingContinuationPolicy.explicitlyRequestsNewReading(question), question)
         }
     }
 
@@ -396,5 +509,30 @@ extension ReadingContinuationTests {
         XCTAssertEqual(EnglishConversation.clarifierFocus("Could you draw one clarifying card about my next step?"), "my next step")
         XCTAssertNil(EnglishConversation.clarifierFocus("Please don't draw a clarifier."))
         XCTAssertEqual(EnglishConversation.replyLanguage(in: "Please answer in English."), .english)
+    }
+
+    func testExplicitLanguageRequestsAllowObjectsAndApplyOnlyToTheCurrentMessage() {
+        for question in ["Please explain the advice card in English. Do not draw more cards.",
+                         "Could you please explain the Advice card in English?", "Please use English to explain this card.",
+                         "Reply to me in English.", "请用英文再解释一下建议牌", "请英文回答", "English please"] {
+            XCTAssertEqual(EnglishConversation.replyLanguage(in: question), .english, question)
+        }
+        for question in ["用中文再说简单点", "请用中文再说一遍", "请中文回答", "Please explain the Advice card in Chinese.",
+                         "Please use simplified Chinese to explain the advice."] {
+            XCTAssertEqual(EnglishConversation.replyLanguage(in: question), .simplifiedChinese, question)
+        }
+        XCTAssertEqual(EnglishConversation.replyLanguage(in: "Please explain in English, then reply in Chinese."), .simplifiedChinese)
+        XCTAssertEqual(EnglishConversation.replyLanguage(in: "不用英文，改用中文解释一下"), .simplifiedChinese)
+        XCTAssertEqual(EnglishConversation.replyLanguage(in: "用中文再说简单点"), .simplifiedChinese)
+        XCTAssertNil(EnglishConversation.replyLanguage(in: "建议牌和现状牌有什么关系？"))
+    }
+
+    func testNegatedQuotedAndDescriptiveLanguageMentionsDoNotSelectAReplyLanguage() {
+        for question in ["Please answer not in English.", "请不要用英文回答", "Don't explain this in English.",
+                         "Please explain why we should not reply in English.", "Please do not explain in English.",
+                         "I study English.", "My friend explained the Advice card in English.", "英文水平怎么样？",
+                         "Explain what ‘in English’ means.", "She said ‘Please explain in English’. What did she mean?"] {
+            XCTAssertNil(EnglishConversation.replyLanguage(in: question), question)
+        }
     }
 }

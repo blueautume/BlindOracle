@@ -51,6 +51,7 @@ final class ChatProgressUITests: XCTestCase {
         let input = app.textFields["questionInput"]
         XCTAssertTrue(panel.exists)
         XCTAssertTrue(transcript.exists)
+        XCTAssertFalse(app.staticTexts["aiConnectionStatus"].exists)
         XCTAssertFalse(panel.frame.isEmpty)
         XCTAssertLessThanOrEqual(transcript.frame.maxY, panel.frame.minY + 1)
         XCTAssertTrue(panel.frame.contains(input.frame))
@@ -96,6 +97,37 @@ final class ChatProgressUITests: XCTestCase {
 
         XCTAssertTrue(progress.label.contains("解读已完成"))
         XCTAssertEqual(app.buttons["sendQuestion"].label, "发送问题")
+    }
+
+    @MainActor func testSavedReadingCanBeOpenedDuringOutputWithoutInterruptingTheAnswer() {
+        let app = launchProgressFixture(paused: false)
+        XCTAssertTrue(app.buttons["progressToggle"].waitForExistence(timeout: 15))
+        XCTAssertEqual(app.buttons["sendQuestion"].label, "停止回答")
+        let reference = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "readingData-")).firstMatch
+        XCTAssertTrue(reference.waitForExistence(timeout: 5))
+        reveal(reference, in: app)
+        XCTAssertTrue(reference.isEnabled)
+        reference.tap()
+        let question = app.staticTexts["runResultsQuestion"]
+        XCTAssertTrue(question.waitForExistence(timeout: 5))
+        XCTAssertFalse(question.label.isEmpty)
+        XCTAssertNotEqual(question.label, "请结合八字和紫微斗数，看看未来一个月的工作节奏。")
+        capture("saved-reading-open-during-output", in: app)
+
+        // The preview finishes after sixteen seconds. Keeping the result sheet
+        // open across that interval must not stop or pause the running answer.
+        Thread.sleep(forTimeInterval: 17)
+        XCTAssertTrue(question.exists)
+        app.buttons["closeRunResults"].tap()
+        let finished = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "发送问题"),
+                                                 object: app.buttons["sendQuestion"])
+        XCTAssertEqual(XCTWaiter.wait(for: [finished], timeout: 2), .completed)
+        let answer = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "接下来可以先稳住手头的安排")).firstMatch
+        XCTAssertTrue(answer.waitForExistence(timeout: 2))
+        let completed = app.buttons["progressToggle"]
+        reveal(completed, in: app)
+        XCTAssertTrue(completed.label.contains("解读已完成"))
+        capture("output-completed-after-closing-saved-reading", in: app)
     }
 
     @MainActor func testBackgroundCheckpointRestoresInterruptedReplyAfterTermination() {

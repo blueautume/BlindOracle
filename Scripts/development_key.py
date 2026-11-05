@@ -9,10 +9,9 @@ import tempfile
 from pathlib import Path
 
 DEEPSEEK_RESOURCE = 'dev-key.txt'
-QWEN_RESOURCE = 'qwen-key.txt'
-QWEN_KEY_FILE = 'qwen-bailian.key'
+RETIRED_RESOURCE = 'qwen-key.txt'
+RETIRED_KEY_FILE = 'qwen-bailian.key'
 DEEPSEEK_PATTERN = r'sk-[A-Za-z0-9_-]{12,}'
-QWEN_PATTERN = r'sk-(?:[A-Za-z0-9_-]{12,}|ws-[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+)'
 
 
 def read_local_configuration(root):
@@ -41,7 +40,7 @@ def read_deepseek_key(key_directory, config):
         return validated_key(config['deepseek_api_key'], DEEPSEEK_PATTERN, 'DeepSeek')
     # Backward compatibility with the original developer-provided Finder clipping.
     for path in sorted(key_directory.glob('*')):
-        if not path.is_file() or path.name.startswith('.') or path.name == QWEN_KEY_FILE:
+        if not path.is_file() or path.name.startswith('.') or path.name == RETIRED_KEY_FILE:
             continue
         data = path.read_bytes()
         values = []
@@ -63,26 +62,12 @@ def read_deepseek_key(key_directory, config):
     return None
 
 
-def read_qwen_key(key_directory, config):
-    if config is not None and 'qwen_api_key' in config:
-        return validated_key(config['qwen_api_key'], QWEN_PATTERN, 'Qwen')
-    path = key_directory / QWEN_KEY_FILE
-    if not (path.exists() or path.is_symlink()):
-        return None
-    try:
-        value = path.read_text(encoding='utf-8')
-    except (ValueError, OSError):
-        raise ValueError('The local Qwen key file is not valid readable text.') from None
-    return validated_key(value, QWEN_PATTERN, 'Qwen')
-
-
 def read_keys(root):
     root = Path(root)
     config = read_local_configuration(root)
     key_directory = root.parent / 'key'
     return {
         DEEPSEEK_RESOURCE: read_deepseek_key(key_directory, config),
-        QWEN_RESOURCE: read_qwen_key(key_directory, config),
     }
 
 
@@ -107,11 +92,12 @@ def write_bundle_key(target, key):
 def bundle_keys(root, resources):
     """Use the same ignored local credentials for Debug and Release builds."""
     try:
+        (resources / RETIRED_RESOURCE).unlink(missing_ok=True)
         for name, key in read_keys(root).items():
             write_bundle_key(resources / name, key)
     except (ValueError, OSError):
-        # Clear both resources after a failure, including partially updated builds.
-        for name in (DEEPSEEK_RESOURCE, QWEN_RESOURCE):
+        # Clear stale resources after a failure, including partially updated builds.
+        for name in (DEEPSEEK_RESOURCE, RETIRED_RESOURCE):
             (resources / name).unlink(missing_ok=True)
         raise
 

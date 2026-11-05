@@ -4,81 +4,114 @@ struct DataLibraryView: View {
     @EnvironmentObject private var store: OracleStore
     @Binding var settingsPresented: Bool
     @State private var editingProfile: OracleProfile?
-    @State private var deletingProfile: OracleProfile?
 
     var body: some View {
         NavigationStack {
             ZStack {
                 PaperBackground()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 28) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(L10n.text("数据", "Data")).font(.system(size: 34, weight: .medium, design: .serif)).foregroundStyle(InkTheme.ink)
-                            Text(L10n.text("每一条线索，皆有来处。", "Every reading has a source."))
-                                .font(.system(size: 14, design: .serif)).foregroundStyle(InkTheme.secondary)
-                        }.padding(.top, 12)
+                List {
+                    Section {
+                        Text(L10n.text("数据", "Data"))
+                            .font(.system(size: 34, weight: .medium, design: .serif))
+                            .foregroundStyle(InkTheme.ink)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 12)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 18, bottom: 0, trailing: 18))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                    }
 
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                SectionEyebrow(text: L10n.text("留存资料", "Saved profiles"))
-                                Spacer()
-                                Button { editingProfile = OracleProfile() } label: { Image(systemName: "plus").font(.system(size: 14)) }
-                                    .tint(InkTheme.cinnabar).accessibilityLabel(L10n.text("新增人员资料", "Add profile")).accessibilityIdentifier("addProfile")
-                            }
-                            PaperCard {
-                                VStack(spacing: 0) {
-                                    if store.profiles.isEmpty {
-                                        Text(L10n.text("还没有留存的人员资料。点右上方的加号，先记下一个姓名。", "No profiles yet. Tap + above to add a name."))
-                                            .font(.system(size: 13, design: .serif)).lineSpacing(5).foregroundStyle(InkTheme.secondary)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    ForEach(Array(store.profiles.enumerated()), id: \.element.id) { index, profile in
-                                        if index > 0 { Divider().overlay(InkTheme.line).padding(.vertical, 13) }
-                                        HStack(spacing: 12) {
-                                          Button { editingProfile = profile } label: {
-                                            HStack(spacing: 12) {
-                                                Image(systemName: "person.text.rectangle").font(.system(size: 21, weight: .light)).frame(width: 30).foregroundStyle(InkTheme.cinnabar)
-                                                VStack(alignment: .leading, spacing: 5) {
-                                                    Text(profileTitle(profile)).font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.ink)
-                                                    Text(profileSummary(profile)).font(.system(size: 12)).foregroundStyle(InkTheme.secondary).lineLimit(2)
-                                                }
-                                                Spacer()
-                                                Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
-                                            }.contentShape(Rectangle())
-                                          }.buttonStyle(.plain).accessibilityIdentifier("profileRow-\(profile.id.uuidString)")
-                                          Button { deletingProfile = profile } label: {
-                                              Image(systemName: "trash").font(.system(size: 14, weight: .light))
-                                                  .foregroundStyle(InkTheme.secondary).frame(width: 36, height: 40)
-                                          }.buttonStyle(.plain).accessibilityLabel(L10n.text("删除\(profileTitle(profile))的资料", "Delete the profile for \(profileTitle(profile))"))
-                                              .accessibilityIdentifier("deleteProfile-\(profile.id.uuidString)")
-                                        }
-                                    }
-                                }
-                            }
-                            Text(L10n.text("可用姓名、代称或代号选取档案。资料可以留空。", "Find profiles by name, nickname, or code. Details can be left blank."))
-                                .font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
+                    Section {
+                        if store.profiles.isEmpty {
+                            Text(L10n.text("还没有留存的人员资料。点右上方的加号，先记下一个姓名。", "No profiles yet. Tap + above to add a name."))
+                                .font(.system(size: 13, design: .serif)).lineSpacing(5).foregroundStyle(InkTheme.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .listRowInsets(EdgeInsets(top: 18, leading: 18, bottom: 18, trailing: 18))
+                                .listRowBackground(Color.white.opacity(0.35))
+                                .listRowSeparator(.hidden)
                         }
-
-                        NavigationLink { PluginDirectoryView() } label: {
-                            HStack {
-                                Text(L10n.text("本地推演方法", "Reading methods")).font(.subheadline)
-                                Spacer()
-                                Image(systemName: "chevron.right").font(.caption)
+                        ForEach(store.profiles) { profile in
+                            Button { editingProfile = profile } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "person.text.rectangle").font(.system(size: 21, weight: .light)).frame(width: 30).foregroundStyle(InkTheme.cinnabar)
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text(profileTitle(profile)).font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.ink)
+                                        Text(profileSummary(profile)).font(.system(size: 12)).foregroundStyle(InkTheme.secondary).lineLimit(2)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
                             }
-                            .foregroundStyle(InkTheme.secondary)
-                            .frame(minHeight: 44)
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("profileRow-\(profile.id.uuidString)")
+                            .listRowInsets(EdgeInsets(top: 16, leading: 18, bottom: 16, trailing: 18))
+                            .listRowBackground(Color.white.opacity(0.35))
+                            .listRowSeparatorTint(InkTheme.line.opacity(0.65))
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) { store.deleteProfile(id: profile.id) } label: {
+                                    Text(L10n.text("删除", "Delete"))
+                                }
+                                .tint(InkTheme.cinnabar)
+                                .accessibilityIdentifier("deleteProfile-\(profile.id.uuidString)")
+                            }
+                        }
+                    } header: {
+                        HStack {
+                            SectionEyebrow(text: L10n.text("留存资料", "Saved profiles"))
+                            Spacer()
+                            Button { editingProfile = OracleProfile() } label: { Image(systemName: "plus").font(.system(size: 14)) }
+                                .tint(InkTheme.cinnabar).accessibilityLabel(L10n.text("新增人员资料", "Add profile")).accessibilityIdentifier("addProfile")
+                        }
+                        .textCase(nil)
+                        .padding(.bottom, 4)
+                    } footer: {
+                        Text(L10n.text("可用姓名、代称或代号选取档案。资料可以留空。", "Find profiles by name, nickname, or code. Details can be left blank."))
+                            .font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
+                            .textCase(nil)
+                            .padding(.top, 4)
+                    }
+
+                    Section {
+                        NavigationLink { PluginDirectoryView() } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "books.vertical")
+                                    .font(.system(size: 21, weight: .light))
+                                    .frame(width: 30)
+                                    .foregroundStyle(InkTheme.cinnabar)
+                                Text(L10n.text("查看方法说明", "Explore methods"))
+                                    .font(.system(size: 16, design: .serif))
+                                    .foregroundStyle(InkTheme.ink)
+                                Spacer(minLength: 0)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("localMethodsDirectory")
-                    }.padding(.horizontal, 22).padding(.bottom, 90)
-                        .frame(maxWidth: 760).frame(maxWidth: .infinity)
+                        .listRowInsets(EdgeInsets(top: 16, leading: 18, bottom: 16, trailing: 18))
+                        .listRowBackground(Color.white.opacity(0.35))
+                        .listRowSeparator(.hidden)
+                    } header: {
+                        HStack {
+                            SectionEyebrow(text: L10n.text("推演方法", "Reading methods"))
+                            Spacer()
+                        }
+                        .textCase(nil)
+                        .padding(.bottom, 4)
+                    }
                 }
+                .listStyle(.insetGrouped)
+                .listSectionSpacing(28)
+                .scrollContentBackground(.hidden)
+                .contentMargins(.top, 0, for: .scrollContent)
+                .contentMargins(.bottom, 90, for: .scrollContent)
+                .frame(maxWidth: 760).frame(maxWidth: .infinity)
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { settingsPresented = true } label: { Image(systemName: "gearshape").font(.system(size: 18, weight: .light)) }
-                        .tint(InkTheme.ink).accessibilityLabel(L10n.text("设置", "Settings"))
+                        .tint(InkTheme.ink).accessibilityLabel(L10n.text("设置", "Settings")).accessibilityIdentifier("settingsButton")
                 }
             }
             .toolbarBackground(InkTheme.paper, for: .navigationBar)
@@ -86,15 +119,6 @@ struct DataLibraryView: View {
                 if let profile = editingProfile {
                     ProfileEditor(profile: profile) { updated in store.saveProfile(updated); editingProfile = nil }
                 }
-            }
-            .confirmationDialog(L10n.text("删除这份人员资料？", "Delete this profile?"), isPresented: Binding(get: { deletingProfile != nil }, set: { if !$0 { deletingProfile = nil } }), titleVisibility: .visible) {
-                Button(L10n.text("删除资料", "Delete profile"), role: .destructive) {
-                    if let profile = deletingProfile { store.deleteProfile(id: profile.id) }
-                    deletingProfile = nil
-                }.accessibilityIdentifier("confirmDeleteProfile")
-                Button(L10n.text("取消", "Cancel"), role: .cancel) { deletingProfile = nil }
-            } message: {
-                Text(L10n.text("\(deletingProfile.map(profileTitle) ?? "这份资料")将从留存名单移除，过去的推演快照仍保留。", "\(deletingProfile.map(profileTitle) ?? "This profile") will be removed. Past reading snapshots will be kept."))
             }
         }.tint(InkTheme.cinnabar)
     }
@@ -130,7 +154,7 @@ private struct PluginDirectoryView: View {
                     }
                 }.padding(22).frame(maxWidth: 760).frame(maxWidth: .infinity)
             }
-        }.navigationTitle(L10n.text("本地推演方法", "Reading methods")).navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle(L10n.text("推演方法", "Reading methods")).navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -167,12 +191,8 @@ private struct PluginDocumentView: View {
 struct OracleSettingsView: View {
     @EnvironmentObject private var store: OracleStore
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("deepseek.model") private var model = DeepSeekConfiguration.defaultModel
-    @AppStorage("oracle.localOnly") private var localOnly = false
-    @State private var draftKey = ""
     @State private var feedback = ""
     @State private var showReset = false
-    @State private var showRemoveKey = false
     @State private var exportURL: URL?
 
     var body: some View {
@@ -189,108 +209,17 @@ struct OracleSettingsView: View {
                             }
                         }
                         VStack(alignment: .leading, spacing: 12) {
-                            SectionEyebrow(text: L10n.text("解读连接", "AI connection"))
-                            PaperCard {
-                                VStack(alignment: .leading, spacing: 15) {
-                                    Picker(L10n.text("解读模型", "AI provider"), selection: Binding(get: { store.aiProvider }, set: { store.selectAIProvider($0) })) {
-                                        ForEach(AIProvider.allCases, id: \.self) { provider in
-                                            Text(provider.displayName).tag(provider)
-                                        }
-                                    }
-                                    .pickerStyle(.segmented)
-                                    .disabled(store.isBusy || store.isCheckingConnection)
-                                    .accessibilityIdentifier("aiProviderPicker")
-                                    HStack {
-                                        Text(L10n.text("\(store.aiProvider.displayName) API 密钥", "\(store.aiProvider.displayName) API key"))
-                                            .font(.system(size: 17, design: .serif)).foregroundStyle(InkTheme.ink)
-                                        Spacer()
-                                        Label(store.hasCredential ? L10n.text("已保存密钥", "Key saved") : L10n.text("未设置", "No key"), systemImage: store.hasCredential ? "checkmark.circle.fill" : "circle")
-                                            .font(.system(size: 11)).foregroundStyle(store.hasCredential ? InkTheme.sage : InkTheme.secondary)
-                                    }
-                                    SecureField(store.hasCredential ? L10n.text("输入新密钥以替换", "Enter a replacement key") : L10n.text("输入 API 密钥", "Enter API key"), text: $draftKey)
-                                        .font(.system(size: 14)).textInputAutocapitalization(.never).autocorrectionDisabled()
-                                        .padding(12).background(InkTheme.paper, in: RoundedRectangle(cornerRadius: 9))
-                                        .accessibilityLabel(L10n.text("\(store.aiProvider.displayName) API 密钥", "\(store.aiProvider.displayName) API key"))
-                                    HStack {
-                                        Button(L10n.text("保存到钥匙串", "Save to Keychain")) { saveKey() }.disabled(draftKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                                            .disabled(store.isBusy || store.isCheckingConnection)
-                                            .font(.system(size: 13, design: .serif)).tint(InkTheme.cinnabar)
-                                        Spacer()
-                                        if store.hasCredential {
-                                            Button(L10n.text("移除", "Remove")) { showRemoveKey = true }
-                                                .font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
-                                                .disabled(store.isBusy || store.isCheckingConnection)
-                                        }
-                                    }
-                                    if !feedback.isEmpty { Text(feedback).font(.system(size: 12)).foregroundStyle(InkTheme.sage) }
-                                    Divider().overlay(InkTheme.line)
-                                    Text(store.connectionStatus).font(.system(size: 13, design: .serif))
-                                        .foregroundStyle(localOnly || !store.hasCredential ? InkTheme.cinnabar : InkTheme.sage)
-                                        .accessibilityIdentifier("settingsAIConnectionStatus")
-                                    Toggle(L10n.text("仅本地试算", "Local calculations only"), isOn: $localOnly).font(.system(size: 15, design: .serif)).tint(InkTheme.sage)
-                                        .disabled(store.isBusy || store.isCheckingConnection)
-                                        .onChange(of: localOnly) { _, _ in store.invalidateConnectionReport() }
-                                    Text(L10n.text("本地试算只显示规则摘要，不调用 AI。启用 AI 解读时，问事、所需资料与推演结果会发送至所选服务。安装包可携带内置密钥，运行时保存于本机钥匙串。", "Local calculations show rule summaries and don’t use AI. When AI interpretation is enabled, your question, required details, and results are sent to the selected provider. A key included with the app is stored in the device’s Keychain."))
-                                        .font(.system(size: 12)).foregroundStyle(InkTheme.secondary).lineSpacing(5)
-                                    if store.aiProvider == .deepSeek {
-                                        Button(L10n.text("恢复 Pro 联网解读", "Restore online Pro interpretation")) { store.restoreRecommendedConnection() }
-                                            .font(.system(size: 13, design: .serif)).tint(InkTheme.cinnabar)
-                                            .disabled(store.isBusy || store.isCheckingConnection)
-                                            .accessibilityIdentifier("restoreProConnection")
-                                    }
-                                    Button {
-                                        Task { await store.checkAIConnection() }
-                                    } label: {
-                                        HStack(spacing: 8) {
-                                            if store.isCheckingConnection { ProgressView().controlSize(.small) }
-                                            Text(store.isCheckingConnection ? L10n.text("正在检查真实模型响应…", "Checking the model response…") : L10n.text("检查 AI 连接", "Check AI connection"))
-                                        }
-                                    }.font(.system(size: 13, design: .serif)).tint(InkTheme.cinnabar)
-                                        .disabled(store.isCheckingConnection || !store.hasCredential)
-                                        .accessibilityIdentifier("checkAIConnection")
-                                    Text(L10n.text("连接检查只发送固定测试消息，不发送个人资料。", "This check sends a fixed test message. It does not include personal information."))
-                                        .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
-                                    if let message = store.connectionFeedback {
-                                        Text(message).font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
-                                            .accessibilityIdentifier("connectionCheckFeedback")
-                                    }
-                                    if let report = store.connectionReport {
-                                        VStack(alignment: .leading, spacing: 6) {
-                                            Text(L10n.text("请求模型：\(report.requestedModel)", "Requested model: \(report.requestedModel)"))
-                                            Text(L10n.text("实际模型：\(report.actualModel ?? "服务端未提供")", "Reported model: \(report.actualModel ?? "Not reported")"))
-                                            let budget = store.aiProvider.outputTokenBudget.formatted(.number.locale(AppLanguage.current.locale))
-                                            Text(L10n.text(
-                                                "深度思考：开启 · \(store.aiProvider.reasoningEffort) · 输出预算 \(budget) tokens",
-                                                "Reasoning enabled · \(store.aiProvider.reasoningEffort) · Output budget: \(budget) tokens"
-                                            ))
-                                            Text(L10n.text("服务：\(report.host) · 耗时 \(String(format: "%.1f", report.elapsed)) 秒", "Service: \(report.host) · \(String(format: "%.1f", report.elapsed)) sec"))
-                                            if let count = report.reasoningTokens { Text(L10n.text("思考 token 数：\(count)", "Reasoning tokens: \(count)")) }
-                                            Text(L10n.text("检查时间：\(report.checkedAt.formatted(date: .numeric, time: .standard))", "Checked: \(report.checkedAt.formatted(.dateTime.year().month().day().hour().minute().second().locale(AppLanguage.current.locale)))"))
-                                        }.font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
-                                            .textSelection(.enabled).accessibilityIdentifier("connectionCheckReport")
-                                    }
-                                    if store.aiProvider == .deepSeek {
-                                        DisclosureGroup(L10n.text("模型设置", "Model settings")) {
-                                            TextField(L10n.text("模型 ID", "Model ID"), text: $model).textInputAutocapitalization(.never).autocorrectionDisabled()
-                                                .font(.system(size: 13)).padding(.top, 10)
-                                                .disabled(store.isBusy || store.isCheckingConnection)
-                                                .onChange(of: model) { _, value in
-                                                    DeepSeekConfiguration.recordUserModelSelection(value)
-                                                    store.invalidateConnectionReport()
-                                                }
-                                        }.font(.system(size: 12)).tint(InkTheme.secondary)
-                                    }
-                                }
-                            }
-                        }
-                        VStack(alignment: .leading, spacing: 12) {
                             SectionEyebrow(text: L10n.text("本机资料", "On-device data"))
                             PaperCard {
                                 VStack(alignment: .leading, spacing: 17) {
                                     Button {
                                         exportURL = store.export()
-                                        if exportURL == nil { feedback = L10n.text("导出暂未完成，请重试。", "Couldn’t export the backup. Try again.") }
+                                        feedback = exportURL == nil ? L10n.text("导出暂未完成，请重试。", "Couldn’t export the backup. Try again.") : ""
                                     } label: { Label(L10n.text("整理一份数据备份", "Create a backup"), systemImage: "square.and.arrow.up").font(.system(size: 15, design: .serif)) }.tint(InkTheme.ink)
+                                    if !feedback.isEmpty {
+                                        Text(feedback).font(.system(size: 12)).foregroundStyle(InkTheme.cinnabar)
+                                            .accessibilityIdentifier("backupExportFeedback")
+                                    }
                                     if let exportURL { ShareLink(item: exportURL) { Label(L10n.text("分享或存储备份", "Share or save backup"), systemImage: "doc.zipper").font(.system(size: 13)) }.tint(InkTheme.cinnabar) }
                                     Text(L10n.text("备份包含基础资料、独立推演结果与解读偏好。", "Backups include profiles, saved readings, and interpretation preferences."))
                                         .font(.system(size: 12)).foregroundStyle(InkTheme.secondary).lineSpacing(4)
@@ -314,40 +243,38 @@ struct OracleSettingsView: View {
                             Text(L10n.text("传统文化与自我梳理，解读不作事实保证。", "For exploring traditions and reflecting on your own life. Readings don’t establish facts."))
                                 .font(.system(size: 11)).foregroundStyle(InkTheme.secondary.opacity(0.8)).padding(.top, 4)
                         }.frame(maxWidth: .infinity).padding(.vertical, 12)
+                        HStack(spacing: 16) {
+                            NavigationLink {
+                                LegalDocumentView(document: .userAgreement)
+                            } label: {
+                                Text(L10n.text("用户协议", "User Agreement"))
+                                    .padding(.vertical, 12)
+                            }
+                            .accessibilityIdentifier("userAgreementLink")
+                            Text("·").accessibilityHidden(true)
+                            NavigationLink {
+                                LegalDocumentView(document: .privacyPolicy)
+                            } label: {
+                                Text(L10n.text("隐私政策", "Privacy Policy"))
+                                    .padding(.vertical, 12)
+                            }
+                            .accessibilityIdentifier("privacyPolicyLink")
+                        }
+                        .font(.system(.footnote, design: .serif))
+                        .foregroundStyle(InkTheme.secondary)
+                        .tint(InkTheme.secondary)
+                        .frame(maxWidth: .infinity)
                     }.padding(22).frame(maxWidth: 760).frame(maxWidth: .infinity)
                 }
+                .accessibilityIdentifier("settingsScroll")
             }
             .navigationTitle(L10n.text("设置", "Settings")).navigationBarTitleDisplayMode(.inline)
-            .onAppear { store.refreshCredential() }
-            .onDisappear { store.refreshCredential(importBundledKey: false) }
-            .onChange(of: store.aiProvider) { _, _ in
-                draftKey = ""
-                feedback = ""
-            }
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(L10n.text("完成", "Done")) { dismiss() }.tint(InkTheme.cinnabar) } }
             .confirmationDialog(L10n.text("将解读偏好恢复为均等？", "Give each method equal weight again?"), isPresented: $showReset, titleVisibility: .visible) {
                 Button(L10n.text("恢复均等偏好", "Reset preferences")) { store.resetPreferences() }
                 Button(L10n.text("取消", "Cancel"), role: .cancel) {}
             }
-            .confirmationDialog(L10n.text("移除本机保存的解读密钥？", "Remove the saved AI key?"), isPresented: $showRemoveKey, titleVisibility: .visible) {
-                Button(L10n.text("移除密钥", "Remove key"), role: .destructive) {
-                    do {
-                        store.invalidateConnectionReport()
-                        try store.credentialStore.delete(); store.refreshCredential()
-                        feedback = store.hasCredential ? L10n.text("已恢复安装包内置密钥。停用 AI 可开启仅本地试算。", "Restored the key included with the app. Turn on local calculations to stop using AI.") : L10n.text("密钥已移除。", "Key removed.")
-                    }
-                    catch { feedback = error.localizedDescription }
-                }
-                Button(L10n.text("取消", "Cancel"), role: .cancel) {}
-            }
         }.tint(InkTheme.cinnabar)
-    }
-    private func saveKey() {
-        do {
-            store.invalidateConnectionReport()
-            try store.credentialStore.save(draftKey); draftKey = ""; store.refreshCredential(); feedback = L10n.text("已安全保存。", "Saved to Keychain.")
-        }
-        catch { feedback = error.localizedDescription }
     }
 }
 

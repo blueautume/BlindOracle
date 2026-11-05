@@ -14,6 +14,7 @@ struct ConversationHistorySidebar: View {
     @Binding var isPresented: Bool
     @EnvironmentObject private var store: OracleStore
     @State private var deletionCandidate: OracleConversation?
+    @State private var showClearHistory = false
 
     private var history: [OracleConversation] {
         store.conversations.filter { !$0.isEmpty }.sorted {
@@ -66,6 +67,17 @@ struct ConversationHistorySidebar: View {
                             }.padding(.horizontal, 10).padding(.top, 24).padding(.bottom, 28)
                         }
                     }
+                    Button(role: .destructive) { showClearHistory = true } label: {
+                        Label(L10n.text("清除全部历史", "Clear all history"), systemImage: "trash")
+                            .font(.system(size: 14, design: .serif))
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(InkTheme.cinnabar)
+                    .disabled(history.isEmpty)
+                    .padding(.horizontal, 24).padding(.top, 8)
+                    .accessibilityIdentifier("clearConversationHistory")
                     Text(L10n.text("长按一段对话，可将它删除。", "Touch and hold a conversation to delete it."))
                         .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                         .padding(.horizontal, 24).padding(.top, 14)
@@ -90,6 +102,17 @@ struct ConversationHistorySidebar: View {
             }.accessibilityIdentifier("confirmDeleteConversation")
             Button(L10n.text("取消", "Cancel"), role: .cancel) { deletionCandidate = nil }
         } message: { Text(L10n.text("这段聊天会从历史中移除，基础资料与独立推演记录仍保留。", "This chat will be removed from history. Your profiles and saved readings will be kept.")) }
+        .alert(L10n.text("清除全部历史？", "Clear all history?"), isPresented: $showClearHistory) {
+            Button(L10n.text("清除全部历史", "Clear all history"), role: .destructive) {
+                deletionCandidate = nil
+                store.clearConversationHistory()
+                close()
+            }.accessibilityIdentifier("confirmClearConversationHistory")
+            Button(L10n.text("取消", "Cancel"), role: .cancel) {}
+                .accessibilityIdentifier("cancelClearConversationHistory")
+        } message: {
+            Text(L10n.text("所有历史对话及未完成的表单、抽牌或投掷进度将被清除，当前回答也会停止。人员资料与已保存的推演记录会保留。", "All conversations and unfinished forms, card draws, or coin casts will be cleared, and the current reply will stop. Your profiles and saved readings will be kept."))
+        }
     }
 
     private func historyRow(_ conversation: OracleConversation) -> some View {

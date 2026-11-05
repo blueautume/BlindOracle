@@ -113,6 +113,7 @@ struct ChinaDistrictCatalog: Sendable {
     private let childrenByParent: [String: [ChinaDistrict]]
     private let byID: [String: ChinaDistrict]
     private let byFullName: [String: ChinaDistrict]
+    private let districtIDByPlace: [String: String]
 
     func children(of district: ChinaDistrict) -> [ChinaDistrict] {
         childrenByParent[district.id] ?? []
@@ -124,12 +125,84 @@ struct ChinaDistrictCatalog: Sendable {
         return district?.fullDisplayName ?? ChinaPlaceNames.english(canonical)
     }
 
+    /// Accept a complete local district path, never a city-only name, partial
+    /// match or address. Duplicate district names require their actual parent.
+    /// English aliases are independent of the app's current display language.
+    func matchingDistrict(for place: String) -> ChinaDistrict? {
+        guard let key = Self.normalizedPlaceKey(place), let id = districtIDByPlace[key] else { return nil }
+        return byID[id]
+    }
+
     private init(provinces: [ChinaDistrict], childrenByParent: [String: [ChinaDistrict]], byID: [String: ChinaDistrict]) {
         self.provinces = provinces
         self.childrenByParent = childrenByParent
         self.byID = byID
         self.byFullName = Dictionary(byID.values.sorted { $0.id < $1.id }.map { ($0.fullName, $0) },
                                      uniquingKeysWith: { first, _ in first })
+        self.districtIDByPlace = Self.districtPlaceIndex(for: byID)
+    }
+
+    private static func districtPlaceIndex(for districts: [String: ChinaDistrict]) -> [String: String] {
+        var idsByPlace: [String: Set<String>] = [:]
+        var englishAliasesByName: [String: [String]] = [:]
+        func englishAliases(_ name: String) -> [String] {
+            if let cached = englishAliasesByName[name] { return cached }
+            var aliases = [ChinaPlaceNames.english(name)]
+            // Keep the previous pinyin display spelling as a supported alias.
+            if name == "浦东新区" { aliases.append("Pudong New Area") }
+            // Foundation transliterates the polyphonic 都 as "dou" here.
+            if name == "成都市" { aliases.append("Chengdu") }
+            englishAliasesByName[name] = aliases
+            return aliases
+        }
+        func add(_ place: String, id: String) {
+            guard let key = normalizedPlaceKey(place) else { return }
+            idsByPlace[key, default: []].insert(id)
+        }
+        for district in districts.values {
+            let isDistrictLevel: Bool
+            switch district.countryCode {
+            case "CN": isDistrictLevel = district.id.count == 6 && !district.id.hasSuffix("00")
+            case "HK", "MO": isDistrictLevel = district.components.count == 2
+            case "TW": isDistrictLevel = district.components.count == 3
+            default: isDistrictLevel = false
+            }
+            guard isDistrictLevel, district.components.count >= 2, !district.hasChildren else { continue }
+            add(district.fullName, id: district.id)
+            if district.countryCode == "CN" { add("中国" + district.fullName, id: district.id) }
+
+            // A province is optional when the district's city is supplied. A
+            // municipality already has just two components and loses none.
+            var paths = [district.components]
+            if district.components.count >= 3 { paths.append(Array(district.components.dropFirst())) }
+            for path in paths {
+                let variants = path.reduce([[]] as [[String]]) { partial, component in
+                    partial.flatMap { prefix in englishAliases(component).map { prefix + [$0] } }
+                }
+                for variant in variants {
+                    for ordered in [variant, Array(variant.reversed())] {
+                        let place = ordered.joined(separator: ", ")
+                        add(place, id: district.id)
+                        if district.countryCode == "CN" {
+                            add(place + ", China", id: district.id)
+                            add("China, " + place, id: district.id)
+                        }
+                    }
+                }
+            }
+        }
+        // An alias shared by distinct complete paths is deliberately unusable.
+        return idsByPlace.compactMapValues { $0.count == 1 ? $0.first : nil }
+    }
+
+    private static func normalizedPlaceKey(_ value: String) -> String? {
+        guard !value.isEmpty, value.count <= 160 else { return nil }
+        let simplified = value.applyingTransform(StringTransform("Traditional-Simplified"), reverse: false) ?? value
+        let folded = simplified.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+        let separators = CharacterSet(charactersIn: " \t,，-'’")
+        guard folded.unicodeScalars.allSatisfy({ CharacterSet.letters.contains($0) || separators.contains($0) }) else { return nil }
+        let key = String(folded.unicodeScalars.filter { CharacterSet.letters.contains($0) })
+        return key.isEmpty ? nil : key
     }
 
     init(data: Data) throws {

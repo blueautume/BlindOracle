@@ -27,7 +27,7 @@ import UIKit
         WindowGroup {
             TabView(selection: $store.selectedTab) {
                 ChatView(draft: $chatDraft).tabItem { Label(L10n.ui("tab.chat", language: preference.language), systemImage: "bubble.left.and.bubble.right") }.tag(0)
-                DataLibraryView(settingsPresented: $settingsPresented).tabItem { Label(L10n.ui("tab.data", language: preference.language), systemImage: "books.vertical") }.tag(1)
+                DataLibraryView(settingsPresented: $settingsPresented).tabItem { Label(L10n.ui("tab.data", language: preference.language), systemImage: "books.vertical").accessibilityIdentifier("dataTab") }.tag(1)
             }
             // Refresh values from view helpers and stores while retaining the app's store.
             .id(preference.language)
@@ -84,7 +84,7 @@ private final class AnalysisBackgroundExecution {
             current = attempt
             protectCurrentWork()
             if let previous { finish(previous, success: false) }
-            if #available(iOS 26.0, *), store.hasCredential, !store.localOnly,
+            if #available(iOS 26.0, *), store.hasCredential,
                UIApplication.shared.applicationState == .active {
                 requestContinuedProcessing(for: attempt)
             }

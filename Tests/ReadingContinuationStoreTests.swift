@@ -62,6 +62,69 @@ final class ReadingContinuationStoreTests: XCTestCase {
         return try decoder.decode(OracleRun.self, from: encoder.encode(run))
     }
 
+    private func eventFixture(method: OracleMethod = .meihua, person: OracleProfile? = nil) async throws -> OracleRun {
+        let question = "今晚的运势如何？"
+        let profile = person ?? OracleProfile()
+        var plan = OraclePlan(intent: "今晚的安排", subject: person == nil ? "事件" : "本人", methods: [method],
+            requiredFields: [], note: "", question: question)
+        plan.participantIDs = person.map { [$0.id] } ?? []
+        plan.participantNames = person.map { [$0.participantLabel] } ?? []
+        let input = OracleInput(question: question, profile: profile,
+            castingDate: Date(timeIntervalSince1970: 1_730_000_000), seed: 73, subject: plan.subject,
+            participants: person.map { [$0] } ?? [])
+        let results = await PluginRegistry().calculate(input, methods: [method]) { _ in }
+        XCTAssertEqual(results.count, 1)
+        XCTAssertTrue(results.allSatisfy { [.complete, .partial].contains($0.status) })
+        var run = OracleRun(input: input, plan: plan, results: results)
+        run.synthesis = ReadingSynthesis(text: "先把今晚的安排交代清楚，再决定停留多久。", alternatives: [])
+        run.completedAt = input.castingDate
+        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(OracleRun.self, from: encoder.encode(run))
+    }
+
+    private var methodActivationCases: [(OracleMethod, String)] {
+        [(.bazi, "八字"), (.ziwei, "紫微斗数"), (.liuyao, "六爻"), (.meihua, "梅花易数"),
+         (.qimen, "奇门遁甲"), (.xiaoliuren, "小六壬"), (.chenggu, "称骨"),
+         (.xingming, "姓名五格"), (.astrology, "西方占星"), (.tarot, "塔罗牌")]
+    }
+
+    private func activationProfile() throws -> OracleProfile {
+        var person = try XCTUnwrap(ProfileDirectory.applying([ProfileUpdate(name: "陈平", sex: "男",
+            birthDate: "1992-06-15", birthTime: "08:30", birthTimeZoneID: "Asia/Shanghai")], to: []).profiles.first)
+        person.familyName = "陈"; person.givenName = "平"
+        person.birthPlace = "上海"; person.birthLatitude = 31.2304; person.birthLongitude = 121.4737
+        person.currentTimeZoneID = "Asia/Shanghai"
+        return person
+    }
+
+    @MainActor private func completeRequestedInteraction(_ method: OracleMethod, in store: OracleStore) throws -> [TarotDraw] {
+        let session = try XCTUnwrap(store.pendingInteraction, "\(method) must request its actual user interaction")
+        let request = try XCTUnwrap(session.currentRequest)
+        XCTAssertEqual(session.requests.map(\.method), [method])
+        let draws: [TarotDraw]
+        let response: OracleInteractionResponse
+        switch method {
+        case .tarot:
+            XCTAssertEqual(request.kind, .tarot)
+            XCTAssertEqual(request.tarotPositions, TarotDeck.positions)
+            XCTAssertNil(session.input.tarotDraws)
+            draws = zip(session.availableTarotCards.prefix(3), request.tarotPositions).map { card, position in
+                TarotDraw(cardID: card.id, isReversed: TarotDeck.isReversed(seed: session.seed, cardID: card.id), position: position)
+            }
+            response = .init(requestID: request.id, tarotDraws: draws, revealedCount: 3)
+        case .liuyao:
+            XCTAssertEqual(request.kind, .coins)
+            draws = []
+            response = .init(requestID: request.id, lines: [6, 7, 8, 9, 7, 8])
+        default:
+            XCTFail("Unexpected interaction for \(method)")
+            return []
+        }
+        store.completeInteraction(response, sessionID: session.id)
+        return draws
+    }
+
     @MainActor private func restoredStore(run: OracleRun, vault: LocalVault) throws -> OracleStore {
         let messages = [ChatMessage(role: .user, content: run.input.question),
                         ChatMessage(role: .assistant, content: run.synthesis!.text, kind: .reading, runID: run.id)]
@@ -188,7 +251,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         store.saveIntakeDraft(profiles: [person], numbers: [], sessionID: oldForm)
         store.send("换成紫微")
         try await waitUntilIdle(store)
-        XCTAssertEqual(store.pendingPlan?.question, question)
+        XCTAssertEqual(store.pendingPlan?.question, question.replacingOccurrences(of: "八字", with: OracleMethod.ziwei.progressName))
         XCTAssertEqual(store.pendingPlan?.methods, [.ziwei])
         XCTAssertEqual(store.intakeParticipants.first?.id, person.id)
         XCTAssertEqual(store.intakeParticipants.first?.birthTimeText, person.birthTimeText)
@@ -203,6 +266,29 @@ final class ReadingContinuationStoreTests: XCTestCase {
         XCTAssertEqual(store.pendingPlan?.question, "改用塔罗看王安")
         XCTAssertEqual(store.pendingPlan?.methods, [.tarot])
         XCTAssertEqual(store.intakeParticipants.map(\.id), [newPerson.id])
+    }
+
+    @MainActor func testAddingTarotToAPendingFormKeepsItsMethodsUntilThePersonChanges() async throws {
+        let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
+        var chen = OracleProfile(); chen.name = "陈平"
+        var li = OracleProfile(); li.name = "李岚"
+        store.saveProfile(chen); store.saveProfile(li)
+        store.send("只用八字看看陈平今年的工作")
+        try await waitUntilIdle(store)
+        XCTAssertEqual(store.pendingPlan?.methods, [.bazi])
+
+        store.send("加上塔罗")
+        try await waitUntilIdle(store)
+        XCTAssertEqual(Set(store.pendingPlan?.methods ?? []), [.bazi, .tarot])
+        XCTAssertEqual(store.intakeParticipants.map(\.id), [chen.id])
+
+        store.send("再用塔罗看看李岚的感情")
+        try await waitUntilIdle(store)
+        XCTAssertEqual(store.pendingPlan?.methods, [.tarot])
+        XCTAssertEqual(store.pendingPlan?.mandatoryMethods, [.tarot])
+        XCTAssertEqual(store.intakeParticipants.map(\.id), [li.id])
+        XCTAssertFalse(store.pendingPlan?.requiredFields.contains(.birthDate) ?? true)
+        XCTAssertNil(store.pendingPlan?.baseRunID)
     }
 
     @MainActor func testSwitchingPersonAndThenAskingAboutBothUsesTheRightBirthCharts() async throws {
@@ -624,6 +710,162 @@ final class ReadingContinuationStoreTests: XCTestCase {
         XCTAssertEqual(session.input.question, original.input.question)
         XCTAssertEqual(session.input.manualLines, original.input.manualLines)
         XCTAssertEqual(store.runs.map(\.id), [original.id])
+    }
+
+    @MainActor func testScreenshotTarotRequestsActuallyDrawCardsAfterAMeihuaReading() async throws {
+        for question in ["你再用塔罗牌再试试呢？", "用塔罗牌计算今晚的运势"] {
+            let original = try await eventFixture()
+            let originalData = try snapshot(original)
+            let store = try restoredStore(run: original, vault: temporaryVault())
+            store.send(question)
+            try await waitUntilIdle(store)
+
+            if let pending = store.pendingPlan {
+                XCTAssertTrue(pending.methods.contains(.tarot), question)
+                XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], save: false), question)
+                try await waitUntilIdle(store)
+            }
+            XCTAssertEqual(store.runs.map(\.id), [original.id], question)
+            let draws = try completeRequestedInteraction(.tarot, in: store)
+            try await waitUntilIdle(store)
+
+            let run = try XCTUnwrap(store.runs.last)
+            XCTAssertNotEqual(run.id, original.id, question)
+            let result = try XCTUnwrap(run.results.first { $0.method == .tarot }, question)
+            XCTAssertTrue([.complete, .partial].contains(result.status), question)
+            XCTAssertEqual(run.input.tarotDraws, draws, question)
+            XCTAssertEqual(result.tarotDraws, draws, question)
+            XCTAssertEqual(store.messages.last?.runID, run.id, question)
+            XCTAssertEqual(try snapshot(store.runs[0]), originalData, question)
+            XCTAssertNil(store.pendingInteraction, question)
+            XCTAssertNil(store.pendingPlan, question)
+        }
+    }
+
+    @MainActor func testAllTenMethodsActivateFromNaturalRetryRequestsAndProduceTheirOwnResults() async throws {
+        let person = try activationProfile()
+        XCTAssertEqual(Set(methodActivationCases.map(\.0)), Set(OracleMethod.allCases))
+
+        for (method, name) in methodActivationCases {
+            let baseMethod: OracleMethod = method == .meihua ? .xiaoliuren : .meihua
+            let original = try await eventFixture(method: baseMethod, person: person)
+            let originalData = try snapshot(original)
+            let store = try restoredStore(run: original, vault: temporaryVault())
+            store.saveProfile(original.input.profile)
+            let question = "再用\(name)再试试呢？"
+            store.send(question)
+            try await waitUntilIdle(store)
+
+            if let pending = store.pendingPlan {
+                XCTAssertTrue(pending.methods.contains(method), question)
+                XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], save: false), question)
+                try await waitUntilIdle(store)
+            }
+            let draws: [TarotDraw]
+            if method == .tarot || method == .liuyao {
+                XCTAssertEqual(store.runs.map(\.id), [original.id], question)
+                draws = try completeRequestedInteraction(method, in: store)
+                try await waitUntilIdle(store)
+            } else {
+                draws = []
+                XCTAssertNil(store.pendingInteraction, question)
+            }
+
+            XCTAssertEqual(store.runs.count, 2, question)
+            let run = try XCTUnwrap(store.runs.last)
+            XCTAssertNotEqual(run.id, original.id, question)
+            let result = try XCTUnwrap(run.results.first { $0.method == method }, question)
+            XCTAssertTrue([.complete, .partial].contains(result.status), question)
+            XCTAssertFalse(result.rows.isEmpty, question)
+            XCTAssertTrue(Set(run.results.map(\.method)).isSubset(of: [baseMethod, method]), question)
+            if method == .tarot { XCTAssertEqual(result.tarotDraws, draws, question) }
+            if method == .liuyao { XCTAssertEqual(run.input.manualLines, [6, 7, 8, 9, 7, 8], question) }
+            XCTAssertEqual(store.messages.last?.runID, run.id, question)
+            XCTAssertEqual(try snapshot(store.runs[0]), originalData, question)
+            XCTAssertNil(store.pendingPlan, question)
+            XCTAssertNil(store.pendingInteraction, question)
+        }
+    }
+
+    @MainActor func testFirstNamedCalculationRunsOnlyTheRequestedMethodAcrossAllTenMethods() async throws {
+        let person = try activationProfile()
+        XCTAssertEqual(Set(methodActivationCases.map(\.0)), Set(OracleMethod.allCases))
+        for (method, name) in methodActivationCases {
+            let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
+            store.saveProfile(person)
+            store.selfProfileID = person.id
+            let question = "用\(name)计算今晚的运势"
+            store.send(question)
+            try await waitUntilIdle(store)
+
+            let plan = try XCTUnwrap(store.pendingPlan, question)
+            XCTAssertEqual(plan.methods, [method], question)
+            XCTAssertEqual(plan.mandatoryMethods, [method], question)
+            XCTAssertNil(plan.baseRunID, question)
+            XCTAssertTrue(store.showIntake, question)
+            XCTAssertTrue(store.runs.isEmpty, question)
+            XCTAssertNil(store.pendingInteraction, question)
+            let descriptor = try XCTUnwrap(store.registry.descriptors.first { $0.method == method })
+            XCTAssertTrue(Set(plan.requiredFields).isSubset(of: Set(descriptor.requiredFields + descriptor.optionalFields)), question)
+            if !method.usesPersonalProfile {
+                XCTAssertTrue(plan.requiredFields.isEmpty, "\(question) must not ask for unrelated birth details")
+            }
+            XCTAssertEqual(OracleInteractionPolicy.requests(for: plan).map(\.method),
+                method == .tarot || method == .liuyao ? [method] : [], question)
+            let participants = method.usesPersonalProfile ? store.intakeParticipants : []
+            if method.usesPersonalProfile { XCTAssertEqual(participants.map(\.id), [person.id], question) }
+            XCTAssertTrue(store.confirmGroupIntake(profiles: participants, numbers: [], save: false), question)
+            try await waitUntilIdle(store)
+
+            let draws: [TarotDraw]
+            if method == .tarot || method == .liuyao {
+                XCTAssertTrue(store.runs.isEmpty, question)
+                draws = try completeRequestedInteraction(method, in: store)
+                try await waitUntilIdle(store)
+            } else {
+                draws = []
+                XCTAssertNil(store.pendingInteraction, question)
+            }
+            XCTAssertEqual(store.runs.count, 1, question)
+            let run = try XCTUnwrap(store.latestRun, question)
+            XCTAssertEqual(run.plan.methods, [method], question)
+            XCTAssertEqual(run.results.map(\.method), [method], question)
+            let result = try XCTUnwrap(run.results.first, question)
+            XCTAssertTrue([.complete, .partial].contains(result.status), question)
+            XCTAssertFalse(result.rows.isEmpty, question)
+            if method == .tarot { XCTAssertEqual(result.tarotDraws, draws, question) }
+            else { XCTAssertNil(run.input.tarotDraws, question) }
+            if method == .liuyao { XCTAssertEqual(run.input.manualLines, [6, 7, 8, 9, 7, 8], question) }
+            else { XCTAssertTrue(run.input.manualLines.isEmpty, question) }
+            XCTAssertEqual(store.messages.last?.runID, run.id, question)
+            XCTAssertNil(store.pendingPlan, question)
+            XCTAssertNil(store.pendingInteraction, question)
+        }
+    }
+
+    @MainActor func testPersonalMethodRetryRequestsOpenIntakeWhenRequiredDetailsAreMissing() async throws {
+        for (method, name) in methodActivationCases where method.usesPersonalProfile {
+            var person = OracleProfile(); person.name = "陈平"
+            let original = try await eventFixture(person: person)
+            let originalData = try snapshot(original)
+            let store = try restoredStore(run: original, vault: temporaryVault())
+            store.saveProfile(original.input.profile)
+            let question = "再用\(name)再试试呢？"
+            store.send(question)
+            try await waitUntilIdle(store)
+
+            let pending = try XCTUnwrap(store.pendingPlan, question)
+            XCTAssertTrue(pending.methods.contains(method), question)
+            XCTAssertTrue(store.showIntake, question)
+            XCTAssertNil(store.pendingInteraction, question)
+            XCTAssertEqual(store.runs.map(\.id), [original.id], question)
+            let report = try XCTUnwrap(store.intakePreparationReport(for: store.intakeParticipants), question)
+            let assessment = try XCTUnwrap(report.assessments.first { $0.method == method }, question)
+            XCTAssertFalse(assessment.canExecute, question)
+            let expectedMissing: OracleField = method == .xingming ? .surname : .birthDate
+            XCTAssertTrue(assessment.blocking.contains { $0.field == expectedMissing }, question)
+            XCTAssertEqual(try snapshot(store.runs[0]), originalData, question)
+        }
     }
 
     @MainActor func testBirthTimeCorrectionRecalculatesOnlyBaziAndKeepsTheImmediateResult() async throws {

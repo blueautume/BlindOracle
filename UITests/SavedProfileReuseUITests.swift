@@ -57,7 +57,7 @@ final class SavedProfileReuseUITests: XCTestCase {
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: interaction)
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
         interaction.tap()
-        let summary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "当前为本地试算")).firstMatch
+        let summary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "这次推演已完成")).firstMatch
         XCTAssertTrue(summary.waitForExistence(timeout: 30))
         XCTAssertFalse(form.exists)
         XCTAssertEqual(app.sheets.count, 0)

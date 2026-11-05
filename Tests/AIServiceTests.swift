@@ -12,54 +12,35 @@ final class AIServiceTests: XCTestCase {
         XCTAssertFalse(DeepSeekClient.modelsMatch(requested: "", returned: "-0813"))
     }
 
-    func testQwenPinnedSnapshotAcceptsOnlyTheExactReleaseAndItsDateAlias() {
-        let requested = "qwen3.8-max-0902"
-        XCTAssertTrue(DeepSeekClient.modelsMatch(requested: requested, returned: requested))
-        XCTAssertTrue(DeepSeekClient.modelsMatch(requested: requested, returned: " qwen3.8-max-2026-09-02\n"))
-        for returned in ["qwen3.8-max", "qwen3.8-max-0903", "qwen3.8-max-2026-09-03", "qwen3.8-max-0902-preview", "qwen3.8-flash"] {
-            XCTAssertFalse(DeepSeekClient.modelsMatch(requested: requested, returned: returned), returned)
+    func testServiceErrorsDoNotExposeCredentialsProvidersOrModelSettings() {
+        let errors: [DeepSeekError] = [.missingKey, .invalidResponse, .malformedJSON, .truncated,
+            .http(401), .http(402), .http(403), .http(429), .http(500), .missingResponseModel,
+            .unexpectedModel(requested: "internal-request-model", actual: "internal-response-model"),
+            .provider("private-server-message")]
+        for language in [AppLanguage.simplifiedChinese, .english] {
+            AppLanguage.$override.withValue(language) {
+                for error in errors {
+                    let message = error.localizedDescription.lowercased()
+                    XCTAssertFalse(message.isEmpty)
+                    for hidden in ["deepseek", "qwen", "api", "key", "密钥", "模型", "设置", "internal-", "private-server-message"] {
+                        XCTAssertFalse(message.contains(hidden), "\(message) exposes \(hidden)")
+                    }
+                }
+            }
         }
     }
 
-    func testQwenRequestUsesBailianParametersForPlanningAndStreaming() {
-        let provider = AIProvider.qwen
-        let messages = [
-            AIConversationTurn(role: "assistant", content: "此前的回答"),
-            AIConversationTurn(role: "user", content: "请输出 json")
-        ]
-        XCTAssertEqual(provider.endpoint.host, "dashscope.aliyuncs.com")
-        XCTAssertEqual(provider.endpoint.path, "/compatible-mode/v1/chat/completions")
-        for streaming in [false, true] {
-            let body = DeepSeekClient.requestBody(messages, model: provider.model(),
-                jsonMode: true, streaming: streaming, maxTokens: 2400, provider: provider)
-            XCTAssertEqual(body["model"] as? String, "qwen3.8-max-0902")
-            XCTAssertEqual(body["messages"] as? [[String: String]], [
-                ["role": "assistant", "content": "此前的回答"],
-                ["role": "user", "content": "请输出 json"]
-            ])
-            XCTAssertEqual(body["enable_thinking"] as? Bool, true)
-            XCTAssertEqual(body["preserve_thinking"] as? Bool, false)
-            XCTAssertEqual(body["reasoning_effort"] as? String, "xhigh")
-            XCTAssertEqual(body["max_completion_tokens"] as? Int, 65_536)
-            XCTAssertEqual(body["stream"] as? Bool, streaming)
-            XCTAssertEqual((body["stream_options"] as? [String: Bool])?["include_usage"], streaming ? true : nil)
-            XCTAssertEqual((body["response_format"] as? [String: String])?["type"], "json_object")
-            XCTAssertNil(body["thinking"])
-            XCTAssertNil(body["max_tokens"])
-        }
-    }
-
-    func testBailianStreamSeparatesVisibleAnswerAndUsageFromHiddenReasoning() throws {
+    func testStreamSeparatesVisibleAnswerAndUsageFromHiddenReasoning() throws {
         var framer = DeepSeekSSEFramer()
         let lines = [
-            #"data: {"model":"qwen3.8-max-0902","choices":[{"delta":{"content":null,"reasoning_content":"private"},"finish_reason":null}]}"#,
-            #"data: {"model":"qwen3.8-max-0902","choices":[{"delta":{"content":"可先观察"},"finish_reason":null}]}"#,
-            #"data: {"model":"qwen3.8-max-0902","choices":[{"delta":{},"finish_reason":"stop"}]}"#,
-            #"data: {"model":"qwen3.8-max-0902","choices":[],"usage":{"prompt_tokens":12,"completion_tokens":8,"total_tokens":20,"completion_tokens_details":{"reasoning_tokens":5}}}"#,
+            #"data: {"model":"deepseek-v4-pro","choices":[{"delta":{"content":null,"reasoning_content":"private"},"finish_reason":null}]}"#,
+            #"data: {"model":"deepseek-v4-pro","choices":[{"delta":{"content":"可先观察"},"finish_reason":null}]}"#,
+            #"data: {"model":"deepseek-v4-pro","choices":[{"delta":{},"finish_reason":"stop"}]}"#,
+            #"data: {"model":"deepseek-v4-pro","choices":[],"usage":{"prompt_tokens":12,"completion_tokens":8,"total_tokens":20,"completion_tokens_details":{"reasoning_tokens":5}}}"#,
             "data: [DONE]"
         ]
         let chunks = try lines.compactMap { try framer.push($0) }
-        XCTAssertEqual(Set(chunks.compactMap(\.model)), ["qwen3.8-max-0902"])
+        XCTAssertEqual(Set(chunks.compactMap(\.model)), ["deepseek-v4-pro"])
         XCTAssertEqual(chunks.map(\.content).joined(), "可先观察")
         XCTAssertEqual(chunks.compactMap(\.finishReason), ["stop"])
         XCTAssertEqual(chunks.compactMap { $0.usage?.reasoningTokens }, [5])
@@ -150,7 +131,7 @@ final class AIServiceTests: XCTestCase {
     func testPlanningAndStreamingRequestsKeepTheSameProThinkingAndOutputBudget() {
         let messages = [AIConversationTurn(role: "user", content: "synthetic check")]
         for streaming in [false, true] {
-            let body = DeepSeekClient.requestBody(messages, model: DeepSeekConfiguration.defaultModel,
+            let body = DeepSeekClient.requestBody(messages,
                 jsonMode: true, streaming: streaming, maxTokens: 2400)
             XCTAssertEqual(body["model"] as? String, "deepseek-v4-pro")
             XCTAssertEqual((body["thinking"] as? [String: String])?["type"], "enabled")
@@ -159,7 +140,7 @@ final class AIServiceTests: XCTestCase {
             XCTAssertEqual(body["stream"] as? Bool, streaming)
             XCTAssertEqual((body["response_format"] as? [String: String])?["type"], "json_object")
         }
-        let plain = DeepSeekClient.requestBody(messages, model: DeepSeekConfiguration.defaultModel,
+        let plain = DeepSeekClient.requestBody(messages,
             jsonMode: false, streaming: false, maxTokens: 128)
         XCTAssertNil(plain["response_format"])
         XCTAssertEqual(plain["max_tokens"] as? Int, 65_536)
@@ -345,15 +326,15 @@ final class AIServiceTests: XCTestCase {
 }
 
 extension AIServiceTests {
-    func testBothProvidersPlanAndStreamAnEnglishReadingWithLegacyHistory() async throws {
+    func testDeepSeekPlansAndStreamsAnEnglishReadingWithLegacyHistory() async throws {
         let question = "Should I apply for the new job?"
         let history = [AIConversationTurn(role: "assistant", content: "上次的对话原文")]
         let profile = OracleProfile()
         let plugins = PluginRegistry().descriptors
-        for provider in AIProvider.allCases {
+        do {
             let configuration = URLSessionConfiguration.ephemeral
             configuration.protocolClasses = [ReadingURLProtocol.self]
-            let client = DeepSeekClient(provider: provider, apiKey: "test-key", sessionConfiguration: configuration)
+            let client = DeepSeekClient(apiKey: "test-key", sessionConfiguration: configuration)
             let plan = try await client.plan(question: question, profile: profile, plugins: plugins, history: history, language: .english)
             XCTAssertEqual(plan.action, "intake")
             XCTAssertEqual(plan.subject, "本人")
@@ -365,7 +346,7 @@ extension AIServiceTests {
 
             var run = OracleRun(input: OracleInput(question: question, profile: profile), plan: plan)
             run.results = [OracleResult(method: .tarot, headline: "Test Tarot result", rows: [])]
-            let visible = XCTestExpectation(description: "\(provider) streamed only the visible reply")
+            let visible = XCTestExpectation(description: "DeepSeek streamed only the visible reply")
             let synthesis = try await client.synthesize(run: run, weights: [:], history: history, language: .english) { delta in
                 XCTAssertEqual(delta, "Apply if the role fits your priorities.")
                 visible.fulfill()
@@ -376,7 +357,7 @@ extension AIServiceTests {
         }
     }
 
-    func testBothProvidersSendEachVoiceForSynthesisAndFollowUpWithoutChangingFormats() async throws {
+    func testDeepSeekSendsEachVoiceForSynthesisAndFollowUpWithoutChangingFormats() async throws {
         let question = "这个新项目靠谱吗？"
         let followUp = "如果分工仍不明确呢？"
         let profile = OracleProfile()
@@ -386,13 +367,13 @@ extension AIServiceTests {
                             results: [OracleResult(method: .tarot, headline: "测试牌面", rows: [])])
         let history = [AIConversationTurn(role: "assistant", content: "上次的对话原文")]
 
-        for provider in AIProvider.allCases {
+        do {
             for voice in OracleVoiceStyle.allCases {
                 let configuration = URLSessionConfiguration.ephemeral
                 configuration.protocolClasses = [ReadingURLProtocol.self]
-                let client = DeepSeekClient(provider: provider, apiKey: "test-voice-\(voice.rawValue)",
+                let client = DeepSeekClient(apiKey: "test-voice-\(voice.rawValue)",
                                             sessionConfiguration: configuration)
-                let synthesisDelta = expectation(description: "\(provider) \(voice) streamed synthesis text")
+                let synthesisDelta = expectation(description: "DeepSeek \(voice) streamed synthesis text")
                 let synthesis = try await client.synthesize(run: run, weights: [:], history: history,
                                                             language: .simplifiedChinese, voice: voice) { delta in
                     XCTAssertEqual(delta, "先问清分工。")
@@ -400,7 +381,7 @@ extension AIServiceTests {
                 }
                 XCTAssertEqual(synthesis.text, "先问清分工。")
                 XCTAssertTrue(synthesis.alternatives.isEmpty)
-                let followUpDelta = expectation(description: "\(provider) \(voice) streamed follow-up text")
+                let followUpDelta = expectation(description: "DeepSeek \(voice) streamed follow-up text")
                 let reply = try await client.followUp(question: followUp, run: run, profile: profile, history: history,
                                                       language: .simplifiedChinese, voice: voice) { delta in
                     XCTAssertEqual(delta, "先别答应。")
@@ -411,10 +392,56 @@ extension AIServiceTests {
             }
         }
     }
+
+    func testCompletedFreshTarotSynthesisTargetsTheOriginalQuestionDespiteRedrawHistory() async throws {
+        let question = "今晚和朋友谈合作，应该先确认分工还是预算？"
+        let draws = zip(["cups-02", "pentacles-06", "swords-04"], TarotDeck.positions).enumerated().map {
+            TarotDraw(cardID: $0.element.0, isReversed: $0.offset == 1, position: $0.element.1)
+        }
+        var input = OracleInput(question: question, profile: OracleProfile(), seed: 73, subject: "事件", tarotDraws: draws, participants: [])
+        input.interactionResponses = [.init(requestID: "tarot", tarotDraws: draws, revealedCount: 3)]
+        let plan = OraclePlan(intent: "合作安排", subject: "事件", methods: [.tarot], requiredFields: [], note: "", question: question)
+        let result = try await TarotPlugin().calculate(input)
+        XCTAssertEqual(result.status, .complete)
+        XCTAssertEqual(result.tarotDraws, draws)
+        let run = OracleRun(input: input, plan: plan, results: [result])
+        XCTAssertNil(run.plan.followUpQuestion)
+        try await assertSynthesisTaskRequest(run: run, expectedDraws: draws, result: result)
+    }
+
+    func testSynthesisDoesNotClaimCompletedTarotWhenOnlyMeihuaReturnedAUsableResult() async throws {
+        let question = "今晚和朋友谈合作，应该先确认分工还是预算？"
+        let input = OracleInput(question: question, profile: OracleProfile(), seed: 73, subject: "事件", participants: [])
+        let plan = OraclePlan(intent: "合作安排", subject: "事件", methods: [.meihua, .tarot], requiredFields: [], note: "", question: question)
+        let result = try await MeihuaPlugin().calculate(input)
+        XCTAssertTrue([.complete, .partial].contains(result.status))
+        let unavailable = try await TarotPlugin().calculate(input)
+        XCTAssertEqual(unavailable.status, .unavailable)
+        let run = OracleRun(input: input, plan: plan, results: [result, unavailable])
+        try await assertSynthesisTaskRequest(run: run, expectedDraws: [], result: result)
+    }
+
+    private func assertSynthesisTaskRequest(run: OracleRun, expectedDraws: [TarotDraw], result: OracleResult) async throws {
+        let operation = "我是想重新抽三张牌，不是解释旧结果。"
+        let oldAnswer = "我不能重新抽牌，得你自己在界面再抽三张，抽完再解。"
+        let history = [AIConversationTurn(role: "user", content: run.input.question),
+            AIConversationTurn(role: "assistant", content: oldAnswer), AIConversationTurn(role: "user", content: operation)]
+        let inspected = expectation(description: "The encoded synthesis request identifies the completed calculation and current question")
+        let key = UUID().uuidString
+        SynthesisTaskURLProtocol.install(.init(question: run.input.question, draws: expectedDraws, result: result,
+            operation: operation, oldAnswer: oldAnswer, inspected: inspected), key: key)
+        defer { SynthesisTaskURLProtocol.remove(key) }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [SynthesisTaskURLProtocol.self]
+        let client = DeepSeekClient(apiKey: key, sessionConfiguration: configuration)
+        let synthesis = try await client.synthesize(run: run, weights: [:], history: history, language: .simplifiedChinese) { _ in }
+        await fulfillment(of: [inspected], timeout: 1)
+        XCTAssertFalse(synthesis.text.isEmpty)
+    }
 }
 
 /// Validates real encoded requests while supplying synthetic API envelopes for
-/// both provider endpoints. This protocol claims all requests in the test session.
+/// the fixed interpretation endpoint. It claims all requests in the test session.
 private final class ReadingURLProtocol: URLProtocol, @unchecked Sendable {
     private static let voiceTitles = [
         "Bearer test-voice-classic": "经典",
@@ -440,8 +467,10 @@ private final class ReadingURLProtocol: URLProtocol, @unchecked Sendable {
                   let system = turns.first?["content"],
                   let latest = turns.last?["content"],
                   turns.contains(["role": "assistant", "content": "上次的对话原文"]),
-                  (host == "api.deepseek.com" && body["thinking"] != nil
-                    || host == "dashscope.aliyuncs.com" && body["enable_thinking"] as? Bool == true) else {
+                  host == "api.deepseek.com", model == DeepSeekConfiguration.defaultModel,
+                  (body["thinking"] as? [String: String])?["type"] == "enabled",
+                  body["reasoning_effort"] as? String == "max",
+                  body["max_tokens"] as? Int == 65_536 else {
                 throw URLError(.badServerResponse)
             }
 
@@ -506,6 +535,99 @@ private final class ReadingURLProtocol: URLProtocol, @unchecked Sendable {
             if count == 0 { return output }
             guard count > 0 else { throw stream.streamError ?? URLError(.badServerResponse) }
             output.append(contentsOf: buffer.prefix(count))
+        }
+    }
+}
+
+/// Checks the real transport payload using real plugin output. The synthetic
+/// reply only finishes the request; it does not stand in for intent validation.
+private final class SynthesisTaskURLProtocol: URLProtocol, @unchecked Sendable {
+    struct Fixture {
+        let question: String
+        let draws: [TarotDraw]
+        let result: OracleResult
+        let operation: String
+        let oldAnswer: String
+        let inspected: XCTestExpectation
+    }
+    private static let lock = NSLock()
+    private static var fixtures: [String: Fixture] = [:]
+
+    static func install(_ fixture: Fixture, key: String) { lock.withLock { fixtures["Bearer " + key] = fixture } }
+    static func remove(_ key: String) { lock.withLock { _ = fixtures.removeValue(forKey: "Bearer " + key) } }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        do {
+            let key = request.value(forHTTPHeaderField: "Authorization") ?? ""
+            let fixture = try XCTUnwrap(Self.lock.withLock { Self.fixtures[key] })
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: requestData()) as? [String: Any])
+            XCTAssertEqual(request.url, DeepSeekConfiguration.endpoint)
+            XCTAssertEqual(body["model"] as? String, DeepSeekConfiguration.defaultModel)
+            XCTAssertEqual(body["stream"] as? Bool, true)
+            XCTAssertEqual((body["response_format"] as? [String: String])?["type"], "json_object")
+            let turns = try XCTUnwrap(body["messages"] as? [[String: String]])
+            let system = try XCTUnwrap(turns.first?["content"])
+            XCTAssertEqual(turns.first?["role"], "system")
+            XCTAssertTrue(system.contains("当前阶段是可用结果计算完成后的解读"))
+            XCTAssertTrue(system.contains("其对应的历史“重抽”“再掷”等操作请求已经完成"))
+            // Direct client callers retain both historical turns; the final
+            // task must still override the old operational conversation.
+            XCTAssertTrue(turns.dropFirst().dropLast().contains(["role": "user", "content": fixture.operation]))
+            XCTAssertTrue(turns.dropFirst().dropLast().contains(["role": "assistant", "content": fixture.oldAnswer]))
+            XCTAssertEqual(turns.last?["role"], "user")
+            let payload = try XCTUnwrap(turns.last?["content"])
+            let task = try XCTUnwrap(payload.components(separatedBy: "\n\n").last)
+            XCTAssertTrue(task.contains("现在请依据以上本轮结果回答这个问事"))
+            XCTAssertTrue(task.contains(fixture.question))
+            XCTAssertFalse(task.contains(fixture.operation))
+            XCTAssertTrue(task.contains("不要把历史中的重抽操作句当成本轮问事"))
+
+            func line(_ label: String) throws -> Data {
+                let value = try XCTUnwrap(payload.components(separatedBy: "\n").first { $0.hasPrefix(label) })
+                return Data(value.dropFirst(label.count).utf8)
+            }
+            let savedDraws = try JSONDecoder().decode([TarotDraw].self, from: line("原始塔罗牌位及正逆位 json："))
+            XCTAssertEqual(savedDraws, fixture.draws)
+            let usable = try XCTUnwrap(JSONSerialization.jsonObject(with: line("全部可用结果 json：")) as? [[String: Any]])
+            XCTAssertEqual(usable.compactMap { $0["method"] as? String }, [fixture.result.method.rawValue])
+            XCTAssertEqual(usable.compactMap { $0["id"] as? String }.map { $0.lowercased() }, [fixture.result.id.uuidString.lowercased()])
+            if fixture.draws.count == 3 {
+                XCTAssertTrue(payload.contains("本轮塔罗初阵确认状态：已确认3张有效初阵牌，抽牌和计算均已完成"))
+                XCTAssertFalse(payload.contains("没有已确认可用的塔罗初阵结果"))
+            } else {
+                XCTAssertTrue(payload.contains("本轮塔罗初阵确认状态：没有已确认可用的塔罗初阵结果"))
+                XCTAssertFalse(payload.contains("已确认3张有效初阵牌，抽牌和计算均已完成"))
+            }
+            fixture.inspected.fulfill()
+            let text = #"{"text":"先确认分工和预算，再决定合作安排。","alternatives":[]}"#
+            let event: [String: Any] = ["model": DeepSeekConfiguration.defaultModel,
+                "choices": [["delta": ["content": text], "finish_reason": "stop"]]]
+            let framed = "data: " + String(decoding: try JSONSerialization.data(withJSONObject: event), as: UTF8.self) + "\n\ndata: [DONE]\n\n"
+            let response = try XCTUnwrap(HTTPURLResponse(url: DeepSeekConfiguration.endpoint, statusCode: 200,
+                httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "text/event-stream"]))
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data(framed.utf8))
+            client?.urlProtocolDidFinishLoading(self)
+        } catch {
+            client?.urlProtocol(self, didFailWithError: error)
+        }
+    }
+
+    override func stopLoading() {}
+
+    private func requestData() throws -> Data {
+        if let data = request.httpBody { return data }
+        let stream = try XCTUnwrap(request.httpBodyStream)
+        stream.open(); defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count == 0 { return data }
+            guard count > 0 else { throw stream.streamError ?? URLError(.badServerResponse) }
+            data.append(contentsOf: buffer.prefix(count))
         }
     }
 }

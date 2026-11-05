@@ -16,6 +16,8 @@ enum ReadingContinuationPolicy {
     ]
     private static let newQuestionPattern = #"(?:换个新?|换一个新?|另一个|另外一个|另问(?:一件|一桩|个|一个)?|换一件|问(?:个|一个|一件)新)(?:问题|事|事情)"#
     private static let personSwitch = #"(?:换(?:个|一个|一位|位|成另一个|成另一位|成别的|成其他)人|(?:换成|改看|改问|改算)(?:(?:我自己|本人|我|他|她|别人|其他人|另一个人|另一位)(?=$|[的呢吧了])|我(?:的)?(?:同事|同学|朋友|对象|家人|爸爸|妈妈)))"#
+    private static let calculationVerb = #"(?:计算|测算|算(?:一下|一次|一遍|一算|算)?|看看|看一下|看一看|排盘(?:分析)?|推演(?:一下)?|试试看|试试|试一下|试一试|尝试|分析(?:一下)?|解读(?:一下)?|参考(?:一下)?|测(?:一测|一下|测)|占卜|起(?:一|个|一轮)?卦|抽(?:(?:一次|一组|三张)牌?|牌))"#
+    private static let calculationModifiers = #"(?:再|也|来|帮我|替我|给我|仔细|好好|认真)*"#
 
     enum ScopeChange: Equatable { case none, explicit, inferred }
 
@@ -150,8 +152,8 @@ enum ReadingContinuationPolicy {
     /// Named calculations can be used on a fresh or existing question. An explicit
     /// addition also asks to keep the current question.
     static func requestedAdditionalMethods(in question: String, requiresAdditiveWording: Bool = false) -> [OracleMethod] {
-        guard !explicitlyChangesScope(question) else { return [] }
-        let english = EnglishConversation.requestedMethods(in: question, additive: requiresAdditiveWording)
+        guard !explicitlyChangesScope(question), !EnglishConversation.requestsRecast(question),
+              !requestsReplacementTarotSpread(question) else { return [] }
         let namedMethod = "(?:" + methodNames.map { $0.1 }.joined(separator: "|") + ")"
         // A generic "再帮我算一下" can be the second half of a supplement.
         // Only a concrete fresh draw, restart or changed question overrides it.
@@ -161,24 +163,44 @@ enum ReadingContinuationPolicy {
             #"(?:改用|换用|改成|换成|再用)"# + namedMethod + #".{0,6}(?:起(?:一|个|一轮)?卦|抽(?:(?:一次|一组|三张)牌?|牌)|占卜)"#
         ]
         guard !hasAffirmativeMatch(in: question, patterns: freshScopePatterns) else { return [] }
+        return requestedCalculationMethods(in: question, requiresAdditiveWording: requiresAdditiveWording)
+    }
+
+    /// Extract explicit method commands independently of whether they belong to
+    /// a new question or supplement. A mention or explanation is not a command.
+    static func requestedCalculationMethods(in question: String, requiresAdditiveWording: Bool = false) -> [OracleMethod] {
+        let english = EnglishConversation.requestedMethods(in: question, additive: requiresAdditiveWording, allowFreshScope: true)
         let clauses = question.components(separatedBy: CharacterSet(charactersIn: "，,。；;！!？?\n"))
         let additions = #"(?:加上|加个|加一个|加入|再加|增加|补算|补个|补一个|补上|补一份)"#
+        let namedMethod = "(?:" + methodNames.map { $0.1 }.joined(separator: "|") + ")"
+        let join = #"(?:、|以及|和|与|及|加|配合)"#
+        let calculationEnd = #"(?:一起|一并|分别|都)?"# + calculationModifiers + calculationVerb
         var requested = Set<OracleMethod>()
         for clause in clauses {
             let compact = clause.filter { !$0.isWhitespace }
+            guard !isMethodConsultationClause(compact) else { continue }
+            let declined = declinedMethods(in: compact)
+            requested.subtract(declined)
+            if !requiresAdditiveWording { requested.formUnion(bareMethodChange(in: compact).filter { !declined.contains($0) }) }
             let fullRange = NSRange(compact.startIndex..<compact.endIndex, in: compact)
             for (method, names) in methodNames {
+                guard !declined.contains(method) else { continue }
                 // "姓名资料" is an ordinary profile field, not a calculation request.
                 let name = "(?:" + (method == .xingming ? "姓名五格|五格|姓名学|姓名数理" : names) + ")"
                 var patterns = [
                     additions + ".{0,20}" + name,
-                    #"(?:再用|也用|再按|也按|再根据)"# + name + #".{0,8}(?:看看|算|排盘|推演|参考|分析|解读)"#,
-                    name + #"(?:也|再)(?:帮我|替我|给我)?(?:算|排盘|推演|看看)"#
+                    #"(?:再用|也用|再按|也按|再根据)"# + name + calculationModifiers + calculationVerb,
+                    name + #"(?:也|再)"# + calculationModifiers + calculationVerb
                 ]
                 if !requiresAdditiveWording {
                     patterns += [
-                        #"(?:用|按|按照)"# + name + #"(?:帮我|替我|给我)?(?:看看|算|排盘|推演)"#,
-                        #"(?:再|也)?(?:帮我|替我|给我)?算(?:一下|一次|一遍|算)?(?:用|按|按照)?"# + name
+                        #"(?:用|按|按照)"# + name + calculationModifiers + calculationVerb,
+                        #"(?:再|也)?(?:帮我|替我|给我)?(?:计算|测算|算(?:一下|一次|一遍|算)?|试试|试一下|试一试|尝试)(?:用|按|按照)?"# + name,
+                        #"(?:用|按|按照)"# + "(?:" + namedMethod + join + ")*" + name
+                            + "(?:" + join + namedMethod + ")*" + calculationEnd,
+                        #"(?:只|仅)(?:要|用|选|使用)"# + "(?:" + namedMethod + join + ")*" + name,
+                        #"(?:用|按|按照)"# + "(?:" + namedMethod + join + ")*" + name
+                            + "(?:" + join + namedMethod + #")*(?:吧|就好|就行|即可)?$"#
                     ]
                 }
                 for pattern in patterns {
@@ -192,7 +214,7 @@ enum ReadingContinuationPolicy {
                         guard let mention = matched.range(of: name, options: [.regularExpression, .caseInsensitive]) else { continue }
                         let mentionPrefix = String(matched[..<mention.lowerBound].suffix(20))
                         let negation = #"(?:不|别|莫|不要|不用|无需|不必|不想|不需要|不是要|并非要|没让你|没有让你|拒绝).{0,5}$"#
-                        let explanation = #"(?:为什么|为何|怎么|什么时候|什么情况|何时|是否必须|是不是必须|难道|一定要|解释|说明|介绍|什么是|想知道|想了解).{0,8}$"#
+                        let explanation = #"(?:为什么|为何|怎么|如何|怎样|什么时候|什么情况|何时|是否必须|是不是必须|难道|一定要|解释|说明|介绍|什么是|想知道|想了解).{0,8}$"#
                         let explainsSuffix = #"^(?:[”\"」』])?(?:是什么|是什么意思|的意思|的必要|的区别|的原理|的步骤|有必要吗|没必要|没有必要|怎么算|怎么排)"#
                         let joinsAnotherRequest = prefix.range(of: #"(?:并且?|同时|顺便|然后)(?:也|再|请)?$"#, options: .regularExpression) != nil
                         guard prefix.range(of: negation, options: .regularExpression) == nil,
@@ -207,15 +229,58 @@ enum ReadingContinuationPolicy {
         return OracleMethod.allCases.filter { requested.contains($0) || english.contains($0) }
     }
 
+    private static func declinedMethods(in clause: String) -> Set<OracleMethod> {
+        let named = "(?:" + methodNames.map { $0.1 }.joined(separator: "|") + ")"
+        let join = #"(?:、|以及|和|与|及|加)"#
+        let refusal = #"(?:不要|不用|别用|不选|排除|不需要)(?:再|也|用|按|考虑|计算|算)?"#
+        return Set(methodNames.compactMap { method, aliases in
+            let pattern = refusal + "(?:" + named + join + ")*(?:" + aliases + ")"
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
+            let matches = regex.matches(in: clause, range: NSRange(clause.startIndex..<clause.endIndex, in: clause))
+            return matches.contains { match in
+                guard let range = Range(match.range, in: clause) else { return false }
+                return String(clause[..<range.lowerBound]).range(of: #"(?:不是|并非|并不是|没有说|没说)$"#, options: .regularExpression) == nil
+            } ? method : nil
+        })
+    }
+
+    /// Preparation and capability questions are answers about a method, rather
+    /// than authorization to calculate. A separate affirmative command survives.
+    static func isMethodConsultation(_ question: String) -> Bool {
+        let clauses = question.components(separatedBy: CharacterSet(charactersIn: "，,。；;！!？?\n"))
+        return clauses.contains(where: isMethodConsultationClause)
+            && requestedCalculationMethods(in: question).isEmpty
+    }
+
+    private static func isMethodConsultationClause(_ clause: String) -> Bool {
+        let compact = clause.filter { !$0.isWhitespace }
+        if compact.range(of: #"^(?:我)?(?:只(?:是)?|先)(?:问问|问一下|了解一下|咨询一下)(?:而已)?$"#, options: .regularExpression) != nil { return true }
+        let method = "(?:" + methodNames.map { $0.1 }.joined(separator: "|") + ")"
+        let fields = #"(?:资料|信息|字段|生辰|生日|出生日期|出生时间|出生时辰|时辰|性别|排盘性别|姓名|出生地|时区)"#
+        let preparation = method + calculationModifiers + "(?:" + calculationVerb + ")?"
+            + #"(?:的话|之前|前)?(?:还|先)?(?:需要|要|需不需要|要不要)(?:先)?(?:准备|提供|填写|补充|知道)?(?:什么|哪些|啥|多少|我的)?"#
+            + "(?:" + fields + #"|(?=[吗么呢？?]|$))"#
+        let fieldQuestion = #"(?:为什么|为何|需不需要|要不要|必须|是否必须).{0,8}"# + fields
+            + "|" + fields + #".{0,6}(?:是必填|必须填|有必要|有什么用|为什么|必须吗|必填吗)"#
+        let definition = method + #"(?:是什么|是什么意思|是干什么的|有什么用|能做什么|能算什么|的原理|的步骤|怎么算|怎么用)"#
+        let comparison = method + #"(?:和|与|跟|、)"# + method + #"(?:有何区别|有什么区别|的区别|差别是什么)"#
+        return compact.range(of: preparation + "|" + fieldQuestion + "|" + definition + "|" + comparison,
+                             options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
     /// A short method selection without a subject can continue the current
     /// question even when there is no remote planner to disambiguate it.
     static func isMethodOnlyRequest(_ question: String) -> Bool {
         if !EnglishConversation.bareMethodChange(question).isEmpty { return true }
         let compact = question.filter { !$0.isWhitespace }
+        guard !requestedCalculationMethods(in: question).isEmpty else { return false }
         let namedMethod = "(?:" + methodNames.map { $0.1 }.joined(separator: "|") + ")"
-        let prefix = #"^(?:请|请你|麻烦|帮我|替我|给我|我想|可以|能否|只|仅|必须)*(?:用|按|按照)"#
-        let suffix = #"(?:看看|算(?:一下|算)?|排盘(?:分析)?|推演)(?:吧|吗|呢|好吗|可以吗)?[。！!？?]*$"#
-        return compact.range(of: prefix + namedMethod + suffix, options: [.regularExpression, .caseInsensitive]) != nil
+        let list = namedMethod + #"(?:(?:、|以及|和|与|及|加|配合)"# + namedMethod + ")*"
+        let prefix = #"^(?:那|就|还是|这次|这回|你|请|请你|麻烦|麻烦你|帮我|替我|给我|我想|我要|可以|能否|只|仅|必须)*(?:再|也)?(?:用|按|按照|只要|仅要|只选|仅选)"#
+        let exclusion = #"(?:[，,]?(?:但|并|而)?(?:不要|不用|别用|不选)"# + list + ")?"
+        let suffix = #"(?:一起|一并|分别|都)?(?:"# + calculationModifiers + calculationVerb
+            + #")?(?:吧|吗|呢|好吗|可以吗|谢谢|就好|就行|即可)?"# + exclusion + #"[。！!？?]*$"#
+        return compact.range(of: prefix + list + suffix, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     /// A method switch without a new subject keeps the current question's scope.
@@ -333,7 +398,8 @@ enum ReadingContinuationPolicy {
     }
 
     static func explicitlyRequestsNewReading(_ question: String) -> Bool {
-        if explicitlyChangesScope(question) || EnglishConversation.requestsRecast(question) { return true }
+        if explicitlyChangesScope(question) || EnglishConversation.requestsRecast(question)
+            || requestsReplacementTarotSpread(question) { return true }
         // Naming a method or asking how a chart was calculated is not a request to calculate again.
         let namedMethod = "(?:" + methodNames.map { $0.1 }.joined(separator: "|") + ")"
         let patterns = recastPatterns + [
@@ -343,6 +409,22 @@ enum ReadingContinuationPolicy {
             "再用" + namedMethod + #".{0,6}(?:起(?:一|个|一轮)?卦|抽(?:(?:一次|一组|三张)牌?|牌)|占卜)"#
         ]
         return hasAffirmativeMatch(in: question, patterns: patterns)
+    }
+
+    private static let oldTarotRejection = #"(?:别用|不要用|不用|不再用|不要|弃用)(?:这组|那组|这副|那副|之前的|原来的|刚才的)?(?:旧牌阵|旧牌|原牌阵|已经抽的牌|已抽的牌|原来的牌)"#
+    private static let newTarotSpread = #"(?:换(?:成)?(?:一组|一副|三张)(?:新的?(?:塔罗牌?|牌)?|牌)|(?:再|重新)(?:用|按)(?:塔罗牌?|塔羅|tarot)(?:再)?(?:看看|试试|算算|算一下|计算)?|重新抽(?:一组|三张|一次)?牌?|重抽(?:一组|三张|一次)?牌?)"#
+
+    private static func replacementTarotRemainder(_ question: String) -> String? {
+        guard let expression = try? NSRegularExpression(pattern: oldTarotRejection),
+              let match = expression.firstMatch(in: question, range: NSRange(question.startIndex..<question.endIndex, in: question)),
+              let range = Range(match.range, in: question),
+              String(question[..<range.lowerBound]).range(of: #"(?:不是|并非|并不是|没说|没有说)$"#, options: .regularExpression) == nil else { return nil }
+        return question.replacingCharacters(in: range, with: "")
+    }
+
+    private static func requestsReplacementTarotSpread(_ question: String) -> Bool {
+        guard let remainder = replacementTarotRemainder(question) else { return false }
+        return hasAffirmativeMatch(in: remainder, patterns: [newTarotSpread])
     }
 
     private static func hasAffirmativeMatch(in question: String, patterns: [String]) -> Bool {
@@ -370,13 +452,24 @@ enum ReadingContinuationPolicy {
     /// Match the entire message rather than guessing which free text is a new subject.
     static func isBareRecastRequest(_ question: String) -> Bool {
         if EnglishConversation.isBareRecast(question) { return true }
+        if requestsReplacementTarotSpread(question), let remainder = replacementTarotRemainder(question) {
+            let rest = remainder.replacingOccurrences(of: newTarotSpread, with: "", options: [.regularExpression, .caseInsensitive])
+                .replacingOccurrences(of: #"(?:请|请你|麻烦|你|我想|我要|吧|呢|好吗|可以吗|谢谢)"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+            return rest.isEmpty
+        }
         guard explicitlyRequestsNewReading(question) else { return false }
-        let compact = question.filter { character in
+        // A correction can explicitly reject explaining the old result without
+        // changing the subject of the fresh draw.
+        let commandQuestion = question.replacingOccurrences(
+            of: #"[，,。；;]\s*(?:而?不是|并非|而非|不要|不用)(?:在)?(?:解释|解读|沿用)(?:旧(?:的)?|原(?:来(?:的)?)?)(?:牌面|牌阵|牌|结果|解读)[。！!？?]*$"#,
+            with: "", options: .regularExpression)
+        let compact = commandQuestion.filter { character in
             !character.isWhitespace && !character.unicodeScalars.allSatisfy { CharacterSet.punctuationCharacters.contains($0) }
         }
         let method = #"(?:六爻|塔罗|塔羅|tarot|梅花|八字|紫微|紫薇|占星|小六壬|奇门|姓名五格|称骨)"#
         let qualification = #"(?:(?:只|仅|必须)?(?:用|按|按照)|改用|换用|再用)"# + method
-        let politePrefix = #"(?:请|请你|麻烦|麻烦你|帮我|替我|给我|我想|我要|我需要|能否|可以)"#
+        let politePrefix = #"(?:请|请你|麻烦|麻烦你|帮我|替我|给我|我想|我要|我是想|我是要|我需要|能否|可以)"#
         let politeSuffix = #"(?:吧|吗|呢|好吗|可以吗|谢谢)"#
         let command = "(?:" + recastPatterns.joined(separator: "|") + ")"
         let pattern = "^(?:" + politePrefix + "|" + qualification + ")*" + command
@@ -435,9 +528,10 @@ enum EnglishConversation {
 
     static func isBareRecast(_ text: String) -> Bool { matches(text, politePrefix + recast + politeSuffix) }
 
-    static func requestedMethods(in text: String, additive: Bool) -> [OracleMethod] {
-        guard !requestsRecast(text), !changesScope(text) else { return [] }
-        return text.components(separatedBy: CharacterSet(charactersIn: ";.!?\n")).flatMap { clause -> [OracleMethod] in
+    static func requestedMethods(in text: String, additive: Bool, allowFreshScope: Bool = false) -> [OracleMethod] {
+        guard allowFreshScope || (!requestsRecast(text) && !changesScope(text)) else { return [] }
+        let separators = allowFreshScope ? ";.!?:\n" : ";.!?\n"
+        return text.components(separatedBy: CharacterSet(charactersIn: separators)).flatMap { clause -> [OracleMethod] in
             let use = additive
                 ? #"(?:add|also use|also include|also calculate|also do|include|supplement (?:it )?with|combine (?:it )?with)\s+"#
                 : #"(?:add|use|try|do|calculate|include|also use|also include|switch to|read (?:it )?with)\s+"#
@@ -473,9 +567,43 @@ enum EnglishConversation {
     }
 
     static func replyLanguage(in question: String) -> AppLanguage? {
-        if matches(question, #"\b(?:answer|reply|respond|explain|write)(?:\s+(?:to me|it|that|this))?\s+in\s+English\b|(?:请|用|改用)英文(?:回答|解释|解读|回复)"#) { return .english }
-        if matches(question, #"\b(?:answer|reply|respond|explain|write)(?:\s+(?:to me|it|that|this))?\s+in\s+(?:simplified\s+)?Chinese\b|(?:请|用|改用)(?:简体)?中文(?:回答|解释|解读|回复)"#) { return .simplifiedChinese }
-        return nil
+        let englishPoliteness = #"(?:(?:please|(?:can|could|would|will) you(?: please)?|i(?:['’]d like| want| need)(?: you)? to|also)\s+)*"#
+        let englishCommand = #"(?:^|\b(?:but|then|and)\s+)"# + englishPoliteness + #"(?:answer|reply|respond|explain|write|say|summarize|translate)(?:\s+[^,，。；;.!?！？\n]{1,100}?)?\s+(?:in|into)\s+"#
+        let englishUse = "^" + englishPoliteness + #"use\s+"#
+        let englishUseAction = #"(?:\s+(?:to\s+)?(?:answer|reply|respond|explain|write|say|summarize)\b|\s*$)"#
+        let chineseCommand = #"^(?:请|麻烦(?:你)?|你|能否|可以|能不能|可不可以|这次|这回|接下来|然后|还是|我想(?:让你)?|我要|希望你)*(?:用|改用|换用|使用|改成|换成)?"#
+        let chineseAction = #"(?:(?:再|重新|简单|简短|详细|清楚|直接)*(?:回答|回复|回应|解释|解读|说明|说|讲|写|表达)|(?:吧|吗|好吗|就好|就行|即可)?$)"#
+        let commands: [(AppLanguage, String)] = [
+            (.english, englishCommand + #"(English)\b"#),
+            (.simplifiedChinese, englishCommand + #"((?:simplified\s+)?Chinese)\b"#),
+            (.english, englishUse + #"(English)\b"# + englishUseAction),
+            (.simplifiedChinese, englishUse + #"((?:simplified\s+)?Chinese)\b"# + englishUseAction),
+            (.english, chineseCommand + #"(英文|英语)"# + chineseAction),
+            (.simplifiedChinese, chineseCommand + #"((?:简体)?中文|汉语)"# + chineseAction),
+            (.english, #"^\s*(?:in\s+)?(English)\s+please\s*$"#),
+            (.simplifiedChinese, #"^\s*(?:in\s+)?((?:simplified\s+)?Chinese)\s+please\s*$"#)
+        ]
+        let quoteExpression = try? NSRegularExpression(pattern: #"\"[^\"]*\"|'[^']*'|“[^”]*”|‘[^’]*’|「[^」]*」"#)
+        var selected: AppLanguage?
+        for clause in question.components(separatedBy: CharacterSet(charactersIn: "，,。；;！!？?.\n")) {
+            let text = clause.trimmingCharacters(in: .whitespacesAndNewlines)
+            let range = NSRange(text.startIndex..<text.endIndex, in: text)
+            let quotations = quoteExpression?.matches(in: text, range: range).map(\.range) ?? []
+            var latest: (Int, AppLanguage)?
+            for (language, pattern) in commands {
+                guard let expression = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { continue }
+                for match in expression.matches(in: text, range: range) {
+                    let target = match.range(at: 1)
+                    let beforeTarget = (text as NSString).substring(to: target.location)
+                    guard !quotations.contains(where: { NSIntersectionRange($0, target).length > 0 }),
+                          !matches(beforeTarget, #"\bnot\s+in\s*$|\b(?:not|never|don['’]t|do not|didn['’]t|did not|shouldn['’]t|should not)\s+(?:answer|reply|respond|explain|write|say)\b"#),
+                          latest == nil || target.location > latest!.0 else { continue }
+                    latest = (target.location, language)
+                }
+            }
+            if let latest { selected = latest.1 }
+        }
+        return selected
     }
 
     static func introducesOtherPerson(_ text: String) -> Bool {

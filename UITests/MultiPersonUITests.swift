@@ -28,7 +28,7 @@ final class MultiPersonUITests: XCTestCase {
         confirm.tap()
         XCTAssertTrue(app.buttons["confirmIntake"].waitForNonExistence(timeout: 5))
         completeCoinsIfRequested(in: app)
-        let summary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "当前为本地试算")).firstMatch
+        let summary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "这次推演已完成")).firstMatch
         XCTAssertTrue(summary.waitForExistence(timeout: 30))
         let data = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "readingData-")).firstMatch
         for _ in 0..<8 where !data.isHittable { app.scrollViews["chatTranscript"].swipeUp() }

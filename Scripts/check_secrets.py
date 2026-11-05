@@ -6,14 +6,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-from development_key import DEEPSEEK_RESOURCE, QWEN_RESOURCE, read_keys
+from development_key import DEEPSEEK_RESOURCE, RETIRED_RESOURCE, read_keys
 
 PROVIDER_KEY = re.compile(rb'\bsk-(?:ws-[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+|[A-Za-z0-9_-]{24,})\b')
 PRIVATE_KEY = re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----')
 
 def credential_issue(path, data, known_keys=()):
     name = Path(path).name.lower()
-    if name in {'secrets.local.json', DEEPSEEK_RESOURCE, QWEN_RESOURCE, '.env'} or name.endswith(('.key', '.pem', '.p12', '.textclipping')):
+    if name in {'secrets.local.json', DEEPSEEK_RESOURCE, RETIRED_RESOURCE, '.env'} or name.endswith(('.key', '.pem', '.p12', '.textclipping')):
         return 'private credential file must not be tracked'
     if any(key and key.encode('utf-8') in data for key in known_keys):
         return 'contains the configured local credential'

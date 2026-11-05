@@ -361,7 +361,7 @@ struct IntakeView: View {
                                 }
                             }
                         }
-                        ProfileFieldsView(draft: $draft)
+                        ProfileFieldsView(draft: $draft, genderRequired: plan.methods.contains(.ziwei))
                         if !isEditing {
                             Toggle(L10n.text("把这份基础资料留在本机", "Save this profile on this device"), isOn: $keepProfile)
                                 .font(.system(size: 13, design: .serif)).tint(InkTheme.sage)
@@ -403,6 +403,7 @@ private enum BirthDateCalendar: String {
 
 struct ProfileFieldsView: View {
     @Binding var draft: ProfileFormDraft
+    var genderRequired = false
     @EnvironmentObject private var store: OracleStore
     @StateObject private var currentLocation = LocationService()
     @StateObject private var birthLocation = LocationService()
@@ -525,24 +526,37 @@ struct ProfileFieldsView: View {
         case "女": L10n.text("女", "Female")
         default: L10n.text("未填写", "Not entered")
         }
-        return HStack(spacing: 10) {
-            Text(L10n.text("排盘性别", "Sex for chart calculation"))
-            Spacer()
-            Menu {
-                Button(L10n.text("男", "Male")) { draft.setGender("男") }
-                Button(L10n.text("女", "Female")) { draft.setGender("女") }
-            } label: {
-                Label(draft.profile.sex == "未提供" ? L10n.text("可留空", "Optional") : gender, systemImage: "chevron.up.chevron.down")
-                    .labelStyle(.titleOnly)
-                    .foregroundStyle(InkTheme.secondary)
+        let placeholder = genderRequired ? L10n.text("请选择", "Choose") : L10n.text("可留空", "Optional")
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 10) {
+                Text(L10n.text("排盘性别", "Sex for chart calculation"))
+                Text(genderRequired ? L10n.text("必填", "Required") : L10n.text("可选", "Optional"))
+                    .font(.system(size: 10))
+                    .foregroundStyle(genderRequired ? InkTheme.cinnabar : InkTheme.secondary)
+                    .accessibilityIdentifier("profileGenderRequirement")
+                Spacer()
+                Menu {
+                    Button(L10n.text("男", "Male")) { draft.setGender("男") }
+                    Button(L10n.text("女", "Female")) { draft.setGender("女") }
+                } label: {
+                    Label(draft.profile.sex == "未提供" ? placeholder : gender, systemImage: "chevron.up.chevron.down")
+                        .labelStyle(.titleOnly)
+                        .foregroundStyle(InkTheme.secondary)
+                }
+                .accessibilityLabel(L10n.text("排盘性别", "Sex for chart calculation"))
+                .accessibilityValue(gender)
+                .accessibilityHint(genderRequired ? L10n.text("紫微斗数排盘需要选择。", "Required for a Zi Wei chart.") : L10n.text("可以留空，八字不会输出大运。", "Optional. BaZi luck cycles will be unavailable."))
+                .accessibilityIdentifier("profileGender")
+                if draft.profile.sex != "未提供" {
+                    clearButton(L10n.text("排盘性别", "Sex for chart calculation"), id: "clearProfileGender") { draft.setGender("未提供") }
+                }
             }
-            .accessibilityLabel(L10n.text("排盘性别", "Sex for chart calculation"))
-            .accessibilityValue(gender)
-            .accessibilityIdentifier("profileGender")
-            if draft.profile.sex != "未提供" {
-                clearButton(L10n.text("排盘性别", "Sex for chart calculation"), id: "clearProfileGender") { draft.setGender("未提供") }
-            }
-        }.frame(minHeight: 44)
+            Text(genderRequired
+                 ? L10n.text("传统排盘使用的男／女参数。紫微斗数需要这一项才能排盘。", "The male/female parameter used by traditional chart calculations. Zi Wei requires a selection.")
+                 : L10n.text("传统排盘使用的男／女参数。八字可留空，但不会输出大运。", "The male/female parameter used by traditional chart calculations. BaZi can leave it unknown, without luck cycles."))
+                .font(.system(size: 11)).foregroundStyle(InkTheme.secondary).fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("profileGenderExplanation")
+        }.frame(minHeight: 44).padding(.vertical, 7)
     }
 
     private var birthDateRow: some View {
@@ -711,7 +725,7 @@ struct ProfileFieldsView: View {
         }
         guard district.localPlace == nil else { return }
         let lookupID = UUID()
-        let client = store.hasCredential && !store.localOnly ? store.client : nil
+        let client = store.hasCredential ? store.client : nil
         let state = resolution(for: purpose)
         state.wrappedValue.lookupID = lookupID
         state.wrappedValue.lookup = Task { @MainActor in

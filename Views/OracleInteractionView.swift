@@ -6,7 +6,7 @@ struct OracleInteractionView: View {
     let session: OracleInteractionSession
     let onProgress: (OracleInteractionResponse) -> Void
     let onComplete: (OracleInteractionResponse) -> Void
-    let onCancelClarification: (() -> Void)?
+    let onCancel: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var response: OracleInteractionResponse
@@ -30,11 +30,11 @@ struct OracleInteractionView: View {
     init(session: OracleInteractionSession,
          onProgress: @escaping (OracleInteractionResponse) -> Void,
          onComplete: @escaping (OracleInteractionResponse) -> Void,
-         onCancelClarification: (() -> Void)? = nil) {
+         onCancel: (() -> Void)? = nil) {
         self.session = session
         self.onProgress = onProgress
         self.onComplete = onComplete
-        self.onCancelClarification = onCancelClarification
+        self.onCancel = onCancel
         let requestID = session.currentRequest?.id ?? ""
         let restored = session.draft.flatMap { session.isValid($0, complete: false) ? $0 : nil }
             ?? OracleInteractionResponse(requestID: requestID)
@@ -67,11 +67,13 @@ struct OracleInteractionView: View {
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if session.currentRequest?.tarotClarification != nil, response.revealedCount == 0, let onCancelClarification {
+                if let cancel = onCancel {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button(L10n.text("取消补牌", "Cancel clarifier"), role: .cancel, action: onCancelClarification)
+                        Button(session.currentRequest?.tarotClarification != nil
+                               ? L10n.text("取消补牌", "Cancel clarifier")
+                               : L10n.text("取消本次操作", "Cancel this step"), role: .cancel, action: cancel)
                             .font(.system(size: 13)).foregroundStyle(InkTheme.secondary)
-                            .accessibilityIdentifier("cancelTarotClarification")
+                            .accessibilityIdentifier(session.currentRequest?.tarotClarification != nil ? "cancelTarotClarification" : "cancelInteraction")
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {

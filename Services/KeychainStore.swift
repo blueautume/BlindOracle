@@ -5,7 +5,6 @@ import CryptoKit
 /// A single device-only credential. Never persisted in chat, profiles, logs or UserDefaults.
 final class KeychainStore: @unchecked Sendable {
     static let shared = KeychainStore(namespace: "deepseek", bundleResource: "dev-key")
-    private static let qwen = KeychainStore(namespace: "qwen", bundleResource: "qwen-key")
     private let service: String
     private let bundleResource: String
     private let account = "api-key"
@@ -19,13 +18,6 @@ final class KeychainStore: @unchecked Sendable {
         self.bundleResource = bundleResource
         bundledFingerprintKey = "\(namespace).bundled-key.sha256"
         manuallySavedKey = "\(namespace).credential.manually-saved"
-    }
-
-    static func store(for provider: AIProvider) -> KeychainStore {
-        switch provider {
-        case .deepSeek: shared
-        case .qwen: qwen
-        }
     }
 
     func string() -> String? {
@@ -60,7 +52,7 @@ final class KeychainStore: @unchecked Sendable {
     func save(_ value: String) throws {
         lock.lock(); defer { lock.unlock() }
         try persist(BootstrapPolicy.normalizedKey(value))
-        // Settings is an explicit choice, including re-entering the same key.
+        // Preserve provenance for credentials imported by earlier app versions.
         defaults.set(true, forKey: manuallySavedKey)
     }
 
@@ -166,10 +158,10 @@ final class KeychainStore: @unchecked Sendable {
         case bundledResourceUnreadable
         var errorDescription: String? {
             switch self {
-            case .invalidValue: L10n.text("请输入完整的 API 密钥。", "Enter the full API key.")
-            case .status: L10n.text("无法将密钥保存到本机钥匙串，请重试。", "Couldn't save the API key to the device keychain. Try again.")
-            case .readStatus, .unreadableValue: L10n.text("无法读取本机钥匙串中的解读密钥，请解锁设备后重试。", "Couldn't read the API key from the device keychain. Unlock your device and try again.")
-            case .bundledResourceUnreadable: L10n.text("随包解读密钥未能读取，请检查应用资源配置。", "Couldn't read the bundled API key. Check the app's configuration.")
+            case .invalidValue, .status, .bundledResourceUnreadable:
+                L10n.text("解读服务暂时无法使用，请稍后重试。", "The reading service is unavailable. Try again in a moment.")
+            case .readStatus, .unreadableValue:
+                L10n.text("解读服务暂时无法使用，请解锁设备后重试。", "The reading service is unavailable. Unlock your device and try again.")
             }
         }
     }

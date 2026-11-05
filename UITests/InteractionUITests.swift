@@ -92,7 +92,7 @@ final class InteractionUITests: XCTestCase {
         input.typeText("Explain the Advice card without drawing again.")
         app.buttons["sendQuestion"].tap()
         let followUp = app.staticTexts.containing(NSPredicate(
-            format: "label CONTAINS %@", "Here is a local rule summary based on your saved reading."
+            format: "label CONTAINS %@", "Using your saved reading."
         )).firstMatch
         XCTAssertTrue(followUp.waitForExistence(timeout: 15))
         XCTAssertFalse(app.buttons["shuffleTarot"].exists)
@@ -174,7 +174,7 @@ final class InteractionUITests: XCTestCase {
         waitUntilEnabled(app.buttons["confirmInteraction"])
         capture("tarot-three-cards", in: app)
         app.buttons["confirmInteraction"].tap()
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "当前为本地试算")).firstMatch.waitForExistence(timeout: 30))
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "这次推演已完成")).firstMatch.waitForExistence(timeout: 30))
     }
 
     @MainActor func testChangingTopicDuringTarotKeepsThePendingSelectionInHistory() {
@@ -378,7 +378,7 @@ final class InteractionUITests: XCTestCase {
     }
 
     @MainActor private func openResults(in app: XCUIApplication) {
-        let summary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "当前为本地试算")).firstMatch
+        let summary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "这次推演已完成")).firstMatch
         XCTAssertTrue(summary.waitForExistence(timeout: 30))
         let reference = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "readingData-")).firstMatch
         for _ in 0..<5 where !reference.isHittable { app.swipeUp() }

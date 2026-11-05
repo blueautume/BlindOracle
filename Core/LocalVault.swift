@@ -84,6 +84,18 @@ final class LocalVault {
             return lhs > rhs
         }
     }
+    func removeLegacyConversationArchives() throws {
+        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        let recoverable = [ConversationHistory.filename, "conversation", "context", "pending-intake"]
+        let legacyNames = Set(legacyConversationArchiveNames())
+        for file in files where file.pathExtension == "json" {
+            let name = file.deletingPathExtension().lastPathComponent
+            let legacy = legacyNames.contains(name)
+                || name.range(of: #"^conversation-[0-9]+\.recovery-"#, options: .regularExpression) != nil
+            let recovery = recoverable.contains { name.hasPrefix($0 + ".recovery-") }
+            if legacy || recovery { try FileManager.default.removeItem(at: file) }
+        }
+    }
     func export(profiles: [OracleProfile], runs: [OracleRun], weights: [String: Double]) throws -> URL {
         struct Export: Encodable { var schemaVersion = 1; var exportedAt = Date(); var profiles: [OracleProfile]; var runs: [OracleRun]; var weights: [String: Double] }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(L10n.text("瞎子-本地档案.json", "BlindOracle-local-data.json"))

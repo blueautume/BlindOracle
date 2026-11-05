@@ -1,7 +1,330 @@
 import XCTest
 @testable import BlindOracle
 
+enum EnglishDistrictBirthFixtures {
+    struct Scenario {
+        let date: String
+        let clock: String
+        let place: String
+        let expectedDate: String
+        let expectedClock: String
+        let canonicalPlace: String
+        let districtCode: String
+
+        var question: String {
+            "Please use BaZi to explore my career strengths. My name is Alex Chen, and I’m male. I was born on \(date), at \(clock) in \(place), China."
+        }
+    }
+
+    static let scenarios: [Scenario] = [
+        .init(date: "June 15, 1995", clock: "9:30 a.m.", place: "Xuhui District, Shanghai",
+              expectedDate: "1995-06-15", expectedClock: "09:30", canonicalPlace: "上海市徐汇区", districtCode: "310104"),
+        .init(date: "15 June 1995", clock: "8:45 PM", place: "Chaoyang District, Beijing",
+              expectedDate: "1995-06-15", expectedClock: "20:45", canonicalPlace: "北京市朝阳区", districtCode: "110105"),
+        .init(date: "1995-06-15", clock: "14:20", place: "Nanshan District, Shenzhen, Guangdong",
+              expectedDate: "1995-06-15", expectedClock: "14:20", canonicalPlace: "广东省深圳市南山区", districtCode: "440305"),
+        .init(date: "February 29, 2000", clock: "12 a.m.", place: "Tianhe District, Guangzhou, Guangdong",
+              expectedDate: "2000-02-29", expectedClock: "00:00", canonicalPlace: "广东省广州市天河区", districtCode: "440106"),
+        .init(date: "15 June 1995", clock: "12 p.m.", place: "Xihu District, Hangzhou, Zhejiang",
+              expectedDate: "1995-06-15", expectedClock: "12:00", canonicalPlace: "浙江省杭州市西湖区", districtCode: "330106"),
+        .init(date: "1995-06-15", clock: "00:05", place: "Wuhou District, Chengdu, Sichuan",
+              expectedDate: "1995-06-15", expectedClock: "00:05", canonicalPlace: "四川省成都市武侯区", districtCode: "510107"),
+        .init(date: "Feb 29, 2000", clock: "23:59:30", place: "Chaoyang District, Changchun, Jilin",
+              expectedDate: "2000-02-29", expectedClock: "23:59:30", canonicalPlace: "吉林省长春市朝阳区", districtCode: "220104"),
+        .init(date: "June 15, 1995", clock: "06:15AM", place: "Pudong New Area, Shanghai",
+              expectedDate: "1995-06-15", expectedClock: "06:15", canonicalPlace: "上海市浦东新区", districtCode: "310115"),
+        .init(date: "June 15, 1995", clock: "noon", place: "Nanshan District, Shenzhen",
+              expectedDate: "1995-06-15", expectedClock: "12:00", canonicalPlace: "广东省深圳市南山区", districtCode: "440305"),
+        .init(date: "June 15, 1995", clock: "midnight", place: "Xuhui District, Shanghai",
+              expectedDate: "1995-06-15", expectedClock: "00:00", canonicalPlace: "上海市徐汇区", districtCode: "310104")
+    ]
+}
+
 final class ProfileDirectoryTests: XCTestCase {
+    func testEnglishDistrictAndClockMatrixPreservesTheCompleteBirthplace() throws {
+        for scenario in EnglishDistrictBirthFixtures.scenarios {
+            let updates = ProfileDirectory.parseExplicitUpdates(in: scenario.question, profiles: [])
+            XCTAssertEqual(updates.count, 1, scenario.question)
+            let update = try XCTUnwrap(updates.first, scenario.question)
+            XCTAssertEqual(update.birthDate, scenario.expectedDate, scenario.question)
+            XCTAssertEqual(update.birthTime, scenario.expectedClock, scenario.question)
+            let place = try XCTUnwrap(update.birthPlace, scenario.question)
+            for component in scenario.place.components(separatedBy: ", ") {
+                XCTAssertTrue(place.contains(component), "Missing \(component) in \(place)")
+            }
+
+            let result = ProfileDirectory.applying(updates, to: [])
+            XCTAssertTrue(result.issues.isEmpty, scenario.question)
+            let profile = try XCTUnwrap(result.profiles.first, scenario.question)
+            XCTAssertEqual(profile.birthPlace, scenario.canonicalPlace, scenario.question)
+            XCTAssertEqual(profile.birthDistrictCode, scenario.districtCode, scenario.question)
+            XCTAssertEqual(profile.birthDateText, scenario.expectedDate, scenario.question)
+            XCTAssertEqual(profile.birthTimeText, scenario.expectedClock, scenario.question)
+            XCTAssertTrue(profile.birthTimeKnown, scenario.question)
+            XCTAssertTrue(profile.currentPlace.isEmpty, "A birthplace does not establish a current location.")
+        }
+    }
+
+    func testEnglishDistrictGroundingPreservesSpecificityAndUsesOnlyCatalogCoordinates() throws {
+        let scenario = try XCTUnwrap(EnglishDistrictBirthFixtures.scenarios.first { $0.districtCode == "440305" })
+        let parsed = ProfileDirectory.parseExplicitUpdates(in: scenario.question, profiles: [])
+        let profile = try XCTUnwrap(ProfileDirectory.applying(parsed, to: []).profiles.first)
+        let catalog = ChinaDistrictCatalog.shared
+        let guangdong = try XCTUnwrap(catalog.provinces.first { $0.id == "440000" })
+        let shenzhen = try XCTUnwrap(catalog.children(of: guangdong).first { $0.id == "440300" })
+        let nanshan = try XCTUnwrap(catalog.children(of: shenzhen).first { $0.id == "440305" })
+        XCTAssertNotNil(nanshan.latitude)
+        XCTAssertNotNil(nanshan.longitude)
+        XCTAssertEqual(profile.birthLatitude, nanshan.latitude)
+        XCTAssertEqual(profile.birthLongitude, nanshan.longitude)
+
+        for (place, accepted) in [("Shenzhen", true), ("广东省深圳市南山区", true), ("Chaoyang District, Beijing", false)] {
+            let proposed = ProfileUpdate(id: profile.id, name: "Alex Chen", birthPlace: place,
+                                         birthLatitude: 39.9, birthLongitude: 116.4)
+            let grounded = ProfileDirectory.groundedUpdates([proposed], in: scenario.question, profiles: [profile])
+            XCTAssertEqual(grounded.first?.birthPlace, accepted ? scenario.canonicalPlace : nil, place)
+            XCTAssertTrue(grounded.allSatisfy { $0.birthLatitude == nil && $0.birthLongitude == nil },
+                          "The message did not supply the model-proposed coordinates.")
+            let updated = try XCTUnwrap(ProfileDirectory.applying(grounded, to: [profile]).profiles.first)
+            XCTAssertEqual(updated.birthDistrictCode, "440305", place)
+            XCTAssertEqual(updated.birthPlace, "广东省深圳市南山区", place)
+            XCTAssertEqual(updated.birthLatitude, nanshan.latitude, place)
+            XCTAssertEqual(updated.birthLongitude, nanshan.longitude, place)
+            XCTAssertEqual(updated.birthDateText, scenario.expectedDate, place)
+            XCTAssertEqual(updated.birthTimeText, scenario.expectedClock, place)
+            XCTAssertTrue(updated.currentPlace.isEmpty, place)
+            XCTAssertNil(updated.currentDistrictCode, place)
+            XCTAssertNil(updated.currentLatitude, place)
+            XCTAssertNil(updated.currentLongitude, place)
+        }
+    }
+
+    func testEnglishDistrictGroundingDoesNotDiscardConflictingCountryOrProvinceQualifiers() throws {
+        let scenarios = [
+            (original: "Nanshan District, Shenzhen, Guangdong, Japan", proposed: "Nanshan District, Shenzhen, Guangdong", qualifier: "Japan"),
+            (original: "Chaoyang District, Beijing, Jilin", proposed: "Chaoyang District, Beijing", qualifier: "Jilin"),
+            (original: "Nanshan District, Shenzhen, Guangdong, China, Japan", proposed: "Nanshan District, Shenzhen, Guangdong, China", qualifier: "Japan")
+        ]
+        for scenario in scenarios {
+            let question = "My name is Alex Chen. I was born on June 15, 1995, at 9:30 a.m. in \(scenario.original)."
+            let parsed = ProfileDirectory.parseExplicitUpdates(in: question, profiles: [])
+            let original = try XCTUnwrap(parsed.first { $0.name == "Alex Chen" }, question)
+            if let place = original.birthPlace {
+                XCTAssertTrue(place.contains(scenario.qualifier), "An invalid qualifier must not be silently discarded: \(question)")
+            }
+            let profile = try XCTUnwrap(ProfileDirectory.applying(parsed, to: []).profiles.first { $0.resolvedName == "Alex Chen" })
+            XCTAssertNil(profile.birthDistrictCode, question)
+            XCTAssertNil(profile.birthLatitude, question)
+            XCTAssertNil(profile.birthLongitude, question)
+
+            let proposed = ProfileUpdate(id: profile.id, name: "Alex Chen", birthPlace: scenario.proposed)
+            let grounded = ProfileDirectory.groundedUpdates([proposed], in: question, profiles: [profile])
+            for update in grounded {
+                if let place = update.birthPlace {
+                    XCTAssertTrue(place.contains(scenario.qualifier), "Grounding must retain the complete supplied location.")
+                }
+            }
+            let updated = try XCTUnwrap(ProfileDirectory.applying(grounded, to: [profile]).profiles.first)
+            XCTAssertNil(updated.birthDistrictCode, scenario.proposed)
+            XCTAssertNil(updated.birthLatitude, scenario.proposed)
+            XCTAssertNil(updated.birthLongitude, scenario.proposed)
+        }
+    }
+
+    func testEnglishRelativesLabeledBirthFactsAreNotAppliedToTheSpeaker() throws {
+        let relativesFacts = [
+            "My brother's birthplace: Nanshan District, Shenzhen, Guangdong, China.",
+            "My brother’s birthplace: Nanshan District, Shenzhen, Guangdong, China, birth time: 8:45 PM, sex: male.",
+            "My brother's birth time: 8:45 PM, sex: male, birthplace: Nanshan District, Shenzhen, Guangdong, China."
+        ]
+        for facts in relativesFacts {
+            let question = "My name is Alex Chen. I was born on June 15, 1995. " + facts
+            let parsed = ProfileDirectory.parseExplicitUpdates(in: question, profiles: [])
+            let alex = try XCTUnwrap(parsed.first { $0.name == "Alex Chen" }, question)
+            XCTAssertEqual(alex.birthDate, "1995-06-15", question)
+            XCTAssertNil(alex.sex, question)
+            XCTAssertNil(alex.birthTime, question)
+            XCTAssertNil(alex.birthPlace, question)
+            let profile = try XCTUnwrap(ProfileDirectory.applying(parsed, to: []).profiles.first { $0.resolvedName == "Alex Chen" })
+            XCTAssertNil(profile.birthDistrictCode, question)
+            XCTAssertNil(profile.birthLatitude, question)
+            XCTAssertNil(profile.birthLongitude, question)
+            let wrongOwner = ProfileUpdate(id: profile.id, name: "Alex Chen", sex: "male", birthTime: "20:45",
+                                           birthPlace: "广东省深圳市南山区")
+            let grounded = ProfileDirectory.groundedUpdates([wrongOwner], in: question, profiles: [profile])
+            XCTAssertTrue(grounded.allSatisfy { $0.sex == nil && $0.birthTime == nil && $0.birthPlace == nil }, question)
+            let updated = try XCTUnwrap(ProfileDirectory.applying(grounded, to: [profile]).profiles.first)
+            XCTAssertEqual(updated.birthDateText, "1995-06-15", question)
+            XCTAssertFalse(updated.birthTimeKnown, question)
+            XCTAssertTrue(updated.birthPlace.isEmpty, question)
+            XCTAssertNil(updated.birthDistrictCode, question)
+            XCTAssertNil(updated.birthLatitude, question)
+            XCTAssertNil(updated.birthLongitude, question)
+        }
+    }
+
+    func testEnglishDistrictPrefillKeepsAmbiguousAndContradictoryLocationsUnresolved() throws {
+        for place in ["Chaoyang District", "Nanshan District, Beijing", "Xuhui District, Beijing"] {
+            let question = "My name is Alex Chen. I was born on June 15, 1995, at 9:30 a.m. in \(place), China."
+            let updates = ProfileDirectory.parseExplicitUpdates(in: question, profiles: [])
+            let profile = try XCTUnwrap(ProfileDirectory.applying(updates, to: []).profiles.first, question)
+            XCTAssertNil(profile.birthDistrictCode, question)
+            for component in place.components(separatedBy: ", ") {
+                XCTAssertTrue(profile.birthPlace.contains(component), question)
+            }
+        }
+
+        for laterLocation in ["I currently live in Beijing.", "I work in Beijing.", "Current location: Beijing."] {
+            let question = "My name is Alex Chen. I was born on June 15, 1995, at 9:30 a.m. in Chaoyang District. \(laterLocation)"
+            let updates = ProfileDirectory.parseExplicitUpdates(in: question, profiles: [])
+            let profile = try XCTUnwrap(ProfileDirectory.applying(updates, to: []).profiles.first, question)
+            XCTAssertTrue(profile.birthPlace.contains("Chaoyang District"), question)
+            XCTAssertFalse(profile.birthPlace.contains("Beijing"), question)
+            XCTAssertNil(profile.birthDistrictCode, question)
+        }
+    }
+
+    func testEnglishDistrictPrefillDoesNotAssumeAnAmbiguousTwelveHourClock() throws {
+        let question = "My name is Alex Chen. I was born on June 15, 1995, at 9:30 in Xuhui District, Shanghai, China."
+        let updates = ProfileDirectory.parseExplicitUpdates(in: question, profiles: [])
+        let update = try XCTUnwrap(updates.first)
+        XCTAssertEqual(update.birthDate, "1995-06-15")
+        XCTAssertNil(update.birthTime)
+        let profile = try XCTUnwrap(ProfileDirectory.applying(updates, to: []).profiles.first)
+        XCTAssertEqual(profile.birthDistrictCode, "310104")
+        XCTAssertNil(profile.birthTimeText)
+        XCTAssertFalse(profile.birthTimeKnown)
+    }
+
+    func testEnglishCareerQuestionExtractsAndGroundsBirthDetailsBeforeConfirmation() throws {
+        let question = "Please use BaZi to explore my career strengths and what kind of work would suit me best. My name is Alex Chen, and I’m male. I was born on June 15, 1995, at 9:30 a.m. in Shanghai, China."
+        let updates = ProfileDirectory.parseExplicitUpdates(in: question, profiles: [])
+        XCTAssertEqual(updates.count, 1)
+        let update = try XCTUnwrap(updates.first)
+        XCTAssertEqual(update.name, "Alex Chen")
+        XCTAssertEqual(update.sex, "男")
+        XCTAssertEqual(update.birthDate, "1995-06-15")
+        XCTAssertEqual(update.birthTime, "09:30")
+        XCTAssertEqual(update.birthPlace, "Shanghai")
+        XCTAssertEqual(ProfileDirectory.explicitSelfName(in: question, profiles: []), "Alex Chen")
+        XCTAssertNil(update.birthTimeZoneID, "A default zone is applied by the form, not invented as a user-supplied fact.")
+        XCTAssertNil(update.birthLatitude)
+        XCTAssertNil(update.birthLongitude)
+
+        let proposed = ProfileUpdate(name: "Alex Chen", sex: "male", birthDate: "1995-06-15", birthTime: "09:30:00",
+                                     birthTimeZoneID: "Asia/Shanghai", birthPlace: "Shanghai", birthLatitude: 31.2304, birthLongitude: 121.4737)
+        let grounded = try XCTUnwrap(ProfileDirectory.groundedUpdates([proposed], in: question, profiles: []).first)
+        XCTAssertEqual(grounded.name, "Alex Chen")
+        XCTAssertEqual(grounded.sex, "male")
+        XCTAssertEqual(grounded.birthDate, "1995-06-15")
+        XCTAssertEqual(grounded.birthTime, "09:30:00")
+        XCTAssertEqual(grounded.birthPlace, "Shanghai")
+        XCTAssertNil(grounded.birthTimeZoneID)
+        XCTAssertNil(grounded.birthLatitude)
+        XCTAssertNil(grounded.birthLongitude)
+    }
+
+    func testEnglishBirthClockHandlesDottedPeriodsAndNoonAndMidnight() throws {
+        for (clock, expected) in [("9:30 a.m.", "09:30"), ("9:30 p.m.", "21:30"), ("12 a.m.", "00:00"), ("12 p.m.", "12:00")] {
+            let text = "Please explore my career. My name is Alex Chen. I was born on June 15, 1995, at \(clock) in Shanghai, China."
+            let update = try XCTUnwrap(ProfileDirectory.parseExplicitUpdates(in: text, profiles: []).first, clock)
+            XCTAssertEqual(update.birthDate, "1995-06-15", clock)
+            XCTAssertEqual(update.birthTime, expected, clock)
+            XCTAssertEqual(update.birthPlace, "Shanghai", clock)
+        }
+    }
+
+    func testEnglishLabeledBirthDateRetainsItsFollowingClock() throws {
+        let text = "Alex Chen, birth date: June 15, 1995 at 8:30 PM"
+        let update = try XCTUnwrap(ProfileDirectory.parseExplicitUpdates(in: text, profiles: []).first)
+        XCTAssertEqual(update.name, "Alex Chen")
+        XCTAssertEqual(update.birthDate, "1995-06-15")
+        XCTAssertEqual(update.birthTime, "20:30")
+    }
+
+    func testEnglishMonthMayDoesNotMakeExplicitBirthFieldsUncertain() throws {
+        let text = "Alex Chen, birth date: May 15, 1995, birth time: 8:30 PM, birthplace: Xuhui District, Shanghai, China."
+        let update = try XCTUnwrap(ProfileDirectory.parseExplicitUpdates(in: text, profiles: []).first)
+        XCTAssertEqual(update.birthDate, "1995-05-15")
+        XCTAssertEqual(update.birthTime, "20:30")
+        let profile = try XCTUnwrap(ProfileDirectory.applying([update], to: []).profiles.first)
+        XCTAssertEqual(profile.birthDistrictCode, "310104")
+    }
+
+    func testEnglishBirthStatementDoesNotBorrowAnUnnamedFriendsPlace() throws {
+        let text = "My name is Alex Chen. I was born on June 15, 1995, at 9:30 a.m.; my friend was born in Beijing."
+        let update = try XCTUnwrap(ProfileDirectory.parseExplicitUpdates(in: text, profiles: []).first { $0.name == "Alex Chen" })
+        XCTAssertEqual(update.birthDate, "1995-06-15")
+        XCTAssertEqual(update.birthTime, "09:30")
+        XCTAssertNil(update.birthPlace)
+        let proposed = ProfileUpdate(name: "Alex Chen", birthDate: "1995-06-15", birthTime: "09:30", birthPlace: "Beijing")
+        let grounded = try XCTUnwrap(ProfileDirectory.groundedUpdates([proposed], in: text, profiles: []).first)
+        XCTAssertEqual(grounded.birthDate, "1995-06-15")
+        XCTAssertEqual(grounded.birthTime, "09:30")
+        XCTAssertNil(grounded.birthPlace)
+    }
+
+    func testEnglishSelfGenderAndBirthClausesAreNotStoredForAnotherNamedPerson() throws {
+        for (speaker, other) in [("Alex Chen", "Bob Smith"), ("Bob Smith", "Alex Chen")] {
+            let text = "My name is \(speaker). \(other), birth date: June 15, 1995. I’m female. I was born on July 20, 1996, at 8:30 p.m. in Beijing."
+            let updates = ProfileDirectory.parseExplicitUpdates(in: text, profiles: [])
+            let update = try XCTUnwrap(updates.first { $0.name == other })
+            XCTAssertEqual(update.birthDate, "1995-06-15", other)
+            XCTAssertNil(update.sex, other)
+            XCTAssertNil(update.birthTime, other)
+            XCTAssertNil(update.birthPlace, other)
+            let wrongOwner = ProfileUpdate(name: other, sex: "female", birthDate: "1996-07-20", birthTime: "20:30", birthPlace: "Beijing")
+            let grounded = ProfileDirectory.groundedUpdates([wrongOwner], in: text, profiles: [])
+            XCTAssertTrue(grounded.allSatisfy {
+                $0.sex == nil && $0.birthDate == nil && $0.birthTime == nil && $0.birthPlace == nil
+            }, other)
+        }
+    }
+
+    func testEnglishPrefillDoesNotUseNegatedUncertainOrUnrelatedBirthFacts() throws {
+        for fact in [
+            "I was not born on June 15, 1995, at 9:30 a.m. in Shanghai, China.",
+            "I may have been born on June 15, 1995, at 9:30 a.m. in Shanghai, China.",
+            "I have an interview on June 15, 1995, at 9:30 a.m. in Shanghai, China."
+        ] {
+            let text = "My name is Alex Chen. " + fact
+            let updates = ProfileDirectory.parseExplicitUpdates(in: text, profiles: [])
+            let update = try XCTUnwrap(updates.first { $0.name == "Alex Chen" }, fact)
+            XCTAssertNil(update.birthDate, fact)
+            XCTAssertNil(update.birthTime, fact)
+            XCTAssertNil(update.birthPlace, fact)
+            let proposal = ProfileUpdate(name: "Alex Chen", birthDate: "1995-06-15", birthTime: "09:30", birthPlace: "Shanghai")
+            let grounded = ProfileDirectory.groundedUpdates([proposal], in: text, profiles: [])
+            XCTAssertTrue(grounded.allSatisfy { $0.birthDate == nil && $0.birthTime == nil && $0.birthPlace == nil }, fact)
+        }
+
+        let separateEvent = "My name is Alex Chen. I was born on June 15, 1995. I have an interview at 9:30 a.m. in Shanghai."
+        let update = try XCTUnwrap(ProfileDirectory.parseExplicitUpdates(in: separateEvent, profiles: []).first)
+        XCTAssertEqual(update.birthDate, "1995-06-15")
+        XCTAssertNil(update.birthTime)
+        XCTAssertNil(update.birthPlace)
+        let currentPlace = "My name is Alex Chen. I was born on June 15, 1995, at 9:30 a.m. I work in Beijing."
+        let own = try XCTUnwrap(ProfileDirectory.parseExplicitUpdates(in: currentPlace, profiles: []).first)
+        XCTAssertEqual(own.birthTime, "09:30")
+        XCTAssertNil(own.birthPlace, "A work location is not a birthplace.")
+    }
+
+    func testEnglishBirthFactsStayWithTheNamedPerson() throws {
+        let text = "My name is Alex Chen. Bob Smith was born on June 15, 1995, at 9:30 a.m. in Shanghai, China."
+        let updates = ProfileDirectory.parseExplicitUpdates(in: text, profiles: [])
+        let alex = try XCTUnwrap(updates.first { $0.name == "Alex Chen" })
+        let bob = try XCTUnwrap(updates.first { $0.name == "Bob Smith" })
+        XCTAssertNil(alex.birthDate)
+        XCTAssertNil(alex.birthTime)
+        XCTAssertNil(alex.birthPlace)
+        XCTAssertEqual(bob.birthDate, "1995-06-15")
+        XCTAssertEqual(bob.birthTime, "09:30")
+        XCTAssertEqual(bob.birthPlace, "Shanghai")
+        let wrongOwner = ProfileUpdate(name: "Alex Chen", birthDate: "1995-06-15", birthTime: "09:30", birthPlace: "Shanghai")
+        let grounded = ProfileDirectory.groundedUpdates([wrongOwner], in: text, profiles: [])
+        XCTAssertTrue(grounded.allSatisfy { $0.birthDate == nil && $0.birthTime == nil && $0.birthPlace == nil })
+    }
+
     func testColloquialReplacementRecognizesTheExactSavedPerson() {
         var person = OracleProfile(); person.name = "李岚"
         XCTAssertEqual(ProfileDirectory.referencedNames(in: "换成李岚，看看她的工作", profiles: [person]), ["李岚"])
@@ -578,5 +901,73 @@ final class ProfileDirectoryTests: XCTestCase {
         XCTAssertEqual(both.first?.givenName, "三")
         XCTAssertNil(ProfileDirectory.parseExplicitUpdates(in: "张小明出生时间8点半", profiles: [original]).first?.birthTime)
         XCTAssertEqual(ProfileDirectory.parseExplicitUpdates(in: "张小明出生时间晚上8点半", profiles: [original]).first?.birthTime, "20:30")
+    }
+
+    func testNaturalSelfBirthTimeRetractionClearsTheOldClockAndCannotBeRestoredFromSavedDetails() throws {
+        let original = try person("陈平")
+        let text = "我不知道几点出生，之前那个八点半不准"
+        XCTAssertTrue(ProfileDirectory.hasExplicitSelfFacts(in: text))
+        let local = ProfileDirectory.explicitSelfUpdates(in: text, profiles: [original], selfProfileID: original.id)
+        let patch = try XCTUnwrap(local.first)
+        XCTAssertEqual(patch.id, original.id)
+        XCTAssertEqual(patch.birthTimeKnown, false)
+        XCTAssertTrue(patch.unknownFields?.contains(.birthTime) == true)
+        XCTAssertNil(patch.birthTime)
+        let grounded = ProfileDirectory.groundedUpdates([ProfileUpdate(id: original.id, birthTimeKnown: false, unknownFields: [.birthTime])],
+            in: text, profiles: [original], contextIDs: [original.id])
+        XCTAssertEqual(grounded.first?.birthTimeKnown, false)
+        XCTAssertTrue(grounded.first?.unknownFields?.contains(.birthTime) == true)
+        let changed = try XCTUnwrap(ProfileDirectory.applying(grounded, to: [original]).profiles.first)
+        XCTAssertFalse(changed.birthTimeKnown)
+        XCTAssertNil(changed.birthTimeText)
+        XCTAssertTrue(changed.unknownFields.contains(.birthTime))
+        XCTAssertTrue(changed.declaredUnknownFields?.contains(.birthTime) == true)
+        XCTAssertEqual(changed.birthDateText, original.birthDateText)
+        XCTAssertEqual(changed.birthTimeZoneID, original.birthTimeZoneID)
+        let restored = ProfileDirectory.restoringKnownFields(in: changed, from: original)
+        XCTAssertFalse(restored.birthTimeKnown)
+        XCTAssertNil(restored.birthTimeText)
+        let guessed = ProfileDirectory.groundedUpdates([ProfileUpdate(id: original.id, birthTime: "08:30", birthTimeKnown: true)],
+            in: text, profiles: [original], contextIDs: [original.id])
+        XCTAssertFalse(guessed.contains { $0.birthTime != nil || $0.birthTimeKnown == true })
+    }
+
+    func testNamedBirthTimeRetractionsDoNotRetainTheRejectedClockButAcceptAnExplicitReplacement() throws {
+        let original = try person("陈平")
+        for text in ["陈平不知道几点出生", "陈平出生时间08:30不准", "陈平出生时间不是08:30",
+                     "陈平不用原来的出生时间", "陈平不要用之前那个八点半作为出生时间"] {
+            let patches = ProfileDirectory.parseExplicitUpdates(in: text, profiles: [original])
+            let patch = try XCTUnwrap(patches.first, text)
+            XCTAssertEqual(patch.birthTimeKnown, false, text)
+            XCTAssertTrue(patch.unknownFields?.contains(.birthTime) == true, text)
+            XCTAssertNil(patch.birthTime, text)
+            let changed = try XCTUnwrap(ProfileDirectory.applying(patches, to: [original]).profiles.first)
+            XCTAssertFalse(changed.birthTimeKnown, text)
+            XCTAssertNil(changed.birthTimeText, text)
+        }
+        let correction = ProfileDirectory.parseExplicitUpdates(in: "陈平出生时间不是08:30，是09:30", profiles: [original])
+        XCTAssertEqual(correction.first?.birthTime, "09:30")
+        XCTAssertEqual(correction.first?.birthTimeKnown, true)
+        XCTAssertFalse(correction.first?.unknownFields?.contains(.birthTime) == true)
+        let changed = try XCTUnwrap(ProfileDirectory.applying(correction, to: [original]).profiles.first)
+        XCTAssertTrue(changed.birthTimeKnown)
+        XCTAssertEqual(changed.birthTimeText, "09:30")
+    }
+
+    func testBirthTimeRetractionStaysWithItsOwnerAndNegatedUncertaintyDoesNotClearTime() throws {
+        let own = try person("陈平")
+        let other = try person("李岚")
+        let text = "李岚出生日期1991-04-03，我不知道几点出生"
+        let named = ProfileDirectory.parseExplicitUpdates(in: text, profiles: [own, other])
+        XCTAssertEqual(named.first?.id, other.id)
+        XCTAssertFalse(named.contains { $0.birthTimeKnown == false || $0.unknownFields?.contains(.birthTime) == true })
+        let selfUpdates = ProfileDirectory.explicitSelfUpdates(in: text, profiles: [own, other], selfProfileID: own.id)
+        XCTAssertEqual(selfUpdates.first?.id, own.id)
+        XCTAssertEqual(selfUpdates.first?.birthTimeKnown, false)
+        XCTAssertTrue(ProfileDirectory.explicitSelfUpdates(in: "我朋友不知道几点出生", profiles: [own, other], selfProfileID: own.id).isEmpty)
+        XCTAssertTrue(ProfileDirectory.parseExplicitUpdates(in: "陈平不知道我几点出生", profiles: [own, other]).isEmpty)
+        XCTAssertTrue(ProfileDirectory.parseExplicitUpdates(in: "陈平不用我的出生时间", profiles: [own, other]).isEmpty)
+        let negated = ProfileDirectory.parseExplicitUpdates(in: "陈平不是不知道几点出生", profiles: [own])
+        XCTAssertFalse(negated.contains { $0.birthTimeKnown == false || $0.unknownFields?.contains(.birthTime) == true })
     }
 }
