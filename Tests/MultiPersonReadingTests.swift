@@ -439,7 +439,7 @@ final class MultiPersonReadingTests: XCTestCase {
         let request = input(people: [first, second])
         let results = await registry.calculate(request, methods: [.bazi]) { _ in }
         let run = OracleRun(input: request, plan: plan(people: [first, second]), results: results)
-        let payload = try ReadingContextBuilder.payload(run: run, weights: PreferenceLearning.initial)
+        let payload = try ReadingContextBuilder.payload(run: run)
         XCTAssertEqual(results.count, 2)
         XCTAssertTrue(payload.contains(first.id.uuidString))
         XCTAssertTrue(payload.contains(second.id.uuidString))
@@ -448,28 +448,23 @@ final class MultiPersonReadingTests: XCTestCase {
         XCTAssertTrue(payload.contains("合作"))
     }
 
-    @MainActor func testSeveralPeopleUsingSameMethodStillReceiveOnlyOnePreferenceVote() throws {
-        let vault = try temporaryVault()
-        let store = OracleStore(vault: vault, bootstrapCredential: false)
+    func testMultiplePeopleKeepIndependentResultsWithDisagreementsInTheBody() throws {
         let first = person("张三"), second = person("李四")
         var firstResult = OracleResult(method: .bazi, headline: "第一人的盘面", rows: [])
         firstResult.participantID = first.id; firstResult.participantName = first.resolvedName
         var secondResult = OracleResult(method: .bazi, headline: "第二人的盘面", rows: [])
         secondResult.participantID = second.id; secondResult.participantName = second.resolvedName
-        let chosen = ReadingAlternative(id: "a", title: "先沟通", body: "一项方法对应两位参与人", supportingMethods: [.bazi, .bazi])
-        let opposing = ReadingAlternative(id: "b", title: "先观察", body: "另一种取法", supportingMethods: [.meihua])
         var run = OracleRun(input: input(people: [first, second]), plan: plan(methods: [.bazi, .meihua], people: [first, second]),
                             results: [firstResult, secondResult, .init(method: .meihua, headline: "问事结果", rows: [])])
-        run.synthesis = ReadingSynthesis(text: "两种处境", alternatives: [chosen, opposing])
-        store.runs = [run]
-        let initial = store.weights
-        let expected = PreferenceLearning.updated(initial, chosen: [.bazi], opposing: [.meihua])
-        store.select(chosen, for: run.id)
-        for method in OracleMethod.allCases {
-            XCTAssertEqual(try XCTUnwrap(store.weights[method.rawValue]), try XCTUnwrap(expected[method.rawValue]), accuracy: 1e-10)
-        }
-        let afterFirstChoice = store.weights
-        store.select(chosen, for: run.id)
-        XCTAssertEqual(store.weights, afterFirstChoice)
+        run.synthesis = ReadingSynthesis(text: "张三的盘面倾向先沟通，李四的盘面倾向先核对分工；分歧在于推进条件尚未一致。")
+        let encoded = try JSONEncoder().encode(run)
+        let decoded = try JSONDecoder().decode(OracleRun.self, from: encoded)
+        XCTAssertEqual(decoded.results.filter { $0.method == .bazi }.compactMap(\.participantID), [first.id, second.id])
+        XCTAssertEqual(decoded.synthesis?.text, run.synthesis?.text)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        XCTAssertNil(object["weightsSnapshot"])
+        XCTAssertNil(object["selectedAlternative"])
+        let synthesis = try XCTUnwrap(object["synthesis"] as? [String: Any])
+        XCTAssertNil(synthesis["alternatives"])
     }
 }

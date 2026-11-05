@@ -86,7 +86,7 @@ final class LiveIntegrationTests: XCTestCase {
         XCTAssertTrue([.complete, .partial].contains(meihua.status))
         XCTAssertFalse(meihua.rows.isEmpty)
         var original = OracleRun(input: input, plan: plan, results: [meihua])
-        original.synthesis = ReadingSynthesis(text: "现有梅花盘可供安排今晚的交流作参考，先交代交流目的，再决定停留多久。", alternatives: [])
+        original.synthesis = ReadingSynthesis(text: "现有梅花盘可供安排今晚的交流作参考，先交代交流目的，再决定停留多久。")
         original.completedAt = input.castingDate
         let conversation = OracleConversation(messages: [ChatMessage(role: .user, content: originalQuestion),
             ChatMessage(role: .assistant, content: original.synthesis!.text, kind: .reading, runID: original.id)])
@@ -218,7 +218,7 @@ final class LiveIntegrationTests: XCTestCase {
         let result = try await TarotPlugin().calculate(input)
         XCTAssertEqual(result.status, .complete)
         let run = OracleRun(input: input, plan: plan, results: [result])
-        let prior = ReadingSynthesis(text: "建议先把费用分摊和分工说清，再决定要不要接。", alternatives: [])
+        let prior = ReadingSynthesis(text: "建议先把费用分摊和分工说清，再决定要不要接。")
         var priorRun = run
         priorRun.synthesis = prior
         let followUpRun = priorRun
@@ -230,10 +230,10 @@ final class LiveIntegrationTests: XCTestCase {
             Task { @MainActor in
                 let stage = "voice DeepSeek \(voice.rawValue)"
                 let initialStream = StreamCollector()
-                let initial = try await client.synthesize(run: run, weights: [:], history: [],
+                let initial = try await client.synthesize(run: run, history: [],
                                                           language: .simplifiedChinese, voice: voice) { initialStream.append($0) }
                 XCTAssertEqual(initialStream.text, initial.text, stage)
-                XCTAssertTrue(initial.alternatives.isEmpty, stage)
+                XCTAssertNil(initial.archivedConflictDetails, stage)
                 let initialReport = await client.lastSuccessfulConnection
                 assertLiveResponse(initialReport)
                 recordJourneyText(initial.text, stage: "\(stage) initial")
@@ -274,7 +274,7 @@ final class LiveIntegrationTests: XCTestCase {
         let run = OracleRun(input: input, plan: plan, results: results)
         let collector = StreamCollector()
         let progress = LiveProgressCollector()
-        let reading = try await client.synthesize(run: run, weights: PreferenceLearning.initial, history: history, onProgress: { stage in
+        let reading = try await client.synthesize(run: run, history: history, onProgress: { stage in
             await progress.append(stage)
         }) { collector.append($0) }
         XCTAssertFalse(reading.text.isEmpty)
@@ -538,7 +538,7 @@ final class LiveIntegrationTests: XCTestCase {
         let plan = OraclePlan(intent: "见面安排", subject: "事件", methods: [.tarot], requiredFields: [], note: "", question: original)
         let result = try await TarotPlugin().calculate(input)
         XCTAssertEqual(result.status, .complete)
-        let prior = ReadingSynthesis(text: "建议先等对方提出具体见面时间。", alternatives: [])
+        let prior = ReadingSynthesis(text: "建议先等对方提出具体见面时间。")
         let run = OracleRun(input: input, plan: plan, results: [result], synthesis: prior)
         let collector = StreamCollector()
         let text = try await client.followUp(
@@ -570,9 +570,9 @@ final class LiveIntegrationTests: XCTestCase {
         XCTAssertFalse(results.isEmpty)
         let run = OracleRun(input: input, plan: plan, results: results)
         let collector = StreamCollector()
-        let reading = try await client.synthesize(run: run, weights: PreferenceLearning.initial, history: []) { collector.append($0) }
+        let reading = try await client.synthesize(run: run, history: []) { collector.append($0) }
         XCTAssertFalse(reading.text.isEmpty)
-        XCTAssertTrue(reading.alternatives.isEmpty || reading.alternatives.count == 2)
+        XCTAssertNil(reading.archivedConflictDetails)
         XCTAssertEqual(collector.text, reading.text)
     }
 
@@ -611,7 +611,7 @@ final class LiveIntegrationTests: XCTestCase {
         XCTAssertEqual(results.count, 2)
         XCTAssertEqual(Set(results.compactMap(\.participantID)), Set(people.map(\.id)))
         let run = OracleRun(input: input, plan: plan, results: results)
-        let reading = try await client.synthesize(run: run, weights: PreferenceLearning.initial, history: []) { _ in }
+        let reading = try await client.synthesize(run: run, history: []) { _ in }
         XCTAssertTrue(reading.text.contains("张三"))
         XCTAssertTrue(reading.text.contains("李四"))
     }

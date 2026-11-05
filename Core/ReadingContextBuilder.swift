@@ -7,7 +7,7 @@ enum ReadingContextBuilder {
         }
     }
 
-    static func payload(run: OracleRun, weights: [String: Double], language: AppLanguage = .current) throws -> String {
+    static func payload(run: OracleRun, language: AppLanguage = .current) throws -> String {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.sortedKeys]
@@ -26,6 +26,8 @@ enum ReadingContextBuilder {
         func label(_ chinese: String, _ english: String) -> String { L10n.text(chinese, english, language: language) }
         let understoodFollowUp = run.plan.followUpQuestion.flatMap { _ in run.plan.understanding?.resolvedQuestion }
         let followUp = run.plan.followUpQuestion ?? label("无，回答原问题", "None; answer the original question.")
+        let archivedConflict = run.synthesis?.archivedConflictDetails?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let archivedNote = archivedConflict.flatMap { $0.isEmpty ? nil : "\n" + label("历史解读中的分歧说明（仅作已保存文字）：", "Archived disagreement explanation (saved text only): ") + $0 } ?? ""
         return """
         \(label("用户问题：", "Original question: "))\(run.input.question)
         \(label("本条补充问题（用户的实际追问或操作请求）：", "Actual follow-up or action request: "))\(followUp)\(understoodFollowUp.map { "\n" + label("结合对话理解的追问：", "Follow-up resolved from the conversation: ") + $0 } ?? "")
@@ -46,8 +48,7 @@ enum ReadingContextBuilder {
         \(label("全部可用结果 json：", "All usable results JSON: "))\(try json(eligible))
         \(label("沿用已有计算的结果ID json：", "Reused result IDs JSON: "))\(try json(run.reusedResultIDs ?? []))
         \(label("因资料限制而未采用的方法 json：", "Methods omitted due to missing details JSON: "))\(try json(run.plan.omittedMethods ?? []))
-        \(label("本次资料说明 json：", "Notes on available details JSON: "))\(try json(run.plan.preparationNotes ?? []))
-        \(label("偏好权重 json：", "Preference weights JSON: "))\(try json(weights))
+        \(label("本次资料说明 json：", "Notes on available details JSON: "))\(try json(run.plan.preparationNotes ?? []))\(archivedNote)
         """
     }
 }

@@ -2,23 +2,69 @@ import XCTest
 @testable import BlindOracle
 
 final class PersistenceAndPreferenceTests: XCTestCase {
-    func testPreferenceLearningStartsEqualAndMovesSlowly() {
-        let initial = PreferenceLearning.initial
-        let updated = PreferenceLearning.updated(initial, chosen: [.bazi], opposing: [.meihua])
-        XCTAssertEqual(initial.values.reduce(0,+), 1, accuracy: 1e-10)
-        XCTAssertEqual(updated.values.reduce(0,+), 1, accuracy: 1e-9)
-        XCTAssertGreaterThan(updated["bazi"]!, initial["bazi"]!)
-        XCTAssertLessThan(abs(updated["bazi"]! - initial["bazi"]!), 0.01)
+    func testLegacyReadingKeepsConflictTextButDropsPreferenceAndSelectionMetadata() throws {
+        let run = OracleRun(input: OracleInput(question: "合作如何安排？", profile: OracleProfile()),
+                            plan: OraclePlan(intent: "合作", subject: "本人", methods: [.bazi, .meihua], requiredFields: [], note: "", question: "合作如何安排？"))
+        let encoder = JSONEncoder()
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoder.encode(run)) as? [String: Any])
+        object["weightsSnapshot"] = ["bazi": 0.8, "meihua": 0.2]
+        object["selectedAlternative"] = "a"
+        object["synthesis"] = [
+            "text": "先核对合作条件。",
+            "alternatives": [
+                ["id": "a", "title": "可以推进", "body": "分工清楚时适合推进。", "supportingMethods": ["bazi"]],
+                ["id": "b", "title": "先核对条件", "body": "预算不明时应先确认。", "supportingMethods": ["meihua"]]
+            ]
+        ]
+        let decoded = try JSONDecoder().decode(OracleRun.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertEqual(decoded.id, run.id)
+        XCTAssertEqual(decoded.synthesis?.text, "先核对合作条件。")
+        let details = try XCTUnwrap(decoded.synthesis?.archivedConflictDetails)
+        XCTAssertTrue(details.contains("分工清楚时适合推进。"))
+        XCTAssertTrue(details.contains("预算不明时应先确认。"))
+
+        let encoded = try encoder.encode(decoded)
+        let current = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        XCTAssertNil(current["weightsSnapshot"])
+        XCTAssertNil(current["selectedAlternative"])
+        let synthesis = try XCTUnwrap(current["synthesis"] as? [String: Any])
+        XCTAssertNil(synthesis["alternatives"])
+        let restarted = try JSONDecoder().decode(OracleRun.self, from: encoded)
+        XCTAssertEqual(restarted.synthesis?.archivedConflictDetails, details)
     }
-    func testRepeatedVotesStayBoundedAndNormalized() {
-        var values = PreferenceLearning.initial
-        for _ in 0..<3000 { values = PreferenceLearning.updated(values, chosen: [.bazi], opposing: [.meihua, .qimen]) }
-        XCTAssertEqual(values.values.reduce(0,+), 1, accuracy: 1e-7)
-        XCTAssertTrue(values.values.allSatisfy { $0 >= 0.04 - 1e-7 && $0 <= 0.25 + 1e-7 })
+
+    @MainActor func testRetiredPreferenceFilesAreRemovedWithoutTouchingPeopleReadingsOrChats() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = LocalVault(directory: directory)
+        var person = OracleProfile(); person.name = "保留人员"
+        let run = OracleRun(input: OracleInput(question: "保留推演", profile: person),
+                            plan: OraclePlan(intent: "测试", subject: "本人", methods: [.xiaoliuren], requiredFields: [], note: "", question: "保留推演"),
+                            synthesis: ReadingSynthesis(text: "保留正文。"))
+        let message = ChatMessage(role: .assistant, content: "原聊天正文。", kind: .reading, runID: run.id)
+        let chat = OracleConversation(messages: [message])
+        try vault.save([person], as: "profiles")
+        try vault.save([run], as: "readings")
+        try vault.save(OracleConversationArchive(activeConversationID: chat.id, conversations: [chat]), as: ConversationHistory.filename)
+        let retired = ["preferences.json", "preferences.recovery-old.json"]
+        for name in retired { try Data("obsolete preference bytes".utf8).write(to: directory.appendingPathComponent(name)) }
+        let unrelated = directory.appendingPathComponent("preferences-notes.json")
+        try Data("unrelated user file".utf8).write(to: unrelated)
+
+        let store = OracleStore(vault: vault, bootstrapCredential: false)
+        XCTAssertEqual(store.profiles.map(\.id), [person.id])
+        XCTAssertEqual(store.runs.map(\.id), [run.id])
+        XCTAssertEqual(store.messages.map(\.content), [message.content])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: unrelated.path))
+        for name in retired { XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent(name).path)) }
+
+        store.checkpoint()
+        let restarted = OracleStore(vault: vault, bootstrapCredential: false)
+        XCTAssertEqual(restarted.runs.first?.synthesis?.text, "保留正文。")
+        XCTAssertEqual(restarted.messages.map(\.content), [message.content])
+        XCTAssertFalse(vault.contains("preferences"))
     }
-    func testOpposingSupportDoesNotChangeWeights() {
-        XCTAssertEqual(PreferenceLearning.updated(PreferenceLearning.initial, chosen: [.bazi], opposing: [.bazi]), PreferenceLearning.initial)
-    }
+
     func testCompressionDoesNotTouchPermanentProfileOrOriginalMessages() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

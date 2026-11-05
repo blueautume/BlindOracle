@@ -29,7 +29,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         else { result = try await TarotPlugin().calculate(input) }
         XCTAssertTrue([OracleResultStatus.complete, .partial].contains(result.status))
         var run = OracleRun(input: input, plan: plan, results: [result])
-        run.synthesis = ReadingSynthesis(text: "先核对行程，再稳步推进。", alternatives: [])
+        run.synthesis = ReadingSynthesis(text: "先核对行程，再稳步推进。")
         run.completedAt = input.castingDate
         // LocalVault stores dates at ISO-8601 second precision. Start with that
         // persisted representation so comparisons still detect any later change.
@@ -56,7 +56,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         XCTAssertTrue([OracleResultStatus.complete, .partial].contains(bazi.status))
         XCTAssertTrue([OracleResultStatus.complete, .partial].contains(immediate.status))
         var run = OracleRun(input: input, plan: plan, results: [bazi, immediate])
-        run.synthesis = ReadingSynthesis(text: "先明确工作边界，再决定如何推进。", alternatives: [])
+        run.synthesis = ReadingSynthesis(text: "先明确工作边界，再决定如何推进。")
         run.completedAt = input.castingDate
         let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
@@ -77,7 +77,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         XCTAssertEqual(results.count, 1)
         XCTAssertTrue(results.allSatisfy { [.complete, .partial].contains($0.status) })
         var run = OracleRun(input: input, plan: plan, results: results)
-        run.synthesis = ReadingSynthesis(text: "先把今晚的安排交代清楚，再决定停留多久。", alternatives: [])
+        run.synthesis = ReadingSynthesis(text: "先把今晚的安排交代清楚，再决定停留多久。")
         run.completedAt = input.castingDate
         let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601

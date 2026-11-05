@@ -344,7 +344,7 @@ final class OracleInteractionTests: XCTestCase {
         let oldPlan = plan(methods: [.meihua])
         let oldRun = OracleRun(input: OracleInput(question: oldPlan.question, profile: store.profile), plan: oldPlan,
                                results: [.init(method: .meihua, headline: "已保存的结果", rows: [])],
-                               synthesis: ReadingSynthesis(text: "已有解读", alternatives: []), completedAt: Date())
+                               synthesis: ReadingSynthesis(text: "已有解读"), completedAt: Date())
         store.runs = [oldRun]
         store.messages = [ChatMessage(role: .user, content: "继续完成这次抽牌")]
         store.pendingPlan = plan(methods: [.tarot])
@@ -365,17 +365,6 @@ final class OracleInteractionTests: XCTestCase {
         XCTAssertEqual(store.pendingInteraction?.currentRequest?.method, .tarot)
         XCTAssertEqual(store.messages.count, messageCount)
         XCTAssertEqual(store.runs.map(\.id), [oldRun.id])
-    }
-
-    @MainActor func testExistingNineMethodPreferencesGainTarotAndRemainNormalized() throws {
-        let vault = try temporaryVault()
-        let previous = Dictionary(uniqueKeysWithValues: OracleMethod.allCases.filter { $0 != .tarot }.map { ($0.rawValue, 1.0 / 9.0) })
-        try vault.save(previous, as: "preferences")
-        let store = OracleStore(vault: vault, bootstrapCredential: false)
-        XCTAssertEqual(Set(store.weights.keys), Set(OracleMethod.allCases.map(\.rawValue)))
-        XCTAssertGreaterThan(try XCTUnwrap(store.weights["tarot"]), 0)
-        XCTAssertEqual(store.weights.values.reduce(0, +), 1, accuracy: 1e-9)
-        XCTAssertTrue(store.weights.values.allSatisfy { $0 >= 0.04 && $0 <= 0.25 })
     }
 
     func testLegacyInputPlanResultAndConversationDecodeWithoutNewFields() throws {

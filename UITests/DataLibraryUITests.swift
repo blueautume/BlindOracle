@@ -1,6 +1,34 @@
 import XCTest
 
 final class DataLibraryUITests: XCTestCase {
+    @MainActor func testArchivedConflictDetailsRemainStaticBodyTextWithoutPreferenceChoices() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-reading-library",
+                               "--ui-testing-archived-conflicts", "--ui-testing-reset-language", "-oracle.appLanguage", "zh-Hans"]
+        app.launch()
+        openDataTab(in: app)
+        XCTAssertTrue(app.staticTexts["留存资料"].exists)
+        XCTAssertTrue(app.buttons["localMethodsDirectory"].exists)
+        openChatTab(in: app)
+
+        let transcript = app.scrollViews["chatTranscript"]
+        let archived = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "archivedConflictDetails-")).firstMatch
+        for _ in 0..<12 {
+            if archived.exists && archived.isHittable { break }
+            transcript.swipeUp()
+        }
+        XCTAssertTrue(archived.exists)
+        XCTAssertTrue(archived.isHittable)
+        XCTAssertEqual(archived.label, "原记录分歧：一处倾向先推进，另一处倾向先核对条件。")
+        XCTAssertEqual(archived.elementType, .staticText)
+        XCTAssertTrue(app.staticTexts["第10份测试解读。"].exists)
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "原记录分歧")).firstMatch.exists)
+        XCTAssertFalse(app.staticTexts["两种处境，哪一种更贴近你？"].exists)
+        XCTAssertFalse(app.staticTexts["只作细微调整，慢慢认识你的处境。"].exists)
+        XCTAssertFalse(app.staticTexts["已记下这次选择。"].exists)
+        capture("archived-reading-conflict-as-body-text", in: app)
+    }
+
     @MainActor func testSwipingAProfileDeletesItImmediatelyAndKeepsOtherProfilesAndReadingSnapshots() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-reading-library",

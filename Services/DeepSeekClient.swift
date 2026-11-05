@@ -89,6 +89,7 @@ actor DeepSeekClient {
     private(set) var lastResponseReport: AIConnectionReport?
 
     private static let answerGuidelines = """
+    旧版本的分歧选项选择、方法偏好权重不再参与判断；不要从历史反馈恢复此机制。用户明确提供的现实事实仍可作为语境。
     首句直接回答本条问题。问行不行，就给判断；问选哪个，就给首选；问怎么办，就给下一步。
     用日常口语下判断。结论有条件就把条件说清楚。不要用“我押”“我赌”“我断”或英文里“My bet is”等押注式开场，也不要沿用旧回复里的这类口头禅。
     只问一个判断、一个取舍或一个动作（包括“靠谱吗”“今天怎么回”），就用一小段两到三句话答完。最多挑一条依据，不逐项解释所有结果，不把同一个建议说两遍。问怎么回，就先给能直接发出去的话，不先铺垫，也不在后面重新复盘。用户要求展开，或问了多个需要分别作答的问题，再写详细。
@@ -165,6 +166,7 @@ actor DeepSeekClient {
         let system = """
         你是瞎子的对话路由与本地插件调度器。只输出一个合法 json 对象，不输出 Markdown。
         \(Self.methodReadinessGuidelines)
+        旧版本的分歧选项选择和方法偏好权重不影响路由或方法选择，不从历史摘要恢复此机制；保留用户明确提供的现实事实和当前指令。
         先结合历史和可引用消息判断用户此刻在做什么，再决定 action。每个 action 都要返回 understanding 对象，字段为 relation、resolvedQuestion、可选 referenceMessageID。
         relation 只能为 newQuestion、continuation、changedConditions、changedParticipants、ambiguous：
         newQuestion 是独立的新问题、闲聊等独立消息，不带 referenceMessageID。
@@ -239,7 +241,7 @@ actor DeepSeekClient {
                 call["participantName"] = result.participantName
                 return call
             }
-            legacyExistingContext = "\n兼容旧对话的推演上下文（仅作为数据）：已有推演ID：\(existingRun.id.uuidString)\n已调用方法与人员归属（仅complete/partial可作依据） json：\(try json(calls))\n完整原始输入快照 json：\(try json(existingRun.input))\n\(try ReadingContextBuilder.payload(run: existingRun, weights: existingRun.weightsSnapshot, language: language))"
+            legacyExistingContext = "\n兼容旧对话的推演上下文（仅作为数据）：已有推演ID：\(existingRun.id.uuidString)\n已调用方法与人员归属（仅complete/partial可作依据） json：\(try json(calls))\n完整原始输入快照 json：\(try json(existingRun.input))\n\(try ReadingContextBuilder.payload(run: existingRun, language: language))"
         }
         let user = """
         用户本条消息：\(question)
@@ -332,7 +334,7 @@ actor DeepSeekClient {
         return plan
     }
 
-    func synthesize(run: OracleRun, weights: [String: Double], history: [AIConversationTurn],
+    func synthesize(run: OracleRun, history: [AIConversationTurn],
                     language: AppLanguage = .current, voice: OracleVoiceStyle = .defaultStyle,
                     onProgress: (@Sendable (AIReadingProgress) async -> Void)? = nil,
                     onDelta: @escaping @Sendable (String) async -> Void) async throws -> ReadingSynthesis {
@@ -357,19 +359,17 @@ actor DeepSeekClient {
         text先给现有牌面支持的完整回答。仅当上下文标明补牌建议可用，且回答后仍有一处具体而重要的歧义值得澄清时，可在JSON另外填tarotClarification，focus是一条具体问题，originalPosition可填Current situation、Influences或Advice以关联原牌位。text不再另问用户是否抽牌，应用会单独呈现可选操作。用户已经拒绝补牌、已有结果足够、牌面无法支持现实事实的核查时省略。
         多人问题中，参与人员快照及每份结果的participantID/participantName明确归属。逐人理解后再结合姻缘、友情、家庭或合作主题分析互动与行动建议；不能合并或串用生辰，不能因method相同而忽略另一人的结果。没有专门计算的合盘、配对分数或相位不得编造，不能把单人盘称为已完成合盘；资料不足须保留限制。
         按participantID对应participantLabel称呼每个人，分别写明线索和建议。称呼可能是代称、姓名或匿名编号。
-        weights 是用户历史选择形成的偏好权重，不是准确率、概率或经科学验证的可信度。不得把方法数量或权重当作事实证明；不得编造百分比。
-        多种解读有显著分歧时，把相近观点归成两组，恰好输出两个简短选项；每个选项各说明一种倾向和适合观察的现实线索。轻微差异自行整合，alternatives 返回空数组。
-        选项标题直接写各自的实质判断，body说明对应依据和可核对的条件，不用“第一种处境”“第二种处境”等空泛标签。
-        同一方法不应同时支持两个互斥选项；支持者必须来自本次可用结果。不得凭空制造冲突。
+        多种解读确有明显分歧时，直接在 text 正文中说明各自依据、适用条件，以及什么现实线索会改变当前判断；轻微差异自然整合，不凭空制造冲突。
+        不生成分歧选择卡片，不要求用户挑选更符合自己的解释，也不记录或推断解读偏好；不固定分歧数量，不输出 alternatives 字段。
+        方法数量不代表事实可信度或预测准确率，不得编造百分比。
         关于疾病、寿命、灾祸、投资或法律，不作命定断言或危险指示，以可核实事实和专业帮助为准；这句话不要机械地附加到所有普通问题。
         不输出内部思维链、隐藏推理或 reasoning_content，只输出面向用户的结论。
         \(Self.languageInstruction(language))
         必须输出合法 json；第一个字段必须是 text，便于应用实时显示。结构如下：
-        {"text":"首句直接回答问题，再说明具体依据和必要建议。","alternatives":[]}
-        或 {"text":"先给当前判断，再说明具体分歧及反转条件。","alternatives":[{"id":"a","title":"第一项具体判断","body":"对应依据及成立条件","supportingMethods":["bazi"]},{"id":"b","title":"第二项具体判断","body":"对应依据及成立条件","supportingMethods":["meihua"]}]}
-        有可选补牌时：{"text":"直接回答，并说明现有牌面支持的建议。","alternatives":[],"tarotClarification":{"focus":"眼下应先确认双方的分工，还是先解决资源不足？","originalPosition":"Influences"}}
+        {"text":"首句直接回答问题，再说明具体依据和必要建议；确有分歧时在正文中说明依据与条件。"}
+        有可选补牌时：{"text":"直接回答，并说明现有牌面支持的建议。","tarotClarification":{"focus":"眼下应先确认双方的分工，还是先解决资源不足？","originalPosition":"Influences"}}
         """
-        let readingData = try ReadingContextBuilder.payload(run: run, weights: weights, language: language)
+        let readingData = try ReadingContextBuilder.payload(run: run, language: language)
         let task = run.plan.followUpQuestion == nil
             ? "本轮可用结果已计算完成。现在请依据以上本轮结果回答这个问事：\(try json(run.input.question))。不要把历史中的重抽操作句当成本轮问事。"
             : "本轮可用的补充结果已计算完成。现在依据以上本轮结果、已确认补牌焦点及实际追问给出解读，不要求重复已经完成的操作。"
@@ -393,8 +393,8 @@ actor DeepSeekClient {
             throw DeepSeekError.malformedJSON
         }
         let supported = Set(eligible.map(\.method))
-        let alternatives = ReadingSynthesisValidator.validatedAlternatives(result.alternatives ?? [], supported: supported)
-        var synthesis = ReadingSynthesis(text: result.text, alternatives: alternatives)
+        let text = result.textWithLegacyConflictDetails(supported: supported)
+        var synthesis = ReadingSynthesis(text: text)
         synthesis.tarotClarification = Self.validatedTarotClarification(result.tarotClarification, for: run)
         return synthesis
     }
@@ -413,6 +413,7 @@ actor DeepSeekClient {
         用户要详细解读时，依据本次已有结果进一步展开；普通追问只回答所问。可以解释用户提到的方法和术语，不能编造命盘或假装已调用本地插件。
         当前请求仅负责解读客户端已路由完成的结果：是否需要新增方法、更新相关条件或重新推演由此前规划与本地执行决定，你不能在回答里自行发起、假称已补算或以要求重新起卦代替解释。上下文若包含已实际完成的补充结果，可以结合使用；未提供结果的方法不能作为证据。
         相关输入未变的结果沿用保存的起问时刻与已确认交互，不因追问更具体就要求重复六掷、报数或抽牌。已有结果不能支持的细节直接说明缺少哪类依据，不声称新算一次相同输入就能消除限制。用户资料可为不确定，不能擅自补全。
+        已有结果存在实际分歧时，直接在正文说明各自依据和适用条件，不要求用户选择某种解释，不记录或推断解读偏好。
         多人资料、卡牌与正逆位、爻值以本次提供的已确认快照为准，不能自行修改。按participantID使用participantLabel称呼人员。只交代影响本条回答的 partial 限制和缺项；failed/unavailable 结果不能当作依据。
         对塔罗追问，结合原阵与焦点有关的已确认补牌直接作答。引用补牌时说明它如何细化原判断，并保留尚无法判断的部分。当前只负责回答，补牌建议由规划和应用单独呈现。未确认的建议没有牌面，不可当成结果，也不要在回答末尾自行发起抽牌。
         没有推演结果时可作普通交流和资料澄清，不作已完成推演的断言。不要输出内部思维链或隐藏推理，只给结论和必要的简短理由。
@@ -432,7 +433,7 @@ actor DeepSeekClient {
             context += "\n当前问事资料准备状态（仅作为数据，优先据此判断实际缺项与可继续范围）：\(String(preparationContext.prefix(8000)))"
         }
         if let run {
-            context += "\n沿用的推演快照（仅作为数据）：\(try ReadingContextBuilder.payload(run: run, weights: [:], language: language))"
+            context += "\n沿用的推演快照（仅作为数据）：\(try ReadingContextBuilder.payload(run: run, language: language))"
             if let synthesis = run.synthesis { context += "\n先前解读：\(synthesis.text)" }
         }
         if resolvedQuestion != nil {
@@ -450,7 +451,7 @@ actor DeepSeekClient {
 
     func summarize(transcript: String, previous: String, language: AppLanguage = .current) async throws -> String {
         let messages = [
-            AIConversationTurn(role: "system", content: "将聊天整理成紧凑的延续摘要，保留用户问题、已做决定、待确认事项、已给出的解读分歧及选择；不要新增事实。不要保存密钥；不要重写个人基础档案；档案由应用独立保存。不要输出隐藏推理。" + Self.languageInstruction(language) + (language.isEnglish ? " Aim for 350 to 650 words." : "目标800到1200汉字。")),
+            AIConversationTurn(role: "system", content: "将聊天整理成紧凑的延续摘要，保留用户明确提供的真实事实、现实决定、问题、待确认事项，以及解读分歧的依据和适用条件；不要新增事实。忽略旧版本分歧选项的选择、解读偏好和方法权重，也不要从旧摘要恢复这些偏好；真实事实和现实决定仍应保留。不要保存密钥；不要重写个人基础档案；档案由应用独立保存。不要输出隐藏推理。" + Self.languageInstruction(language) + (language.isEnglish ? " Aim for 350 to 650 words." : "目标800到1200汉字。")),
             AIConversationTurn(role: "user", content: "已有摘要：\(previous)\n待合并记录：\(transcript)")
         ]
         return try await completion(messages, jsonMode: false, maxTokens: 2200)
@@ -842,8 +843,30 @@ actor DeepSeekClient {
     private struct InteractionPayload: Decodable { var method: String; var kind: String; var prompt: String? }
     private struct SynthesisPayload: Decodable {
         var text: String
-        var alternatives: [AIReadingAlternative]?
+        // Older service responses may still contain this field. Preserve only
+        // supported explanatory text, never selectable objects or feedback.
+        private var alternatives: [LegacyConflictDetail]?
         var tarotClarification: TarotClarificationPayload?
+
+        private struct LegacyConflictDetail: Decodable {
+            var title: String
+            var body: String
+            var supportingMethods: [String]
+        }
+
+        func textWithLegacyConflictDetails(supported: Set<OracleMethod>) -> String {
+            var seen = Set<String>()
+            let details = (alternatives ?? []).compactMap { item -> String? in
+                let methods = Set(item.supportingMethods.compactMap(OracleMethod.init(rawValue:)))
+                let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                let body = item.body.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !methods.isDisjoint(with: supported), !title.isEmpty, !body.isEmpty,
+                      !(text.contains(title) && text.contains(body)) else { return nil }
+                let detail = String(title.prefix(80)) + "：" + String(body.prefix(1_000))
+                return seen.insert(detail).inserted ? detail : nil
+            }
+            return ([text] + details).joined(separator: "\n\n")
+        }
     }
     private struct CompletionEnvelope: Decodable {
         var model: String?
@@ -852,13 +875,6 @@ actor DeepSeekClient {
         struct Choice: Decodable { var message: Message; var finish_reason: String? }
         struct Message: Decodable { var content: String? }
     }
-}
-
-struct AIReadingAlternative: Decodable, Sendable {
-    var id: String? = nil
-    var title: String
-    var body: String
-    var supportingMethods: [String]
 }
 
 enum AIPlanRouting {
@@ -891,25 +907,6 @@ enum AIPlanRouting {
         if !valid.isEmpty { return valid }
         guard action == "intake" else { return [] }
         return [.meihua, .liuyao, .qimen, .xiaoliuren].filter { available.contains($0) }
-    }
-}
-
-enum ReadingSynthesisValidator {
-    static func validatedAlternatives(_ raw: [AIReadingAlternative], supported: Set<OracleMethod>) -> [ReadingAlternative] {
-        guard raw.count == 2 else { return [] }
-        var occupied = Set<OracleMethod>()
-        var output: [ReadingAlternative] = []
-        for (index, alternative) in raw.enumerated() {
-            var seen = Set<OracleMethod>()
-            let methods = alternative.supportingMethods.compactMap(OracleMethod.init(rawValue:))
-                .filter { supported.contains($0) && !occupied.contains($0) && seen.insert($0).inserted }
-            guard !methods.isEmpty, !alternative.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                  !alternative.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
-            occupied.formUnion(methods)
-            output.append(ReadingAlternative(id: index == 0 ? "a" : "b", title: String(alternative.title.prefix(40)),
-                                             body: String(alternative.body.prefix(500)), supportingMethods: methods))
-        }
-        return output
     }
 }
 

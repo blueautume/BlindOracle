@@ -267,8 +267,17 @@ struct ChatView: View {
                 }
                 if message.kind != .intake, let runID = message.runID, !message.content.isEmpty,
                    store.runs.contains(where: { $0.id == runID }) {
-                    if let run = store.runs.first(where: { $0.id == runID }), let synthesis = run.synthesis, message.kind == .reading, synthesis.hasSignificantConflict {
-                        alternatives(synthesis.alternatives, run: run)
+                    if message.kind == .reading,
+                       let synthesis = store.runs.first(where: { $0.id == runID })?.synthesis,
+                       let details = synthesis.archivedConflictDetails?.trimmingCharacters(in: .whitespacesAndNewlines),
+                       !details.isEmpty, !message.content.contains(details) {
+                        Text(.init(details))
+                            .font(.system(size: 16, design: .serif))
+                            .lineSpacing(6)
+                            .foregroundStyle(InkTheme.ink)
+                            .textSelection(.enabled)
+                            .tint(InkTheme.cinnabar)
+                            .accessibilityIdentifier("archivedConflictDetails-\(message.id.uuidString)")
                     }
                     HStack(spacing: 18) {
                         Button { selectedReading = ReadingReference(id: runID) } label: { Label(L10n.text("翻看数据", "View reading"), systemImage: "books.vertical") }
@@ -352,30 +361,6 @@ struct ChatView: View {
             }.padding(19).background(.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(InkTheme.line, lineWidth: 0.7))
         }.buttonStyle(.plain).accessibilityIdentifier("interactionCard")
-    }
-
-    private func alternatives(_ choices: [ReadingAlternative], run: OracleRun) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(L10n.text("两种处境，哪一种更贴近你？", "Which of these feels closer to your situation?")).font(.system(size: 13, design: .serif)).foregroundStyle(InkTheme.secondary)
-            ForEach(Array(choices.enumerated()), id: \.element.id) { index, choice in
-                Button { store.select(choice, for: run.id) } label: {
-                    HStack(alignment: .top, spacing: 12) {
-                        Text(index == 0 ? L10n.text("甲", "A") : L10n.text("乙", "B")).font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.cinnabar)
-                            .frame(width: 30, height: 30).background(InkTheme.cinnabar.opacity(0.07), in: Circle())
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(choice.title).font(.system(size: 15, weight: .medium, design: .serif))
-                            Text(choice.body).font(.system(size: 12)).lineSpacing(4).foregroundStyle(InkTheme.secondary)
-                        }
-                        Spacer(minLength: 0)
-                        if run.selectedAlternative == choice.id { Image(systemName: "checkmark.circle.fill").foregroundStyle(InkTheme.sage) }
-                    }.padding(15).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(.white.opacity(run.selectedAlternative == choice.id ? 0.7 : 0.3), in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(run.selectedAlternative == choice.id ? InkTheme.sage : InkTheme.line, lineWidth: 0.7))
-                }.buttonStyle(.plain).disabled(run.selectedAlternative != nil)
-            }
-            Text(run.selectedAlternative == nil ? L10n.text("只作细微调整，慢慢认识你的处境。", "Your choice helps fine-tune future interpretations.") : L10n.text("已记下这次选择。", "Choice saved."))
-                .font(.system(size: 10)).foregroundStyle(InkTheme.secondary)
-        }.padding(.top, 12)
     }
 
     private var composer: some View {

@@ -16,7 +16,7 @@ final class ReadingDeletionTests: XCTestCase {
     private func reading(_ question: String) -> OracleRun {
         var run = OracleRun(input: OracleInput(question: question, profile: OracleProfile(), seed: 42, participants: []), plan: plan(question))
         run.results = [OracleResult(method: .xiaoliuren, headline: "已留存的本地结果", rows: [.init("时宫", "大安")])]
-        run.synthesis = ReadingSynthesis(text: "已留存的解读文字", alternatives: [])
+        run.synthesis = ReadingSynthesis(text: "已留存的解读文字")
         run.completedAt = Date(timeIntervalSince1970: 100)
         return run
     }
@@ -55,12 +55,11 @@ final class ReadingDeletionTests: XCTestCase {
         XCTAssertEqual(restarted.runs.map(\.id), [retained.id])
     }
 
-    @MainActor func testDeletionClearsCurrentAndArchivedLinksButPreservesTextPeoplePreferencesAndPendingQuestion() throws {
+    @MainActor func testDeletionClearsCurrentAndArchivedLinksButPreservesTextPeopleAndPendingQuestion() throws {
         let vault = try temporaryVault()
         let removed = reading("删除盘面，保留对话")
         let retained = reading("另一份盘面")
         var person = OracleProfile(); person.name = "张三"; person.birthDateText = "1995-01-02"
-        let preferences = PreferenceLearning.updated(PreferenceLearning.initial, chosen: [.xiaoliuren], opposing: [.meihua])
         var pending = plan("尚未确认的新问题")
         pending.preparationStage = .confirming
         pending.reviewedParticipants = []
@@ -72,10 +71,8 @@ final class ReadingDeletionTests: XCTestCase {
         try vault.save([removed, retained], as: "readings")
         try vault.save([person], as: "profiles")
         try vault.save(Optional(person.id), as: "self-profile-id")
-        try vault.save(preferences, as: "preferences")
         try vault.save(OracleConversationArchive(activeConversationID: current.id, conversations: [current, archived]), as: ConversationHistory.filename)
         let store = OracleStore(vault: vault, bootstrapCredential: false)
-        let originalWeights = store.weights
 
         store.deleteReading(id: removed.id)
 
@@ -88,7 +85,6 @@ final class ReadingDeletionTests: XCTestCase {
         XCTAssertEqual(store.messages.first { $0.id == otherReply.id }?.runID, retained.id)
         XCTAssertEqual(store.pendingPlan?.question, pending.question)
         XCTAssertTrue(store.showIntake)
-        XCTAssertEqual(store.weights, originalWeights)
         XCTAssertEqual(store.profiles.map(\.id), [person.id])
         XCTAssertEqual(store.profiles.first?.birthDateText, person.birthDateText)
         XCTAssertEqual(store.selfProfileID, person.id)
@@ -106,7 +102,6 @@ final class ReadingDeletionTests: XCTestCase {
         XCTAssertFalse(restarted.conversations.flatMap(\.messages).contains { $0.runID == removed.id })
         XCTAssertEqual(restarted.messages.first { $0.id == otherReply.id }?.runID, retained.id)
         XCTAssertEqual(restarted.pendingPlan?.question, pending.question)
-        XCTAssertEqual(restarted.weights, originalWeights)
         XCTAssertEqual(restarted.profiles.map(\.id), [person.id])
         XCTAssertEqual(restarted.profiles.first?.birthDateText, person.birthDateText)
         XCTAssertEqual(restarted.selfProfileID, person.id)

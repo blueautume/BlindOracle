@@ -189,11 +189,7 @@ private struct PluginDocumentView: View {
 }
 
 struct OracleSettingsView: View {
-    @EnvironmentObject private var store: OracleStore
     @Environment(\.dismiss) private var dismiss
-    @State private var feedback = ""
-    @State private var showReset = false
-    @State private var exportURL: URL?
 
     var body: some View {
         NavigationStack {
@@ -206,31 +202,6 @@ struct OracleSettingsView: View {
                                 AppLanguageSettingsRow()
                                 Divider().overlay(InkTheme.line)
                                 OracleVoiceSettingsRow()
-                            }
-                        }
-                        VStack(alignment: .leading, spacing: 12) {
-                            SectionEyebrow(text: L10n.text("本机资料", "On-device data"))
-                            PaperCard {
-                                VStack(alignment: .leading, spacing: 17) {
-                                    Button {
-                                        exportURL = store.export()
-                                        feedback = exportURL == nil ? L10n.text("导出暂未完成，请重试。", "Couldn’t export the backup. Try again.") : ""
-                                    } label: { Label(L10n.text("整理一份数据备份", "Create a backup"), systemImage: "square.and.arrow.up").font(.system(size: 15, design: .serif)) }.tint(InkTheme.ink)
-                                    if !feedback.isEmpty {
-                                        Text(feedback).font(.system(size: 12)).foregroundStyle(InkTheme.cinnabar)
-                                            .accessibilityIdentifier("backupExportFeedback")
-                                    }
-                                    if let exportURL { ShareLink(item: exportURL) { Label(L10n.text("分享或存储备份", "Share or save backup"), systemImage: "doc.zipper").font(.system(size: 13)) }.tint(InkTheme.cinnabar) }
-                                    Text(L10n.text("备份包含基础资料、独立推演结果与解读偏好。", "Backups include profiles, saved readings, and interpretation preferences."))
-                                        .font(.system(size: 12)).foregroundStyle(InkTheme.secondary).lineSpacing(4)
-                                    NavigationLink { LocalNoticeView() } label: {
-                                        Label(L10n.text("第三方资料与许可", "Third-party sources and licenses"), systemImage: "doc.plaintext").font(.system(size: 13, design: .serif))
-                                    }.tint(InkTheme.secondary)
-                                    Divider().overlay(InkTheme.line)
-                                    Button { showReset = true } label: { Label(L10n.text("重置解读偏好", "Reset interpretation preferences"), systemImage: "arrow.counterclockwise").font(.system(size: 15, design: .serif)) }.tint(InkTheme.ink)
-                                    Text(L10n.text("将各方法恢复为相同初始占比，保留资料和推演记录。", "Give each method equal weight again. Your profiles and readings will be kept."))
-                                        .font(.system(size: 12)).foregroundStyle(InkTheme.secondary).lineSpacing(4)
-                                }.frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
                         VStack(spacing: 9) {
@@ -264,16 +235,21 @@ struct OracleSettingsView: View {
                         .foregroundStyle(InkTheme.secondary)
                         .tint(InkTheme.secondary)
                         .frame(maxWidth: .infinity)
+                        NavigationLink { LocalNoticeView() } label: {
+                            Text(L10n.text("第三方资料与许可", "Third-party sources and licenses"))
+                                .padding(.vertical, 8)
+                        }
+                        .font(.system(.footnote, design: .serif))
+                        .foregroundStyle(InkTheme.secondary)
+                        .tint(InkTheme.secondary)
+                        .frame(maxWidth: .infinity)
+                        .accessibilityIdentifier("thirdPartyLicensesLink")
                     }.padding(22).frame(maxWidth: 760).frame(maxWidth: .infinity)
                 }
                 .accessibilityIdentifier("settingsScroll")
             }
             .navigationTitle(L10n.text("设置", "Settings")).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(L10n.text("完成", "Done")) { dismiss() }.tint(InkTheme.cinnabar) } }
-            .confirmationDialog(L10n.text("将解读偏好恢复为均等？", "Give each method equal weight again?"), isPresented: $showReset, titleVisibility: .visible) {
-                Button(L10n.text("恢复均等偏好", "Reset preferences")) { store.resetPreferences() }
-                Button(L10n.text("取消", "Cancel"), role: .cancel) {}
-            }
         }.tint(InkTheme.cinnabar)
     }
 }
@@ -317,6 +293,7 @@ private struct LocalNoticeView: View {
         ZStack {
             PaperBackground()
             ScrollView { Text(notices).font(.system(size: 11, design: .monospaced)).foregroundStyle(InkTheme.ink).textSelection(.enabled).padding(22).frame(maxWidth: 760).frame(maxWidth: .infinity) }
+                .accessibilityIdentifier("thirdPartyNoticesScroll")
         }.navigationTitle(L10n.text("资料与许可", "Sources and licenses")).navigationBarTitleDisplayMode(.inline)
     }
 }

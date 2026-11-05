@@ -117,14 +117,12 @@ final class ConversationHistoryTests: XCTestCase {
         store.saveProfile(profile)
         let run = OracleRun(input: OracleInput(question: "独立推演", profile: profile), plan: plan("独立推演"))
         store.runs = [run]
-        let originalWeights = store.weights
         store.deleteConversation(oldID)
 
         XCTAssertEqual(store.activeConversationID, currentID)
         XCTAssertEqual(store.messages.map(\.id), [current.id])
         XCTAssertEqual(store.profiles.first?.displayName, "永久资料")
         XCTAssertEqual(store.runs.map(\.id), [run.id])
-        XCTAssertEqual(store.weights, originalWeights)
         XCTAssertFalse(store.conversations.contains { $0.id == oldID })
         let restarted = OracleStore(vault: vault, bootstrapCredential: false)
         XCTAssertEqual(restarted.runs.map(\.id), [run.id])
@@ -158,7 +156,6 @@ final class ConversationHistoryTests: XCTestCase {
         let reading = OracleRun(input: OracleInput(question: "保留的独立推演", profile: person),
                                 plan: plan("保留的独立推演"))
         store.runs = [reading]
-        let weights = store.weights
         let archivedID = store.activeConversationID
         store.messages = [message("归档中的聊天草稿")]
         store.summary = ConversationSummary(text: "归档中的摘要")
@@ -207,7 +204,6 @@ final class ConversationHistoryTests: XCTestCase {
         XCTAssertEqual(store.profiles.map(\.id), [person.id])
         XCTAssertEqual(store.selfProfileID, person.id)
         XCTAssertEqual(store.runs.map(\.id), [reading.id])
-        XCTAssertEqual(store.weights, weights)
 
         // A form or card sheet kept alive by SwiftUI cannot submit into the new chat.
         XCTAssertFalse(store.confirmGroupIntake(profiles: [person], numbers: [], save: false, sessionID: oldFormID))
@@ -228,7 +224,6 @@ final class ConversationHistoryTests: XCTestCase {
         XCTAssertEqual(restarted.profiles.map(\.id), [person.id])
         XCTAssertEqual(restarted.selfProfileID, person.id)
         XCTAssertEqual(restarted.runs.map(\.id), [reading.id])
-        XCTAssertEqual(restarted.weights, weights)
     }
 
     @MainActor func testClearingMigratedHistoryCannotReviveLegacyChatsOrPendingForms() throws {

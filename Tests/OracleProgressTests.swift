@@ -627,7 +627,7 @@ final class OracleProgressTests: XCTestCase {
         let oldResult = OracleResult(method: .xiaoliuren, headline: "陈平的测试盘", rows: [])
         let oldReply = "陈平这周先确认手头任务。"
         let oldRun = OracleRun(input: oldInput, plan: oldPlan, results: [oldResult],
-                               synthesis: ReadingSynthesis(text: oldReply, alternatives: []))
+                               synthesis: ReadingSynthesis(text: oldReply))
         let oldAnswer = ChatMessage(role: .assistant, content: oldReply, kind: .reading, runID: oldRun.id)
         let conversation = OracleConversation(messages: [oldQuestion, oldAnswer])
         let client = scriptedClient([

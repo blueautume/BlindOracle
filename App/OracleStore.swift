@@ -11,7 +11,6 @@ enum OraclePhase: String {
     @Published var selfProfileID: UUID?
     @Published var messages: [ChatMessage]
     @Published var runs: [OracleRun]
-    @Published var weights: [String: Double]
     @Published var summary: ConversationSummary
     @Published var conversations: [OracleConversation]
     @Published var activeConversationID: UUID
@@ -101,7 +100,7 @@ enum OraclePhase: String {
         }
         messages = active?.messages ?? []
         runs = vault.load([OracleRun].self, from: "readings", fallback: [])
-        weights = PreferenceLearning.normalized(vault.load([String: Double].self, from: "preferences", fallback: PreferenceLearning.initial))
+        try? vault.removeRetiredInterpretationPreferences()
         summary = active?.summary ?? ConversationSummary()
         pendingPlan = active?.pendingPlan
         pendingInteraction = active?.pendingInteraction
@@ -160,7 +159,6 @@ enum OraclePhase: String {
             try vault.save(profiles, as: "profiles")
             try vault.save(selfProfileID, as: "self-profile-id")
             try vault.save(runs, as: "readings")
-            try vault.save(weights, as: "preferences")
             let history = OracleConversationArchive(activeConversationID: activeConversationID, conversations: conversations)
             try vault.save(history, as: ConversationHistory.filename)
             // Keep the previous single-chat files as a compatibility snapshot;
@@ -368,8 +366,6 @@ enum OraclePhase: String {
         }
         if let ids = plan.participantIDs, ids.count > 1 { plan.subject = "多人" }
     }
-    func resetPreferences() { weights = PreferenceLearning.initial; persist() }
-    func export() -> URL? { try? vault.export(profiles: profiles, runs: runs, weights: weights) }
     func newConversation() {
         cancelConversationTask()
         captureCurrentConversation()
@@ -1599,7 +1595,7 @@ enum OraclePhase: String {
         let base = plan.baseRunID.flatMap { id in runs.first { $0.id == id } }
         let reused = isTarotClarification ? (base?.results ?? []).filter { $0.method != .tarot }
             : reusableResults(input: input, plan: plan)
-        let run = OracleRun(input: input, plan: plan, results: reused, weightsSnapshot: weights,
+        let run = OracleRun(input: input, plan: plan, results: reused,
                             reusedResultIDs: plan.baseRunID == nil ? nil : reused.map(\.id))
         activityRunID = run.id
         runs.append(run); showIntake = false; pendingPlan = nil
@@ -1734,9 +1730,6 @@ enum OraclePhase: String {
             return
         }
         guard operationID == operation, !Task.isCancelled else { return }
-        if run.selectedAlternative != nil, let original = run.synthesis?.alternatives, original.count == 2 {
-            synthesis.alternatives = original
-        }
         if let notes = run.plan.preparationNotes, !notes.isEmpty {
             let missing = notes.filter { !synthesis.text.contains($0) }
             if !missing.isEmpty { synthesis.text += L10n.text("\n\n资料说明：", "\n\nNotes on the available details:\n", language: replyLanguage) + missing.joined(separator: "\n") }
@@ -1759,7 +1752,7 @@ enum OraclePhase: String {
             return testAgentReading(run, reason: L10n.text("这次推演已完成。", "Your reading is ready.", language: language), language: language)
         }
         #endif
-        return try await client.synthesize(run: run, weights: weights, history: history, language: language,
+        return try await client.synthesize(run: run, history: history, language: language,
                                            voice: OracleVoiceStyle.current, onProgress: { [weak self] stage in
             await self?.readingProgress(stage, runID: run.id, operation: operation)
         }) { [weak self] delta in
@@ -1783,7 +1776,7 @@ enum OraclePhase: String {
             progress(methods.count == 1 ? L10n.text("正在解读\(names)结果", "Interpreting \(names) results") : L10n.text("综合解析\(names)结果", "Combining \(names) results"),
                      detail: L10n.text("结合问题、已保存结果与资料限制生成解读。", "Using your question, saved results, and available details."))
         case .writing: progress(L10n.text("正在整理中文解读", "Writing the reading"))
-        case .validating: progress(L10n.text("核对解读与分歧选项", "Reviewing the reading and any differing interpretations"))
+        case .validating: progress(L10n.text("核对解读与分歧说明", "Reviewing the reading and any differing interpretations"))
         }
     }
     #if DEBUG
@@ -1797,14 +1790,14 @@ enum OraclePhase: String {
            let tarot = eligible.first(where: { $0.method == .tarot }) {
             let statements = tarot.evidence.map(\.statement).joined(separator: "\n\n")
             let focus = L10n.text("本轮补牌 · \(round.request.focus)", "Clarifying card · \(round.request.focus)", language: language)
-            return ReadingSynthesis(text: [reason, focus, sourceText([tarot.headline, statements].filter { !$0.isEmpty }.joined(separator: "\n\n"))].filter { !$0.isEmpty }.joined(separator: "\n\n"), alternatives: [])
+            return ReadingSynthesis(text: [reason, focus, sourceText([tarot.headline, statements].filter { !$0.isEmpty }.joined(separator: "\n\n"))].filter { !$0.isEmpty }.joined(separator: "\n\n"))
         }
         let statements = eligible.flatMap(\.evidence).map(\.statement)
         var seen = Set<String>()
         let unique = statements.filter { seen.insert($0).inserted }
         let body = unique.isEmpty ? L10n.text("现有资料还不足以给出完整判断。点这条回复下方的「翻看数据」可以查看现有结果。", "There isn’t enough information for a full reading. Tap View Reading below this reply to see what’s available.", language: language) : sourceText(String(unique.prefix(5).joined(separator: "\n\n").prefix(900)))
         let uncertainty = eligible.contains { !$0.limitations.isEmpty } ? L10n.text("\n\n有些资料或规则仍有限制，未确定的部分先留白。", "\n\nSome details or rules are limited, so parts of this reading remain uncertain.", language: language) : ""
-        return ReadingSynthesis(text: reason + "\n\n" + body + uncertainty, alternatives: [])
+        return ReadingSynthesis(text: reason + "\n\n" + body + uncertainty)
     }
     #endif
     private func answerFollowUp(_ question: String, history: [AIConversationTurn], operation: UUID,
@@ -1924,20 +1917,6 @@ enum OraclePhase: String {
             messages[index].content = text
         }
     }
-    func select(_ alternative: ReadingAlternative, for runID: UUID) {
-        guard let index = runs.firstIndex(where: { $0.id == runID }), runs[index].selectedAlternative == nil,
-              let options = runs[index].synthesis?.alternatives, options.count == 2,
-              let chosen = options.first(where: { $0.id == alternative.id }),
-              let other = options.first(where: { $0.id != alternative.id }) else { return }
-        let valid = Set(runs[index].results.filter { $0.status == .complete || $0.status == .partial }.map(\.method))
-        let chosenMethods = Set(chosen.supportingMethods).intersection(valid)
-        let otherMethods = Set(other.supportingMethods).intersection(valid)
-        weights = PreferenceLearning.updated(weights, chosen: chosenMethods, opposing: otherMethods)
-        runs[index].selectedAlternative = chosen.id
-        messages.append(ChatMessage(role: .user, content: L10n.text("更贴近我的处境：", "Closer to my situation: ") + chosen.title, kind: .choice, runID: runID))
-        messages.append(ChatMessage(role: .assistant, content: L10n.text("记下了。往后会把这类线索稍稍多放在心上；这次先照你确认的处境继续看。", "I’ve saved your choice. I’ll give similar clues a little more weight in future readings and use the situation you confirmed for this one."), runID: runID))
-        persist()
-    }
     func stop() {
         interruptAnalysis(backgroundExpired: false)
     }
@@ -1968,7 +1947,10 @@ enum OraclePhase: String {
             let input = OracleInput(question: question, profile: people[0], castingDate: Date(timeIntervalSince1970: 1_700_000_000 + Double(index) * 60), participants: people)
             let plan = OraclePlan(intent: "删除记录验收", subject: "事件", methods: [.xiaoliuren], requiredFields: [], note: "", question: question)
             var run = OracleRun(input: input, plan: plan, results: [OracleResult(method: .xiaoliuren, headline: "本地测试记录\(index)", rows: [.init("测试编号", "\(index)")])])
-            run.synthesis = ReadingSynthesis(text: "第\(index)份测试解读。", alternatives: [])
+            run.synthesis = ReadingSynthesis(text: "第\(index)份测试解读。")
+            if index == 10, ProcessInfo.processInfo.arguments.contains("--ui-testing-archived-conflicts") {
+                run.synthesis?.archivedConflictDetails = "原记录分歧：一处倾向先推进，另一处倾向先核对条件。"
+            }
             run.completedAt = input.castingDate
             return run
         }
@@ -1988,7 +1970,7 @@ enum OraclePhase: String {
         let savedPlan = OraclePlan(intent: savedQuestion, subject: "事件", methods: [.xiaoliuren], requiredFields: [], note: "", question: savedQuestion)
         var savedRun = OracleRun(input: OracleInput(question: savedQuestion, profile: OracleProfile(), seed: 42), plan: savedPlan,
                                  results: [OracleResult(method: .xiaoliuren, headline: "已保存的旧结果", rows: [.init("建议", "先核对条件")])])
-        savedRun.synthesis = ReadingSynthesis(text: "这是已经完成并保存的解读。", alternatives: [])
+        savedRun.synthesis = ReadingSynthesis(text: "这是已经完成并保存的解读。")
         savedRun.completedAt = Date()
         runs.append(savedRun)
         for index in 1...3 {

@@ -127,7 +127,7 @@ struct ChinaDistrictCatalog: Sendable {
     private let childrenByParent: [String: [ChinaDistrict]]
     private let byID: [String: ChinaDistrict]
     private let byFullName: [String: ChinaDistrict]
-    private let districtIDByPlace: [String: String]
+    private let placeMatchIndex: PlaceMatchIndex
 
     func children(of district: ChinaDistrict) -> [ChinaDistrict] {
         childrenByParent[district.id] ?? []
@@ -143,9 +143,14 @@ struct ChinaDistrictCatalog: Sendable {
     /// match or address. Duplicate district names require their actual parent.
     /// English aliases are independent of the app's current display language.
     func matchingDistrict(for place: String) -> ChinaDistrict? {
-        guard let key = Self.normalizedPlaceKey(place), let id = districtIDByPlace[key] else { return nil }
+        guard let key = Self.normalizedPlaceKey(place), let id = placeMatchIndex.districtID(for: key) else { return nil }
         return byID[id]
     }
+
+    #if DEBUG
+    var hasBuiltPlaceMatchingIndex: Bool { placeMatchIndex.hasBuiltIndex }
+    var hasBuiltEnglishPlaceMatchingIndex: Bool { placeMatchIndex.hasBuiltEnglishIndex }
+    #endif
 
     private init(provinces: [ChinaDistrict], childrenByParent: [String: [ChinaDistrict]], byID: [String: ChinaDistrict]) {
         self.provinces = provinces
@@ -153,10 +158,48 @@ struct ChinaDistrictCatalog: Sendable {
         self.byID = byID
         self.byFullName = Dictionary(byID.values.sorted { $0.id < $1.id }.map { ($0.fullName, $0) },
                                      uniquingKeysWith: { first, _ in first })
-        self.districtIDByPlace = Self.districtPlaceIndex(for: byID)
+        self.placeMatchIndex = PlaceMatchIndex(districts: byID)
     }
 
-    private static func districtPlaceIndex(for districts: [String: ChinaDistrict]) -> [String: String] {
+    /// Displaying a saved place or browsing the hierarchy does not need a
+    /// transliterated alias index. Build only the matching index actually used;
+    /// this shared reference also keeps concurrent value copies race-free.
+    private final class PlaceMatchIndex: @unchecked Sendable {
+        private let districts: [String: ChinaDistrict]
+        private let lock = NSLock()
+        private var canonicalIndex: [String: String]?
+        private var englishIndex: [String: String]?
+
+        init(districts: [String: ChinaDistrict]) { self.districts = districts }
+
+        func districtID(for key: String) -> String? {
+            lock.lock()
+            defer { lock.unlock() }
+            if let englishIndex { return englishIndex[key] }
+            if key.utf8.allSatisfy({ $0 < 128 }) {
+                let index = ChinaDistrictCatalog.districtPlaceIndex(for: districts, includeEnglishAliases: true)
+                englishIndex = index
+                return index[key]
+            }
+            if canonicalIndex == nil {
+                canonicalIndex = ChinaDistrictCatalog.districtPlaceIndex(for: districts, includeEnglishAliases: false)
+            }
+            return canonicalIndex?[key]
+        }
+
+        var hasBuiltIndex: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return canonicalIndex != nil || englishIndex != nil
+        }
+        var hasBuiltEnglishIndex: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return englishIndex != nil
+        }
+    }
+
+    private static func districtPlaceIndex(for districts: [String: ChinaDistrict], includeEnglishAliases: Bool) -> [String: String] {
         var idsByPlace: [String: Set<String>] = [:]
         var englishAliasesByName: [String: [String]] = [:]
         func englishAliases(_ name: String) -> [String] {
@@ -184,6 +227,7 @@ struct ChinaDistrictCatalog: Sendable {
             guard isDistrictLevel, district.components.count >= 2, !district.hasChildren else { continue }
             add(district.fullName, id: district.id)
             if district.countryCode == "CN" { add("中国" + district.fullName, id: district.id) }
+            guard includeEnglishAliases else { continue }
 
             // A province is optional when the district's city is supplied. A
             // municipality already has just two components and loses none.
@@ -211,6 +255,22 @@ struct ChinaDistrictCatalog: Sendable {
 
     private static func normalizedPlaceKey(_ value: String) -> String? {
         guard !value.isEmpty, value.count <= 160 else { return nil }
+        // Generated English aliases are ASCII. Avoid thousands of ICU
+        // traditional/simplified and case/diacritic transformations for them.
+        // Non-ASCII input retains the original Unicode normalization rules.
+        if value.utf8.allSatisfy({ $0 < 128 }) {
+            var key = String()
+            key.reserveCapacity(value.utf8.count)
+            for byte in value.utf8 {
+                switch byte {
+                case 65...90: key.append(Character(UnicodeScalar(byte + 32)))
+                case 97...122: key.append(Character(UnicodeScalar(byte)))
+                case 32, 9, 44, 45, 39: continue
+                default: return nil
+                }
+            }
+            return key.isEmpty ? nil : key
+        }
         let simplified = value.applyingTransform(StringTransform("Traditional-Simplified"), reverse: false) ?? value
         let folded = simplified.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
         let separators = CharacterSet(charactersIn: " \t,，-'’")

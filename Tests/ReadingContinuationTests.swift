@@ -8,7 +8,7 @@ final class ReadingContinuationTests: XCTestCase {
         input.manualLines = [6, 7, 8, 9, 7, 8]
         var run = OracleRun(input: input, plan: plan)
         run.results = [OracleResult(method: method, status: status, headline: "已保存的盘面", rows: [.init("本卦", "乾为天")])]
-        run.synthesis = ReadingSynthesis(text: "原有解读", alternatives: [])
+        run.synthesis = ReadingSynthesis(text: "原有解读")
         run.completedAt = Date(timeIntervalSince1970: 100)
         return run
     }

@@ -96,44 +96,18 @@ final class LocalVault {
             if legacy || recovery { try FileManager.default.removeItem(at: file) }
         }
     }
-    func export(profiles: [OracleProfile], runs: [OracleRun], weights: [String: Double]) throws -> URL {
-        struct Export: Encodable { var schemaVersion = 1; var exportedAt = Date(); var profiles: [OracleProfile]; var runs: [OracleRun]; var weights: [String: Double] }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(L10n.text("瞎子-本地档案.json", "BlindOracle-local-data.json"))
-        try encoder.encode(Export(profiles: profiles, runs: runs, weights: weights)).write(to: url, options: .atomic)
-        return url
-    }
-}
-
-enum PreferenceLearning {
-    static var initial: [String: Double] { Dictionary(uniqueKeysWithValues: OracleMethod.allCases.map { ($0.rawValue, 1.0 / Double(OracleMethod.allCases.count)) }) }
-    static func normalized(_ previous: [String: Double]) -> [String: Double] {
-        var values = initial
-        for method in OracleMethod.allCases {
-            if let value = previous[method.rawValue], value.isFinite, value > 0 { values[method.rawValue] = value }
+    /// Retire only the obsolete preference cache and its recovery copies.
+    /// Permanent profiles, reading snapshots and conversations are unaffected.
+    func removeRetiredInterpretationPreferences() throws {
+        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        for file in files where file.pathExtension == "json" {
+            let name = file.deletingPathExtension().lastPathComponent
+            if name == "preferences" || name.hasPrefix("preferences.recovery-") {
+                try FileManager.default.removeItem(at: file)
+            }
         }
-        return project(values)
-    }
-    /// Small multiplicative steps track personal resonance, never statistical accuracy.
-    static func updated(_ previous: [String: Double], chosen: Set<OracleMethod>, opposing: Set<OracleMethod>) -> [String: Double] {
-        guard !chosen.isEmpty, chosen.isDisjoint(with: opposing) else { return previous }
-        var values = normalized(previous)
-        for method in OracleMethod.allCases {
-            let direction: Double = chosen.contains(method) ? 1 : opposing.contains(method) ? -1 : 0
-            values[method.rawValue] = max(0.04, min(0.25, (values[method.rawValue] ?? initial[method.rawValue]!) * exp(0.035 * direction)))
-        }
-        return project(values)
-    }
-    private static func project(_ previous: [String: Double]) -> [String: Double] {
-        var values = previous.mapValues { max(0.04, min(0.25, $0)) }
-        // Projection onto a bounded simplex prevents repeated votes from excluding a method.
-        for _ in 0..<30 {
-            let total = values.values.reduce(0, +)
-            let free = values.keys.filter { key in total > 1 ? values[key]! > 0.0400001 : values[key]! < 0.2499999 }
-            guard !free.isEmpty, abs(total - 1) > 1e-10 else { break }
-            let adjustment = (1 - total) / Double(free.count)
-            for key in free { values[key] = max(0.04, min(0.25, values[key]! + adjustment)) }
-        }
-        return values
+        unreadableFiles.remove("preferences")
+        recoveryCopies.removeValue(forKey: "preferences")
     }
 }
 
@@ -152,7 +126,7 @@ enum LocalContextPolicy {
         let uncovered = messages.filter { !previous.coveredMessageIDs.contains($0.id) }
         let older = Array(uncovered.dropLast(retainedRecentMessages))
         guard !older.isEmpty else { return previous }
-        let entries = older.filter { $0.kind != .intake }.map { message in
+        let entries = older.filter { $0.kind != .intake && $0.kind != .choice }.map { message in
             let text = message.content.replacingOccurrences(of: "\n", with: " ")
             return (message.role == .user ? L10n.text("用户：", "User: ") : L10n.text("先知：", "Oracle: ")) + String(text.prefix(message.role == .user ? 500 : 800))
         }

@@ -69,8 +69,8 @@ enum OracleAnalysisAttempt: Codable, Sendable {
     }
 }
 
-/// A conversation owns its transcript and model context; profiles, readings and
-/// personal preferences remain independent, device-local records.
+/// A conversation owns its transcript and model context; profiles and readings
+/// remain independent, device-local records.
 struct OracleConversation: Codable, Identifiable, Sendable {
     var id: UUID
     var createdAt: Date

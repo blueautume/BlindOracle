@@ -281,24 +281,55 @@ final class AIServiceTests: XCTestCase {
         XCTAssertThrowsError(try framer.finish())
     }
 
-    func testConflictOptionsOnlyUseAvailableDistinctMethods() {
-        let raw = [
-            AIReadingAlternative(title: "先稳住", body: "先做好手边之事。", supportingMethods: ["bazi", "bazi", "not_a_plugin"]),
-            AIReadingAlternative(title: "可尝试", body: "做一次小范围尝试。", supportingMethods: ["bazi", "meihua", "astrology"])
-        ]
-        let result = ReadingSynthesisValidator.validatedAlternatives(raw, supported: [.bazi, .meihua])
-        XCTAssertEqual(result.count, 2)
-        XCTAssertEqual(result[0].supportingMethods, [.bazi])
-        XCTAssertEqual(result[1].supportingMethods, [.meihua])
-        XCTAssertEqual(result.map(\.id), ["a", "b"])
+    func testLegacyPreferenceSnapshotsAreExcludedFromReadingContextAndNewEncoding() throws {
+        let input = OracleInput(question: "合作怎样安排？", profile: OracleProfile())
+        let plan = OraclePlan(intent: "合作", subject: "事件", methods: [.meihua], requiredFields: [], note: "", question: input.question)
+        let original = OracleRun(input: input, plan: plan, results: [OracleResult(method: .meihua, headline: "已有结果", rows: [])])
+        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: encoder.encode(original)) as? [String: Any])
+        legacy["weightsSnapshot"] = ["legacy-preference-marker": 0.95]
+        legacy["selectedAlternative"] = "legacy-choice-marker"
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        let run = try decoder.decode(OracleRun.self, from: JSONSerialization.data(withJSONObject: legacy))
+        for language in [AppLanguage.simplifiedChinese, .english] {
+            let payload = try ReadingContextBuilder.payload(run: run, language: language)
+            for removed in ["偏好权重", "Preference weights", "weightsSnapshot", "selectedAlternative", "legacy-preference-marker", "legacy-choice-marker"] {
+                XCTAssertFalse(payload.contains(removed), removed)
+            }
+        }
+        let encoded = try XCTUnwrap(JSONSerialization.jsonObject(with: encoder.encode(run)) as? [String: Any])
+        XCTAssertNil(encoded["weightsSnapshot"])
+        XCTAssertNil(encoded["selectedAlternative"])
     }
 
-    func testInvalidConflictCardinalityOrUnsupportedOptionsAreRejected() {
-        let a = AIReadingAlternative(title: "一", body: "说明", supportingMethods: ["bazi"])
-        let b = AIReadingAlternative(title: "二", body: "说明", supportingMethods: ["unknown"])
-        XCTAssertTrue(ReadingSynthesisValidator.validatedAlternatives([a], supported: [.bazi]).isEmpty)
-        XCTAssertTrue(ReadingSynthesisValidator.validatedAlternatives([a, b], supported: [.bazi]).isEmpty)
-        XCTAssertTrue(ReadingSynthesisValidator.validatedAlternatives([a, a, a], supported: [.bazi]).isEmpty)
+    func testLegacyServiceConflictDetailsBecomeResultTextWithoutFixedCardinality() async throws {
+        let input = OracleInput(question: "合作怎样安排？", profile: OracleProfile(), participants: [])
+        let plan = OraclePlan(intent: "合作", subject: "事件", methods: [.meihua], requiredFields: [], note: "", question: input.question)
+        let result = OracleResult(method: .meihua, headline: "已有结果", rows: [])
+        let run = OracleRun(input: input, plan: plan, results: [result])
+        for count in [1, 3] {
+            let details = (0..<count).map { index in
+                ["title": "条件\(index)", "body": "现实条件\(index)明确时采用这一判断。", "supportingMethods": ["meihua"]] as [String: Any]
+            }
+            let content = String(decoding: try JSONSerialization.data(withJSONObject: ["text": "先确认现实条件。", "alternatives": details]), as: UTF8.self)
+            let synthesis = try await assertSynthesisTaskRequest(run: run, expectedDraws: [], result: result, responseJSON: content)
+            for index in 0..<count {
+                XCTAssertTrue(synthesis.text.contains("条件\(index)：现实条件\(index)明确时采用这一判断。"))
+            }
+            let encoded = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(synthesis)) as? [String: Any])
+            XCTAssertNil(encoded["alternatives"])
+            XCTAssertNil(synthesis.archivedConflictDetails)
+        }
+    }
+
+    func testLegacyServiceConflictDetailsRejectUnsupportedMethodsAndAvoidDuplicateText() async throws {
+        let input = OracleInput(question: "合作怎样安排？", profile: OracleProfile(), participants: [])
+        let plan = OraclePlan(intent: "合作", subject: "事件", methods: [.meihua], requiredFields: [], note: "", question: input.question)
+        let result = OracleResult(method: .meihua, headline: "已有结果", rows: [])
+        let run = OracleRun(input: input, plan: plan, results: [result])
+        let content = #"{"text":"先确认分工：分工明确后再决定。","alternatives":[{"title":"先确认分工","body":"分工明确后再决定。","supportingMethods":["meihua"]},{"title":"凭空新增的盘","body":"不应该出现在正文。","supportingMethods":["not_a_plugin"]}]}"#
+        let synthesis = try await assertSynthesisTaskRequest(run: run, expectedDraws: [], result: result, responseJSON: content)
+        XCTAssertEqual(synthesis.text, "先确认分工：分工明确后再决定。")
     }
 
     func testHistoryPreservesSummaryAndEveryUncoveredTurn() {
@@ -312,6 +343,45 @@ final class AIServiceTests: XCTestCase {
         XCTAssertEqual(history[1].content, "消息10")
         XCTAssertEqual(history.last?.content, "消息59")
         XCTAssertEqual(messages.count, 60)
+    }
+
+    func testOutboundHistoryExcludesRetiredChoicesButKeepsRealUserFacts() {
+        let fact = ChatMessage(role: .user, content: "真实事实：下周二已约好面谈。")
+        let answer = ChatMessage(role: .assistant, content: "先准备需要确认的问题。", kind: .reading)
+        let choice = ChatMessage(role: .user, content: "retired-choice-must-not-be-sent", kind: .choice)
+        let intake = ChatMessage(role: .assistant, content: "internal-intake-must-not-be-sent", kind: .intake)
+        let messages = [fact, choice, intake, answer]
+        let history = ContextCompressor.history(messages: messages, summary: ConversationSummary())
+        XCTAssertEqual(history.map(\.content), [fact.content, answer.content])
+        XCTAssertEqual(messages.map(\.id), [fact.id, choice.id, intake.id, answer.id])
+        XCTAssertEqual(messages[1].content, choice.content) // The archive is not rewritten.
+
+        let choicesOnly = (0..<60).map { _ in
+            ChatMessage(role: .user, content: String(repeating: "旧偏好", count: 1_200), kind: .choice)
+        }
+        XCTAssertFalse(ContextCompressor.shouldCompress(messages: choicesOnly, summary: ConversationSummary()))
+    }
+
+    func testOnlineCompactionExcludesRetiredChoicesAndRetainsRealFacts() async throws {
+        let inspected = expectation(description: "Choice-free online summary request inspected")
+        let key = "test-summary-" + UUID().uuidString
+        ChoiceFreeSummaryURLProtocol.install(inspected, for: key)
+        defer { ChoiceFreeSummaryURLProtocol.remove(key) }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ChoiceFreeSummaryURLProtocol.self]
+        let client = DeepSeekClient(apiKey: key, sessionConfiguration: configuration)
+        let fact = ChatMessage(role: .user, content: "real-user-fact: meeting is confirmed for Tuesday")
+        let choice = ChatMessage(role: .user, content: "retired-choice-must-not-be-summarized", kind: .choice)
+        let messages = [choice, fact] + (0..<60).map { index in
+            ChatMessage(role: index.isMultiple(of: 2) ? .user : .assistant,
+                        content: "正常记录\(index)" + String(repeating: "实", count: 600))
+        }
+        let previous = ConversationSummary(text: "previous-real-fact: budget is still unconfirmed")
+        let summary = try await ContextCompressor.compact(messages: messages, summary: previous, using: client)
+        await fulfillment(of: [inspected], timeout: 3)
+        XCTAssertEqual(summary?.text, "真实事项已保留，待核对预算。")
+        XCTAssertTrue(summary?.coveredMessageIDs.contains(fact.id) == true)
+        XCTAssertEqual(messages[0].content, choice.content)
     }
 
     func testCompressionIsInfrequentAndThresholdBased() {
@@ -347,13 +417,13 @@ extension AIServiceTests {
             var run = OracleRun(input: OracleInput(question: question, profile: profile), plan: plan)
             run.results = [OracleResult(method: .tarot, headline: "Test Tarot result", rows: [])]
             let visible = XCTestExpectation(description: "DeepSeek streamed only the visible reply")
-            let synthesis = try await client.synthesize(run: run, weights: [:], history: history, language: .english) { delta in
+            let synthesis = try await client.synthesize(run: run, history: history, language: .english) { delta in
                 XCTAssertEqual(delta, "Apply if the role fits your priorities.")
                 visible.fulfill()
             }
             await fulfillment(of: [visible], timeout: 1)
             XCTAssertEqual(synthesis.text, "Apply if the role fits your priorities.")
-            XCTAssertTrue(synthesis.alternatives.isEmpty)
+            XCTAssertNil(synthesis.archivedConflictDetails)
         }
     }
 
@@ -374,13 +444,13 @@ extension AIServiceTests {
                 let client = DeepSeekClient(apiKey: "test-voice-\(voice.rawValue)",
                                             sessionConfiguration: configuration)
                 let synthesisDelta = expectation(description: "DeepSeek \(voice) streamed synthesis text")
-                let synthesis = try await client.synthesize(run: run, weights: [:], history: history,
+                let synthesis = try await client.synthesize(run: run, history: history,
                                                             language: .simplifiedChinese, voice: voice) { delta in
                     XCTAssertEqual(delta, "先问清分工。")
                     synthesisDelta.fulfill()
                 }
                 XCTAssertEqual(synthesis.text, "先问清分工。")
-                XCTAssertTrue(synthesis.alternatives.isEmpty)
+                XCTAssertNil(synthesis.archivedConflictDetails)
                 let followUpDelta = expectation(description: "DeepSeek \(voice) streamed follow-up text")
                 let reply = try await client.followUp(question: followUp, run: run, profile: profile, history: history,
                                                       language: .simplifiedChinese, voice: voice) { delta in
@@ -406,7 +476,10 @@ extension AIServiceTests {
         XCTAssertEqual(result.tarotDraws, draws)
         let run = OracleRun(input: input, plan: plan, results: [result])
         XCTAssertNil(run.plan.followUpQuestion)
-        try await assertSynthesisTaskRequest(run: run, expectedDraws: draws, result: result)
+        let response = #"{"text":"先确认分工，再决定合作安排。","tarotClarification":{"focus":"对方能否明确承担分工？","originalPosition":"Current situation"}}"#
+        let synthesis = try await assertSynthesisTaskRequest(run: run, expectedDraws: draws, result: result, responseJSON: response)
+        XCTAssertEqual(synthesis.tarotClarification?.focus, "对方能否明确承担分工？")
+        XCTAssertEqual(synthesis.tarotClarification?.originalPosition, "Current situation")
     }
 
     func testSynthesisDoesNotClaimCompletedTarotWhenOnlyMeihuaReturnedAUsableResult() async throws {
@@ -421,7 +494,9 @@ extension AIServiceTests {
         try await assertSynthesisTaskRequest(run: run, expectedDraws: [], result: result)
     }
 
-    private func assertSynthesisTaskRequest(run: OracleRun, expectedDraws: [TarotDraw], result: OracleResult) async throws {
+    @discardableResult
+    private func assertSynthesisTaskRequest(run: OracleRun, expectedDraws: [TarotDraw], result: OracleResult,
+                                            responseJSON: String = #"{"text":"先确认分工和预算，再决定合作安排。"}"#) async throws -> ReadingSynthesis {
         let operation = "我是想重新抽三张牌，不是解释旧结果。"
         let oldAnswer = "我不能重新抽牌，得你自己在界面再抽三张，抽完再解。"
         let history = [AIConversationTurn(role: "user", content: run.input.question),
@@ -429,14 +504,15 @@ extension AIServiceTests {
         let inspected = expectation(description: "The encoded synthesis request identifies the completed calculation and current question")
         let key = UUID().uuidString
         SynthesisTaskURLProtocol.install(.init(question: run.input.question, draws: expectedDraws, result: result,
-            operation: operation, oldAnswer: oldAnswer, inspected: inspected), key: key)
+            operation: operation, oldAnswer: oldAnswer, inspected: inspected, responseJSON: responseJSON), key: key)
         defer { SynthesisTaskURLProtocol.remove(key) }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [SynthesisTaskURLProtocol.self]
         let client = DeepSeekClient(apiKey: key, sessionConfiguration: configuration)
-        let synthesis = try await client.synthesize(run: run, weights: [:], history: history, language: .simplifiedChinese) { _ in }
+        let synthesis = try await client.synthesize(run: run, history: history, language: .simplifiedChinese) { _ in }
         await fulfillment(of: [inspected], timeout: 1)
         XCTAssertFalse(synthesis.text.isEmpty)
+        return synthesis
     }
 }
 
@@ -549,6 +625,7 @@ private final class SynthesisTaskURLProtocol: URLProtocol, @unchecked Sendable {
         let operation: String
         let oldAnswer: String
         let inspected: XCTestExpectation
+        let responseJSON: String
     }
     private static let lock = NSLock()
     private static var fixtures: [String: Fixture] = [:]
@@ -572,12 +649,19 @@ private final class SynthesisTaskURLProtocol: URLProtocol, @unchecked Sendable {
             XCTAssertEqual(turns.first?["role"], "system")
             XCTAssertTrue(system.contains("当前阶段是可用结果计算完成后的解读"))
             XCTAssertTrue(system.contains("其对应的历史“重抽”“再掷”等操作请求已经完成"))
+            XCTAssertTrue(system.contains("直接在 text 正文中说明各自依据、适用条件"))
+            XCTAssertTrue(system.contains("不生成分歧选择卡片"))
+            XCTAssertFalse(system.contains("恰好输出两个"))
+            XCTAssertFalse(system.contains("\"alternatives\":"))
             // Direct client callers retain both historical turns; the final
             // task must still override the old operational conversation.
             XCTAssertTrue(turns.dropFirst().dropLast().contains(["role": "user", "content": fixture.operation]))
             XCTAssertTrue(turns.dropFirst().dropLast().contains(["role": "assistant", "content": fixture.oldAnswer]))
             XCTAssertEqual(turns.last?["role"], "user")
             let payload = try XCTUnwrap(turns.last?["content"])
+            for removed in ["偏好权重 json", "Preference weights JSON", "weightsSnapshot", "selectedAlternative"] {
+                XCTAssertFalse(payload.contains(removed), removed)
+            }
             let task = try XCTUnwrap(payload.components(separatedBy: "\n\n").last)
             XCTAssertTrue(task.contains("现在请依据以上本轮结果回答这个问事"))
             XCTAssertTrue(task.contains(fixture.question))
@@ -601,7 +685,7 @@ private final class SynthesisTaskURLProtocol: URLProtocol, @unchecked Sendable {
                 XCTAssertFalse(payload.contains("已确认3张有效初阵牌，抽牌和计算均已完成"))
             }
             fixture.inspected.fulfill()
-            let text = #"{"text":"先确认分工和预算，再决定合作安排。","alternatives":[]}"#
+            let text = fixture.responseJSON
             let event: [String: Any] = ["model": DeepSeekConfiguration.defaultModel,
                 "choices": [["delta": ["content": text], "finish_reason": "stop"]]]
             let framed = "data: " + String(decoding: try JSONSerialization.data(withJSONObject: event), as: UTF8.self) + "\n\ndata: [DONE]\n\n"
@@ -615,6 +699,68 @@ private final class SynthesisTaskURLProtocol: URLProtocol, @unchecked Sendable {
         }
     }
 
+    override func stopLoading() {}
+
+    private func requestData() throws -> Data {
+        if let data = request.httpBody { return data }
+        let stream = try XCTUnwrap(request.httpBodyStream)
+        stream.open(); defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count == 0 { return data }
+            guard count > 0 else { throw stream.streamError ?? URLError(.badServerResponse) }
+            data.append(contentsOf: buffer.prefix(count))
+        }
+    }
+}
+
+/// Captures the actual non-streaming summary request without contacting a server.
+private final class ChoiceFreeSummaryURLProtocol: URLProtocol, @unchecked Sendable {
+    private static let lock = NSLock()
+    private static var inspections: [String: XCTestExpectation] = [:]
+
+    static func install(_ expectation: XCTestExpectation, for key: String) {
+        lock.withLock { inspections["Bearer " + key] = expectation }
+    }
+    static func remove(_ key: String) {
+        lock.withLock { _ = inspections.removeValue(forKey: "Bearer " + key) }
+    }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        do {
+            let key = request.value(forHTTPHeaderField: "Authorization") ?? ""
+            let inspected = try XCTUnwrap(Self.lock.withLock { Self.inspections[key] })
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: requestData()) as? [String: Any])
+            XCTAssertEqual(body["stream"] as? Bool, false)
+            let turns = try XCTUnwrap(body["messages"] as? [[String: String]])
+            let system = try XCTUnwrap(turns.first?["content"])
+            XCTAssertTrue(system.contains("真实事实"))
+            XCTAssertTrue(system.contains("现实决定"))
+            XCTAssertTrue(system.contains("忽略旧版本分歧选项的选择"))
+            XCTAssertTrue(system.contains("不要从旧摘要恢复这些偏好"))
+            let transcript = try XCTUnwrap(turns.last?["content"])
+            XCTAssertTrue(transcript.contains("real-user-fact: meeting is confirmed for Tuesday"))
+            XCTAssertTrue(transcript.contains("previous-real-fact: budget is still unconfirmed"))
+            XCTAssertFalse(transcript.contains("retired-choice-must-not-be-summarized"))
+            inspected.fulfill()
+
+            let payload = try JSONSerialization.data(withJSONObject: [
+                "model": DeepSeekConfiguration.defaultModel,
+                "choices": [["message": ["content": "真实事项已保留，待核对预算。"], "finish_reason": "stop"]]
+            ])
+            let response = try XCTUnwrap(HTTPURLResponse(url: request.url!, statusCode: 200,
+                httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"]))
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: payload)
+            client?.urlProtocolDidFinishLoading(self)
+        } catch {
+            client?.urlProtocol(self, didFailWithError: error)
+        }
+    }
     override func stopLoading() {}
 
     private func requestData() throws -> Data {

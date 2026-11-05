@@ -264,18 +264,54 @@ struct ChatMessage: Codable, Identifiable, Sendable {
     }
 }
 
-struct ReadingAlternative: Codable, Identifiable, Sendable {
-    var id: String
-    var title: String
-    var body: String
-    var supportingMethods: [OracleMethod]
-}
-
 struct ReadingSynthesis: Codable, Sendable {
     var text: String
-    var alternatives: [ReadingAlternative]
     var tarotClarification: TarotClarificationSuggestion? = nil
-    var hasSignificantConflict: Bool { alternatives.count == 2 }
+    /// Text-only compatibility for archived readings from the retired choice UI.
+    /// New readings describe disagreements directly in `text`.
+    var archivedConflictDetails: String? = nil
+
+    init(text: String, tarotClarification: TarotClarificationSuggestion? = nil,
+         archivedConflictDetails: String? = nil) {
+        self.text = text
+        self.tarotClarification = tarotClarification
+        self.archivedConflictDetails = archivedConflictDetails
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case text, tarotClarification, archivedConflictDetails, alternatives
+    }
+
+    private struct LegacyAlternative: Decodable {
+        var title: String?
+        var body: String?
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        text = try values.decode(String.self, forKey: .text)
+        tarotClarification = try values.decodeIfPresent(TarotClarificationSuggestion.self, forKey: .tarotClarification)
+        archivedConflictDetails = try values.decodeIfPresent(String.self, forKey: .archivedConflictDetails)
+        if archivedConflictDetails == nil,
+           let legacy = try? values.decode([LegacyAlternative].self, forKey: .alternatives) {
+            let details = legacy.compactMap { option -> String? in
+                let parts = [option.title, option.body].compactMap { value -> String? in
+                    guard let value else { return nil }
+                    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return trimmed.isEmpty ? nil : trimmed
+                }
+                return parts.isEmpty ? nil : parts.joined(separator: "\n")
+            }.joined(separator: "\n\n")
+            if !details.isEmpty { archivedConflictDetails = details }
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(text, forKey: .text)
+        try values.encodeIfPresent(tarotClarification, forKey: .tarotClarification)
+        try values.encodeIfPresent(archivedConflictDetails, forKey: .archivedConflictDetails)
+    }
 }
 
 struct OracleRun: Codable, Identifiable, Sendable {
@@ -284,9 +320,7 @@ struct OracleRun: Codable, Identifiable, Sendable {
     var plan: OraclePlan
     var results: [OracleResult] = []
     var synthesis: ReadingSynthesis?
-    var selectedAlternative: String?
     var completedAt: Date?
-    var weightsSnapshot: [String: Double] = [:]
     var activities: [OracleActivity]? = nil
     /// The result objects themselves are copied into this run for independent recovery.
     var reusedResultIDs: [UUID]? = nil

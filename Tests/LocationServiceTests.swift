@@ -81,6 +81,46 @@ final class LocationServiceTests: XCTestCase {
         XCTAssertEqual(catalog.matchingDistrict(for: "中國廣東省深圳市南山區")?.id, "440305")
     }
 
+    func testDisplayingAndBrowsingPlacesDoesNotBuildTheEnglishMatchingIndex() throws {
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "china-districts", withExtension: "json", subdirectory: "Locations"))
+        let catalog = try ChinaDistrictCatalog(data: Data(contentsOf: url))
+        XCTAssertFalse(catalog.hasBuiltPlaceMatchingIndex)
+        let beijing = try XCTUnwrap(catalog.provinces.first { $0.id == "110000" })
+        XCTAssertFalse(catalog.children(of: beijing).isEmpty)
+        AppLanguage.$override.withValue(.simplifiedChinese) {
+            XCTAssertEqual(catalog.displayName(for: "110108", canonical: "北京市海淀区"), "北京市海淀区")
+        }
+        AppLanguage.$override.withValue(.english) {
+            XCTAssertEqual(catalog.displayName(for: "110108", canonical: "北京市海淀区"), "Haidian District, Beijing")
+        }
+        XCTAssertFalse(catalog.hasBuiltPlaceMatchingIndex)
+
+        XCTAssertEqual(catalog.matchingDistrict(for: "北京市海淀區")?.id, "110108")
+        XCTAssertTrue(catalog.hasBuiltPlaceMatchingIndex)
+        XCTAssertFalse(catalog.hasBuiltEnglishPlaceMatchingIndex)
+        XCTAssertEqual(catalog.matchingDistrict(for: "Haidian District, Beijing")?.id, "110108")
+        XCTAssertTrue(catalog.hasBuiltEnglishPlaceMatchingIndex)
+    }
+
+    func testConcurrentFirstPlaceMatchesPreserveParentPathsAndAmbiguousNames() async throws {
+        let data = Data(#"{"version":1,"districts":[{"id":"130000","name":"河北省","country":"CN"},{"id":"130100","name":"石家庄市","parent":"130000"},{"id":"130102","name":"长安区","parent":"130100"},{"id":"610000","name":"陕西省","country":"CN"},{"id":"610100","name":"西安市","parent":"610000"},{"id":"610116","name":"长安区","parent":"610100"}]}"#.utf8)
+        let catalog = try ChinaDistrictCatalog(data: data)
+        let queries: [(String, String?)] = [
+            ("Chang'an District, Shijiazhuang, Hebei", "130102"),
+            ("Chang'an District, Xi'an, Shaanxi", "610116"),
+            ("陝西省西安市長安區", "610116"),
+            ("Chang'an District", nil),
+        ]
+        await withTaskGroup(of: (String?, String?).self) { group in
+            for index in 0..<40 {
+                let (query, expected) = queries[index % queries.count]
+                group.addTask { (catalog.matchingDistrict(for: query)?.id, expected) }
+            }
+            for await (actual, expected) in group { XCTAssertEqual(actual, expected) }
+        }
+        XCTAssertTrue(catalog.hasBuiltEnglishPlaceMatchingIndex)
+    }
+
     func testDistrictMatchingRejectsAmbiguousContradictoryAndExtendedPlaces() {
         let catalog = ChinaDistrictCatalog.shared
         for place in [

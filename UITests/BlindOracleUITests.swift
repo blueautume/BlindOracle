@@ -9,10 +9,14 @@ final class BlindOracleUITests: XCTestCase {
             openSettings(in: app)
             let scroll = app.scrollViews["settingsScroll"]
             XCTAssertTrue(scroll.waitForExistence(timeout: 10))
+            XCTAssertTrue(app.buttons["appLanguagePicker"].exists)
+            XCTAssertTrue(app.buttons["oracleVoiceStylePicker"].exists)
             let removedIDs = ["aiProviderPicker", "settingsAIConnectionStatus", "restoreProConnection",
-                              "checkAIConnection", "connectionCheckReport", "connectionCheckFeedback"]
+                              "checkAIConnection", "connectionCheckReport", "connectionCheckFeedback", "backupExportFeedback"]
             let removedLabels = ["解读模型", "AI provider", "模型 ID", "Model ID", "输入 API 密钥", "Enter API key",
-                                 "输入新密钥以替换", "Enter a replacement key", "仅本地试算", "Local calculations only"]
+                                 "输入新密钥以替换", "Enter a replacement key", "仅本地试算", "Local calculations only",
+                                 "本机资料", "On-device data", "整理一份数据备份", "Create a backup",
+                                 "分享或存储备份", "Share or save backup", "重置解读偏好", "Reset interpretation preferences"]
             for _ in 0..<5 {
                 for identifier in removedIDs {
                     XCTAssertFalse(app.descendants(matching: .any).matching(identifier: identifier).firstMatch.exists, identifier)
@@ -25,6 +29,7 @@ final class BlindOracleUITests: XCTestCase {
             }
             XCTAssertTrue(app.buttons["userAgreementLink"].exists)
             XCTAssertTrue(app.buttons["privacyPolicyLink"].exists)
+            XCTAssertTrue(app.buttons["thirdPartyLicensesLink"].exists)
             app.terminate()
         }
     }
@@ -142,6 +147,19 @@ final class BlindOracleUITests: XCTestCase {
                 XCTAssertTrue(scroll.waitForNonExistence(timeout: 5))
                 XCTAssertTrue(settings.waitForExistence(timeout: 5))
             }
+            let licenses = app.buttons["thirdPartyLicensesLink"]
+            for _ in 0..<8 where !licenses.isHittable { settings.swipeUp() }
+            XCTAssertTrue(licenses.isHittable)
+            licenses.tap()
+            let notices = app.scrollViews["thirdPartyNoticesScroll"]
+            XCTAssertTrue(notices.waitForExistence(timeout: 10))
+            let title = language == "en" ? "Sources and licenses" : "资料与许可"
+            let navigation = app.navigationBars[title]
+            XCTAssertTrue(navigation.exists)
+            XCTAssertFalse(app.webViews.firstMatch.exists)
+            navigation.buttons.firstMatch.tap()
+            XCTAssertTrue(notices.waitForNonExistence(timeout: 5))
+            XCTAssertTrue(settings.waitForExistence(timeout: 5))
             app.terminate()
         }
     }
