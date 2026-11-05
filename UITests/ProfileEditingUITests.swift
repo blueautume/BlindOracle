@@ -1,6 +1,60 @@
 import XCTest
 
 final class ProfileEditingUITests: XCTestCase {
+    @MainActor func testTrueSolarBaziPreviewIsReadOnlyAndFollowsBirthDetails() throws {
+        let app = launchFreshApp(locationFixture: true)
+        openNewProfile(in: app)
+        let preview = element("profileBaziPreview", in: app)
+        reveal(preview, in: app)
+        XCTAssertTrue(preview.exists)
+        XCTAssertFalse(app.textFields["profileBaziPreview"].exists)
+        XCTAssertFalse(app.buttons["profileBaziPreview"].exists)
+        XCTAssertFalse(isFourPillars(preview.value as? String ?? ""))
+
+        // The birth-date and clock pickers start at 1995-01-01 12:00. Confirm
+        // both explicitly; the unselected defaults must never produce a chart.
+        for identifier in ["profileBirthDate", "profileBirthTime"] {
+            let field = app.buttons[identifier]
+            reveal(field, in: app); field.tap()
+            let confirm = app.buttons["confirmBirthClock"]
+            XCTAssertTrue(confirm.waitForExistence(timeout: 10)); confirm.tap()
+        }
+        reveal(preview, in: app)
+        XCTAssertFalse(isFourPillars(preview.value as? String ?? ""))
+        let birthplace = app.buttons["profileBirthPlace"]
+        reveal(birthplace, in: app); birthplace.tap()
+        tapDistrictPath(["chinaDistrict-110000", "chinaDistrict-110101"], in: app)
+        reveal(preview, in: app)
+        let beijingPillars = try waitForFourPillars(of: preview)
+        let current = app.buttons["profileCurrentPlace"]
+        XCTAssertGreaterThan(preview.frame.minY, current.frame.minY)
+
+        // At the same noon clock time, Urumqi's true solar hour differs from
+        // Beijing's. The readonly value must refresh without saving the form.
+        reveal(birthplace, in: app); birthplace.tap()
+        tapDistrictPath(["chinaDistrict-650000", "chinaDistrict-650100", "chinaDistrict-650102"], in: app)
+        reveal(preview, in: app)
+        let changed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value != %@", beijingPillars), object: preview)
+        XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 10), .completed)
+        let urumqiPillars = try waitForFourPillars(of: preview)
+        XCTAssertNotEqual(urumqiPillars, beijingPillars)
+
+        let currentGPS = app.buttons["useCurrentLocation"]
+        reveal(currentGPS, in: app); currentGPS.tap()
+        waitForValue("北京市海淀区", of: current)
+        reveal(preview, in: app)
+        XCTAssertEqual(preview.value as? String, urumqiPillars)
+        capture("true-solar-bazi-readonly-preview", in: app)
+
+        let clearDate = app.buttons["clearProfileBirthDate"]
+        reveal(clearDate, in: app); clearDate.tap()
+        reveal(preview, in: app)
+        XCTAssertNotEqual(preview.value as? String, urumqiPillars)
+        XCTAssertFalse(isFourPillars(preview.value as? String ?? ""))
+        XCTAssertFalse(app.textFields["profileBaziPreview"].exists)
+        XCTAssertFalse(app.buttons["profileBaziPreview"].exists)
+    }
+
     @MainActor func testAnonymousProfileUsesStableAliasPlaceholderAcrossRelaunch() throws {
         let app = launchFreshApp()
         openNewProfile(in: app)
@@ -169,9 +223,30 @@ final class ProfileEditingUITests: XCTestCase {
     @MainActor private func tapDistrictPath(_ identifiers: [String], in app: XCUIApplication) {
         for identifier in identifiers {
             let item = element(identifier, in: app)
-            XCTAssertTrue(item.waitForExistence(timeout: 10), identifier)
+            let picker = element("chinaDistrictPicker", in: app)
+            XCTAssertTrue(picker.waitForExistence(timeout: 10))
+            for _ in 0..<14 {
+                if item.exists && item.isHittable { break }
+                picker.swipeUp()
+            }
+            XCTAssertTrue(item.exists, identifier)
+            XCTAssertTrue(item.isHittable, identifier)
             item.tap()
         }
+    }
+
+    private var fourPillarsPattern: String {
+        #"^[甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥](\s+[甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥]){3}$"#
+    }
+
+    private func isFourPillars(_ value: String) -> Bool {
+        value.range(of: fourPillarsPattern, options: .regularExpression) != nil
+    }
+
+    @MainActor private func waitForFourPillars(of element: XCUIElement) throws -> String {
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value MATCHES %@", fourPillarsPattern), object: element)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed)
+        return try XCTUnwrap(element.value as? String)
     }
 
     @MainActor private func openNewProfile(in app: XCUIApplication) {

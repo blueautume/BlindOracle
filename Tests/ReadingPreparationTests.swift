@@ -23,7 +23,8 @@ final class ReadingPreparationTests: XCTestCase {
         OracleMethod.allCases.map { method in
             let fields: [OracleField]
             switch method {
-            case .bazi, .chenggu, .astrology: fields = [.birthDate, .birthTimeZone]
+            case .bazi: fields = [.birthDate, .birthTimeZone, .birthCoordinates]
+            case .chenggu, .astrology: fields = [.birthDate, .birthTimeZone]
             case .ziwei: fields = [.birthDate, .birthTime, .gender, .birthTimeZone]
             case .xingming: fields = [.surname, .givenName]
             default: fields = []
@@ -83,12 +84,16 @@ final class ReadingPreparationTests: XCTestCase {
         XCTAssertEqual(Set(report.runnableMethods), Set(requested))
         XCTAssertTrue(report.omissions.isEmpty)
         XCTAssertFalse(report.questions.contains { $0.field == .birthTime })
-        XCTAssertTrue(report.assessments.first { $0.method == .bazi }?.limitations.joined().contains("前三柱") == true)
+        XCTAssertTrue(report.assessments.first { $0.method == .bazi }?.limitations.joined().contains("必要候选") == true)
         XCTAssertTrue(report.assessments.first { $0.method == .chenggu }?.limitations.joined().contains("范围") == true)
         XCTAssertTrue(report.assessments.first { $0.method == .astrology }?.limitations.joined().contains("全天星位区间") == true)
         person.birthLatitude = nil; person.birthLongitude = nil; person.sex = "未提供"
         let stillPartial = ReadingPreparationPolicy.evaluate(plan: plan([.bazi, .astrology]), participants: [person], descriptors: descriptors)
-        XCTAssertTrue(stillPartial.questions.isEmpty) // Neither sex nor houses can improve an unknown-time output.
+        XCTAssertEqual(stillPartial.runnableMethods, [.astrology])
+        XCTAssertEqual(stillPartial.questions.map(\.field), [.birthCoordinates])
+        XCTAssertEqual(stillPartial.assessments.first { $0.method == .bazi }?.blocking.map(\.field), [.birthCoordinates])
+        // Unknown time can omit houses, but a true-solar BaZi chart still needs
+        // its birthplace longitude to determine possible solar dates.
     }
 
     func testExplicitUnknownTimeStillBlocksMandatoryZiweiWithoutRepeatingTheQuestion() {

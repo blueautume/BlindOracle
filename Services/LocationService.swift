@@ -27,7 +27,9 @@ struct ChinaDistrict: Hashable, Identifiable, Sendable {
     var fullDisplayName: String {
         L10n.text(fullName, components.reversed().map(ChinaPlaceNames.english).joined(separator: ", "))
     }
-    var timeZone: String { OracleProfile.defaultChinaTimeZoneID }
+    var timeZone: String {
+        ChinaDistrictCatalog.timeZoneID(forCountryCode: countryCode) ?? OracleProfile.defaultChinaTimeZoneID
+    }
 
     var wholeAreaSelectionTitle: String? {
         guard hasChildren else { return nil }
@@ -108,7 +110,19 @@ struct ChinaDistrictCatalog: Sendable {
         return catalog
     }()
 
-    static let supportedCountryCodes: Set<String> = ["CN", "HK", "MO", "TW"]
+    // Present-day UTC offsets happen to match, but the historical DST and
+    // local-time rules must follow the selected region when resolving a birth.
+    private static let timeZoneIDsByCountryCode = [
+        "CN": OracleProfile.defaultChinaTimeZoneID,
+        "HK": "Asia/Hong_Kong",
+        "MO": "Asia/Macau",
+        "TW": "Asia/Taipei"
+    ]
+    static let supportedCountryCodes = Set(timeZoneIDsByCountryCode.keys)
+
+    static func timeZoneID(forCountryCode code: String) -> String? {
+        timeZoneIDsByCountryCode[code]
+    }
     let provinces: [ChinaDistrict]
     private let childrenByParent: [String: [ChinaDistrict]]
     private let byID: [String: ChinaDistrict]
@@ -526,11 +540,11 @@ extension LocalPlace {
 
     static func currentPlace(name: String?, regionCode: String?, coordinate: CLLocationCoordinate2D) throws -> LocalPlace {
         guard let regionCode else { throw LocationLookupError.unavailable }
-        guard ChinaDistrictCatalog.supportedCountryCodes.contains(regionCode) else { throw LocationLookupError.outsideChina }
+        guard let timeZone = ChinaDistrictCatalog.timeZoneID(forCountryCode: regionCode) else { throw LocationLookupError.outsideChina }
         guard let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty,
               CLLocationCoordinate2DIsValid(coordinate) else { throw LocationLookupError.unavailable }
         return LocalPlace(name: name, latitude: coordinate.latitude, longitude: coordinate.longitude,
-            timeZone: OracleProfile.defaultChinaTimeZoneID)
+            timeZone: timeZone)
     }
 
     private func finish(_ value: LocalPlace, id: UUID) {

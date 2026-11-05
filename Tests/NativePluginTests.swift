@@ -10,6 +10,8 @@ final class NativePluginTests: XCTestCase {
         profile.sex = "男"
         profile.birthDate = ISO8601DateFormatter().date(from: "1971-01-27T00:00:00+08:00")!
         profile.birthTimeZoneID = "Asia/Shanghai"
+        profile.birthLatitude = 30
+        profile.birthLongitude = 120
         profile.currentTimeZoneID = "Asia/Shanghai"
         return OracleInput(question: "下一阶段如何安排？", profile: profile,
                            castingDate: ISO8601DateFormatter().date(from: casting)!, seed: 42)
@@ -17,6 +19,10 @@ final class NativePluginTests: XCTestCase {
     private func value(_ result: OracleResult, _ label: String) -> String? { result.rows.first { $0.label == label }?.value }
 
     func testEightCharUpstreamGoldenFixture() async throws {
+        let upstream = Solar(year: 2005, month: 12, day: 23, hour: 8, minute: 37).lunar.eightChar
+        upstream.sect = 2
+        XCTAssertEqual([upstream.year, upstream.month, upstream.day, upstream.time].joined(separator: " "),
+                       "乙酉 戊子 辛巳 壬辰")
         var request = input()
         request.profile.birthDate = ISO8601DateFormatter().date(from: "2005-12-23T08:37:00+08:00")!
         let result = try await BaziPlugin().calculate(request)
@@ -141,7 +147,8 @@ final class NativePluginTests: XCTestCase {
         request.profile.birthTimeKnown = false
         let result = try await BaziPlugin().calculate(request)
         XCTAssertEqual(result.status, .partial)
-        XCTAssertTrue(value(result, "月柱")?.contains("交节前") == true)
+        XCTAssertTrue(value(result, "月柱")?.contains("己丑") == true)
+        XCTAssertTrue(value(result, "月柱")?.contains("庚寅") == true)
         XCTAssertEqual(value(result, "时柱"), "未知，未计算")
         XCTAssertFalse(result.rows.contains { $0.label.hasPrefix("大运") })
     }

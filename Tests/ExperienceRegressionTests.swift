@@ -13,7 +13,8 @@ final class ExperienceRegressionTests: XCTestCase {
 
     private func person() throws -> OracleProfile {
         try XCTUnwrap(ProfileDirectory.applying([ProfileUpdate(name: "陈平", sex: "男", birthDate: "1992-06-15",
-            birthTime: "08:30", birthTimeZoneID: "Asia/Shanghai")], to: []).profiles.first)
+            birthTime: "08:30", birthTimeZoneID: "Asia/Shanghai", birthPlace: "上海",
+            birthLatitude: 31.2304, birthLongitude: 121.4737)], to: []).profiles.first)
     }
 
     private func client(action: String = "reply", methods: [OracleMethod] = [], note: String = "模拟回复",

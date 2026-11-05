@@ -411,6 +411,48 @@ struct ProfileFieldsView: View {
     @State private var birthDateCalendar: BirthDateCalendar = .gregorian
     @State private var birthResolution = LocationResolution()
     @State private var currentResolution = LocationResolution()
+    @State private var calculatedBaziInput: BaziPreviewInput?
+    @State private var baziPreviewText: String?
+    @State private var baziPreviewHasPillars = false
+
+    /// Only birth inputs belong to a birth chart. Name, sex and current-location
+    /// edits must not invalidate the displayed Four Pillars.
+    private struct BaziPreviewInput: Equatable {
+        let profileID: UUID
+        let birthDate: Date?
+        let birthDateText: String?
+        let birthTimeText: String?
+        let birthTimeKnown: Bool
+        let timeZoneID: String
+        let place: String
+        let districtCode: String?
+        let latitude: Double?
+        let longitude: Double?
+        let unknownFields: Set<OracleField>
+        let declaredUnknownFields: Set<OracleField>
+        let languageCode: String
+
+        init(profile: OracleProfile) {
+            profileID = profile.id
+            birthDate = profile.birthDate
+            birthDateText = profile.birthDateText
+            birthTimeText = profile.birthTimeText
+            birthTimeKnown = profile.birthTimeKnown
+            timeZoneID = profile.birthTimeZoneID
+            place = profile.birthPlace
+            districtCode = profile.birthDistrictCode
+            latitude = profile.birthLatitude
+            longitude = profile.birthLongitude
+            let fields: Set<OracleField> = [.birthDate, .birthTime, .birthPlace, .birthTimeZone, .birthCoordinates]
+            unknownFields = profile.unknownFields.intersection(fields)
+            declaredUnknownFields = (profile.declaredUnknownFields ?? []).intersection(fields)
+            languageCode = AppLanguage.current.rawValue
+        }
+    }
+
+    private var baziPreviewInput: BaziPreviewInput {
+        BaziPreviewInput(profile: draft.draftProfile)
+    }
 
     private struct LocationResolution {
         var waitingForGPS = false
@@ -475,6 +517,8 @@ struct ProfileFieldsView: View {
                     locationRow(L10n.text("当前所在地", "Current location"), value: displayPlace(code: draft.profile.currentDistrictCode, name: draft.profile.currentPlace) ?? (draft.profile.currentLatitude != nil || draft.profile.currentLongitude != nil ? L10n.text("已定位", "Located") : nil),
                                 id: "profileCurrentPlace", gpsID: "useCurrentLocation", clearID: "clearProfileCurrentPlace",
                                 purpose: .current, selection: .currentDistrict)
+                    Divider()
+                    baziPreviewRow
                 }
             }
         }
@@ -498,10 +542,44 @@ struct ProfileFieldsView: View {
         .onReceive(birthLocation.$place) { receiveGPS($0, purpose: .birth) }
         .onReceive(currentLocation.$message) { receiveGPSError($0, purpose: .current) }
         .onReceive(birthLocation.$message) { receiveGPSError($0, purpose: .birth) }
+        .task(id: baziPreviewInput) {
+            let profile = draft.draftProfile
+            let input = BaziPreviewInput(profile: profile)
+            let calculation = await TrueSolarBaziEngine.shared.calculate(profile: profile)
+            guard !Task.isCancelled, baziPreviewInput == input else { return }
+            baziPreviewText = calculation.rawPillars ?? calculation.previewPlaceholder
+            baziPreviewHasPillars = calculation.rawPillars != nil
+            calculatedBaziInput = input
+        }
         .onDisappear {
             cancelLocation(.birth)
             cancelLocation(.current)
         }
+    }
+
+    private var baziPreviewRow: some View {
+        let isCurrent = calculatedBaziInput == baziPreviewInput
+        let text = isCurrent ? baziPreviewText : nil
+        let value = text ?? L10n.text("根据出生资料自动生成", "Generated from birth details")
+        return HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(L10n.text("八字", "BaZi"))
+                .fixedSize(horizontal: true, vertical: false)
+            Spacer(minLength: 0)
+            Text(value)
+                .foregroundStyle(isCurrent && baziPreviewHasPillars ? InkTheme.ink : InkTheme.secondary)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(3)
+                .minimumScaleFactor(0.85)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(minHeight: 44)
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isStaticText)
+        .accessibilityLabel(L10n.text("八字", "BaZi"))
+        .accessibilityValue(value)
+        .accessibilityHint(L10n.text("按出生地真太阳时自动计算，随出生资料更新。", "Calculated using true solar time at the birthplace and updated with the birth details."))
+        .accessibilityIdentifier("profileBaziPreview")
     }
 
     private func textRow(_ title: String, text: Binding<String>, contentType: UITextContentType, id: String,

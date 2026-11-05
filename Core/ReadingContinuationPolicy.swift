@@ -344,6 +344,15 @@ enum ReadingContinuationPolicy {
             if method == .ziwei || (method == .bazi && hasTime) {
                 guard oldPerson.sex == newPerson.sex, sameUnknowns([.gender], oldPerson, newPerson) else { return false }
             }
+            if method == .bazi {
+                let fields: Set<OracleField> = [.birthCoordinates, .birthPlace]
+                guard sameUnknowns(fields, oldPerson, newPerson),
+                      (oldPerson.declaredUnknownFields ?? []).intersection(fields) == (newPerson.declaredUnknownFields ?? []).intersection(fields) else { return false }
+                let oldCoordinates = BaziBirthLocation.coordinates(for: oldPerson)
+                let newCoordinates = BaziBirthLocation.coordinates(for: newPerson)
+                return oldCoordinates?.latitude == newCoordinates?.latitude
+                    && oldCoordinates?.longitude == newCoordinates?.longitude
+            }
             if method == .ziwei {
                 return original.castingDate == candidate.castingDate && oldPerson.currentTimeZoneID == newPerson.currentTimeZoneID
             }

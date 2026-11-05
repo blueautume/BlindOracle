@@ -119,7 +119,7 @@ final class LocationServiceTests: XCTestCase {
         XCTAssertEqual(counties.flatMap { catalog.children(of: $0) }.count, 368)
         let taipei = try XCTUnwrap(counties.first { $0.name == "臺北市" })
         let daan = try XCTUnwrap(catalog.children(of: taipei).first { $0.name == "大安區" })
-        XCTAssertEqual(daan.localPlace?.timeZone, OracleProfile.defaultChinaTimeZoneID)
+        XCTAssertEqual(daan.localPlace?.timeZone, "Asia/Taipei")
         XCTAssertTrue(daan.matchesGeocodedAddress("台北市大安区", regionCode: "TW"))
         XCTAssertFalse(daan.matchesGeocodedAddress("台中市大安区", regionCode: "TW"))
 
@@ -129,6 +129,34 @@ final class LocationServiceTests: XCTestCase {
         XCTAssertTrue(catalog.children(of: dongguan).isEmpty)
         XCTAssertNil(dongguan.wholeAreaSelectionTitle)
         XCTAssertNotNil(dongguan.localPlace)
+    }
+
+    func testSelectedRegionalTimeZonesPreserveHistoricalDaylightSavingRules() throws {
+        let catalog = ChinaDistrictCatalog.shared
+        let expected = ["CN": "Asia/Shanghai", "HK": "Asia/Hong_Kong", "MO": "Asia/Macau", "TW": "Asia/Taipei"]
+        for (region, identifier) in expected {
+            let district = try XCTUnwrap(catalog.provinces.first { $0.countryCode == region })
+            XCTAssertEqual(district.timeZone, identifier)
+            XCTAssertEqual(district.localPlace?.timeZone, identifier)
+        }
+        XCTAssertNil(ChinaDistrictCatalog.timeZoneID(forCountryCode: "JP"))
+
+        // These historical differences are defined by IANA tzdb's Asia rules;
+        // checking modern +08:00 offsets alone would miss the old bug.
+        // https://data.iana.org/time-zones/tzdb/asia
+        let formatter = ISO8601DateFormatter()
+        let summer1988 = try XCTUnwrap(formatter.date(from: "1988-07-01T00:00:00Z"))
+        let summer1979 = try XCTUnwrap(formatter.date(from: "1979-07-01T00:00:00Z"))
+        let shanghai = try XCTUnwrap(TimeZone(identifier: expected["CN"]!))
+        let hongKong = try XCTUnwrap(TimeZone(identifier: expected["HK"]!))
+        let macao = try XCTUnwrap(TimeZone(identifier: expected["MO"]!))
+        let taipei = try XCTUnwrap(TimeZone(identifier: expected["TW"]!))
+        XCTAssertEqual(shanghai.secondsFromGMT(for: summer1988), 9 * 3_600)
+        XCTAssertEqual(hongKong.secondsFromGMT(for: summer1988), 8 * 3_600)
+        XCTAssertEqual(macao.secondsFromGMT(for: summer1988), 8 * 3_600)
+        XCTAssertEqual(taipei.secondsFromGMT(for: summer1988), 8 * 3_600)
+        XCTAssertEqual(shanghai.secondsFromGMT(for: summer1979), 8 * 3_600)
+        XCTAssertEqual(taipei.secondsFromGMT(for: summer1979), 9 * 3_600)
     }
 
     func testWholeAreaTitlesFollowTheExistingAdministrativeHierarchy() throws {
@@ -230,11 +258,11 @@ final class LocationServiceTests: XCTestCase {
     @MainActor
     func testGPSRequiresDomesticPlacemarkAndKeepsDeviceCoordinates() throws {
         let point = CLLocationCoordinate2D(latitude: 22.3193, longitude: 114.1694)
-        for code in ["CN", "HK", "MO", "TW"] {
+        for (code, zone) in ["CN": "Asia/Shanghai", "HK": "Asia/Hong_Kong", "MO": "Asia/Macau", "TW": "Asia/Taipei"] {
             let resolved = try LocationService.currentPlace(name: "定位结果", regionCode: code, coordinate: point)
             XCTAssertEqual(resolved.latitude, point.latitude)
             XCTAssertEqual(resolved.longitude, point.longitude)
-            XCTAssertEqual(resolved.timeZone, OracleProfile.defaultChinaTimeZoneID)
+            XCTAssertEqual(resolved.timeZone, zone)
         }
         XCTAssertThrowsError(try LocationService.currentPlace(name: "东京都", regionCode: "JP", coordinate: point)) {
             guard case LocationLookupError.outsideChina = $0 else { return XCTFail("Unexpected error: \($0)") }

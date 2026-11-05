@@ -51,6 +51,8 @@ final class MultiPersonReadingTests: XCTestCase {
         profile.birthTimeKnown = true
         profile.birthPlace = "北京"
         profile.birthTimeZoneID = "Asia/Shanghai"
+        profile.birthLatitude = 39.9
+        profile.birthLongitude = 116.4
         return profile
     }
     private func plan(methods: [OracleMethod] = [.bazi], people: [OracleProfile] = []) -> OraclePlan {

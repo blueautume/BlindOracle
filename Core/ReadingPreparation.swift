@@ -102,6 +102,10 @@ enum ReadingPreparationPolicy {
                 var required = hardRequirements(for: method)
                 if mandatory.contains(method) { required.formUnion(descriptor.requiredFields) }
                 for field in orderedFields where required.contains(field) {
+                    if method == .bazi, field == .birthCoordinates {
+                        if let gap = baziCoordinateGap(person: person, declaredUnknown: declared) { assessment.blocking.append(gap) }
+                        continue
+                    }
                     if let gap = gap(for: field, person: person, declaredUnknown: declared) { assessment.blocking.append(gap) }
                 }
                 let timeAvailable = gap(for: .birthTime, person: person, declaredUnknown: declared) == nil
@@ -148,7 +152,8 @@ enum ReadingPreparationPolicy {
     /// field or AI-requested plan.requiredFields value as an absolute blocker.
     private static func hardRequirements(for method: OracleMethod) -> Set<OracleField> {
         switch method {
-        case .bazi, .chenggu, .astrology: [.birthDate, .birthTimeZone]
+        case .bazi: [.birthDate, .birthTimeZone, .birthCoordinates]
+        case .chenggu, .astrology: [.birthDate, .birthTimeZone]
         case .ziwei: [.birthDate, .birthTime, .gender, .birthTimeZone]
         case .xingming: [.surname, .givenName]
         default: []
@@ -164,6 +169,19 @@ enum ReadingPreparationPolicy {
         // cannot replace the separately confirmed time zone.
         default: []
         }
+    }
+
+    private static func baziCoordinateGap(person: OracleProfile, declaredUnknown: Set<OracleField>) -> PreparationGap? {
+        let fields: Set<OracleField> = [.birthPlace, .birthCoordinates]
+        if !declaredUnknown.isDisjoint(with: fields) {
+            return .init(field: .birthCoordinates, state: .explicitlyUnknown,
+                         reason: L10n.text("出生地已明确为不确定，暂不能校正真太阳时。", "The birthplace was marked unknown, so true solar time cannot be calculated."))
+        }
+        if BaziBirthLocation.coordinates(for: person) != nil { return nil }
+        let invalid = person.birthLatitude.map { !$0.isFinite || !(-90...90).contains($0) } == true
+            || person.birthLongitude.map { !$0.isFinite || !(-180...180).contains($0) } == true
+        return .init(field: .birthCoordinates, state: invalid ? .invalid : .unspecified,
+                     reason: L10n.text("请选择有效出生地，用于本地真太阳时八字排盘。", "Choose a valid birthplace to calculate the true-solar-time BaZi chart on device."))
     }
 
     private static func gap(for field: OracleField, person: OracleProfile, declaredUnknown: Set<OracleField>) -> PreparationGap? {
@@ -202,7 +220,7 @@ enum ReadingPreparationPolicy {
         case .birthCoordinates:
             guard let latitude = person.birthLatitude, let longitude = person.birthLongitude else { return missing() }
             return latitude.isFinite && longitude.isFinite && (-90...90).contains(latitude) && (-180...180).contains(longitude)
-                ? nil : invalid(L10n.text("出生经纬度无效，只能保留不依赖宫位的星位结果。", "The birth coordinates are invalid. Only planetary positions that do not depend on houses are available."))
+                ? nil : invalid(L10n.text("出生地坐标无效，请重新选择出生地。", "The birth coordinates are invalid. Choose the birthplace again."))
         case .birthPlace: return person.birthPlace.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? missing() : nil
         case .currentLocation: return person.currentPlace.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? missing() : nil
         case .numbers: return missing() // Collected by the existing interaction session, not the profile.
@@ -214,7 +232,7 @@ enum ReadingPreparationPolicy {
         switch method {
         case .bazi:
             var limits: [String] = []
-            if missing.contains(.birthTime) { limits.append(L10n.text("出生时辰未确定，仅保留前三柱及必要候选，不输出起运与大运。", "The birth hour is unknown. Only the first three pillars and any necessary candidates are shown. Luck cycles are unavailable.")) }
+            if missing.contains(.birthTime) { limits.append(L10n.text("出生时辰未确定，仅保留年、月、日柱的必要候选；真太阳时可能跨日，不固定日柱，不输出时柱、起运与大运。", "The birth hour is unknown. Possible year, month and day pillars are shown; true solar time can cross midnight. No unique day or hour pillar, or luck cycles, is assumed.")) }
             else if missing.contains(.gender) { limits.append(L10n.text("排盘性别未确定，本次不输出起运与大运。", "The chart gender is unknown, so luck cycles are unavailable.")) }
             return limits
         case .chenggu:
@@ -265,7 +283,7 @@ enum ReadingPreparationPolicy {
         case .gender: return L10n.text("\(subject)排盘性别是男还是女？不确定可说明。", "Which chart gender should be used for \(name ?? "this person")? You can leave it unknown.")
         case .surname: return L10n.text("请确认\(subject)姓氏部分，先不自动拆姓名。", "Confirm \(owner) family name separately.")
         case .givenName: return L10n.text("请确认\(subject)名字部分。", "Confirm \(owner) given name separately.")
-        case .birthCoordinates: return L10n.text("\(subject)出生地经纬度是否已知？不确定时可以只保留不依赖宫位的部分。", "Do you know the coordinates of \(owner) birthplace? If not, we can use the chart details that don’t need houses.")
+        case .birthCoordinates: return L10n.text("请选择\(subject)出生地的省、市和区县，或确认已有出生坐标。", "Choose \(owner) birth province, city and district, or confirm the saved birth coordinates.")
         default: return L10n.text("请补充或确认\(subject)\(gap.field.title)。", "Please provide or confirm \(owner) \(gap.field.title.lowercased()).")
         }
     }

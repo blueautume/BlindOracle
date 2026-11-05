@@ -10,7 +10,8 @@ final class SavedProfileReuseTests: XCTestCase {
     }
 
     private func person(_ name: String = "陈平", date: String = "1992-06-15") throws -> OracleProfile {
-        let patch = ProfileUpdate(name: name, sex: "男", birthDate: date, birthTime: "08:30", birthTimeZoneID: "Asia/Tokyo", birthPlace: "东京")
+        let patch = ProfileUpdate(name: name, sex: "男", birthDate: date, birthTime: "08:30", birthTimeZoneID: "Asia/Tokyo", birthPlace: "东京",
+                                  birthLatitude: 35.6762, birthLongitude: 139.6503)
         return try XCTUnwrap(ProfileDirectory.applying([patch], to: []).profiles.first)
     }
 

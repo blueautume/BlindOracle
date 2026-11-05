@@ -40,7 +40,8 @@ final class ReadingContinuationStoreTests: XCTestCase {
 
     private func personalFixture() async throws -> OracleRun {
         let merged = ProfileDirectory.applying([ProfileUpdate(name: "陈平", sex: "男", birthDate: "1992-06-15",
-            birthTime: "08:30", birthTimeZoneID: "Asia/Shanghai")], to: [])
+            birthTime: "08:30", birthTimeZoneID: "Asia/Shanghai", birthPlace: "上海",
+            birthLatitude: 31.2304, birthLongitude: 121.4737)], to: [])
         var person = try XCTUnwrap(merged.profiles.first)
         person.currentTimeZoneID = "Asia/Shanghai"
         let question = "陈平接下来工作如何安排？"
@@ -91,9 +92,9 @@ final class ReadingContinuationStoreTests: XCTestCase {
 
     private func activationProfile() throws -> OracleProfile {
         var person = try XCTUnwrap(ProfileDirectory.applying([ProfileUpdate(name: "陈平", sex: "男",
-            birthDate: "1992-06-15", birthTime: "08:30", birthTimeZoneID: "Asia/Shanghai")], to: []).profiles.first)
+            birthDate: "1992-06-15", birthTime: "08:30", birthTimeZoneID: "Asia/Shanghai", birthPlace: "上海",
+            birthLatitude: 31.2304, birthLongitude: 121.4737)], to: []).profiles.first)
         person.familyName = "陈"; person.givenName = "平"
-        person.birthPlace = "上海"; person.birthLatitude = 31.2304; person.birthLongitude = 121.4737
         person.currentTimeZoneID = "Asia/Shanghai"
         return person
     }
@@ -297,7 +298,8 @@ final class ReadingContinuationStoreTests: XCTestCase {
         let store = try restoredStore(run: original, vault: temporaryVault())
         let own = original.input.profile
         let other = try XCTUnwrap(ProfileDirectory.applying([ProfileUpdate(name: "李岚", sex: "女", birthDate: "1995-03-11",
-            birthTime: "14:00", birthTimeZoneID: "Asia/Shanghai")], to: []).profiles.first)
+            birthTime: "14:00", birthTimeZoneID: "Asia/Shanghai", birthPlace: "北京",
+            birthLatitude: 39.9, birthLongitude: 116.4)], to: []).profiles.first)
         store.saveProfile(own); store.saveProfile(other); store.selfProfileID = own.id
 
         store.send("不看陈平了，换成李岚的工作怎么样？这次只用八字。")
@@ -915,7 +917,8 @@ final class ReadingContinuationStoreTests: XCTestCase {
             $0.method == .bazi && $0.blocking.contains { $0.field == .birthDate }
         } ?? false)
         let people = ProfileDirectory.applying([ProfileUpdate(id: original.input.profile.id, birthDate: "1992-06-15",
-            birthTime: "08:30", birthTimeZoneID: "Asia/Shanghai")], to: [original.input.profile]).profiles
+            birthTime: "08:30", birthTimeZoneID: "Asia/Shanghai", birthPlace: "上海",
+            birthLatitude: 31.2304, birthLongitude: 121.4737)], to: [original.input.profile]).profiles
         XCTAssertTrue(store.confirmGroupIntake(profiles: people, numbers: [], save: false))
         try await waitUntilIdle(store)
 

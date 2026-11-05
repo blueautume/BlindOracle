@@ -10,7 +10,8 @@ final class FormIntakeTests: XCTestCase {
     }
 
     private func person(_ name: String = "张三", date: String = "1995-01-02", time: String = "08:30") throws -> OracleProfile {
-        let patch = ProfileUpdate(name: name, sex: "男", birthDate: date, birthTime: time, birthTimeZoneID: "Asia/Shanghai", birthPlace: "北京")
+        let patch = ProfileUpdate(name: name, sex: "男", birthDate: date, birthTime: time, birthTimeZoneID: "Asia/Shanghai", birthPlace: "北京",
+                                  birthLatitude: 39.9, birthLongitude: 116.4)
         return try XCTUnwrap(ProfileDirectory.applying([patch], to: []).profiles.first)
     }
 

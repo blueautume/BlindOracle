@@ -407,7 +407,7 @@ final class ReadingContinuationTests: XCTestCase {
             $0.profile.birthPlace = "更新地点文字"; $0.profile.currentPlace = "更新当前地点文字"
             $0.profile.currentDistrictCode = "310115"
             $0.profile.currentLatitude = 31.22; $0.profile.currentLongitude = 121.53
-            $0.profile.updatedAt = Date(); $0.profile.unknownFields.insert(.birthPlace)
+            $0.profile.updatedAt = Date()
         }
         let original = completeReading()
         var candidate = original.input; candidate.profile.name = "新的显示姓名"
@@ -423,18 +423,21 @@ final class ReadingContinuationTests: XCTestCase {
         assertInvalidates([.bazi, .chenggu, .ziwei, .astrology]) { $0.profile.birthTimeKnown = false }
         assertInvalidates([.bazi, .chenggu, .ziwei, .astrology]) { $0.profile.unknownFields.insert(.birthTimeZone) }
         assertInvalidates([.bazi, .ziwei]) { $0.profile.sex = "女" }
-        assertInvalidates([.astrology]) { $0.profile.birthLongitude = 120 }
-        assertInvalidates([.astrology]) { $0.profile.unknownFields.insert(.birthCoordinates) }
+        assertInvalidates([.bazi, .astrology]) { $0.profile.birthLongitude = 120 }
+        assertInvalidates([.bazi, .astrology]) { $0.profile.unknownFields.insert(.birthCoordinates) }
+        assertInvalidates([.bazi]) { $0.profile.unknownFields.insert(.birthPlace) }
+        assertInvalidates([.bazi]) { $0.profile.declaredUnknownFields = [.birthPlace] }
     }
 
-    func testUnknownBirthTimeUsesTheCalendarDayAndIgnoresUnusedSexOrCoordinates() {
+    func testUnknownBirthTimeUsesTheCalendarDayButStillDependsOnBirthCoordinates() {
         var original = completeReading(); original.input.profile.birthTimeKnown = false
         // Ziwei cannot have a valid saved chart without a known time.
         original.results.removeAll { $0.method == .ziwei }
         assertInvalidates([], from: original) {
             $0.profile.birthDate = $0.profile.birthDate?.addingTimeInterval(3600)
-            $0.profile.sex = "女"; $0.profile.birthLatitude = 40
+            $0.profile.sex = "女"
         }
+        assertInvalidates([.bazi], from: original) { $0.profile.birthLatitude = 40 }
         assertInvalidates([.bazi, .chenggu, .astrology], from: original) {
             $0.profile.birthDate = $0.profile.birthDate?.addingTimeInterval(86400)
         }
