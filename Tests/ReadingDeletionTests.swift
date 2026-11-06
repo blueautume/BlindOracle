@@ -25,7 +25,11 @@ final class ReadingDeletionTests: XCTestCase {
         let pending = plan("仍在进行的本地推演")
         store.pendingPlan = pending
         store.messages.append(ChatMessage(role: .assistant, content: "请确认这次问题。", kind: .intake))
-        store.confirmGroupIntake(profiles: [], numbers: [], save: false)
+        var casting = OracleProfile()
+        casting.currentPlace = "北京市朝阳区"
+        casting.currentLatitude = 39.9; casting.currentLongitude = 116.4
+        casting.currentTimeZoneID = "Asia/Shanghai"
+        store.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: casting)
         XCTAssertEqual(store.phase, .calculating)
         XCTAssertNil(store.pendingInteraction)
         return try XCTUnwrap(store.runs.last?.id)

@@ -71,7 +71,8 @@ struct ReadingPreparationReport: Sendable {
 /// instant, actual card selections and coin responses remain runtime checks.
 enum ReadingPreparationPolicy {
     static func evaluate(plan: OraclePlan, participants: [OracleProfile], descriptors: [OraclePluginDescriptor],
-                         explicitlyUnknownFields: [UUID: Set<OracleField>] = [:]) -> ReadingPreparationReport {
+                         explicitlyUnknownFields: [UUID: Set<OracleField>] = [:],
+                         castingProfile: OracleProfile? = nil, numbers: [Int]? = nil) -> ReadingPreparationReport {
         let mandatory = Set(plan.mandatoryMethods ?? [])
         // A malformed plan cannot silently drop a user-mandated method.
         let requested = Set(plan.methods).union(mandatory)
@@ -92,6 +93,10 @@ enum ReadingPreparationPolicy {
                     assessments.append(assessment); continue
                 }
                 guard method.usesPersonalProfile else {
+                    if requiresCastingLocation(method: method, numbers: numbers ?? plan.draftNumbers ?? []),
+                       let gap = castingLocationGap(castingProfile ?? plan.castingProfile) {
+                        assessment.blocking.append(gap)
+                    }
                     assessments.append(assessment); continue
                 }
                 guard let person else {
@@ -102,8 +107,8 @@ enum ReadingPreparationPolicy {
                 var required = hardRequirements(for: method)
                 if mandatory.contains(method) { required.formUnion(descriptor.requiredFields) }
                 for field in orderedFields where required.contains(field) {
-                    if method == .bazi, field == .birthCoordinates {
-                        if let gap = baziCoordinateGap(person: person, declaredUnknown: declared) { assessment.blocking.append(gap) }
+                    if [.bazi, .ziwei, .chenggu].contains(method), field == .birthCoordinates {
+                        if let gap = birthCoordinateGap(person: person, declaredUnknown: declared) { assessment.blocking.append(gap) }
                         continue
                     }
                     if let gap = gap(for: field, person: person, declaredUnknown: declared) { assessment.blocking.append(gap) }
@@ -121,9 +126,12 @@ enum ReadingPreparationPolicy {
         }
         var available = methods.filter { method in assessments.contains { $0.method == method && $0.canExecute } }
         if mandatory.isEmpty, available.isEmpty, descriptors.contains(where: { $0.method == .xiaoliuren }) {
-            available.append(.xiaoliuren)
-            assessments.append(.init(method: .xiaoliuren, participantID: nil, participantName: nil,
-                blocking: [], optionalGaps: [], limitations: [], requiresUserInteraction: false))
+            let gaps = castingLocationGap(castingProfile ?? plan.castingProfile).map { [$0] } ?? []
+            if gaps.isEmpty { available.append(.xiaoliuren) }
+            if !assessments.contains(where: { $0.method == .xiaoliuren }) {
+                assessments.append(.init(method: .xiaoliuren, participantID: nil, participantName: nil,
+                    blocking: gaps, optionalGaps: [], limitations: [], requiresUserInteraction: false))
+            }
         }
         let runnable = blockedMandatory.isEmpty ? available : []
         let omissions = assessments.filter { !$0.canExecute && !mandatory.contains($0.method) }.map { assessment in
@@ -152,9 +160,9 @@ enum ReadingPreparationPolicy {
     /// field or AI-requested plan.requiredFields value as an absolute blocker.
     private static func hardRequirements(for method: OracleMethod) -> Set<OracleField> {
         switch method {
-        case .bazi: [.birthDate, .birthTimeZone, .birthCoordinates]
-        case .chenggu, .astrology: [.birthDate, .birthTimeZone]
-        case .ziwei: [.birthDate, .birthTime, .gender, .birthTimeZone]
+        case .bazi, .chenggu: [.birthDate, .birthTimeZone, .birthCoordinates]
+        case .astrology: [.birthDate, .birthTimeZone]
+        case .ziwei: [.birthDate, .birthTime, .gender, .birthTimeZone, .birthCoordinates]
         case .xingming: [.surname, .givenName]
         default: []
         }
@@ -165,13 +173,34 @@ enum ReadingPreparationPolicy {
         case .bazi: timeAvailable ? [.birthTime, .gender] : [.birthTime]
         case .chenggu: [.birthTime]
         case .astrology: timeAvailable ? [.birthTime, .birthCoordinates] : [.birthTime]
-        // Place text is not used by Ziwei's numerical guards. Asking for it
-        // cannot replace the separately confirmed time zone.
         default: []
         }
     }
 
-    private static func baziCoordinateGap(person: OracleProfile, declaredUnknown: Set<OracleField>) -> PreparationGap? {
+    static func requiresCastingLocation(method: OracleMethod, numbers: [Int]) -> Bool {
+        method == .qimen || method == .xiaoliuren || (method == .meihua && numbers.count < 3)
+    }
+
+    private static func castingLocationGap(_ profile: OracleProfile?) -> PreparationGap? {
+        guard let profile else {
+            return .init(field: .currentLocation, state: .unspecified,
+                         reason: TrueSolarClock.ClockError.castingLocation.localizedDescription)
+        }
+        let declared = profile.declaredUnknownFields ?? []
+        if declared.contains(.currentLocation) {
+            return .init(field: .currentLocation, state: .explicitlyUnknown,
+                         reason: L10n.text("起卦地点已标为不确定，暂不能校正真太阳时。", "The casting place is marked unknown, so apparent solar time is unavailable."))
+        }
+        if TrueSolarClock.castingCoordinates(profile: profile) != nil,
+           TimeZone(identifier: profile.currentTimeZoneID) != nil { return nil }
+        let invalid = profile.currentLatitude.map { !$0.isFinite || !(-90...90).contains($0) } == true
+            || profile.currentLongitude.map { !$0.isFinite || !(-180...180).contains($0) } == true
+            || TimeZone(identifier: profile.currentTimeZoneID) == nil
+        return .init(field: .currentLocation, state: invalid ? .invalid : .unspecified,
+                     reason: TrueSolarClock.ClockError.castingLocation.localizedDescription)
+    }
+
+    private static func birthCoordinateGap(person: OracleProfile, declaredUnknown: Set<OracleField>) -> PreparationGap? {
         let fields: Set<OracleField> = [.birthPlace, .birthCoordinates]
         if !declaredUnknown.isDisjoint(with: fields) {
             return .init(field: .birthCoordinates, state: .explicitlyUnknown,
@@ -181,7 +210,7 @@ enum ReadingPreparationPolicy {
         let invalid = person.birthLatitude.map { !$0.isFinite || !(-90...90).contains($0) } == true
             || person.birthLongitude.map { !$0.isFinite || !(-180...180).contains($0) } == true
         return .init(field: .birthCoordinates, state: invalid ? .invalid : .unspecified,
-                     reason: L10n.text("请选择有效出生地，用于本地真太阳时八字排盘。", "Choose a valid birthplace to calculate the true-solar-time BaZi chart on device."))
+                     reason: L10n.text("请选择有效出生地，用于本地真太阳时排盘。", "Choose a valid birthplace to calculate the apparent-solar chart on device."))
     }
 
     private static func gap(for field: OracleField, person: OracleProfile, declaredUnknown: Set<OracleField>) -> PreparationGap? {
@@ -284,6 +313,7 @@ enum ReadingPreparationPolicy {
         case .surname: return L10n.text("请确认\(subject)姓氏部分，先不自动拆姓名。", "Confirm \(owner) family name separately.")
         case .givenName: return L10n.text("请确认\(subject)名字部分。", "Confirm \(owner) given name separately.")
         case .birthCoordinates: return L10n.text("请选择\(subject)出生地的省、市和区县，或确认已有出生坐标。", "Choose \(owner) birth province, city and district, or confirm the saved birth coordinates.")
+        case .currentLocation: return L10n.text("请选择这次问事的起卦地点，用于当地真太阳时计算。", "Choose the casting place for this question to calculate local apparent solar time.")
         default: return L10n.text("请补充或确认\(subject)\(gap.field.title)。", "Please provide or confirm \(owner) \(gap.field.title.lowercased()).")
         }
     }

@@ -12,9 +12,21 @@ final class ExperienceRegressionTests: XCTestCase {
     }
 
     private func person() throws -> OracleProfile {
-        try XCTUnwrap(ProfileDirectory.applying([ProfileUpdate(name: "陈平", sex: "男", birthDate: "1992-06-15",
+        var person = try XCTUnwrap(ProfileDirectory.applying([ProfileUpdate(name: "陈平", sex: "男", birthDate: "1992-06-15",
             birthTime: "08:30", birthTimeZoneID: "Asia/Shanghai", birthPlace: "上海",
             birthLatitude: 31.2304, birthLongitude: 121.4737)], to: []).profiles.first)
+        person.currentPlace = "上海市黄浦区"
+        person.currentLatitude = 31.2304; person.currentLongitude = 121.4737
+        person.currentTimeZoneID = "Asia/Shanghai"
+        return person
+    }
+
+    private func castingSite() -> OracleProfile {
+        var site = OracleProfile()
+        site.currentPlace = "上海市黄浦区"
+        site.currentLatitude = 31.2304; site.currentLongitude = 121.4737
+        site.currentTimeZoneID = "Asia/Shanghai"
+        return site
     }
 
     private func client(action: String = "reply", methods: [OracleMethod] = [], note: String = "模拟回复",
@@ -50,7 +62,7 @@ final class ExperienceRegressionTests: XCTestCase {
         let vault = try vault()
         let question = "今晚跟朋友讨论合作该注意什么？"
         let plan = OraclePlan(intent: "合作安排", subject: "事件", methods: [.tarot], requiredFields: [], note: "", question: question)
-        let input = OracleInput(question: question, profile: OracleProfile(), seed: 41, subject: "事件", participants: [])
+        let input = OracleInput(question: question, profile: castingSite(), seed: 41, subject: "事件", participants: [])
         let request = OracleInteractionRequest(method: .tarot, kind: .tarot)
         var session = OracleInteractionSession(input: input, plan: plan, requests: [request])
         let draws = zip(session.availableTarotCards.prefix(3), request.tarotPositions).map {
@@ -113,7 +125,7 @@ final class ExperienceRegressionTests: XCTestCase {
             XCTAssertEqual(pending.methods, [.meihua])
             XCTAssertTrue(pending.question.contains("合作"))
             XCTAssertFalse(pending.question.contains("同一件事"))
-            XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], save: false))
+            XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], save: false, castingProfile: castingSite()))
             try await wait(store)
         }
         XCTAssertNil(store.pendingInteraction)
@@ -338,7 +350,7 @@ final class ExperienceRegressionTests: XCTestCase {
 
     @MainActor func testCombiningTarotAndBaziRetainsTheExistingTopicAndOnlyAsksForMissingDetails() async throws {
         let question = "今晚和朋友谈合作应该先谈清什么？"
-        let input = OracleInput(question: question, profile: OracleProfile(), seed: 41, subject: "事件", participants: [])
+        let input = OracleInput(question: question, profile: castingSite(), seed: 41, subject: "事件", participants: [])
         let plan = OraclePlan(intent: "合作", subject: "事件", methods: [.meihua], requiredFields: [], note: "", question: question)
         let run = OracleRun(input: input, plan: plan, results: [try await MeihuaPlugin().calculate(input)])
         let store = try restore(run, vault: vault(), client: client(action: "clarify", note: "你指哪件合作？"))
@@ -366,7 +378,7 @@ final class ExperienceRegressionTests: XCTestCase {
             let draws = zip(["major-00", "cups-01", "swords-14"], TarotDeck.positions).map {
                 TarotDraw(cardID: $0.0, isReversed: false, position: $0.1)
             }
-            let input = OracleInput(question: question, profile: OracleProfile(), seed: 41, subject: "事件",
+            let input = OracleInput(question: question, profile: castingSite(), seed: 41, subject: "事件",
                 tarotDraws: hasSavedCards ? draws : nil, participants: [])
             let methods: [OracleMethod] = hasSavedCards ? [.meihua, .tarot] : [.meihua]
             let plan = OraclePlan(intent: "合作", subject: "事件", methods: methods, requiredFields: [], note: "", question: question)

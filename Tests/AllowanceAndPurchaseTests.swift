@@ -210,7 +210,11 @@ final class AllowanceAndPurchaseTests: XCTestCase {
         await idle(store)
         let id = try XCTUnwrap(store.quotaTaskID)
         XCTAssertEqual(store.pendingPlan?.quotaTaskID, id)
-        XCTAssertTrue(store.confirmIntake(profile: OracleProfile(), numbers: [], save: false))
+        var casting = OracleProfile()
+        casting.currentPlace = "上海市黄浦区"
+        casting.currentLatitude = 31.2304; casting.currentLongitude = 121.4737
+        casting.currentTimeZoneID = "Asia/Shanghai"
+        XCTAssertTrue(store.confirmIntake(profile: OracleProfile(), numbers: [], save: false, castingProfile: casting))
         await idle(store)
         XCTAssertEqual(store.runs.last?.plan.quotaTaskID, id)
         XCTAssertNotNil(store.runs.last?.completedAt)

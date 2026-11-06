@@ -71,6 +71,8 @@ final class LiveIntegrationTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let vault = LocalVault(directory: directory)
         var profile = OracleProfile(); profile.currentTimeZoneID = "Asia/Shanghai"
+        profile.currentPlace = "上海市黄浦区"
+        profile.currentLatitude = 31.2304; profile.currentLongitude = 121.4737
         let originalQuestion = "这是虚构的功能测试。今晚打算进入线上语聊房与朋友短聊，请用梅花易数看今晚的运势和参与时的注意事项。"
         let plan = OraclePlan(intent: "今晚的安排", subject: "事件", methods: [.meihua],
             requiredFields: [], note: "", question: originalQuestion)

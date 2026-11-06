@@ -484,7 +484,11 @@ extension AIServiceTests {
 
     func testSynthesisDoesNotClaimCompletedTarotWhenOnlyMeihuaReturnedAUsableResult() async throws {
         let question = "今晚和朋友谈合作，应该先确认分工还是预算？"
-        let input = OracleInput(question: question, profile: OracleProfile(), seed: 73, subject: "事件", participants: [])
+        var casting = OracleProfile()
+        casting.currentPlace = "上海市黄浦区"
+        casting.currentLatitude = 31.2304; casting.currentLongitude = 121.4737
+        casting.currentTimeZoneID = "Asia/Shanghai"
+        let input = OracleInput(question: question, profile: casting, seed: 73, subject: "事件", participants: [])
         let plan = OraclePlan(intent: "合作安排", subject: "事件", methods: [.meihua, .tarot], requiredFields: [], note: "", question: question)
         let result = try await MeihuaPlugin().calculate(input)
         XCTAssertTrue([.complete, .partial].contains(result.status))

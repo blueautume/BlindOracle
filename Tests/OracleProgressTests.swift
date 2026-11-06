@@ -239,7 +239,7 @@ final class OracleProgressTests: XCTestCase {
     @MainActor func testRelaunchCancelsBothIntakeAndRunProgressDuringLocalCalculation() async throws {
         let vault = try temporaryVault()
         let plan = OraclePlan(intent: "计算恢复", subject: "事件", methods: [.xiaoliuren], requiredFields: [], note: "", question: "出行如何安排？")
-        var run = OracleRun(input: OracleInput(question: plan.question, profile: OracleProfile(), seed: 73), plan: plan)
+        var run = OracleRun(input: OracleInput(question: plan.question, profile: castingSite(), seed: 73), plan: plan)
         let step = OracleActivity(text: "正在推演小六壬", date: instant(1), status: .running, method: .xiaoliuren)
         run.activities = [step]
         let intake = ChatMessage(role: .assistant, content: "问事笺已收好。", kind: .intake, runID: run.id, activities: [step])
@@ -647,7 +647,7 @@ final class OracleProgressTests: XCTestCase {
         XCTAssertEqual(pending.participantIDs, [li.id])
         XCTAssertNil(pending.baseRunID)
         XCTAssertEqual(store.intakeParticipants.map(\.id), [li.id])
-        XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], save: false, castingProfile: castingSite()))
         try await waitUntil { !store.isBusy }
 
         let newRun = try XCTUnwrap(store.runs.last)
@@ -816,8 +816,16 @@ final class OracleProgressTests: XCTestCase {
         let plan = OraclePlan(intent: question, subject: "事件", methods: [.xiaoliuren],
                               requiredFields: [], note: "", question: question)
         let result = OracleResult(method: .xiaoliuren, headline: evidence, rows: [])
-        return OracleRun(input: OracleInput(question: question, profile: OracleProfile(), seed: seed),
+        return OracleRun(input: OracleInput(question: question, profile: castingSite(), seed: seed),
                          plan: plan, results: [result])
+    }
+
+    private func castingSite() -> OracleProfile {
+        var site = OracleProfile()
+        site.currentPlace = "上海市黄浦区"
+        site.currentLatitude = 31.2304; site.currentLongitude = 121.4737
+        site.currentTimeZoneID = "Asia/Shanghai"
+        return site
     }
 
     private func mistakenIntake(continuing message: ChatMessage, expanded: String) throws -> String {

@@ -373,6 +373,8 @@ final class ReadingContinuationTests: XCTestCase {
         run.input.profile.birthTimeZoneID = "Asia/Shanghai"
         run.input.profile.currentTimeZoneID = "Asia/Shanghai"
         run.input.profile.birthLatitude = 31.23; run.input.profile.birthLongitude = 121.47
+        run.input.profile.currentPlace = "上海市黄浦区"
+        run.input.profile.currentLatitude = 31.23; run.input.profile.currentLongitude = 121.47
         run.input.tarotDraws = zip(["major-00", "cups-01", "swords-14"], TarotDeck.positions).map {
             TarotDraw(cardID: $0.0, isReversed: false, position: $0.1)
         }
@@ -405,8 +407,6 @@ final class ReadingContinuationTests: XCTestCase {
         assertInvalidates([]) {
             $0.profile.name = "新的显示姓名"; $0.profile.displayName = "备注"
             $0.profile.birthPlace = "更新地点文字"; $0.profile.currentPlace = "更新当前地点文字"
-            $0.profile.currentDistrictCode = "310115"
-            $0.profile.currentLatitude = 31.22; $0.profile.currentLongitude = 121.53
             $0.profile.updatedAt = Date()
         }
         let original = completeReading()
@@ -423,10 +423,10 @@ final class ReadingContinuationTests: XCTestCase {
         assertInvalidates([.bazi, .chenggu, .ziwei, .astrology]) { $0.profile.birthTimeKnown = false }
         assertInvalidates([.bazi, .chenggu, .ziwei, .astrology]) { $0.profile.unknownFields.insert(.birthTimeZone) }
         assertInvalidates([.bazi, .ziwei]) { $0.profile.sex = "女" }
-        assertInvalidates([.bazi, .astrology]) { $0.profile.birthLongitude = 120 }
-        assertInvalidates([.bazi, .astrology]) { $0.profile.unknownFields.insert(.birthCoordinates) }
-        assertInvalidates([.bazi]) { $0.profile.unknownFields.insert(.birthPlace) }
-        assertInvalidates([.bazi]) { $0.profile.declaredUnknownFields = [.birthPlace] }
+        assertInvalidates([.bazi, .chenggu, .ziwei, .astrology]) { $0.profile.birthLongitude = 120 }
+        assertInvalidates([.bazi, .chenggu, .ziwei, .astrology]) { $0.profile.unknownFields.insert(.birthCoordinates) }
+        assertInvalidates([.bazi, .chenggu, .ziwei]) { $0.profile.unknownFields.insert(.birthPlace) }
+        assertInvalidates([.bazi, .chenggu, .ziwei]) { $0.profile.declaredUnknownFields = [.birthPlace] }
     }
 
     func testUnknownBirthTimeUsesTheCalendarDayButStillDependsOnBirthCoordinates() {
@@ -437,15 +437,20 @@ final class ReadingContinuationTests: XCTestCase {
             $0.profile.birthDate = $0.profile.birthDate?.addingTimeInterval(3600)
             $0.profile.sex = "女"
         }
-        assertInvalidates([.bazi], from: original) { $0.profile.birthLatitude = 40 }
+        assertInvalidates([.bazi, .chenggu], from: original) { $0.profile.birthLatitude = 40 }
         assertInvalidates([.bazi, .chenggu, .astrology], from: original) {
             $0.profile.birthDate = $0.profile.birthDate?.addingTimeInterval(86400)
         }
     }
 
     func testCastingInputsInvalidateOnlyAffectedMethods() {
-        assertInvalidates([.ziwei, .liuyao, .meihua, .qimen, .xiaoliuren, .astrology]) { $0.castingDate.addTimeInterval(3600) }
-        assertInvalidates([.ziwei, .liuyao, .meihua, .qimen, .xiaoliuren]) { $0.profile.currentTimeZoneID = "Asia/Tokyo" }
+        // Three supplied numbers make this Mei Hua result independent of time.
+        assertInvalidates([.ziwei, .liuyao, .qimen, .xiaoliuren, .astrology]) { $0.castingDate.addTimeInterval(3600) }
+        assertInvalidates([.ziwei, .liuyao, .qimen, .xiaoliuren]) { $0.profile.currentTimeZoneID = "Asia/Tokyo" }
+        assertInvalidates([.qimen, .xiaoliuren]) {
+            $0.profile.currentDistrictCode = "310115"
+            $0.profile.currentLatitude = 31.22; $0.profile.currentLongitude = 121.53
+        }
         assertInvalidates([.meihua]) { $0.numbers = [1, 2, 3] }
         assertInvalidates([.liuyao]) { $0.manualLines = [7, 7, 7, 7, 7, 7] }
         assertInvalidates([.tarot]) { $0.tarotDraws?[0].isReversed = true }
@@ -458,6 +463,20 @@ final class ReadingContinuationTests: XCTestCase {
         var simulated = completeReading(); simulated.input.manualLines = []
         assertInvalidates([.liuyao], from: simulated) { $0.seed = 100 }
         assertInvalidates([.liuyao], from: simulated) { $0.castingStyle = "yarrow" }
+    }
+
+    func testTwoNumberMeihuaStillDependsOnTheSolarCastingPlaceAndTime() {
+        var original = completeReading()
+        original.input.numbers = [8, 8]
+        assertInvalidates([.ziwei, .liuyao, .meihua, .qimen, .xiaoliuren, .astrology], from: original) {
+            $0.castingDate.addTimeInterval(3600)
+        }
+        assertInvalidates([.meihua, .qimen, .xiaoliuren], from: original) {
+            $0.profile.currentLongitude = 120
+        }
+        assertInvalidates([.meihua, .qimen, .xiaoliuren], from: original) {
+            $0.profile.declaredUnknownFields = [.currentLocation]
+        }
     }
 
     func testReuseIsPerParticipantAndCannotTransferChartsToANewUUID() {

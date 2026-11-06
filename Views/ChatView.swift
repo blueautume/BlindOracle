@@ -173,10 +173,11 @@ struct ChatView: View {
             })) {
                 if store.showIntake, let plan = store.pendingPlan {
                     let sessionID = store.intakeSessionID
-                    GroupIntakeView(plan: plan, profiles: store.intakeParticipants, numbers: store.intakeNumbers, onDraftChange: { profiles, numbers in
-                        store.saveIntakeDraft(profiles: profiles, numbers: numbers, sessionID: sessionID)
-                    }, onConfirm: { profiles, numbers, save in
-                        store.confirmGroupIntake(profiles: profiles, numbers: numbers, save: save, sessionID: sessionID)
+                    GroupIntakeView(plan: plan, profiles: store.intakeParticipants, numbers: store.intakeNumbers,
+                                    castingProfile: store.intakeCastingProfile, onDraftChange: { profiles, numbers, castingProfile in
+                        store.saveIntakeDraft(profiles: profiles, numbers: numbers, castingProfile: castingProfile, sessionID: sessionID)
+                    }, onConfirm: { profiles, numbers, castingProfile, save in
+                        store.confirmGroupIntake(profiles: profiles, numbers: numbers, save: save, castingProfile: castingProfile, sessionID: sessionID)
                     }).id(sessionID)
                 } else if let session = store.pendingInteraction {
                     OracleInteractionView(session: session, onProgress: { response in

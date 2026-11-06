@@ -1,6 +1,19 @@
 import Foundation
 
 enum ReadingContextBuilder {
+    private struct CastingPlaceSnapshot: Encodable {
+        let place: String
+        let timeZone: String
+        let latitude: Double?
+        let longitude: Double?
+        let confirmed: Bool
+        init(_ profile: OracleProfile) {
+            place = profile.currentPlace; timeZone = profile.currentTimeZoneID
+            let point = TrueSolarClock.castingCoordinates(profile: profile)
+            latitude = point?.latitude; longitude = point?.longitude
+            confirmed = point != nil && TimeZone(identifier: timeZone) != nil
+        }
+    }
     static func canSuggestTarotClarification(for run: OracleRun) -> Bool {
         TarotDeck.canAppendClarification(to: run.input) && run.results.contains { result in
             result.method == .tarot && result.status == .complete
@@ -37,6 +50,7 @@ enum ReadingContextBuilder {
         \(label("参与人员（本次已确认快照） json：", "Confirmed participants JSON: "))\(try json(run.input.readingParticipants))
         \(label("参与人员称呼（以ID配对） json：", "Participant labels by ID JSON: "))\(try json(run.input.readingParticipants.map { ["id": $0.id.uuidString, "participantLabel": $0.participantLabel] }))
         \(label("已保存的起问时刻 json：", "Saved casting time JSON: "))\(try json(run.input.castingDate))
+        \(label("本次独立起卦地点（与参与人出生地分开） json：", "Independent casting place for this question (separate from birthplaces) JSON: "))\(try json(CastingPlaceSnapshot(run.input.profile)))
         \(label("原始六爻爻值（由下至上） json：", "Original six-line values, bottom to top, JSON: "))\(try json(run.input.manualLines))
         \(label("原始塔罗牌位及正逆位 json：", "Original Tarot positions and orientations JSON: "))\(try json(run.input.tarotDraws ?? []))
         \(label("已确认塔罗补牌（按轮次排列，含澄清焦点、关联原牌位、实际牌面及正逆位） json：", "Confirmed Tarot clarifiers in round order, with focus, position, card and orientation, JSON: "))\(try json(tarotRounds))

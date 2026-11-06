@@ -1,15 +1,15 @@
 # 小六壬 · `xiaoliuren`
 
-版本：1.0.0。执行位置：设备本地。入口：`OraclePlugin.calculate(OracleInput) async throws -> OracleResult`。
+版本：2.0.0。执行位置：设备本地。入口：`OraclePlugin.calculate(OracleInput) async throws -> OracleResult`。
 
-输入：当前起课时间与时区。
+输入：真实起课时刻、确认的当前所在地坐标及当前时区。通过`TrueSolarClock.casting(input:)`计算起课地点的真太阳钟面，不使用出生地点或默认经度。
 
-输出：月宫、日宫、时宫及六宫通行象征释义。
+纪日规则：太阳钟面00:00换日后映射农历；23:00仅进入子时，不额外推进农历日。取映射后的农历月、日和太阳时辰计算月宫、日宫、时宫；闰月沿用本月。此为本项目明确采用的规则，不等同于所有小六壬流派。
 
-能力边界：农历月起宫，日和时逐步减1取余；闰月沿用本月；日界采用本地农历零点。不混用其他起课法，不给事件概率。
+输出：民用时间、太阳钟面、经度/时制校正、均时差、总校正、纪日规则，以及月日时三宫、完整计算过程和六宫象征释义。
 
-依赖与来源：BlindOracle独立Swift实现；历法MIT。
+能力边界：只实现时间起课，不混用数字、道传等其他取法；不将宫名当作现实事实或概率。缺失、撤回、无效坐标或时间返回unavailable；代表点靠近时辰/日界时应核对实际地点。没有位置时不静默回落到东经120度。
 
-所有方法统一保留 `rows` 原始表、`evidence` 命中规则、`limitations`、`status`、版本与来源。只有已实现的规则可以生成 evidence，不能将未计算内容交给模型补造。`polarity` 是传统符号方向，不是现实概率。对具体占问的适用性由规划器判断；同一输入和seed须得到同样结果。无HTTP、在线字典、云历法或模型调用。
+依赖：LunarSwift MIT、共享TrueSolarClock及本地六宫公式。无HTTP或模型调用。新结果及unavailable结果标2.0.0；历史1.0.0结果保留原样，不重算、不用于新盘复用。
 
-测试覆盖与限制详见 `Tests/NativePluginTests.swift` 和 `Documentation/Plugins/native-implementation.md`。
+验收用例：`Tests/NativeSolarTimeTests.swift`覆盖真太阳跨午夜/农历年和子时不提前换日；既有新年golden fixture改用民用00:30以确保校正后仍处农历初一，另以民用00:00专测跨回前日。由主任务统一执行，本文不提前声称通过。

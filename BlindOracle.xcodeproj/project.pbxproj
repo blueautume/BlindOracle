@@ -32,6 +32,8 @@ F37A3DE18E78597A11D647FB = { isa = PBXFileReference; lastKnownFileType = "source
 6A56EDB92AE3740F0502585C = { isa = PBXBuildFile; fileRef = F37A3DE18E78597A11D647FB; };
 21E3FD6AD0E55EF5DB9063E7 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/TrueSolarBazi.swift"; sourceTree = "<group>"; };
 59344E191E6A4FF6113BE3B5 = { isa = PBXBuildFile; fileRef = 21E3FD6AD0E55EF5DB9063E7; };
+4310D2D8A7839DE9A5411494 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/TrueSolarClock.swift"; sourceTree = "<group>"; };
+A1E17D60EC4FCD69B209935F = { isa = PBXBuildFile; fileRef = 4310D2D8A7839DE9A5411494; };
 AC2F8C120655A4D337468903 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Plugins/Native/BaziPlugin.swift"; sourceTree = "<group>"; };
 D5A3BA585CFBB2EC28E38A2C = { isa = PBXBuildFile; fileRef = AC2F8C120655A4D337468903; };
 472406C7D989E466B9DA8BB8 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Plugins/Native/ChengguPlugin.swift"; sourceTree = "<group>"; };
@@ -225,6 +227,7 @@ FBDC4F23F93125BBEEAE800C = { isa = PBXGroup; children = (
     5C95D4D1AADBB38078B06D8F,
     F37A3DE18E78597A11D647FB,
     21E3FD6AD0E55EF5DB9063E7,
+    4310D2D8A7839DE9A5411494,
     AC2F8C120655A4D337468903,
     472406C7D989E466B9DA8BB8,
     A1B45E6CA9A1EB0FBBFDEE04,
@@ -329,6 +332,7 @@ FBDC4F23F93125BBEEAE800C = { isa = PBXGroup; children = (
     050777EA79DCDA1E876D5F45,
     6A56EDB92AE3740F0502585C,
     59344E191E6A4FF6113BE3B5,
+    A1E17D60EC4FCD69B209935F,
     D5A3BA585CFBB2EC28E38A2C,
     4C5581F0F020AF83D7D02662,
     9293069317A423FF1B8B8176,
@@ -421,14 +425,14 @@ F01580CCB5F725E4E879D491 = { isa = PBXFrameworksBuildPhase; buildActionMask = 21
 1FA51788B7965A8459664B67 = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = "5.0"; IPHONEOS_DEPLOYMENT_TARGET = "17.0"; SDKROOT = "iphoneos"; CODE_SIGN_STYLE = "Automatic"; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_STRICT_CONCURRENCY = "minimal"; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; GCC_C_LANGUAGE_STANDARD = "gnu11"; ENABLE_USER_SCRIPT_SANDBOXING = NO; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; HEADER_SEARCH_PATHS = (
     "$(inherited)",
     "$(SRCROOT)/Vendor/Astronomy",
-); PRODUCT_BUNDLE_IDENTIFIER = "com.lihao.BlindOracle"; BLINDORACLE_SANDBOX = "NO"; BLINDORACLE_APP_DISPLAY_NAME = "瞎子"; BLINDORACLE_APP_DISPLAY_NAME_EN = "BlindOracle"; ORACLE_SERVICE_ENVIRONMENT = "Production"; ORACLE_SERVICE_ENVIRONMENT_RESOLUTION = "AppleVerified"; DEVELOPMENT_TEAM = "A82X46N3WS"; INFOPLIST_FILE = "App/Info.plist"; CODE_SIGN_ENTITLEMENTS = "App/BlindOracle.entitlements"; CURRENT_PROJECT_VERSION = 48; MARKETING_VERSION = "3.0.22"; ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon"; SWIFT_OBJC_BRIDGING_HEADER = "App/BlindOracle-Bridging-Header.h"; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = "dwarf"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; GCC_PREPROCESSOR_DEFINITIONS = (
+); PRODUCT_BUNDLE_IDENTIFIER = "com.lihao.BlindOracle"; BLINDORACLE_SANDBOX = "NO"; BLINDORACLE_APP_DISPLAY_NAME = "瞎子"; BLINDORACLE_APP_DISPLAY_NAME_EN = "BlindOracle"; ORACLE_SERVICE_ENVIRONMENT = "Production"; ORACLE_SERVICE_ENVIRONMENT_RESOLUTION = "AppleVerified"; DEVELOPMENT_TEAM = "A82X46N3WS"; INFOPLIST_FILE = "App/Info.plist"; CODE_SIGN_ENTITLEMENTS = "App/BlindOracle.entitlements"; CURRENT_PROJECT_VERSION = 49; MARKETING_VERSION = "3.0.23"; ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon"; SWIFT_OBJC_BRIDGING_HEADER = "App/BlindOracle-Bridging-Header.h"; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = "dwarf"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; GCC_PREPROCESSOR_DEFINITIONS = (
     "DEBUG=1",
     "$(inherited)",
 ); ENABLE_TESTABILITY = YES; }; name = "Debug"; };
 8AD3BB4A5DF33E553662F892 = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = "5.0"; IPHONEOS_DEPLOYMENT_TARGET = "17.0"; SDKROOT = "iphoneos"; CODE_SIGN_STYLE = "Automatic"; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_STRICT_CONCURRENCY = "minimal"; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; GCC_C_LANGUAGE_STANDARD = "gnu11"; ENABLE_USER_SCRIPT_SANDBOXING = NO; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; HEADER_SEARCH_PATHS = (
     "$(inherited)",
     "$(SRCROOT)/Vendor/Astronomy",
-); PRODUCT_BUNDLE_IDENTIFIER = "com.lihao.BlindOracle"; BLINDORACLE_SANDBOX = "NO"; BLINDORACLE_APP_DISPLAY_NAME = "瞎子"; BLINDORACLE_APP_DISPLAY_NAME_EN = "BlindOracle"; ORACLE_SERVICE_ENVIRONMENT = "Production"; ORACLE_SERVICE_ENVIRONMENT_RESOLUTION = "AppleVerified"; DEVELOPMENT_TEAM = "A82X46N3WS"; INFOPLIST_FILE = "App/Info.plist"; CODE_SIGN_ENTITLEMENTS = "App/BlindOracle.entitlements"; CURRENT_PROJECT_VERSION = 48; MARKETING_VERSION = "3.0.22"; ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon"; SWIFT_OBJC_BRIDGING_HEADER = "App/BlindOracle-Bridging-Header.h"; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)"; }; name = "Release"; };
+); PRODUCT_BUNDLE_IDENTIFIER = "com.lihao.BlindOracle"; BLINDORACLE_SANDBOX = "NO"; BLINDORACLE_APP_DISPLAY_NAME = "瞎子"; BLINDORACLE_APP_DISPLAY_NAME_EN = "BlindOracle"; ORACLE_SERVICE_ENVIRONMENT = "Production"; ORACLE_SERVICE_ENVIRONMENT_RESOLUTION = "AppleVerified"; DEVELOPMENT_TEAM = "A82X46N3WS"; INFOPLIST_FILE = "App/Info.plist"; CODE_SIGN_ENTITLEMENTS = "App/BlindOracle.entitlements"; CURRENT_PROJECT_VERSION = 49; MARKETING_VERSION = "3.0.23"; ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon"; SWIFT_OBJC_BRIDGING_HEADER = "App/BlindOracle-Bridging-Header.h"; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)"; }; name = "Release"; };
 60EA43DB068BD71C9709BED5 = { isa = XCConfigurationList; buildConfigurations = (
     1FA51788B7965A8459664B67,
     8AD3BB4A5DF33E553662F892,
@@ -469,6 +473,8 @@ B3467F6498CE5DB51A8061C4 = { isa = PBXFileReference; lastKnownFileType = "source
 4BAC15E3752BB819CA79CA51 = { isa = PBXBuildFile; fileRef = 06C18B57A601909EF3654E3C; };
 1CFFDCE87BF4D13203DA3447 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/NativePluginTests.swift"; sourceTree = "<group>"; };
 8A2E3806BC4E3818DC60623B = { isa = PBXBuildFile; fileRef = 1CFFDCE87BF4D13203DA3447; };
+4C11FC19515C3BFDA84443D1 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/NativeSolarTimeTests.swift"; sourceTree = "<group>"; };
+A2EF0AD235ABFB73C569B7FD = { isa = PBXBuildFile; fileRef = 4C11FC19515C3BFDA84443D1; };
 0E670E294D71DD409935A98E = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/OracleInteractionTests.swift"; sourceTree = "<group>"; };
 6FCF72462B41723578A32165 = { isa = PBXBuildFile; fileRef = 0E670E294D71DD409935A98E; };
 0816A2498A7B5D421F4FE92A = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/OracleProgressTests.swift"; sourceTree = "<group>"; };
@@ -495,12 +501,18 @@ ECDCE4EBBF9652643ACF5273 = { isa = PBXFileReference; lastKnownFileType = "source
 283C3AD53C32C20D1A2608EF = { isa = PBXBuildFile; fileRef = 310DFB6DCFE55C4CB42AF2CD; };
 BE55F98D9D3E05A5FF30160D = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/SkyPluginTests.swift"; sourceTree = "<group>"; };
 C336DE80D20BB10B10D16E05 = { isa = PBXBuildFile; fileRef = BE55F98D9D3E05A5FF30160D; };
+5498D7F0E5F2E5E2FB8A6799 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/SolarCastingIntakeTests.swift"; sourceTree = "<group>"; };
+62FEC7733241E74A868879E7 = { isa = PBXBuildFile; fileRef = 5498D7F0E5F2E5E2FB8A6799; };
+CCE4C06BC3AF8C82E110A377 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/SolarReadinessContinuationTests.swift"; sourceTree = "<group>"; };
+A8FEB79DEB9646C574065D4D = { isa = PBXBuildFile; fileRef = CCE4C06BC3AF8C82E110A377; };
 35E4D0E2DCF7976EAC5FD95F = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/StoreKitLocalPurchaseTests.swift"; sourceTree = "<group>"; };
 0654D4A332F63734E0A216C2 = { isa = PBXBuildFile; fileRef = 35E4D0E2DCF7976EAC5FD95F; };
 2660E297A06FA807B423590F = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/TarotPluginTests.swift"; sourceTree = "<group>"; };
 9C79F323EE8960ED9D06526C = { isa = PBXBuildFile; fileRef = 2660E297A06FA807B423590F; };
 8039C36685EC6830637ED006 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/TrueSolarBaziTests.swift"; sourceTree = "<group>"; };
 3A1F69ADF00F6010617C39AA = { isa = PBXBuildFile; fileRef = 8039C36685EC6830637ED006; };
+7FC27769FB329088AC2EA40D = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/TrueSolarClockTests.swift"; sourceTree = "<group>"; };
+FA6C5BA13C4982DF530A87EA = { isa = PBXBuildFile; fileRef = 7FC27769FB329088AC2EA40D; };
 6F7C2242AC1FABACA52B0670 = { isa = PBXFileReference; lastKnownFileType = "text"; path = "Tests/Fixtures/QuotaProducts.storekit"; sourceTree = "<group>"; };
 DFD4894D9D213E0155E03331 = { isa = PBXBuildFile; fileRef = 6F7C2242AC1FABACA52B0670; };
 536329F47F8EAF961EDFDB02 = { isa = PBXGroup; children = (
@@ -519,6 +531,7 @@ DFD4894D9D213E0155E03331 = { isa = PBXBuildFile; fileRef = 6F7C2242AC1FABACA52B0
     B3467F6498CE5DB51A8061C4,
     06C18B57A601909EF3654E3C,
     1CFFDCE87BF4D13203DA3447,
+    4C11FC19515C3BFDA84443D1,
     0E670E294D71DD409935A98E,
     0816A2498A7B5D421F4FE92A,
     CAF993DB33533D4B616777C5,
@@ -532,9 +545,12 @@ DFD4894D9D213E0155E03331 = { isa = PBXBuildFile; fileRef = 6F7C2242AC1FABACA52B0
     ECDCE4EBBF9652643ACF5273,
     310DFB6DCFE55C4CB42AF2CD,
     BE55F98D9D3E05A5FF30160D,
+    5498D7F0E5F2E5E2FB8A6799,
+    CCE4C06BC3AF8C82E110A377,
     35E4D0E2DCF7976EAC5FD95F,
     2660E297A06FA807B423590F,
     8039C36685EC6830637ED006,
+    7FC27769FB329088AC2EA40D,
     6F7C2242AC1FABACA52B0670,
 ); name = "Tests"; sourceTree = "<group>"; };
 EC2E9EAA9E1CA4B18AE2370A = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
@@ -553,6 +569,7 @@ EC2E9EAA9E1CA4B18AE2370A = { isa = PBXSourcesBuildPhase; buildActionMask = 21474
     6EEE4D6CFE5D115EDE5F7078,
     4BAC15E3752BB819CA79CA51,
     8A2E3806BC4E3818DC60623B,
+    A2EF0AD235ABFB73C569B7FD,
     6FCF72462B41723578A32165,
     83C3B4027D23DD2115872E42,
     04A45B0CCBAB6E71A5D7654C,
@@ -566,9 +583,12 @@ EC2E9EAA9E1CA4B18AE2370A = { isa = PBXSourcesBuildPhase; buildActionMask = 21474
     35D7067833369C6613CDE5EB,
     283C3AD53C32C20D1A2608EF,
     C336DE80D20BB10B10D16E05,
+    62FEC7733241E74A868879E7,
+    A8FEB79DEB9646C574065D4D,
     0654D4A332F63734E0A216C2,
     9C79F323EE8960ED9D06526C,
     3A1F69ADF00F6010617C39AA,
+    FA6C5BA13C4982DF530A87EA,
 ); runOnlyForDeploymentPostprocessing = 0; };
 FF93C0DD54B18EA1A6227C5A = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (
     DFD4894D9D213E0155E03331,
@@ -622,6 +642,8 @@ B2A6A36FECF092F3FAE05A71 = { isa = PBXBuildFile; fileRef = B19802EFAFD481A88DEA4
 52A1BDB30179C2605296AB11 = { isa = PBXBuildFile; fileRef = 2117640136054B5D1E93DE6A; };
 BF20B46C59FF9D96E2637E58 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/SavedProfileReuseUITests.swift"; sourceTree = "<group>"; };
 51EC3E8B650FB2A8AF7218C0 = { isa = PBXBuildFile; fileRef = BF20B46C59FF9D96E2637E58; };
+F91A3C59684243187AA739DC = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/TrueSolarCastingUITests.swift"; sourceTree = "<group>"; };
+109A6CA1D03620EE1470D0C6 = { isa = PBXBuildFile; fileRef = F91A3C59684243187AA739DC; };
 666C2AE724655A458A689DF0 = { isa = PBXGroup; children = (
     41601D34E66D9C1E39D6E33F,
     4411CD8FBC8DBD739C800E9D,
@@ -636,6 +658,7 @@ BF20B46C59FF9D96E2637E58 = { isa = PBXFileReference; lastKnownFileType = "source
     33D171549E71AE201F2AD73B,
     2117640136054B5D1E93DE6A,
     BF20B46C59FF9D96E2637E58,
+    F91A3C59684243187AA739DC,
 ); name = "UITests"; sourceTree = "<group>"; };
 0AA69D9A4583D0A6B3B9DD67 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
     9BCEFA6CEAE20825F05B6B9E,
@@ -651,6 +674,7 @@ BF20B46C59FF9D96E2637E58 = { isa = PBXFileReference; lastKnownFileType = "source
     5B17B68A7FEE3C86E97083C6,
     52A1BDB30179C2605296AB11,
     51EC3E8B650FB2A8AF7218C0,
+    109A6CA1D03620EE1470D0C6,
 ); runOnlyForDeploymentPostprocessing = 0; };
 9FE15850D9525F77FD6AA721 = { isa = PBXContainerItemProxy; containerPortal = 98F54143AB4E86B28C3AFEE0; proxyType = 1; remoteGlobalIDString = 4F6027D858B72CC70E5CC8E9; remoteInfo = "BlindOracle"; };
 7049CC82325B8E002825BA60 = { isa = PBXTargetDependency; target = 4F6027D858B72CC70E5CC8E9; targetProxy = 9FE15850D9525F77FD6AA721; };

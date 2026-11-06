@@ -6,6 +6,57 @@ enum OraclePhase: String {
     var isBusy: Bool { self == .planning || self == .calculating || self == .synthesizing }
 }
 
+/// A reading's place is independent of any participant's birth/current details.
+/// Copy only the casting fields when projecting it onto legacy OracleInput.
+struct CastingLocationDraft: Equatable, Sendable {
+    var profile: OracleProfile
+
+    init(profile source: OracleProfile) {
+        profile = Self.applying(source, to: OracleProfile(id: source.id))
+    }
+
+    static func applying(_ source: OracleProfile, to target: OracleProfile) -> OracleProfile {
+        var result = target
+        let previousUnknown = target.unknownFields
+        result.currentPlace = source.currentPlace
+        result.currentLatitude = source.currentLatitude
+        result.currentLongitude = source.currentLongitude
+        result.currentTimeZoneID = source.currentTimeZoneID
+        result.currentDistrictCode = source.currentDistrictCode
+        result.unknownFields.remove(.currentLocation)
+        if source.unknownFields.contains(.currentLocation) { result.unknownFields.insert(.currentLocation) }
+        if target.declaredUnknownFields != nil || source.declaredUnknownFields != nil {
+            var declared = target.declaredUnknownFields ?? previousUnknown
+            declared.remove(.currentLocation)
+            if source.declaredUnknownFields?.contains(.currentLocation) == true { declared.insert(.currentLocation) }
+            result.declaredUnknownFields = declared
+        }
+        return result
+    }
+
+    mutating func select(_ district: ChinaDistrict) {
+        profile.currentPlace = district.fullName
+        profile.currentDistrictCode = district.id
+        profile.currentLatitude = district.latitude
+        profile.currentLongitude = district.longitude
+        profile.currentTimeZoneID = district.timeZone
+        profile.unknownFields.remove(.currentLocation)
+        profile.declaredUnknownFields?.remove(.currentLocation)
+    }
+
+    mutating func clear() {
+        profile.currentPlace = ""
+        profile.currentDistrictCode = nil
+        profile.currentLatitude = nil
+        profile.currentLongitude = nil
+        profile.currentTimeZoneID = OracleProfile.defaultChinaTimeZoneID
+        profile.unknownFields.insert(.currentLocation)
+        var declared = profile.declaredUnknownFields ?? []
+        declared.insert(.currentLocation)
+        profile.declaredUnknownFields = declared
+    }
+}
+
 @MainActor final class OracleStore: ObservableObject {
     @Published var profiles: [OracleProfile]
     @Published var selfProfileID: UUID?
@@ -575,11 +626,15 @@ enum OraclePhase: String {
         return initialIntakeParticipants(for: plan).map(ProfileDirectory.assigningDefaultBirthTimeZone(to:))
     }
     var intakeNumbers: [Int] { pendingPlan?.draftNumbers ?? [] }
+    var intakeCastingProfile: OracleProfile? {
+        guard let plan = pendingPlan else { return nil }
+        return castingProfileSnapshot(for: plan)
+    }
 
     func intakePreparationReport(for participants: [OracleProfile]) -> ReadingPreparationReport? {
         guard let plan = pendingPlan else { return nil }
         return ReadingPreparationPolicy.evaluate(plan: plan, participants: participants.map(ProfileDirectory.assigningDefaultBirthTimeZone(to:)),
-                                                 descriptors: registry.descriptors)
+                                                 descriptors: registry.descriptors, castingProfile: castingProfileSnapshot(for: plan), numbers: plan.draftNumbers)
     }
 
     var canConfirmIntake: Bool {
@@ -594,15 +649,37 @@ enum OraclePhase: String {
         intakeError = nil; showIntake = true; showInteraction = false; phase = .awaitingIntake
     }
 
-    func saveIntakeDraft(profiles: [OracleProfile], numbers: [Int], sessionID: UUID) {
-        guard sessionID == intakeSessionID, pendingPlan != nil, !isBusy else { return }
-        pendingPlan?.draftParticipants = profiles
-        pendingPlan?.draftNumbers = numbers
+    func saveIntakeDraft(profiles: [OracleProfile], numbers: [Int], castingProfile: OracleProfile? = nil, sessionID: UUID) {
+        guard sessionID == intakeSessionID, var plan = pendingPlan, !isBusy else { return }
+        initializeCastingProfile(in: &plan)
+        plan.draftParticipants = profiles
+        plan.draftNumbers = numbers
+        if let castingProfile { plan.castingProfile = CastingLocationDraft(profile: castingProfile).profile }
+        pendingPlan = plan
         persist()
+    }
+
+    private func initializeCastingProfile(in plan: inout OraclePlan) {
+        guard plan.castingProfile == nil else { return }
+        plan.castingProfile = castingProfileSnapshot(for: plan)
+    }
+
+    private func castingProfileSnapshot(for plan: OraclePlan) -> OracleProfile {
+        if let casting = plan.castingProfile { return casting }
+        let source = plan.baseRunID.flatMap { id in runs.first(where: { $0.id == id })?.input.profile } ?? profile
+        return CastingLocationDraft(profile: source).profile
     }
 
     private func prepareConversation(_ proposed: OraclePlan, clarification: String? = nil, pendingAnswer: String? = nil, appendMessage: Bool = true) {
         var plan = proposed
+        // Narrowing a mixed proposal must not promote an optional place into
+        // a hard requirement. Meihua's time/two-number location requirement is
+        // evaluated separately from the confirmed numbers by the local policy.
+        let requiresPlace = registry.descriptors.contains {
+            plan.methods.contains($0.method) && $0.requiredFields.contains(.currentLocation)
+        }
+        if !requiresPlace { plan.requiredFields.removeAll { $0 == .currentLocation } }
+        initializeCastingProfile(in: &plan)
         plan.quotaTaskID = quotaTaskID ?? proposed.quotaTaskID ?? UUID()
         quotaTaskID = plan.quotaTaskID
         // Legacy field-by-field preparations reopen as one complete form.
@@ -610,7 +687,8 @@ enum OraclePhase: String {
         plan.requestedProfileID = nil; plan.requestedFields = nil
         plan.reviewedParticipants = nil; plan.pendingAnswer = nil
         let people = initialIntakeParticipants(for: plan)
-        let report = ReadingPreparationPolicy.evaluate(plan: plan, participants: people, descriptors: registry.descriptors)
+        let report = ReadingPreparationPolicy.evaluate(plan: plan, participants: people, descriptors: registry.descriptors,
+                                                       castingProfile: plan.castingProfile, numbers: plan.draftNumbers)
         plan.omittedMethods = report.omissions; plan.preparationNotes = preparationNotes(report)
         if appendMessage, pendingPlan != nil, let old = pendingIntakeMessageID,
            let index = messages.firstIndex(where: { $0.id == old }) {
@@ -678,6 +756,7 @@ enum OraclePhase: String {
         input.question = plan.question; input.subject = plan.subject
         input.participants = participants; input.relationship = plan.relationship
         if let updated = participants.first(where: { $0.id == base.input.profile.id }) { input.profile = updated }
+        input.profile = CastingLocationDraft.applying(plan.castingProfile ?? base.input.profile, to: input.profile)
         input.numbers = numbers
         if numbers == base.input.numbers {
             if base.input.profile.unknownFields.contains(.numbers) { input.profile.unknownFields.insert(.numbers) }
@@ -697,6 +776,9 @@ enum OraclePhase: String {
         }
         var plan = proposed
         plan.baseRunID = base.id; plan.followUpQuestion = question; plan.question = base.input.question
+        // A newly proposed supplement inherits the original question's place.
+        // Only edits on its subsequent confirmation form replace that snapshot.
+        plan.castingProfile = CastingLocationDraft(profile: base.input.profile).profile
         plan.action = "supplement"; plan.subject = base.input.subject
         plan.relationship = proposed.relationship ?? base.input.relationship
         let available = base.results.filter { $0.status == .complete || $0.status == .partial }.map(\.method)
@@ -726,7 +808,8 @@ enum OraclePhase: String {
         plan.draftParticipants = people; plan.draftNumbers = base.input.numbers
         let input = supplementInput(base: base, plan: plan, participants: people, numbers: base.input.numbers)
         let reused = reusableResults(input: input, plan: plan)
-        let report = ReadingPreparationPolicy.evaluate(plan: plan, participants: people, descriptors: registry.descriptors)
+        let report = ReadingPreparationPolicy.evaluate(plan: plan, participants: people, descriptors: registry.descriptors,
+                                                       castingProfile: plan.castingProfile, numbers: base.input.numbers)
         let needsCalculation = report.assessments.contains { assessment in
             !reused.contains { $0.method == assessment.method && (!assessment.method.usesPersonalProfile || $0.participantID == assessment.participantID) }
         }
@@ -837,7 +920,8 @@ enum OraclePhase: String {
 
     private func pendingPreparationContext() -> String? {
         if let plan = pendingPlan {
-            let report = ReadingPreparationPolicy.evaluate(plan: plan, participants: intakeParticipants, descriptors: registry.descriptors)
+            let report = ReadingPreparationPolicy.evaluate(plan: plan, participants: intakeParticipants, descriptors: registry.descriptors,
+                                                           castingProfile: castingProfileSnapshot(for: plan), numbers: plan.draftNumbers)
             return "当前尚未完成的问事：\(plan.question)\n当前方法：\(plan.methods.map(\.progressName).joined(separator: "、"))\n应用实际准备状态：\(report.summary)\n必需和可选字段以上述准备状态为准；未完成确认，不能声称已得到结果。"
         }
         if let session = pendingInteraction, let request = session.currentRequest {
@@ -848,7 +932,7 @@ enum OraclePhase: String {
         return nil
     }
 
-    private func singleOtherParticipantFocus(_ question: String, references: [ConversationPlanningReference], transcript: [ChatMessage]) -> (OracleRun, String)? {
+    func singleOtherParticipantFocus(_ question: String, references: [ConversationPlanningReference], transcript: [ChatMessage]) -> (OracleRun, String)? {
         let focusRequest = question.filter { !$0.isWhitespace && !$0.isPunctuation }
         guard let selfProfileID,
               focusRequest.range(of: #"^(?:那)?(?:只|单独)(?:看|问)(?:他|她)(?:呢|吧)?(?:先)?(?:不看|不问|不要看|别看)我(?:了)?$"#, options: .regularExpression) != nil,
@@ -869,14 +953,16 @@ enum OraclePhase: String {
         guard people.count == 2, people.contains(where: { $0.id == selfProfileID }),
               let person = people.first(where: { $0.id != selfProfileID }) else { return nil }
         var focused = original
-        focused.input.profile = person; focused.input.participants = [person]; focused.input.subject = "他人"
+        focused.input.profile = CastingLocationDraft.applying(original.input.profile, to: person)
+        focused.input.participants = [person]; focused.input.subject = "他人"
+        focused.plan.castingProfile = CastingLocationDraft(profile: original.input.profile).profile
         focused.plan.subject = "他人"; focused.plan.participantIDs = [person.id]; focused.plan.participantNames = [person.participantLabel]
         focused.results = original.results.filter { !$0.method.usesPersonalProfile || $0.participantID == person.id }
         guard !focused.results.isEmpty, calculationInputsAreCurrent(for: focused) else { return nil }
         return (focused, "接着「\(original.input.question)」，本条仅看\(person.participantLabel)，不分析本人。")
     }
 
-    private func calculationInputsAreCurrent(for run: OracleRun) -> Bool {
+    func calculationInputsAreCurrent(for run: OracleRun) -> Bool {
         let latestPeople = run.input.readingParticipants.map { original in
             guard let saved = profiles.first(where: { $0.id == original.id }), saved.updatedAt >= original.updatedAt else { return original }
             return saved
@@ -884,6 +970,9 @@ enum OraclePhase: String {
         var candidate = run.input
         if run.input.participants != nil { candidate.participants = latestPeople }
         if let current = latestPeople.first(where: { $0.id == candidate.profile.id }) { candidate.profile = current }
+        // Refresh personal birth details without replacing the question's
+        // frozen casting point with a person's subsequently edited location.
+        candidate.profile = CastingLocationDraft.applying(run.input.profile, to: candidate.profile)
         let usable = run.results.filter { $0.status == .complete || $0.status == .partial }
         let reused = ReadingContinuationPolicy.reusableResults(from: run, for: candidate, methods: usable.map(\.method))
         let retainedIDs = Set(reused.map(\.id))
@@ -1031,6 +1120,7 @@ enum OraclePhase: String {
                 var pending = session.plan
                 pending.draftParticipants = session.input.readingParticipants
                 pending.draftNumbers = session.input.numbers
+                pending.castingProfile = CastingLocationDraft(profile: session.input.profile).profile
                 pendingPlan = pending; pendingInteraction = nil; showInteraction = false
                 intakeSessionID = UUID(); phase = .awaitingIntake
             } else {
@@ -1343,6 +1433,8 @@ enum OraclePhase: String {
                 plan.subject = previous.subject; plan.relationship = previous.relationship
                 plan.participantIDs = previous.participantIDs; plan.participantNames = previous.participantNames
                 plan.draftParticipants = previous.draftParticipants
+                plan.castingProfile = previous.castingProfile
+                if plan.methods.contains(.meihua) { plan.draftNumbers = previous.draftNumbers }
                 plan.action = "intake"
                 prepareConversation(plan)
                 return
@@ -1358,6 +1450,7 @@ enum OraclePhase: String {
                     plan.draftParticipants = pendingPlan?.draftParticipants
                 }
                 if plan.methods.contains(.meihua) { plan.draftNumbers = previous.draftNumbers }
+                plan.castingProfile = previous.castingProfile
                 plan.subject = previous.subject; plan.relationship = plan.relationship ?? previous.relationship
                 plan.action = "intake"
                 prepareConversation(plan)
@@ -1514,14 +1607,17 @@ enum OraclePhase: String {
         #endif
     }
 
-    @discardableResult func confirmIntake(profile submittedProfile: OracleProfile, numbers: [Int], save: Bool) -> Bool {
-        confirmGroupIntake(profiles: [submittedProfile], numbers: numbers, save: save)
+    @discardableResult func confirmIntake(profile submittedProfile: OracleProfile, numbers: [Int], save: Bool,
+                                        castingProfile: OracleProfile? = nil) -> Bool {
+        confirmGroupIntake(profiles: [submittedProfile], numbers: numbers, save: save, castingProfile: castingProfile)
     }
     @discardableResult func confirmGroupIntake(profiles submittedProfiles: [OracleProfile], numbers submittedNumbers: [Int], save: Bool,
-                                               sessionID: UUID? = nil) -> Bool {
+                                               castingProfile: OracleProfile? = nil, sessionID: UUID? = nil) -> Bool {
         guard var plan = pendingPlan, !isBusy,
               sessionID == nil || sessionID == intakeSessionID else { return false }
         if discardMissingSupplement() { persist(); return false }
+        initializeCastingProfile(in: &plan)
+        if let castingProfile { plan.castingProfile = CastingLocationDraft(profile: castingProfile).profile }
         var seen = Set<UUID>()
         let participants = submittedProfiles.filter { seen.insert($0.id).inserted }
             .map(ProfileDirectory.assigningDefaultBirthTimeZone(to:))
@@ -1529,8 +1625,11 @@ enum OraclePhase: String {
         pendingPlan = plan
         let numbers = submittedNumbers
         var issues: [String] = []
-        if plan.subject == "多人", participants.count < 2 { issues.append(L10n.text("请至少添加两位参与人。每位的资料都可以留空。", "Add at least two participants. You can leave their details blank.")) }
-        let report = ReadingPreparationPolicy.evaluate(plan: plan, participants: participants, descriptors: registry.descriptors)
+        if plan.subject == "多人", plan.methods.contains(where: \.usesPersonalProfile), participants.count < 2 {
+            issues.append(L10n.text("请至少添加两位参与人。每位的资料都可以留空。", "Add at least two participants. You can leave their details blank."))
+        }
+        let report = ReadingPreparationPolicy.evaluate(plan: plan, participants: participants, descriptors: registry.descriptors,
+                                                       castingProfile: plan.castingProfile, numbers: numbers)
         if !report.canProceed {
             for assessment in report.assessments {
                 let owner = assessment.participantName.map { $0 + "：" } ?? ""
@@ -1543,8 +1642,8 @@ enum OraclePhase: String {
             if issues.isEmpty { issues.append(L10n.text("现有资料还不足以按这次要求推演，请补充标明的必要信息。", "Add the required details marked on the form to start this reading.")) }
         }
         let requiresNumbers = OracleInteractionPolicy.requests(for: plan).contains { $0.kind == .numbers }
-        if (requiresNumbers || !numbers.isEmpty), numbers.count != 3 || !numbers.allSatisfy({ (1...999).contains($0) }) {
-            issues.append(L10n.text("请在同一张资料表中选择三个1到999的整数。", "Choose three whole numbers from 1 to 999 on this form."))
+        if (requiresNumbers && numbers.isEmpty) || (!numbers.isEmpty && (![2, 3].contains(numbers.count) || !numbers.allSatisfy({ (1...999).contains($0) }))) {
+            issues.append(L10n.text("请在同一张资料表中填写两个或三个1到999的整数；第三数可留空。", "Enter two or three whole numbers from 1 to 999 on this form; the third is optional."))
         }
         if !issues.isEmpty {
             var seenIssues = Set<String>()
@@ -1572,7 +1671,11 @@ enum OraclePhase: String {
         } else {
             input = OracleInput(question: plan.question, profile: participants.first ?? OracleProfile(), numbers: numbers,
                                 subject: plan.subject, castingStyle: style, participants: participants, relationship: plan.relationship)
-            if !numbers.isEmpty { input.profile.unknownFields.remove(.numbers) }
+            if let casting = plan.castingProfile { input.profile = CastingLocationDraft.applying(casting, to: input.profile) }
+        }
+        if !numbers.isEmpty {
+            input.profile.unknownFields.remove(.numbers)
+            input.profile.declaredUnknownFields?.remove(.numbers)
         }
         launchPreparedReading(input: input, plan: plan)
         return true

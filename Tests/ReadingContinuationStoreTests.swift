@@ -9,8 +9,18 @@ final class ReadingContinuationStoreTests: XCTestCase {
         return LocalVault(directory: directory)
     }
 
+    private func castingSite() -> OracleProfile {
+        var site = OracleProfile()
+        site.currentPlace = "上海市黄浦区"
+        site.currentLatitude = 31.2304; site.currentLongitude = 121.4737
+        site.currentTimeZoneID = "Asia/Shanghai"
+        return site
+    }
+
     private func fixture(_ method: OracleMethod) async throws -> OracleRun {
         var person = OracleProfile(); person.name = "陈平"; person.currentTimeZoneID = "Asia/Shanghai"
+        person.currentPlace = "上海市黄浦区"
+        person.currentLatitude = 31.2304; person.currentLongitude = 121.4737
         let question = "这次出行如何安排？"
         let plan = OraclePlan(intent: "出行安排", subject: "事件", methods: [method], requiredFields: [], note: "", question: question)
         var input = OracleInput(question: question, profile: person, castingDate: Date(timeIntervalSince1970: 1_730_000_000), seed: 73, subject: "事件", participants: [])
@@ -44,6 +54,8 @@ final class ReadingContinuationStoreTests: XCTestCase {
             birthLatitude: 31.2304, birthLongitude: 121.4737)], to: [])
         var person = try XCTUnwrap(merged.profiles.first)
         person.currentTimeZoneID = "Asia/Shanghai"
+        person.currentPlace = "上海市黄浦区"
+        person.currentLatitude = 31.2304; person.currentLongitude = 121.4737
         let question = "陈平接下来工作如何安排？"
         var plan = OraclePlan(intent: "工作安排", subject: "本人", methods: [.bazi, .xiaoliuren],
             requiredFields: [.birthDate, .birthTimeZone], note: "", question: question)
@@ -65,7 +77,10 @@ final class ReadingContinuationStoreTests: XCTestCase {
 
     private func eventFixture(method: OracleMethod = .meihua, person: OracleProfile? = nil) async throws -> OracleRun {
         let question = "今晚的运势如何？"
-        let profile = person ?? OracleProfile()
+        var profile = person ?? OracleProfile()
+        profile.currentPlace = "上海市黄浦区"
+        profile.currentLatitude = 31.2304; profile.currentLongitude = 121.4737
+        profile.currentTimeZoneID = "Asia/Shanghai"
         var plan = OraclePlan(intent: "今晚的安排", subject: person == nil ? "事件" : "本人", methods: [method],
             requiredFields: [], note: "", question: question)
         plan.participantIDs = person.map { [$0.id] } ?? []
@@ -96,6 +111,8 @@ final class ReadingContinuationStoreTests: XCTestCase {
             birthLatitude: 31.2304, birthLongitude: 121.4737)], to: []).profiles.first)
         person.familyName = "陈"; person.givenName = "平"
         person.currentTimeZoneID = "Asia/Shanghai"
+        person.currentPlace = "上海市黄浦区"
+        person.currentLatitude = 31.2304; person.currentLongitude = 121.4737
         return person
     }
 
@@ -230,7 +247,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         XCTAssertEqual(store.pendingPlan?.methods, [.xiaoliuren])
         store.completeInteraction(.init(requestID: request.id, tarotDraws: draws, revealedCount: 3), sessionID: session.id)
         XCTAssertTrue(store.runs.isEmpty)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: castingSite()))
         try await waitUntilIdle(store)
         XCTAssertEqual(store.latestRun?.results.map(\.method), [.xiaoliuren])
 
@@ -355,7 +372,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         store.send("只用小六壬看看我们两人周末坐高铁出行要注意什么？")
         try await waitUntilIdle(store)
         XCTAssertTrue(store.intakeParticipants.isEmpty)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: castingSite()))
         try await waitUntilIdle(store)
         let trip = try XCTUnwrap(store.latestRun)
         XCTAssertEqual(trip.results.map(\.method), [.xiaoliuren])
@@ -364,7 +381,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         try await waitUntilIdle(store)
         XCTAssertEqual(store.pendingPlan?.methods, [.meihua])
         XCTAssertNil(store.pendingPlan?.baseRunID)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: castingSite()))
         try await waitUntilIdle(store)
         let study = try XCTUnwrap(store.latestRun)
         XCTAssertNotEqual(study.id, trip.id)
@@ -388,7 +405,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
             XCTAssertNil(store.pendingPlan?.baseRunID)
             let people = method == .xingming ? store.intakeParticipants : []
             if method == .xingming { XCTAssertEqual(people.map(\.id), [person.id]) }
-            XCTAssertTrue(store.confirmGroupIntake(profiles: people, numbers: [], save: false))
+            XCTAssertTrue(store.confirmGroupIntake(profiles: people, numbers: [], save: false, castingProfile: castingSite()))
             try await waitUntilIdle(store)
             XCTAssertEqual(store.latestRun?.results.map(\.method), [method])
         }
@@ -810,13 +827,13 @@ final class ReadingContinuationStoreTests: XCTestCase {
             let descriptor = try XCTUnwrap(store.registry.descriptors.first { $0.method == method })
             XCTAssertTrue(Set(plan.requiredFields).isSubset(of: Set(descriptor.requiredFields + descriptor.optionalFields)), question)
             if !method.usesPersonalProfile {
-                XCTAssertTrue(plan.requiredFields.isEmpty, "\(question) must not ask for unrelated birth details")
+                XCTAssertEqual(Set(plan.requiredFields), Set(descriptor.requiredFields), "\(question) must ask only for its actual casting requirements")
             }
             XCTAssertEqual(OracleInteractionPolicy.requests(for: plan).map(\.method),
                 method == .tarot || method == .liuyao ? [method] : [], question)
             let participants = method.usesPersonalProfile ? store.intakeParticipants : []
             if method.usesPersonalProfile { XCTAssertEqual(participants.map(\.id), [person.id], question) }
-            XCTAssertTrue(store.confirmGroupIntake(profiles: participants, numbers: [], save: false), question)
+            XCTAssertTrue(store.confirmGroupIntake(profiles: participants, numbers: [], save: false, castingProfile: castingSite()), question)
             try await waitUntilIdle(store)
 
             let draws: [TarotDraw]

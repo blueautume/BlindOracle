@@ -8,11 +8,15 @@ final class NativePluginTests: XCTestCase {
         profile.familyName = "王"
         profile.givenName = "小明"
         profile.sex = "男"
-        profile.birthDate = ISO8601DateFormatter().date(from: "1971-01-27T00:00:00+08:00")!
+        // Keep the historical table fixture on lunar New Year after EOT;
+        // NativeSolarTimeTests separately verifies the civil-midnight crossing.
+        profile.birthDate = ISO8601DateFormatter().date(from: "1971-01-27T00:30:00+08:00")!
         profile.birthTimeZoneID = "Asia/Shanghai"
         profile.birthLatitude = 30
         profile.birthLongitude = 120
         profile.currentTimeZoneID = "Asia/Shanghai"
+        profile.currentLatitude = 30
+        profile.currentLongitude = 120
         return OracleInput(question: "下一阶段如何安排？", profile: profile,
                            castingDate: ISO8601DateFormatter().date(from: casting)!, seed: 42)
     }
@@ -76,7 +80,8 @@ final class NativePluginTests: XCTestCase {
         XCTAssertEqual(value(a, "爻值（初→上）"), value(b, "爻值（初→上）"))
     }
     func testXiaoliurenNewYearMidnight() async throws {
-        let result = try await XiaoliurenPlugin().calculate(input(casting: "2024-02-10T00:00:00+08:00"))
+        // 00:30 civil remains New Year after the February equation of time.
+        let result = try await XiaoliurenPlugin().calculate(input(casting: "2024-02-10T00:30:00+08:00"))
         XCTAssertEqual(value(result, "月宫"), "大安")
         XCTAssertEqual(value(result, "日宫"), "大安")
         XCTAssertEqual(value(result, "时宫"), "大安")

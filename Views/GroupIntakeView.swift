@@ -6,17 +6,20 @@ struct GroupIntakeView: View {
     private struct DraftSnapshot: Equatable {
         let profiles: [OracleProfile]
         let numbers: [Int]
+        let castingProfile: OracleProfile
     }
 
     let plan: OraclePlan
-    let onDraftChange: (([OracleProfile], [Int]) -> Void)?
-    let onConfirm: ([OracleProfile], [Int], Bool) -> Bool
+    let onDraftChange: (([OracleProfile], [Int], OracleProfile) -> Void)?
+    let onConfirm: ([OracleProfile], [Int], OracleProfile, Bool) -> Bool
     @EnvironmentObject private var store: OracleStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @State private var drafts: [UUID: ProfileFormDraft]
     @State private var selectedIDs: [UUID]
     @State private var numberTexts: [String]
+    @State private var casting: CastingLocationDraft
+    @State private var choosingCastingLocation = false
     @State private var keepProfiles = true
     @State private var error: String?
     @State private var submitted = false
@@ -25,6 +28,14 @@ struct GroupIntakeView: View {
     init(plan: OraclePlan, profiles: [OracleProfile], numbers: [Int] = [],
          onDraftChange: (([OracleProfile], [Int]) -> Void)? = nil,
          onConfirm: @escaping ([OracleProfile], [Int], Bool) -> Bool) {
+        self.init(plan: plan, profiles: profiles, numbers: numbers, castingProfile: plan.castingProfile,
+                  onDraftChange: onDraftChange.map { callback in { people, values, _ in callback(people, values) } },
+                  onConfirm: { people, values, _, save in onConfirm(people, values, save) })
+    }
+
+    init(plan: OraclePlan, profiles: [OracleProfile], numbers: [Int] = [], castingProfile: OracleProfile?,
+         onDraftChange: (([OracleProfile], [Int], OracleProfile) -> Void)? = nil,
+         onConfirm: @escaping ([OracleProfile], [Int], OracleProfile, Bool) -> Bool) {
         self.plan = plan; self.onDraftChange = onDraftChange; self.onConfirm = onConfirm
         var values: [UUID: ProfileFormDraft] = [:]
         var ids: [UUID] = []
@@ -34,11 +45,12 @@ struct GroupIntakeView: View {
         _drafts = State(initialValue: values)
         _selectedIDs = State(initialValue: ids)
         _numberTexts = State(initialValue: (0..<3).map { numbers.indices.contains($0) && numbers[$0] != 0 ? String(numbers[$0]) : "" })
+        _casting = State(initialValue: CastingLocationDraft(profile: castingProfile ?? plan.castingProfile ?? OracleProfile()))
     }
 
     private var minimumCount: Int {
-        if plan.subject == "多人" { return 2 }
-        return plan.methods.contains(where: \.usesPersonalProfile) ? 1 : 0
+        guard plan.methods.contains(where: \.usesPersonalProfile) else { return 0 }
+        return plan.subject == "多人" ? 2 : 1
     }
     private var selectedProfiles: [OracleProfile] {
         selectedIDs.compactMap { id in
@@ -48,17 +60,23 @@ struct GroupIntakeView: View {
     }
     private var report: ReadingPreparationReport {
         let participants = selectedProfiles.map(ProfileDirectory.assigningDefaultBirthTimeZone(to:))
-        return ReadingPreparationPolicy.evaluate(plan: plan, participants: participants, descriptors: store.registry.descriptors)
+        return ReadingPreparationPolicy.evaluate(plan: plan, participants: participants, descriptors: store.registry.descriptors,
+                                                 castingProfile: casting.profile, numbers: draftNumbers)
     }
     private var requestsNumbers: Bool {
         plan.methods.contains(.meihua) && (plan.requiredFields.contains(.numbers) || (plan.interactions ?? []).contains { $0.kind == .numbers })
     }
     private var draftNumbers: [Int] {
-        guard numberTexts.contains(where: { !$0.isEmpty }) else { return [] }
-        return numberTexts.map { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0 }
+        let trimmed = numberTexts.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        guard let last = trimmed.lastIndex(where: { !$0.isEmpty }) else { return [] }
+        return trimmed[...last].map { Int($0) ?? 0 }
+    }
+    private var needsCastingLocation: Bool {
+        let methods = Set(plan.methods + (plan.mandatoryMethods ?? []) + report.assessments.map(\.method))
+        return methods.contains { ReadingPreparationPolicy.requiresCastingLocation(method: $0, numbers: draftNumbers) }
     }
     private var draftSnapshot: DraftSnapshot {
-        DraftSnapshot(profiles: selectedProfiles, numbers: draftNumbers)
+        DraftSnapshot(profiles: selectedProfiles, numbers: draftNumbers, castingProfile: casting.profile)
     }
 
     var body: some View {
@@ -68,6 +86,7 @@ struct GroupIntakeView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
                         questionCard
+                        if needsCastingLocation { castingLocationCard }
                         if !store.profiles.isEmpty { savedPeople }
                         selectedPeople
                         Button(action: addPerson) {
@@ -77,7 +96,7 @@ struct GroupIntakeView: View {
                                 .background(.white.opacity(0.45), in: RoundedRectangle(cornerRadius: 13))
                                 .overlay(RoundedRectangle(cornerRadius: 13).stroke(InkTheme.line, lineWidth: 0.7))
                         }.buttonStyle(.plain).accessibilityIdentifier("addParticipant")
-                        if requestsNumbers { numbersCard }
+                        if plan.methods.contains(.meihua) { numbersCard }
                         preparationCard
                         if !selectedIDs.isEmpty {
                             Toggle(L10n.text("把这些人员资料留在本机", "Save these profiles on this device"), isOn: $keepProfiles)
@@ -131,7 +150,15 @@ struct GroupIntakeView: View {
                 saveUnsubmittedDraft()
             }
             .onDisappear(perform: saveUnsubmittedDraft)
-        }.presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $choosingCastingLocation) {
+            ChinaDistrictPicker(title: L10n.text("选择起卦地点", "Choose the casting location")) { district in
+                casting.select(district)
+                error = nil
+                saveUnsubmittedDraft()
+            }
+        }
+        .presentationDragIndicator(.visible)
     }
 
     private func saveUnsubmittedDraft() {
@@ -139,7 +166,7 @@ struct GroupIntakeView: View {
         let snapshot = draftSnapshot
         guard savedDraft != snapshot else { return }
         savedDraft = snapshot
-        onDraftChange(snapshot.profiles, snapshot.numbers)
+        onDraftChange(snapshot.profiles, snapshot.numbers, snapshot.castingProfile)
     }
 
     private var questionCard: some View {
@@ -156,6 +183,44 @@ struct GroupIntakeView: View {
                     .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
             }
         }
+    }
+
+    private var castingLocationCard: some View {
+        let place = ChinaDistrictCatalog.shared.displayName(for: casting.profile.currentDistrictCode, canonical: casting.profile.currentPlace)
+        let coordinates = TrueSolarClock.castingCoordinates(profile: casting.profile)
+        return PaperCard {
+            VStack(alignment: .leading, spacing: 13) {
+                SectionEyebrow(text: L10n.text("起卦地点 · 本次问事共用", "Casting location · shared for this reading"))
+                Text(L10n.text("与每位人员的出生地和所在地分开，不需要新增人员或出生资料。按此地点和起卦时刻自动换算真太阳时。", "This is separate from each person’s birthplace and location. No additional person or birth details are needed. Apparent solar time is calculated from this place and the casting instant."))
+                    .font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.secondary).lineSpacing(4)
+                    .accessibilityIdentifier("castingLocationExplanation")
+                Button { choosingCastingLocation = true } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "mappin.and.ellipse").foregroundStyle(InkTheme.sage)
+                        Text(place.isEmpty ? L10n.text("选择起卦地点", "Choose the casting location") : place)
+                            .foregroundStyle(InkTheme.ink)
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                    }.font(.system(size: 15, design: .serif)).contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityIdentifier("castingLocationButton")
+                if let coordinates, TimeZone(identifier: casting.profile.currentTimeZoneID) != nil {
+                    Text(L10n.text("时区：\(casting.profile.currentTimeZoneID) · 经度 \(String(format: "%.4f", coordinates.longitude))°", "Time zone: \(casting.profile.currentTimeZoneID) · Longitude \(String(format: "%.4f", coordinates.longitude))°"))
+                        .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                        .accessibilityIdentifier("castingLocationSummary")
+                    Text(TrueSolarClock.coordinateLimitation).font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                } else {
+                    Text(L10n.text("请选取有有效坐标和时区的地点；缺少或撤回地点时不能按时间起卦。", "Choose a place with valid coordinates and time zone. Time-based casting cannot continue without that location."))
+                        .font(.system(size: 12)).foregroundStyle(InkTheme.cinnabar)
+                        .accessibilityIdentifier("castingLocationRequired")
+                }
+                Button(L10n.text("清空起卦地点", "Clear casting location")) {
+                    casting.clear()
+                    error = nil
+                    saveUnsubmittedDraft()
+                }.font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
+                    .accessibilityIdentifier("clearCastingLocation")
+            }
+        }.accessibilityElement(children: .contain).accessibilityIdentifier("castingLocationCard")
     }
 
     private var savedPeople: some View {
@@ -214,11 +279,13 @@ struct GroupIntakeView: View {
         PaperCard {
             VStack(alignment: .leading, spacing: 13) {
                 SectionEyebrow(text: L10n.text("随心留数", "Choose your numbers"))
-                Text(L10n.text("凭心意填写三个1到999的整数。", "Enter any three whole numbers from 1 to 999."))
+                Text(requestsNumbers
+                     ? L10n.text("填写两个或三个1到999的整数。两数结合起卦时辰，三数以第三数定动爻。", "Enter two or three whole numbers from 1 to 999. Two numbers use the casting hour; three use the third number for the moving line.")
+                     : L10n.text("留空按时间起卦；也可填两个或三个1到999的整数。两数需要起卦地点，三数无需地点。", "Leave these blank for time-based casting, or enter two or three whole numbers from 1 to 999. Two numbers need a casting location; three do not."))
                     .font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.secondary)
                 HStack(spacing: 16) {
                     ForEach(0..<3, id: \.self) { index in
-                        TextField(L10n.text("第\(index + 1)个数", "Number \(index + 1)"), text: $numberTexts[index]).keyboardType(.numberPad)
+                        TextField(index == 2 ? L10n.text("第三数（可选）", "Third (optional)") : L10n.text("第\(index + 1)个数", "Number \(index + 1)"), text: $numberTexts[index]).keyboardType(.numberPad)
                             .textFieldStyle(.roundedBorder).accessibilityIdentifier("intakeNumber-\(index)")
                     }
                 }
@@ -305,10 +372,11 @@ struct GroupIntakeView: View {
             catch { errors.append(title(draft.profile) + L10n.text("：", ": ") + error.localizedDescription) }
         }
         let numbers = draftNumbers
-        if requestsNumbers && (numbers.count != 3 || !numbers.allSatisfy { (1...999).contains($0) }) {
-            errors.append(L10n.text("请填写三个1到999的整数。", "Enter three whole numbers from 1 to 999."))
+        if (requestsNumbers && numbers.isEmpty) || (!numbers.isEmpty && (![2, 3].contains(numbers.count) || !numbers.allSatisfy { (1...999).contains($0) })) {
+            errors.append(L10n.text("请从第一个数开始连续填写两个或三个1到999的整数。", "Enter two or three consecutive whole numbers from 1 to 999, starting with the first field."))
         }
-        let review = ReadingPreparationPolicy.evaluate(plan: plan, participants: people, descriptors: store.registry.descriptors)
+        let review = ReadingPreparationPolicy.evaluate(plan: plan, participants: people, descriptors: store.registry.descriptors,
+                                                       castingProfile: casting.profile, numbers: numbers)
         if !review.canProceed {
             let blocked = review.assessments.filter { (plan.mandatoryMethods ?? []).contains($0.method) && !$0.canExecute }
             errors += blocked.map { assessment in
@@ -320,7 +388,7 @@ struct GroupIntakeView: View {
         }
         guard errors.isEmpty else { error = errors.joined(separator: "\n"); return }
         error = nil
-        if onConfirm(people, requestsNumbers ? numbers : [], keepProfiles) {
+        if onConfirm(people, plan.methods.contains(.meihua) ? numbers : [], casting.profile, keepProfiles) {
             submitted = true
         } else {
             error = store.intakeError ?? L10n.text("资料尚未确认，请核对后再试。", "Couldn’t confirm the details. Review them and try again.")

@@ -49,7 +49,10 @@ enum BaziBirthLocation {
         let withdrawn = profile.declaredUnknownFields ?? profile.unknownFields
         guard !withdrawn.contains(.birthPlace), !withdrawn.contains(.birthCoordinates) else { return nil }
         if let latitude = profile.birthLatitude, let longitude = profile.birthLongitude {
-            guard !profile.unknownFields.contains(.birthCoordinates), !profile.unknownFields.contains(.birthPlace),
+            // The form marks an empty place label as missing even when the
+            // coordinate pair is confirmed. Actual withdrawals are checked
+            // above, including legacy records without a declaration set.
+            guard !profile.unknownFields.contains(.birthCoordinates),
                   latitude.isFinite, longitude.isFinite,
                   (-90...90).contains(latitude), (-180...180).contains(longitude) else { return nil }
             return (latitude, longitude)

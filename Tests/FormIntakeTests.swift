@@ -15,6 +15,14 @@ final class FormIntakeTests: XCTestCase {
         return try XCTUnwrap(ProfileDirectory.applying([patch], to: []).profiles.first)
     }
 
+    private func castingSite() -> OracleProfile {
+        var site = OracleProfile()
+        site.currentPlace = "北京市朝阳区"
+        site.currentLatitude = 39.9; site.currentLongitude = 116.4
+        site.currentTimeZoneID = "Asia/Shanghai"
+        return site
+    }
+
     private func plan(_ methods: [OracleMethod], people: [OracleProfile] = [], strict: Bool = false) -> OraclePlan {
         var plan = OraclePlan(intent: "统一填写", subject: people.count > 1 ? "多人" : "事件", methods: methods, requiredFields: [], note: "", question: "接下来应该怎样安排？")
         plan.participantIDs = people.map(\.id)
@@ -164,7 +172,7 @@ final class FormIntakeTests: XCTestCase {
         XCTAssertNotNil(store.pendingPlan)
         let report = try XCTUnwrap(store.intakePreparationReport(for: [person]))
         let fields = Set(report.missing.flatMap(\.fields))
-        XCTAssertTrue(fields.isSuperset(of: [.birthDate, .birthTime, .gender]))
+        XCTAssertTrue(fields.isSuperset(of: [.birthDate, .birthTime, .gender, .birthCoordinates]))
         XCTAssertFalse(fields.contains(.birthTimeZone))
         let notice = try XCTUnwrap(store.intakeError)
         for field in fields { XCTAssertTrue(notice.contains(field.title), "缺项必须一次完整告知：\(field.title)") }
@@ -220,7 +228,7 @@ final class FormIntakeTests: XCTestCase {
         let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
         let person = OracleProfile(alias: "邻居")
         store.pendingPlan = plan([.bazi], people: [person])
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [person], numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [person], numbers: [], save: false, castingProfile: castingSite()))
         try await waitUntilIdle(store)
         let ordinary = try XCTUnwrap(store.runs.last)
         XCTAssertEqual(ordinary.plan.methods, [.xiaoliuren])
@@ -233,7 +241,7 @@ final class FormIntakeTests: XCTestCase {
         store.send("改用小六壬")
         try await waitUntilIdle(store)
         XCTAssertEqual(store.pendingPlan?.methods, [.xiaoliuren])
-        XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], save: false, castingProfile: castingSite()))
         try await waitUntilIdle(store)
         let explicit = try XCTUnwrap(store.runs.last)
         XCTAssertEqual(explicit.plan.methods, [.xiaoliuren])
@@ -251,7 +259,7 @@ final class FormIntakeTests: XCTestCase {
         let person = try XCTUnwrap(ProfileDirectory.applying([ProfileUpdate(name: "张三")], to: []).profiles.first)
         store.pendingPlan = plan([.bazi, .xiaoliuren], people: [person])
         store.showIntake = true
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [person], numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [person], numbers: [], save: false, castingProfile: castingSite()))
         try await waitUntilIdle(store)
         let run = try XCTUnwrap(store.runs.first)
         XCTAssertEqual(run.results.filter { $0.status == .complete || $0.status == .partial }.map(\.method), [.xiaoliuren])

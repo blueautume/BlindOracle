@@ -340,18 +340,18 @@ enum ReadingContinuationPolicy {
                 && sameUnknowns([.surname, .givenName], oldPerson, newPerson)
         case .bazi, .chenggu, .ziwei, .astrology:
             guard sameBirth(oldPerson, newPerson) else { return false }
-            let hasTime = oldPerson.birthTimeKnown && !oldPerson.unknownFields.contains(.birthTime)
+            let hasTime = oldPerson.birthTimeKnown && !effectiveUnknowns(oldPerson).contains(.birthTime)
             if method == .ziwei || (method == .bazi && hasTime) {
                 guard oldPerson.sex == newPerson.sex, sameUnknowns([.gender], oldPerson, newPerson) else { return false }
             }
-            if method == .bazi {
+            if [.bazi, .ziwei, .chenggu].contains(method) {
                 let fields: Set<OracleField> = [.birthCoordinates, .birthPlace]
                 guard sameUnknowns(fields, oldPerson, newPerson),
                       (oldPerson.declaredUnknownFields ?? []).intersection(fields) == (newPerson.declaredUnknownFields ?? []).intersection(fields) else { return false }
                 let oldCoordinates = BaziBirthLocation.coordinates(for: oldPerson)
                 let newCoordinates = BaziBirthLocation.coordinates(for: newPerson)
-                return oldCoordinates?.latitude == newCoordinates?.latitude
-                    && oldCoordinates?.longitude == newCoordinates?.longitude
+                guard oldCoordinates?.latitude == newCoordinates?.latitude,
+                      oldCoordinates?.longitude == newCoordinates?.longitude else { return false }
             }
             if method == .ziwei {
                 return original.castingDate == candidate.castingDate && oldPerson.currentTimeZoneID == newPerson.currentTimeZoneID
@@ -368,12 +368,13 @@ enum ReadingContinuationPolicy {
             return original.tarotDraws == candidate.tarotDraws
                 && (original.tarotClarificationRounds ?? []) == (candidate.tarotClarificationRounds ?? [])
         case .qimen, .xiaoliuren:
-            return original.castingDate == candidate.castingDate && oldPerson.currentTimeZoneID == newPerson.currentTimeZoneID
+            return original.castingDate == candidate.castingDate && sameCastingLocation(oldPerson, newPerson)
         case .meihua:
-            guard original.castingDate == candidate.castingDate, oldPerson.currentTimeZoneID == newPerson.currentTimeZoneID else { return false }
-            let oldUsesNumbers = !oldPerson.unknownFields.contains(.numbers) && original.numbers.count >= 2
-            let newUsesNumbers = !newPerson.unknownFields.contains(.numbers) && candidate.numbers.count >= 2
-            return oldUsesNumbers == newUsesNumbers && (!oldUsesNumbers || original.numbers == candidate.numbers)
+            let oldUsesNumbers = !effectiveUnknowns(oldPerson).contains(.numbers) && original.numbers.count >= 2
+            let newUsesNumbers = !effectiveUnknowns(newPerson).contains(.numbers) && candidate.numbers.count >= 2
+            guard oldUsesNumbers == newUsesNumbers, !oldUsesNumbers || original.numbers == candidate.numbers else { return false }
+            if oldUsesNumbers, original.numbers.count >= 3 { return true }
+            return original.castingDate == candidate.castingDate && sameCastingLocation(oldPerson, newPerson)
         case .liuyao:
             guard original.castingDate == candidate.castingDate, oldPerson.currentTimeZoneID == newPerson.currentTimeZoneID,
                   original.manualLines == candidate.manualLines else { return false }
@@ -387,15 +388,29 @@ enum ReadingContinuationPolicy {
         }
     }
 
+    private static func sameCastingLocation(_ original: OracleProfile, _ candidate: OracleProfile) -> Bool {
+        guard original.currentTimeZoneID == candidate.currentTimeZoneID,
+              sameUnknowns([.currentLocation], original, candidate),
+              (original.declaredUnknownFields ?? []).contains(.currentLocation)
+                == (candidate.declaredUnknownFields ?? []).contains(.currentLocation) else { return false }
+        let old = TrueSolarClock.castingCoordinates(profile: original)
+        let new = TrueSolarClock.castingCoordinates(profile: candidate)
+        return old?.latitude == new?.latitude && old?.longitude == new?.longitude
+    }
+
     private static func sameUnknowns(_ fields: Set<OracleField>, _ original: OracleProfile, _ candidate: OracleProfile) -> Bool {
-        original.unknownFields.intersection(fields) == candidate.unknownFields.intersection(fields)
+        effectiveUnknowns(original).intersection(fields) == effectiveUnknowns(candidate).intersection(fields)
+    }
+
+    private static func effectiveUnknowns(_ profile: OracleProfile) -> Set<OracleField> {
+        profile.unknownFields.union(profile.declaredUnknownFields ?? [])
     }
 
     private static func sameBirth(_ original: OracleProfile, _ candidate: OracleProfile) -> Bool {
         guard sameUnknowns([.birthDate, .birthTimeZone], original, candidate),
               original.birthTimeZoneID == candidate.birthTimeZoneID else { return false }
-        let oldHasTime = original.birthTimeKnown && !original.unknownFields.contains(.birthTime)
-        let newHasTime = candidate.birthTimeKnown && !candidate.unknownFields.contains(.birthTime)
+        let oldHasTime = original.birthTimeKnown && !effectiveUnknowns(original).contains(.birthTime)
+        let newHasTime = candidate.birthTimeKnown && !effectiveUnknowns(candidate).contains(.birthTime)
         guard oldHasTime == newHasTime else { return false }
         if oldHasTime { return original.birthDate == candidate.birthDate }
         guard let oldDate = original.birthDate, let newDate = candidate.birthDate,

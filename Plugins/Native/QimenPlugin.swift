@@ -11,18 +11,24 @@ struct QimenPlugin: OraclePlugin {
     private static let terms = ["冬至","小寒","大寒","立春","雨水","惊蛰","春分","清明","谷雨","立夏","小满","芒种","夏至","小暑","大暑","立秋","处暑","白露","秋分","寒露","霜降","立冬","小雪","大雪"]
     private static let numbers = [[1,7,4],[2,8,5],[3,9,6],[8,5,2],[9,6,3],[1,7,4],[3,9,6],[4,1,7],[5,2,8],[4,1,7],[5,2,8],[6,3,9],[9,3,6],[8,2,5],[7,1,4],[2,5,8],[1,4,7],[9,3,6],[7,1,4],[6,9,3],[5,8,2],[6,9,3],[5,8,2],[4,7,1]]
     var descriptor: OraclePluginDescriptor {
-        NativeCalendar.descriptor(.qimen, summary: L10n.text("时家转盘拆补法，按当地起盘时间算节气、符头、三元、阴阳遁局、天地盘、九星、八门、八神。", "Uses the hourly rotating Chai Bu method to calculate the solar term, cycle leaders, Yuan phase, Yin or Yang chart, Heaven and Earth plates, stars, gates and spirits."),
-            optional: [.currentLocation], questions: [L10n.text("行动节奏", "Timing an action"), L10n.text("具体选择", "Specific decisions"), L10n.text("协作与沟通", "Cooperation and communication"), L10n.text("近期规划", "Near-term planning")],
+        var value = NativeCalendar.descriptor(.qimen, summary: L10n.text("时家转盘拆补：真实时刻定节气，起卦地真太阳钟面定日符头与时盘。", "Hourly rotating Chai Bu: the physical instant determines solar terms, while the casting place's apparent-solar clock determines the day leader and hour chart."),
+            required: [.currentLocation], questions: [L10n.text("行动节奏", "Timing an action"), L10n.text("具体选择", "Specific decisions"), L10n.text("协作与沟通", "Cooperation and communication"), L10n.text("近期规划", "Near-term planning")],
             output: L10n.text("节气/符头/三元/局数/旬首/值符/值使与逐宫天地干、星门神；值使门基础释义。", "Solar term, cycle and configuration, chief star and duty gate, and each palace's stems, stars, gates and spirits. Includes the traditional duty gate meaning."),
             limitations: [L10n.text("只支持时家转盘拆补，不混用置闰、茅山或飞盘。", "Uses hourly rotating Chai Bu only. Other schools use different chart rules."), L10n.text("中五寄坤，值使由寄宫按九宫数顺逆加时。", "The center palace is hosted in Kun. The duty gate advances or reverses through the numbered palaces according to the hour."), L10n.text("不含暗干、十干克应、完整格局取用及应期判断。", "Hidden stems, stem interaction readings, full chart interpretation and event timing are outside its scope.")],
             source: L10n.text("qfdk/qimen MIT转盘公式参考；6tail/lunar-swift节气；BlindOracle Swift移植", "qfdk/qimen rotating chart formulas (MIT) · 6tail/lunar-swift solar terms · BlindOracle Swift port"), license: L10n.text("MIT参考实现，保留Resources/Native/ThirdParty-Qimen.txt", "MIT reference implementation. See Resources/Native/ThirdParty-Qimen.txt."))
+        value.limitations += [TrueSolarClock.calendarRule, TrueSolarClock.coordinateLimitation]
+        value.version = "2.0.0"
+        return value
     }
     func calculate(_ input: OracleInput) async throws -> OracleResult {
-        guard let solar = NativeCalendar.castingSolar(input) else { return NativeCalendar.unavailable(.qimen, L10n.text("起盘时刻或时区无效，支持1900–2100年。", "A valid casting time and time zone in 1900–2100 are required.")) }
-        let lunar = solar.lunar
-        let term = lunar.prevJieQi.name
+        let clock: TrueSolarClock
+        do { clock = try .casting(input: input) }
+        catch { return unavailable(error.localizedDescription) }
+        let lunar = clock.apparentSolar.lunar
+        let physical = clock.physicalSolar.lunar
+        let term = physical.prevJieQi.name
         guard let termIndex = Self.terms.firstIndex(of: term) else {
-            return NativeCalendar.unavailable(.qimen, L10n.text("当前节气\(term)未匹配本地定局表，未采用默认假局。", "The local chart table has no matching solar term for \(NativeCalendar.pinyin(term))."))
+            return unavailable(L10n.text("当前节气\(term)未匹配本地定局表，未采用默认假局。", "The local chart table has no matching solar term for \(NativeCalendar.pinyin(term))."))
         }
         let dayIndex = NativeCalendar.jiaziIndex(lunar.dayInGanZhi)
         let headIndex = dayIndex - dayIndex % 5
@@ -41,7 +47,7 @@ struct QimenPlugin: OraclePlugin {
         let targetRaw = earth.first(where: { $0.value == hourStem })?.key ?? origin
         let target = targetRaw == 5 ? 2 : targetRaw
         guard let originIndex = Self.ring.firstIndex(of: origin), let targetIndex = Self.ring.firstIndex(of: target) else {
-            return NativeCalendar.unavailable(.qimen, L10n.text("值符落宫校验失败。", "The chief star's palace could not be validated."))
+            return unavailable(L10n.text("值符落宫校验失败。", "The chief star's palace could not be validated."))
         }
         let rotate = NativeCalendar.mod(targetIndex - originIndex, 8)
         var sky: [Int: String] = [5: earth[5] ?? ""]
@@ -63,12 +69,14 @@ struct QimenPlugin: OraclePlugin {
         let zhiShi = Self.doors[originIndex]
         let zhiFu = Self.stars[originIndex]
         let configuration = L10n.text("\(yang ? "阳遁" : "阴遁")\(ju)局", "\(yang ? "Yang" : "Yin") Dun \(ju)")
-        var rows: [OracleRow] = [
+        var rows: [OracleRow] = clock.rows + [
+            .init(L10n.text("纪日口径", "Calendar convention"), TrueSolarClock.calendarRule),
+            .init(L10n.text("子时规则", "Zi-hour convention"), Self.ziRule),
             .init(L10n.text("排法", "Chart method"), L10n.text("时家转盘拆补 · 中五寄坤", "Hourly rotating Chai Bu · center palace hosted in Kun")),
-            .init(L10n.text("起盘时间", "Casting time"), solar.ymdhms + " · " + input.profile.currentTimeZoneID),
-            .init(L10n.text("四柱", "Four Pillars"), [lunar.yearInGanZhiExact, lunar.monthInGanZhiExact, lunar.dayInGanZhi, lunar.timeInGanZhi].map { NativeCalendar.stemBranch($0) }.joined(separator: " ")),
+            .init(L10n.text("起盘时间", "Casting time"), clock.apparentSolar.ymdhms + L10n.text(" · 真太阳钟面", " · apparent-solar clock")),
+            .init(L10n.text("四柱", "Four Pillars"), [physical.yearInGanZhiExact, physical.monthInGanZhiExact, lunar.dayInGanZhi, lunar.timeInGanZhi].map { NativeCalendar.stemBranch($0) }.joined(separator: " ")),
             .init(L10n.text("节气 / 三元", "Solar term / Yuan phase"), L10n.text("\(term) · \(yuanNames[yuan])", "\(Self.englishTerms[termIndex]) · \(["Upper", "Middle", "Lower"][yuan]) Yuan")),
-            .init(L10n.text("上次交节", "Most recent solar-term boundary"), lunar.prevJieQi.solar.ymdhms + L10n.text("（东八区历表）", " (UTC+8 calendar)")),
+            .init(L10n.text("上次交节", "Most recent solar-term boundary"), physical.prevJieQi.solar.ymdhms + L10n.text("（东八区历表）", " (UTC+8 calendar)")),
             .init(L10n.text("符头", "Five-day cycle leader"), NativeCalendar.stemBranch(NativeCalendar.stems[headIndex % 10] + NativeCalendar.branches[headBranch])),
             .init(L10n.text("局数", "Configuration"), configuration),
             .init(L10n.text("旬首六仪", "Ten-day cycle leader"), L10n.text("\(lunar.timeXun)遁\(hiddenStem)", "\(NativeCalendar.stemBranch(lunar.timeXun)) hides under \(NativeCalendar.stemBranch(hiddenStem))")),
@@ -97,10 +105,19 @@ struct QimenPlugin: OraclePlugin {
             "开门": (L10n.text("值使开门，传统象征取开放、联络和行动机会。", "The Open Gate traditionally suggests openness, contact and opportunities to act."), 0.3)
         ]
         let meaning = doorMeaning[zhiShi] ?? (L10n.text("值使门只作盘面记录。", "The duty gate is recorded as a chart detail."), 0)
-        return OracleResult(method: .qimen, status: .partial, headline: "\(configuration) · \(L10n.text(zhiFu, Self.starName(zhiFu))) / \(L10n.text(zhiShi, Self.doorName(zhiShi)))", rows: rows,
+        return OracleResult(method: .qimen, version: descriptor.version, status: .partial, headline: "\(configuration) · \(L10n.text(zhiFu, Self.starName(zhiFu))) / \(L10n.text(zhiShi, Self.doorName(zhiShi)))", rows: rows,
             evidence: [.init(id: "qimen-duty-door", statement: meaning.0 + L10n.text("仍需结合具体问题与用神，不能单以门名定结果。", " Consider the question and relevant chart focus. The gate alone cannot determine an outcome."), polarity: meaning.1, strength: 0.25, topic: "action")],
-            limitations: [L10n.text("已排天地干、九星八门八神；本版尚未实现完整格局、暗干和应期，仅输出基础盘与值使门线索。", "This basic chart includes the Heaven and Earth stems, nine stars, eight gates, eight spirits and a duty gate cue. It does not provide a full interpretation, hidden stems or timing."), L10n.text("奇门流派存在差异，当前固定拆补与中五寄坤口径。", "Qi Men schools differ. This chart uses Chai Bu and places the center in Kun.")] + NativeCalendar.timezoneLimit(input.profile.currentTimeZoneID, date: input.castingDate),
+            limitations: [L10n.text("已排天地干、九星八门八神；本版尚未实现完整格局、暗干和应期，仅输出基础盘与值使门线索。", "This basic chart includes the Heaven and Earth stems, nine stars, eight gates, eight spirits and a duty gate cue. It does not provide a full interpretation, hidden stems or timing."), L10n.text("奇门流派存在差异，当前固定拆补与中五寄坤口径。", "Qi Men schools differ. This chart uses Chai Bu and places the center in Kun.")] + [TrueSolarClock.calendarRule, TrueSolarClock.coordinateLimitation, Self.ziRule],
             provenance: L10n.text("qfdk/qimen MIT转盘参考＋6tail/lunar-swift本地节气；BlindOracle Swift", "qfdk/qimen rotating chart reference (MIT) · 6tail/lunar-swift solar terms · BlindOracle Swift"))
+    }
+    private func unavailable(_ reason: String) -> OracleResult {
+        var result = NativeCalendar.unavailable(.qimen, reason)
+        result.version = descriptor.version
+        result.limitations.append(TrueSolarClock.calendarRule)
+        return result
+    }
+    private static var ziRule: String {
+        L10n.text("日符头在真太阳钟面零点换日；23点进入子时，时干沿用LunarSwift子初换干规则。年/月干支与节气独立使用真实时刻。", "The apparent-solar day leader changes at midnight. The Zi branch starts at 23:00; its hour stem follows LunarSwift's Zi-start rule. Year/month stems and solar terms use the physical instant independently.")
     }
     private static let englishTerms = [
         "Winter Solstice", "Minor Cold", "Major Cold", "Start of Spring", "Rain Water", "Awakening of Insects",

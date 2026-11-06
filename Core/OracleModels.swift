@@ -230,6 +230,8 @@ struct OraclePlan: Codable, Sendable {
     /// Unsubmitted form drafts are independent of the permanent people directory.
     var draftParticipants: [OracleProfile]? = nil
     var draftNumbers: [Int]? = nil
+    /// The casting place belongs to the question, independently of its people.
+    var castingProfile: OracleProfile? = nil
     /// A pending supplement refers to a saved reading, never to a new random cast.
     var baseRunID: UUID? = nil
     var followUpQuestion: String? = nil

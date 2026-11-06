@@ -6,20 +6,23 @@ enum SkyPlugins {
 }
 
 struct ZiweiPlugin: OraclePlugin {
+    static let algorithmVersion = "2.0.0+iztro.2.6.3"
     var descriptor: OraclePluginDescriptor {
         OraclePluginDescriptor(
-            method: .ziwei, version: "1.0.0+iztro.2.6.3",
-            summary: L10n.text("完全离线的紫微斗数排盘：十二宫、主辅星、亮度、生年四化、大限与问事时刻流年四化。", "Calculates a Zi Wei Dou Shu chart on device, including twelve palaces, major and minor stars, brightness, birth transformations, decade cycles and annual transformations."),
-            requiredFields: [.birthDate, .birthTime, .gender, .birthTimeZone],
+            method: .ziwei, version: Self.algorithmVersion,
+            summary: L10n.text("按出生地真太阳时在设备本地排紫微本命盘：十二宫、主辅星、亮度、生年四化；运限按真实问事时刻的民用日期查询。", "Calculates a Zi Wei natal chart on device using apparent solar time at birth, including twelve palaces, stars and birth transformations. Horoscope queries use the actual casting instant's civil date."),
+            requiredFields: [.birthDate, .birthTime, .gender, .birthTimeZone, .birthCoordinates],
             optionalFields: [.birthPlace],
             supportedQuestions: [L10n.text("本人事业与财务主题", "Career and finances"), L10n.text("关系主题", "Relationships"), L10n.text("长期趋势与本命结构", "Long-term patterns and birth chart")],
             outputDescription: L10n.text("十二宫独立数据、生年四化、大限、小限与流年；固定规则产生符号性证据，不生成事实性命运预测。", "Twelve palaces, birth transformations, decade and annual cycles, with symbolic cues from the traditional rules."),
-            limitations: [L10n.text("出生时间或排盘性别不确定时不生成唯一命盘。", "A birth time and chart gender are required to produce a unique chart."), L10n.text("采用 iztro 2.6.3 默认三合排盘配置，闰月按前后半月调整；不覆盖所有流派。", "Uses the default San He rules in iztro 2.6.3, with a half-month adjustment for leap months."), L10n.text("时区采用用户确认的出生地时区，未作真太阳时校正。", "Uses the confirmed birth time zone without a true solar time correction.")],
+            limitations: [L10n.text("出生时间、出生地坐标或排盘性别不确定时不生成唯一命盘。", "A known birth time, confirmed birth coordinates and chart gender are required to produce a unique chart."), L10n.text("本项目以真太阳钟面的日期与时辰排本命，早晚子时交给 iztro 的 dayDivide=forward 处理，不在调用前另加一天；不代表所有流派都采用同一口径。", "This implementation uses the apparent-solar date and hour for the natal chart. Iztro's dayDivide=forward handles early and late Zi hours; the caller does not add a day. Other schools may use different conventions."), L10n.text("采用 iztro 2.6.3 三合排盘配置，闰月按前后半月调整；运限查询保留真实问事时刻在当前所在地时区的民用日期，未作目标真太阳时校正。", "Uses the San He configuration in iztro 2.6.3, with a half-month adjustment for leap months. Horoscope queries retain the actual casting instant's civil date in the current time zone, without a target solar-time correction."), TrueSolarClock.coordinateLimitation],
             source: "https://github.com/SylarLong/iztro", license: L10n.text("MIT；依赖许可证随应用内置", "MIT · dependency licenses included in the app"))
     }
 
     func calculate(_ input: OracleInput) async throws -> OracleResult {
-        try await SkyCalculator.shared.ziwei(input)
+        var result = try await SkyCalculator.shared.ziwei(input)
+        result.version = Self.algorithmVersion
+        return result
     }
 }
 
@@ -78,33 +81,35 @@ private actor SkyCalculator {
 
     func ziwei(_ input: OracleInput) throws -> OracleResult {
         let start = Date()
-        guard let birth = input.profile.birthDate, !input.profile.unknownFields.contains(.birthDate) else {
+        let unknown = input.profile.unknownFields.union(input.profile.declaredUnknownFields ?? [])
+        guard input.profile.birthDate != nil, !unknown.contains(.birthDate) else {
             return unavailable(.ziwei, L10n.text("出生日期未确定，暂不生成紫微命盘。", "A birth date is required for a Zi Wei chart."))
         }
-        guard input.profile.birthTimeKnown, !input.profile.unknownFields.contains(.birthTime) else {
+        guard input.profile.birthTimeKnown, !unknown.contains(.birthTime) else {
             return unavailable(.ziwei, L10n.text("出生时辰不确定：十二宫和星曜落点依赖时辰，暂不生成唯一命盘。", "A known birth time is needed to place the twelve palaces and stars."))
         }
-        guard ["男", "女"].contains(input.profile.sex), !input.profile.unknownFields.contains(.gender) else {
+        guard ["男", "女"].contains(input.profile.sex), !unknown.contains(.gender) else {
             return unavailable(.ziwei, L10n.text("紫微排盘需要确认排盘性别；未确定时不代填。", "Confirm the chart gender to calculate a Zi Wei chart."))
         }
-        guard let zone = TimeZone(identifier: input.profile.birthTimeZoneID), !input.profile.unknownFields.contains(.birthTimeZone) else {
-            return unavailable(.ziwei, L10n.text("出生地时区未确定，暂不生成命盘。", "The birth time zone is required."))
-        }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = zone
-        let components = calendar.dateComponents([.year, .month, .day, .hour], from: birth)
-        guard let year = components.year, (1900...2100).contains(year) else {
-            return unavailable(.ziwei, L10n.text("当前离线版本仅支持 1900–2100 年出生日期。", "This offline version supports birth dates from 1900 to 2100."))
+        let clock: TrueSolarClock
+        do { clock = try TrueSolarClock.birth(profile: input.profile) }
+        catch { return unavailable(.ziwei, error.localizedDescription) }
+        // Only these virtual clock components enter the natal calendar API.
+        // The physical birth/casting Dates are never overwritten.
+        let apparent = clock.apparentSolar
+        let correctedOutsideOriginalRange = !(1900...2100).contains(apparent.year)
+        guard let zone = TimeZone(identifier: clock.zoneID) else {
+            return unavailable(.ziwei, L10n.text("出生地时区无效，暂不生成命盘。", "The birth time zone is invalid."))
         }
         let targetZone = TimeZone(identifier: input.profile.currentTimeZoneID) ?? zone
         var targetCalendar = Calendar(identifier: .gregorian)
         targetCalendar.timeZone = targetZone
         let target = targetCalendar.dateComponents([.year, .month, .day, .hour], from: input.castingDate)
         let payload: [String: Any] = [
-            "date": "\(year)-\(components.month ?? 1)-\(components.day ?? 1)",
-            "timeIndex": SkyMath.timeIndex(hour: components.hour ?? 0),
+            "date": "\(apparent.year)-\(apparent.month)-\(apparent.day)",
+            "timeIndex": SkyMath.timeIndex(hour: apparent.hour),
             "gender": input.profile.sex,
-            "targetDate": "\(target.year ?? year)-\(target.month ?? 1)-\(target.day ?? 1)",
+            "targetDate": "\(target.year ?? apparent.year)-\(target.month ?? 1)-\(target.day ?? 1)",
             "targetTimeIndex": SkyMath.timeIndex(hour: target.hour ?? 0)
         ]
         let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
@@ -117,18 +122,28 @@ private actor SkyCalculator {
         context.evaluateScript(source)
         if let error = context.exception?.toString() { throw SkyError.javascript(error) }
         let function = context.objectForKeyedSubscript("BlindOracleZiwei")?.objectForKeyedSubscript("calculate")
-        let value = function?.call(withArguments: [serialized])
-        if let error = context.exception?.toString() { throw SkyError.javascript(error) }
-        guard let text = value?.toString(), let resultData = text.data(using: .utf8) else {
-            throw SkyError.javascript(L10n.text("本地排盘未返回有效数据", "The local engine did not return valid chart data"))
+        let chart: ZiweiChart
+        do {
+            let value = function?.call(withArguments: [serialized])
+            if let error = context.exception?.toString() { throw SkyError.javascript(error) }
+            guard let text = value?.toString(), let resultData = text.data(using: .utf8) else {
+                throw SkyError.javascript(L10n.text("本地排盘未返回有效数据", "The local engine did not return valid chart data"))
+            }
+            chart = try JSONDecoder().decode(ZiweiChart.self, from: resultData)
+            guard chart.palaces.count == 12 else { throw SkyError.javascript(L10n.text("命盘宫位数无效", "The chart has an invalid number of palaces")) }
+        } catch {
+            if correctedOutsideOriginalRange {
+                return unavailable(.ziwei, L10n.text("原始出生日期有效，但校正后的真太阳日期 \(apparent.ymd) 位于本地紫微内核无法处理的边界；未钳制日期或回退到民用时刻。", "The original birth date is valid, but the corrected apparent-solar date \(apparent.ymd) is at a boundary the local Zi Wei engine could not handle. The date was not clamped or replaced with civil time."))
+            }
+            throw error
         }
-        let chart = try JSONDecoder().decode(ZiweiChart.self, from: resultData)
-        guard chart.palaces.count == 12 else { throw SkyError.javascript(L10n.text("命盘宫位数无效", "The chart has an invalid number of palaces")) }
-        var rows: [OracleRow] = [
-            .init(L10n.text("公历", "Gregorian date"), chart.solarDate ?? ""), .init(L10n.text("农历", "Lunar date"), ZiweiDisplay.lunarDate(chart.lunarDate ?? "")),
+        var rows: [OracleRow] = clock.rows + [
+            .init(L10n.text("时间口径", "Time conventions"), L10n.text("本命采用出生地真太阳日期与时辰；运限采用真实问事时刻的所在地民用日期，不作目标真太阳时校正。", "The natal chart uses the birthplace's apparent-solar date and hour. Horoscope queries use the actual casting instant's local civil date, without a target solar-time correction.")),
+            .init(L10n.text("本命排盘公历", "Natal chart date"), chart.solarDate ?? ""), .init(L10n.text("农历", "Lunar date"), ZiweiDisplay.lunarDate(chart.lunarDate ?? "")),
             .init(L10n.text("干支", "Stems and branches"), ZiweiDisplay.pillars(chart.chineseDate ?? "")), .init(L10n.text("五行局", "Five Element configuration"), ZiweiDisplay.configuration(chart.fiveElementsClass ?? "")),
             .init(L10n.text("命宫 / 身宫", "Life palace / Body palace"), "\(NativeCalendar.stemBranch(chart.earthlyBranchOfSoulPalace ?? "")) / \(NativeCalendar.stemBranch(chart.earthlyBranchOfBodyPalace ?? ""))"),
-            .init(L10n.text("时区与时辰", "Time zone and hour"), "\(zone.identifier) · \(ZiweiDisplay.hour(chart.time ?? ""))"),
+            .init(L10n.text("本命太阳时辰", "Natal solar hour"), ZiweiDisplay.hour(chart.time ?? "")),
+            .init(L10n.text("运限查询民用时间", "Horoscope civil time"), NativeCalendar.dateLabel(input.castingDate, zone: targetZone.identifier) + " · " + targetZone.identifier),
             .init(L10n.text("流派配置", "Chart rules"), L10n.text("三合排盘；农历年界；早晚子时分开；闰月前后半月调整", "San He chart; lunar year boundary; early and late Zi hours are separate; leap months use a half-month adjustment."))
         ]
         for palace in chart.palaces {
@@ -181,10 +196,10 @@ private actor SkyCalculator {
         let lifeStars = life?.majorStars.map { NativeCalendar.pinyin($0.name) }.joined(separator: L10n.text("、", ", ")) ?? ""
         let lifeLabel = L10n.text("命宫\(lifeBranch)", "Life palace: \(lifeBranch)")
         let headline = "\(configuration) · \(lifeLabel) · \(lifeStars)"
-        var result = OracleResult(method: .ziwei, version: "1.0.0+iztro.2.6.3", headline: headline,
+        var result = OracleResult(method: .ziwei, version: ZiweiPlugin.algorithmVersion, headline: headline,
             rows: rows, evidence: evidence,
             limitations: ZiweiPlugin().descriptor.limitations + [L10n.text("证据强度是固定规则参数，非验证过的预测概率。", "Cue weights are fixed rules and do not measure the probability of an event.")],
-            provenance: L10n.text("设备本地 JavaScriptCore · iztro 2.6.3（MIT）· 无网络接口", "On-device JavaScriptCore · iztro 2.6.3 (MIT) · no network access"))
+            provenance: L10n.text("设备本地 NOAA/Meeus 真太阳本命钟面 · JavaScriptCore / iztro 2.6.3（MIT）· 运限采用真实问事民用日期 · 无网络接口", "On-device NOAA/Meeus apparent-solar natal clock · JavaScriptCore / iztro 2.6.3 (MIT) · horoscope queries use the actual civil date · no network access"))
         result.durationMilliseconds = Date().timeIntervalSince(start) * 1000
         return result
     }
