@@ -1,0 +1,26 @@
+BlindOracle / 瞎子 3.0.22 (48)
+Bundle ID: com.lihao.BlindOracle
+
+SIGN-IN AND SERVICE ACCESS
+Sign in with Apple is the only sign-in method. Use Apple's review sign-in flow; no developer API key or developer's private Apple credentials are needed. A first eligible Apple account receives a welcome allowance. Please use sample details rather than real sensitive personal information.
+
+The app verifies an Apple-signed AppTransaction to select the service environment automatically. App Review / TestFlight Sandbox sessions use a separate Sandbox account database and allowance ledger, with a visible test-environment banner. There is no reviewer-only menu or environment toggle. Sandbox purchase allowance does not fund the production account.
+
+AI SHARING PERMISSION
+Before online AI use, the app explains that questions, selected profile details, context and necessary location details pass through wellecho.cn to DeepSeek. Choose Agree to enable online AI, or decline to leave AI disabled. The disclosure links to the privacy policy. Permission can be withdrawn through the AI data-sharing control in Chat. The central request gate prevents sending without permission.
+
+If the first App Store verification cannot finish, tap "重新验证 App Store" / "Verify with App Store". This is an explicit refresh and may show Apple's authentication dialog. An unverified transaction does not grant access. If access still fails, please contact the App Review contact.
+
+SUGGESTED REVIEW PATH
+1. Sign in with Apple. Open "问事" / the question screen, enter a sample question, select a method, and follow the prompts. Tarot includes an interactive card draw. Results show the related inputs and cards or chart, and allow follow-up questions using the same result.
+2. Open "数据" / "Data". Profiles and "查看方法说明" / "Explore methods" show the supported methods, their inputs, references, and calculation limitations. Language can be changed in Data > Settings.
+3. Data > account card (or Settings > Account settings) opens the remaining-allowance percentage. Choose "补充额度" / "Replenish allowance" for the consumable purchase. "核对购买" / "Check purchases" retries delivery of unfinished purchases.
+4. Account settings > "删除账号" / "Delete account" opens account deletion. Local profiles, chats, and reading records are device records and can be removed separately. In Sandbox, deletion removes only the test account and keeps Apple's shared authorization so it does not revoke a production account's authorization.
+
+FIRST IN-APP PURCHASE
+Product: com.lihao.BlindOracle.quota.1m
+Type: Consumable allowance replenishment; no subscription or automatic renewal.
+Current intended price: CNY 6 in the China mainland storefront. Apple's localized purchase sheet shows the final price. Please use a China mainland Sandbox storefront for this product. Sandbox purchases do not charge real money. The server validates the Apple transaction and delivers allowance once before the app finishes it.
+
+ABOUT THE APP
+Native calculations and interactive draws support ten traditional methods. The app exposes inputs and method limitations, preserves reading history locally, and reuses an existing result for follow-up questions. Online questions and interpretations use a third-party AI service through wellecho.cn. Content is for entertainment, cultural exploration, and reflection; it does not guarantee predictions or provide medical, legal, or investment advice.

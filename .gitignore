@@ -32,3 +32,14 @@ node_modules/
 *.xcarchive/
 *.xcresult/
 /Design/**/*.zip
+
+# Local review deliverables and private/runtime evidence; source material stays versioned.
+/Release/**/*.zip
+/Release/**/evidence/
+/Release/**/review-evidence/
+/Release/**/screenshots/
+/Release/**/review-only/
+/Release/**/final-artifacts.json
+/Release/**/package-assembly-result.json
+/Release/**/screenshots-approved.json
+/Release/**/screenshots-manifest.json

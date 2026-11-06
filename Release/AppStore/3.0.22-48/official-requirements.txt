@@ -1,0 +1,33 @@
+核对日期：2026-11-07。以下为审核资料草稿依据；未操作 App Store Connect。
+
+App Store 字段与限制
+https://developer.apple.com/help/app-store-connect/reference/app-information/platform-version-information/
+名称/副标题各30字符；推广文本170字符；描述4000字符；关键词按100 UTF-8 bytes和100字符双重检查；审核备注4000 UTF-8 bytes。What's New只在更新版本适用。Support URL必须有真实联系信息。
+
+App信息、中国大陆备案与通知URL
+https://developer.apple.com/help/app-store-connect/reference/app-information/app-information/
+ICP信息与MIIT备案及简中元数据一致；此草稿没有备案号。服务器通知URL是可选配置，并不表示通知链路已验收。
+
+IAP 字段与审核截图
+https://developer.apple.com/help/app-store-connect/reference/in-app-purchases-and-subscriptions/in-app-purchase-information/
+保守采用 Reference Name<=64、Product ID<=100、Display Name 2–30、Description<=45字符，均满足当前ASC帮助参考页限制。IAP审核截图应显示实际售卖服务，可用App支持的截图尺寸。1024方形推广图不是IAP审核截图的必填尺寸要求。
+
+首次IAP随App版本提交
+https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/submit-an-in-app-purchase
+https://developer.apple.com/help/app-review/before-submitting-for-review/configure-in-app-purchases
+首次提交该IAP类型要和App版本一起送审；Sandbox及App Review购买不要求先取得IAP审核批准。此草稿没有提交或价格修改动作。
+
+隐私与显式AI共享同意
+https://developer.apple.com/app-store/review/guidelines/#data-use-and-sharing
+https://developer.apple.com/app-store/app-privacy-details/
+https://developer.apple.com/help/app-store-connect/manage-app-information/manage-app-privacy
+5.1.2(i)要求事先明确说明第三方AI共享并取得明确许可。隐私政策中的说明及一般登录条款不应被当作已经完成单独AI授权验收。隐私标签应包含实际开发者及第三方处理的数据，不能复用旧稿“未收集数据”。
+
+功能描述与同类App差异
+https://developer.apple.com/app-store/review/guidelines/#spam
+https://developer.apple.com/app-store/product-page/
+4.3(b)将fortune telling列入成熟类别，要求有实质不同或改进体验。文案仅描述真实的本地算法、交互、可检查输入与方法边界、留存及追问功能，不承诺通过审核或预测准确。公共描述避免固定价格。
+
+截图规格
+https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/
+当前页面必需项为至少1张iPhone Dynamic Island medium截图，以及支持iPad时至少1张iPad13英寸截图。1206x2622属于medium；1320x2868属于large；2064x2752属于iPad13。每尺寸可1–10张，不含alpha通道。为兼容ASC设备栏，计划同时准备medium、large、iPad13三组真实渲染，中文及英文分别截图。不复用旧版图片冒充build48。

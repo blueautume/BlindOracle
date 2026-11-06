@@ -856,7 +856,7 @@ final class OracleProgressTests: XCTestCase {
         addTeardownBlock { AnalysisURLProtocol.remove(key) }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [AnalysisURLProtocol.self]
-        return DeepSeekClient(apiKey: key, sessionConfiguration: configuration)
+        return DeepSeekClient(accessToken: key, sessionConfiguration: configuration)
     }
 }
 

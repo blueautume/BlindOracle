@@ -835,7 +835,12 @@ struct ProfileFieldsView: View {
         state.wrappedValue.lookupID = lookupID
         state.wrappedValue.lookup = Task { @MainActor in
             do {
-                let place = try await LocationService.resolveChinaDistrict(district, using: client)
+                let parentTask = store.quotaTaskID
+                let quotaID = parentTask ?? UUID()
+                let place = try await AIQuotaTaskScope.$stage.withValue(AIQuotaStage(taskID: quotaID, stageID: "geocoding:" + district.id)) {
+                    try await LocationService.resolveChinaDistrict(district, using: client)
+                }
+                if parentTask == nil { await AIQuotaTaskService.shared.end(quotaID, status: "completed") }
                 guard !Task.isCancelled, state.wrappedValue.lookupID == lookupID else { return }
                 switch purpose {
                 case .birth: draft.setBirthCoordinates(latitude: place.latitude, longitude: place.longitude)

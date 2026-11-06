@@ -1,1010 +1,702 @@
 // !$*UTF8*$!
-{
-	archiveVersion = 1;
-	classes = {
-	};
-	objectVersion = 56;
-	objects = {
-
-/* Begin PBXBuildFile section */
-		033C56C418649AA9917F4B19 /* Views/ReadingResultsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9658E6981BE22FFEDA80B6C /* Views/ReadingResultsSheet.swift */; };
-		039183FC04B9E630ADB31B62 /* Resources/ThirdPartyNotices.txt in Resources */ = {isa = PBXBuildFile; fileRef = 25F162EE31CC2A073312F9DC /* Resources/ThirdPartyNotices.txt */; };
-		04372582E955CE1775FBC427 /* Vendor/LunarSwift/Foto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DAAF1F90BCD343A8C081F7A /* Vendor/LunarSwift/Foto.swift */; };
-		04A45B0CCBAB6E71A5D7654C /* Tests/PersistenceAndPreferenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAF993DB33533D4B616777C5 /* Tests/PersistenceAndPreferenceTests.swift */; };
-		0A8297633187AD275FE62253 /* App/OracleStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69B82AE54AF8208EB0E59DE6 /* App/OracleStore.swift */; };
-		0B77E5E4F7CFB30FC448AFB9 /* Views/DataViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 458DA343CF351A710189AD91 /* Views/DataViews.swift */; };
-		0DBCD0A701F634B2B768B352 /* Vendor/LunarSwift/Fu.swift in Sources */ = {isa = PBXBuildFile; fileRef = F704CBB7A9003610B62AE67B /* Vendor/LunarSwift/Fu.swift */; };
-		15282667D81C35E388711ADF /* Vendor/LunarSwift/FotoFestival.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115C9EC4B5B56F7EC6C202B2 /* Vendor/LunarSwift/FotoFestival.swift */; };
-		17063F990CA0F9C819D21E47 /* Core/ConversationHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 002C308C2ABD09C73AFA4BE8 /* Core/ConversationHistory.swift */; };
-		1BEB9F65990743FA14F6EA46 /* Tests/ConversationHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AF1DFCE463B6B761BCA81A /* Tests/ConversationHistoryTests.swift */; };
-		213C330AF37F39F0DD1A134F /* Vendor/LunarSwift/LunarTime.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A536FA9087251C4696F365 /* Vendor/LunarSwift/LunarTime.swift */; };
-		24C749653174E5349B4F3351 /* App/BlindOracleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7798695EE7B7021FBF200561 /* App/BlindOracleApp.swift */; };
-		2F0F4CFC2317D5EB827F400A /* Vendor/LunarSwift/SolarYear.swift in Sources */ = {isa = PBXBuildFile; fileRef = A078C17D7199A7485C2CD159 /* Vendor/LunarSwift/SolarYear.swift */; };
-		30A033228EED3E59F0169C6C /* Views/ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CBFC10119F66BB40AF54375 /* Views/ChatView.swift */; };
-		32040188B3489D3AA795BFF3 /* Vendor/LunarSwift/SolarWeek.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32D003CB4E1896D6CABC6A69 /* Vendor/LunarSwift/SolarWeek.swift */; };
-		372A1E40C99D01DB3C4820DB /* Vendor/LunarSwift/TaoUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 616ED068AC33D4FB9449EB31 /* Vendor/LunarSwift/TaoUtil.swift */; };
-		3DE6CBA0A22BDCD953774104 /* Vendor/LunarSwift/DaYun.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33DBC853DD9D605566BA52A8 /* Vendor/LunarSwift/DaYun.swift */; };
-		3EA08A340576F6491C5AC7DB /* Vendor/LunarSwift/SolarUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AAFCA4F93C7AC9965F68B5F /* Vendor/LunarSwift/SolarUtil.swift */; };
-		49BD94E331905E4E63636EB0 /* Vendor/LunarSwift/LunarMonth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A0A2DD63EA672EB9310151 /* Vendor/LunarSwift/LunarMonth.swift */; };
-		4C5581F0F020AF83D7D02662 /* Plugins/Native/ChengguPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 472406C7D989E466B9DA8BB8 /* Plugins/Native/ChengguPlugin.swift */; };
-		4DB2469F18EAA1FDEBA34892 /* Core/PluginRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4133140DB3C7E888EE383751 /* Core/PluginRegistry.swift */; };
-		4E1F7F891F816AC63C48FC8C /* Vendor/LunarSwift/LunarYear.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC8B3EB2672A26B7ABF9A00B /* Vendor/LunarSwift/LunarYear.swift */; };
-		51E04D8379A6DB36BF561F9F /* Services/KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E51DBF45614D11AA84C0EC5 /* Services/KeychainStore.swift */; };
-		52B1BEBAB802F236671500C3 /* Vendor/LunarSwift/Yun.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4385D45D874D64AD168AA287 /* Vendor/LunarSwift/Yun.swift */; };
-		5702D4ABFD3BD3B9C84925D2 /* Vendor/LunarSwift/LiuYue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D93DB7F462232363EE5D8CE3 /* Vendor/LunarSwift/LiuYue.swift */; };
-		587B702876373BF0CEF258DE /* Services/LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B356011F6FAEF59E7D63A4 /* Services/LocationService.swift */; };
-		5AD747EF296A761A06F2EAE9 /* Vendor/LunarSwift/FotoUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AD62ACA09DB0C13B0201779 /* Vendor/LunarSwift/FotoUtil.swift */; };
-		5DA2F73375E50353D155104C /* Views/IntakeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBC60C2872AB143498164C85 /* Views/IntakeView.swift */; };
-		627BBC9C62B0C159B656E415 /* Resources/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E0E27618A2D2A8FEBDD49F35 /* Resources/Assets.xcassets */; };
-		67D503817DF9FD0B0CAC3EA1 /* UITests/BlindOracleUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E272884F9DD5FF8215160095 /* UITests/BlindOracleUITests.swift */; };
-		6BCF15CE1D308D5A5703596B /* Vendor/LunarSwift/LiuNian.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE748B901BA0D0C243217BB /* Vendor/LunarSwift/LiuNian.swift */; };
-		6D1630B5EA75E78F1440AD6F /* Vendor/LunarSwift/Solar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80AFF95D972AFBA6B05198E6 /* Vendor/LunarSwift/Solar.swift */; };
-		746C5639EB0CEC99AFBAF471 /* Documentation in Resources */ = {isa = PBXBuildFile; fileRef = 48759B6513A7FE260F577D41 /* Documentation */; };
-		74CED8506BD39603E0704024 /* Vendor/LunarSwift/SolarMonth.swift in Sources */ = {isa = PBXBuildFile; fileRef = F986D4BB1FCD3D58BD853930 /* Vendor/LunarSwift/SolarMonth.swift */; };
-		77D1B4D6E941FE3FA21B98A8 /* Vendor/Astronomy/BlindOracleSky.c in Sources */ = {isa = PBXBuildFile; fileRef = AD8DAFF1E2D591F4547537AA /* Vendor/Astronomy/BlindOracleSky.c */; };
-		78B96DF05521BE6B1C616A6D /* Vendor/LunarSwift/NineStar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2273C04BA03DEBAC3621ABE3 /* Vendor/LunarSwift/NineStar.swift */; };
-		7B69A1607CBCAC5312B4C715 /* Vendor/LunarSwift/EightChar.swift in Sources */ = {isa = PBXBuildFile; fileRef = C83D0942CC9F577D18D6B0ED /* Vendor/LunarSwift/EightChar.swift */; };
-		7D7C9E9DC387AF2EA0C9B021 /* Vendor/LunarSwift/HolidayUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0812CE684BCC5EA099DEB5B5 /* Vendor/LunarSwift/HolidayUtil.swift */; };
-		81F541DB98F5B14E344CFD7F /* Vendor/LunarSwift/Tao.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0540227AC09D5DB982AC2B62 /* Vendor/LunarSwift/Tao.swift */; };
-		876ECDAAA3EB1315056096B9 /* Views/ConversationHistorySidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAE2095FD8E3FA1AD8875F7 /* Views/ConversationHistorySidebar.swift */; };
-		8A2E3806BC4E3818DC60623B /* Tests/NativePluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CFFDCE87BF4D13203DA3447 /* Tests/NativePluginTests.swift */; };
-		8B427F0BADD80C692437DEBC /* Plugins/Native/XingmingPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0A31C234F191C3AF5443A3 /* Plugins/Native/XingmingPlugin.swift */; };
-		9293069317A423FF1B8B8176 /* Plugins/Native/LiuyaoPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B45E6CA9A1EB0FBBFDEE04 /* Plugins/Native/LiuyaoPlugin.swift */; };
-		9AB09DD69B6C8DE61FEFFA5C /* Services/DeepSeekClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9547081036B521336C169F30 /* Services/DeepSeekClient.swift */; };
-		9AC904784CD622D520494C80 /* Vendor/LunarSwift/XiaoYun.swift in Sources */ = {isa = PBXBuildFile; fileRef = D75A96199EC52C83C9ED1AF9 /* Vendor/LunarSwift/XiaoYun.swift */; };
-		9D22C8215226F5D79F6617F8 /* Plugins/Native/MeihuaPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9FBACD5DB4A9378D43274A3 /* Plugins/Native/MeihuaPlugin.swift */; };
-		A610D2D8AFAD6041D279FAAC /* Views/InkTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C2D6782D5487BC856F682EB /* Views/InkTheme.swift */; };
-		A67B78724C2A4E982CD4492E /* Vendor/LunarSwift/SolarSeason.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0A70EB8937B43119A88EBD3 /* Vendor/LunarSwift/SolarSeason.swift */; };
-		AC483E5005B1C308F0439EF2 /* Plugins/Native/QimenPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC74CA60FB509514320CD8DA /* Plugins/Native/QimenPlugin.swift */; };
-		B6063DE17974A861E59FA914 /* Vendor/LunarSwift/ShuJiu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8900E0A5CC06D22EE25BF707 /* Vendor/LunarSwift/ShuJiu.swift */; };
-		B8B32F9D350BAA9B5462D4F3 /* Vendor/LunarSwift/SolarHalfYear.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2D7DD003B00C893BE8D52D6 /* Vendor/LunarSwift/SolarHalfYear.swift */; };
-		C27D346B01DDF74439BD2A66 /* Vendor/Astronomy/astronomy.c in Sources */ = {isa = PBXBuildFile; fileRef = B23A91BB4F68D3CBD8864718 /* Vendor/Astronomy/astronomy.c */; };
-		C336DE80D20BB10B10D16E05 /* Tests/SkyPluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE55F98D9D3E05A5FF30160D /* Tests/SkyPluginTests.swift */; };
-		C3C899EE711D48353C5D67D2 /* Core/OracleModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1FF2DC0CAAB8E896C6DCF3A /* Core/OracleModels.swift */; };
-		D1C867563B6C7A076B56B7B9 /* Tests/AIServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD32172FE07185B5709EABAA /* Tests/AIServiceTests.swift */; };
-		D4E0E78DD8A32162315CF6A1 /* Tests/LiveIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03ECE31C7F69A6DD14D6866E /* Tests/LiveIntegrationTests.swift */; };
-		D5A3BA585CFBB2EC28E38A2C /* Plugins/Native/BaziPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2F8C120655A4D337468903 /* Plugins/Native/BaziPlugin.swift */; };
-		D72496060A9C4AFB3638F798 /* Services/ContextCompressor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDBAA86F1747D4914A807631 /* Services/ContextCompressor.swift */; };
-		DF2C2CE6AA9AA823003CD183 /* Vendor/LunarSwift/TaoFestival.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FA034C5888B2339F7A89580 /* Vendor/LunarSwift/TaoFestival.swift */; };
-		E20E43DF0EF623694FA77290 /* Resources/Native in Resources */ = {isa = PBXBuildFile; fileRef = 88538569096914C7E497DEFF /* Resources/Native */; };
-		7C4185D044A69B70C0B2842D /* Resources/Locations in Resources */ = {isa = PBXBuildFile; fileRef = 7D0DC9BF96A9A9D45B2568DD /* Resources/Locations */; };
-		E66B5BD6F94E13A2AC0D3457 /* Plugins/Native/XiaoliurenPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E037D93B24FECDC028E88E9 /* Plugins/Native/XiaoliurenPlugin.swift */; };
-		E6C95734662DD72D49181038 /* Vendor/LunarSwift/Holiday.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92DFB59011F9A040BA8C93BC /* Vendor/LunarSwift/Holiday.swift */; };
-		E95EA32AA97461216CAF9193 /* Vendor/LunarSwift/ShouXingUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BE8C2BF27E99086C51BD47F /* Vendor/LunarSwift/ShouXingUtil.swift */; };
-		ED9B130A3387D75AF9D5AF48 /* Plugins/Native/NativeSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF77EF2A6D433E476524A995 /* Plugins/Native/NativeSupport.swift */; };
-		F0B2F8F9B5F719701902F6FD /* Vendor/LunarSwift/LunarUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94BA479195B46046DB8D7DB7 /* Vendor/LunarSwift/LunarUtil.swift */; };
-		F241310AF2239B604A24C047 /* Core/LocalVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E0774B2DD8CC0AF35CA454E /* Core/LocalVault.swift */; };
-		F39B1118CA2E5AD9282000D7 /* Resources/Sky in Resources */ = {isa = PBXBuildFile; fileRef = 398169473CB0E42EACE9C08D /* Resources/Sky */; };
-		F858321910B4E380FCC73483 /* Vendor/LunarSwift/Lunar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FEC68C7279139775AAA7301 /* Vendor/LunarSwift/Lunar.swift */; };
-		FC11462A1D5F39B071C88226 /* Plugins/Sky/SkyPlugins.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8476580A3DAFCDE4BA2067A1 /* Plugins/Sky/SkyPlugins.swift */; };
-		FE6A393A73586051011EBA03 /* Vendor/LunarSwift/JieQi.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04CAD42427C269F9F760AFBA /* Vendor/LunarSwift/JieQi.swift */; };
-		07DD1792BAF6420599BEE707 = { isa = PBXBuildFile; fileRef = F5D0CE4657728878EA583034; };
-		51042322101E35BFD7ECDE75 = { isa = PBXBuildFile; fileRef = 4719657E3D6D78337DEF2B8D; };
-		6A56EDB92AE3740F0502585C = { isa = PBXBuildFile; fileRef = F37A3DE18E78597A11D647FB; };
-		6FCF72462B41723578A32165 = { isa = PBXBuildFile; fileRef = 0E670E294D71DD409935A98E; };
-		7EAFFA1B1D2E5CD03A97C8D2 = { isa = PBXBuildFile; fileRef = 27B31E0553E504ABA8D2B310; };
-		99A23049938EF439DD00FEE2 = { isa = PBXBuildFile; fileRef = FBA3BC5E25A6B996FC1BD91A; };
-		9A009DCC2D6BEAA937A5DE5E = { isa = PBXBuildFile; fileRef = 55C384363A8589207F9DFF18; };
-		9C79F323EE8960ED9D06526C = { isa = PBXBuildFile; fileRef = 2660E297A06FA807B423590F; };
-		B05D8A18785590E6F0C86505 = { isa = PBXBuildFile; fileRef = 4C0C7F2D19EE90C70F7DE3E6; };
-		B2A6A36FECF092F3FAE05A71 = { isa = PBXBuildFile; fileRef = B19802EFAFD481A88DEA4571; };
-		D4AE0C2971C14BECBD0ECE6E = { isa = PBXBuildFile; fileRef = E08983289BED6FB7BB35C08E; };
-		9B95E6272DB497164733D91F = { isa = PBXBuildFile; fileRef = 94C0E7CD9CC3479716966C3A; };
-		6A7BBD3E7EEAFA04B44C050B = { isa = PBXBuildFile; fileRef = 12951FC3E3F7B5569974CE78; };
-		83C3B4027D23DD2115872E42 = { isa = PBXBuildFile; fileRef = 0816A2498A7B5D421F4FE92A; };
-		75C36303236DCEF68D110F96 = { isa = PBXBuildFile; fileRef = 7C468C36997B89D270418938; };
-		E40891D5A6AF35AD134EB7D6 = { isa = PBXBuildFile; fileRef = 6CDDD152F87AD6596C2D0056; };
-		0DFCA6F45AF58DE0DFE96B43 = { isa = PBXBuildFile; fileRef = 17FF0ECFB4A52EF6C37645E9; };
-		04840FBF67C1A7637ADAF6AD = { isa = PBXBuildFile; fileRef = 85A686C20CF5424466E74A5D; };
-		8576222752A013A2A7A0DD3F = { isa = PBXBuildFile; fileRef = AB7C448BAEADFC42E1C42B8E; };
-		4BAC15E3752BB819CA79CA51 = { isa = PBXBuildFile; fileRef = 06C18B57A601909EF3654E3C; };
-		106EE0C2BA81B2AAA9258B3F = { isa = PBXBuildFile; fileRef = 92F0731FEDC931C2DD157383; };
-		050777EA79DCDA1E876D5F45 = { isa = PBXBuildFile; fileRef = 5C95D4D1AADBB38078B06D8F; };
-		3E96D138E8A1FD38EC9FF856 = { isa = PBXBuildFile; fileRef = B784D2B75E9607353C9D9432; };
-		A1C6C77DBF3FE8C75354B064 = { isa = PBXBuildFile; fileRef = 52869BFC452B5FC9F80F0A9A; };
-		C31054DBCC765277FF56A5C1 = { isa = PBXBuildFile; fileRef = 205A6ED808200F169EFC5A3C; };
-		5B17B68A7FEE3C86E97083C6 = { isa = PBXBuildFile; fileRef = 33D171549E71AE201F2AD73B; };
-		3449126A9E213EAE8BB0072A = { isa = PBXBuildFile; fileRef = 2C0ADB7AF00A0DC236719610; };
-		29E2F54E63793CEA9CA90B37 = { isa = PBXBuildFile; fileRef = 677A6D59D043E9D024B38A68; };
-		53B4DE84F2DA3D0ADDE03AC0 /* Core/ReadingContinuationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61A2541CC296E5BA7163C216 /* Core/ReadingContinuationPolicy.swift */; };
-		6EEE4D6CFE5D115EDE5F7078 /* Tests/LocationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3467F6498CE5DB51A8061C4 /* Tests/LocationServiceTests.swift */; };
-		87EA3B6BDF4A82907B390544 /* Tests/ReadingContinuationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED5CAD6D2C0C6163099DC634 /* Tests/ReadingContinuationTests.swift */; };
-		41FCA247C449BDFC33F40F03 /* Tests/ReadingContinuationStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20234D92C0503593913D8B29 /* Tests/ReadingContinuationStoreTests.swift */; };
-		52A1BDB30179C2605296AB11 /* UITests/ReadingContinuationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2117640136054B5D1E93DE6A /* UITests/ReadingContinuationUITests.swift */; };
-		6DB166F23FEA9936B7A6EA4C /* Views/TimeZonePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3648D9B91033B79D49125D03 /* Views/TimeZonePicker.swift */; };
-		CEF8C6E5786AF9C105533469 /* Tests/ProfileFormTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0992E666DBA55AB834037B6 /* Tests/ProfileFormTests.swift */; };
-		3F09D9994B7AA981D9A3C01D /* Tests/FormIntakeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C8F1B6F4FC8170C35FD889 /* Tests/FormIntakeTests.swift */; };
-		8FB8B9B0D083B355FCF30CDF /* UITests/FormIntakeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01230A2A838CB347186D484 /* UITests/FormIntakeUITests.swift */; };
-		35D7067833369C6613CDE5EB /* Tests/SavedProfileReuseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECDCE4EBBF9652643ACF5273 /* Tests/SavedProfileReuseTests.swift */; };
-		51EC3E8B650FB2A8AF7218C0 /* UITests/SavedProfileReuseUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF20B46C59FF9D96E2637E58 /* UITests/SavedProfileReuseUITests.swift */; };
-		AC664F5C1390B30502A5C02B /* Tests/AppLanguageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 247A9EC788523554F771335E /* Tests/AppLanguageTests.swift */; };
-		4C385A5AC6717F3A602E3EE6 /* Resources/Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 856C499462BBFDE31A946813 /* Resources/Localizable.xcstrings */; };
-		4820144CCCE65F4CB24E180A /* Core/AppLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F121229E5AFC78F27C460B4B /* Core/AppLanguage.swift */; };
-		1206A3F92213CD72DB8E45D3 /* Resources/InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 6723B9E711E25E51CE0BCE8D /* Resources/InfoPlist.xcstrings */; };
-		5C710B275462269B0D966C86 /* Views/LegalDocumentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9908ED988795AD060EACED1 /* Views/LegalDocumentView.swift */; };
-		AB2691C2C7E51041F1471BF9 /* Tests/ExperienceRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF10BEC79FD76A40E75F377C; };
-		19F3AEEF4DE1DC33DA6047FF /* UITests/ExperienceFixUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABCC0926266A89641443A2AF; };
-		59344E191E6A4FF6113BE3B5 /* Core/TrueSolarBazi.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21E3FD6AD0E55EF5DB9063E7 /* Core/TrueSolarBazi.swift */; };
-		3A1F69ADF00F6010617C39AA /* Tests/TrueSolarBaziTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8039C36685EC6830637ED006 /* Tests/TrueSolarBaziTests.swift */; };
-/* End PBXBuildFile section */
-
-/* Begin PBXContainerItemProxy section */
-		7F796F1F402F084D42051CB9 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 98F54143AB4E86B28C3AFEE0 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 4F6027D858B72CC70E5CC8E9;
-			remoteInfo = BlindOracle;
-		};
-		9FE15850D9525F77FD6AA721 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 98F54143AB4E86B28C3AFEE0 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 4F6027D858B72CC70E5CC8E9;
-			remoteInfo = BlindOracle;
-		};
-/* End PBXContainerItemProxy section */
-
-/* Begin PBXFileReference section */
-		002C308C2ABD09C73AFA4BE8 /* Core/ConversationHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core/ConversationHistory.swift; sourceTree = "<group>"; };
-		03ECE31C7F69A6DD14D6866E /* Tests/LiveIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/LiveIntegrationTests.swift; sourceTree = "<group>"; };
-		04CAD42427C269F9F760AFBA /* Vendor/LunarSwift/JieQi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/JieQi.swift; sourceTree = "<group>"; };
-		0540227AC09D5DB982AC2B62 /* Vendor/LunarSwift/Tao.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/Tao.swift; sourceTree = "<group>"; };
-		0812CE684BCC5EA099DEB5B5 /* Vendor/LunarSwift/HolidayUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/HolidayUtil.swift; sourceTree = "<group>"; };
-		115C9EC4B5B56F7EC6C202B2 /* Vendor/LunarSwift/FotoFestival.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/FotoFestival.swift; sourceTree = "<group>"; };
-		1AD62ACA09DB0C13B0201779 /* Vendor/LunarSwift/FotoUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/FotoUtil.swift; sourceTree = "<group>"; };
-		1CFFDCE87BF4D13203DA3447 /* Tests/NativePluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/NativePluginTests.swift; sourceTree = "<group>"; };
-		2273C04BA03DEBAC3621ABE3 /* Vendor/LunarSwift/NineStar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/NineStar.swift; sourceTree = "<group>"; };
-		25F162EE31CC2A073312F9DC /* Resources/ThirdPartyNotices.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Resources/ThirdPartyNotices.txt; sourceTree = "<group>"; };
-		32D003CB4E1896D6CABC6A69 /* Vendor/LunarSwift/SolarWeek.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/SolarWeek.swift; sourceTree = "<group>"; };
-		33DBC853DD9D605566BA52A8 /* Vendor/LunarSwift/DaYun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/DaYun.swift; sourceTree = "<group>"; };
-		398169473CB0E42EACE9C08D /* Resources/Sky */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources/Sky; sourceTree = "<group>"; };
-		3BE8C2BF27E99086C51BD47F /* Vendor/LunarSwift/ShouXingUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/ShouXingUtil.swift; sourceTree = "<group>"; };
-		3FEC68C7279139775AAA7301 /* Vendor/LunarSwift/Lunar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/Lunar.swift; sourceTree = "<group>"; };
-		4133140DB3C7E888EE383751 /* Core/PluginRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core/PluginRegistry.swift; sourceTree = "<group>"; };
-		4385D45D874D64AD168AA287 /* Vendor/LunarSwift/Yun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/Yun.swift; sourceTree = "<group>"; };
-		458DA343CF351A710189AD91 /* Views/DataViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/DataViews.swift; sourceTree = "<group>"; };
-		472406C7D989E466B9DA8BB8 /* Plugins/Native/ChengguPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Native/ChengguPlugin.swift; sourceTree = "<group>"; };
-		48759B6513A7FE260F577D41 /* Documentation */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Documentation; sourceTree = "<group>"; };
-		5DAAF1F90BCD343A8C081F7A /* Vendor/LunarSwift/Foto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/Foto.swift; sourceTree = "<group>"; };
-		5FA034C5888B2339F7A89580 /* Vendor/LunarSwift/TaoFestival.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/TaoFestival.swift; sourceTree = "<group>"; };
-		616ED068AC33D4FB9449EB31 /* Vendor/LunarSwift/TaoUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/TaoUtil.swift; sourceTree = "<group>"; };
-		6876384C1F14AB301558A48A /* BlindOracleUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BlindOracleUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		69B82AE54AF8208EB0E59DE6 /* App/OracleStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/OracleStore.swift; sourceTree = "<group>"; };
-		6CBFC10119F66BB40AF54375 /* Views/ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/ChatView.swift; sourceTree = "<group>"; };
-		6E037D93B24FECDC028E88E9 /* Plugins/Native/XiaoliurenPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Native/XiaoliurenPlugin.swift; sourceTree = "<group>"; };
-		71A0A2DD63EA672EB9310151 /* Vendor/LunarSwift/LunarMonth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/LunarMonth.swift; sourceTree = "<group>"; };
-		7798695EE7B7021FBF200561 /* App/BlindOracleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/BlindOracleApp.swift; sourceTree = "<group>"; };
-		7E0774B2DD8CC0AF35CA454E /* Core/LocalVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core/LocalVault.swift; sourceTree = "<group>"; };
-		80AFF95D972AFBA6B05198E6 /* Vendor/LunarSwift/Solar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/Solar.swift; sourceTree = "<group>"; };
-		8476580A3DAFCDE4BA2067A1 /* Plugins/Sky/SkyPlugins.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Sky/SkyPlugins.swift; sourceTree = "<group>"; };
-		88538569096914C7E497DEFF /* Resources/Native */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources/Native; sourceTree = "<group>"; };
-		7D0DC9BF96A9A9D45B2568DD /* Resources/Locations */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources/Locations; sourceTree = "<group>"; };
-		8900E0A5CC06D22EE25BF707 /* Vendor/LunarSwift/ShuJiu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/ShuJiu.swift; sourceTree = "<group>"; };
-		8C2D6782D5487BC856F682EB /* Views/InkTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/InkTheme.swift; sourceTree = "<group>"; };
-		8E51DBF45614D11AA84C0EC5 /* Services/KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/KeychainStore.swift; sourceTree = "<group>"; };
-		92DFB59011F9A040BA8C93BC /* Vendor/LunarSwift/Holiday.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/Holiday.swift; sourceTree = "<group>"; };
-		94BA479195B46046DB8D7DB7 /* Vendor/LunarSwift/LunarUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/LunarUtil.swift; sourceTree = "<group>"; };
-		9547081036B521336C169F30 /* Services/DeepSeekClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/DeepSeekClient.swift; sourceTree = "<group>"; };
-		9AAFCA4F93C7AC9965F68B5F /* Vendor/LunarSwift/SolarUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/SolarUtil.swift; sourceTree = "<group>"; };
-		A078C17D7199A7485C2CD159 /* Vendor/LunarSwift/SolarYear.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/SolarYear.swift; sourceTree = "<group>"; };
-		A0A70EB8937B43119A88EBD3 /* Vendor/LunarSwift/SolarSeason.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/SolarSeason.swift; sourceTree = "<group>"; };
-		A1B45E6CA9A1EB0FBBFDEE04 /* Plugins/Native/LiuyaoPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Native/LiuyaoPlugin.swift; sourceTree = "<group>"; };
-		A1FF2DC0CAAB8E896C6DCF3A /* Core/OracleModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core/OracleModels.swift; sourceTree = "<group>"; };
-		AAAE2095FD8E3FA1AD8875F7 /* Views/ConversationHistorySidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/ConversationHistorySidebar.swift; sourceTree = "<group>"; };
-		AC2F8C120655A4D337468903 /* Plugins/Native/BaziPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Native/BaziPlugin.swift; sourceTree = "<group>"; };
-		AD32172FE07185B5709EABAA /* Tests/AIServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/AIServiceTests.swift; sourceTree = "<group>"; };
-		AD8DAFF1E2D591F4547537AA /* Vendor/Astronomy/BlindOracleSky.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Vendor/Astronomy/BlindOracleSky.c; sourceTree = "<group>"; };
-		B23A91BB4F68D3CBD8864718 /* Vendor/Astronomy/astronomy.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Vendor/Astronomy/astronomy.c; sourceTree = "<group>"; };
-		B5AF1DFCE463B6B761BCA81A /* Tests/ConversationHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/ConversationHistoryTests.swift; sourceTree = "<group>"; };
-		B6CDB6E5D160E013280D3C68 /* BlindOracle.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BlindOracle.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		BE0A31C234F191C3AF5443A3 /* Plugins/Native/XingmingPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Native/XingmingPlugin.swift; sourceTree = "<group>"; };
-		BE55F98D9D3E05A5FF30160D /* Tests/SkyPluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/SkyPluginTests.swift; sourceTree = "<group>"; };
-		C83D0942CC9F577D18D6B0ED /* Vendor/LunarSwift/EightChar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/EightChar.swift; sourceTree = "<group>"; };
-		CAF993DB33533D4B616777C5 /* Tests/PersistenceAndPreferenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/PersistenceAndPreferenceTests.swift; sourceTree = "<group>"; };
-		CDBAA86F1747D4914A807631 /* Services/ContextCompressor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/ContextCompressor.swift; sourceTree = "<group>"; };
-		D75A96199EC52C83C9ED1AF9 /* Vendor/LunarSwift/XiaoYun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/XiaoYun.swift; sourceTree = "<group>"; };
-		D93DB7F462232363EE5D8CE3 /* Vendor/LunarSwift/LiuYue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/LiuYue.swift; sourceTree = "<group>"; };
-		D9FBACD5DB4A9378D43274A3 /* Plugins/Native/MeihuaPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Native/MeihuaPlugin.swift; sourceTree = "<group>"; };
-		DBC60C2872AB143498164C85 /* Views/IntakeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/IntakeView.swift; sourceTree = "<group>"; };
-		DC74CA60FB509514320CD8DA /* Plugins/Native/QimenPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Native/QimenPlugin.swift; sourceTree = "<group>"; };
-		DC8B3EB2672A26B7ABF9A00B /* Vendor/LunarSwift/LunarYear.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/LunarYear.swift; sourceTree = "<group>"; };
-		DF77EF2A6D433E476524A995 /* Plugins/Native/NativeSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins/Native/NativeSupport.swift; sourceTree = "<group>"; };
-		E02A90D9643568EA39115CFB /* BlindOracleTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BlindOracleTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		E0E27618A2D2A8FEBDD49F35 /* Resources/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = "<group>"; };
-		E272884F9DD5FF8215160095 /* UITests/BlindOracleUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITests/BlindOracleUITests.swift; sourceTree = "<group>"; };
-		E2D7DD003B00C893BE8D52D6 /* Vendor/LunarSwift/SolarHalfYear.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/SolarHalfYear.swift; sourceTree = "<group>"; };
-		E5A536FA9087251C4696F365 /* Vendor/LunarSwift/LunarTime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/LunarTime.swift; sourceTree = "<group>"; };
-		E9658E6981BE22FFEDA80B6C /* Views/ReadingResultsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/ReadingResultsSheet.swift; sourceTree = "<group>"; };
-		F0B356011F6FAEF59E7D63A4 /* Services/LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/LocationService.swift; sourceTree = "<group>"; };
-		F704CBB7A9003610B62AE67B /* Vendor/LunarSwift/Fu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/Fu.swift; sourceTree = "<group>"; };
-		F986D4BB1FCD3D58BD853930 /* Vendor/LunarSwift/SolarMonth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/SolarMonth.swift; sourceTree = "<group>"; };
-		FDE748B901BA0D0C243217BB /* Vendor/LunarSwift/LiuNian.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/LunarSwift/LiuNian.swift; sourceTree = "<group>"; };
-		0E670E294D71DD409935A98E = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/OracleInteractionTests.swift"; sourceTree = "<group>"; };
-		2660E297A06FA807B423590F = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/TarotPluginTests.swift"; sourceTree = "<group>"; };
-		27B31E0553E504ABA8D2B310 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/OracleInteraction.swift"; sourceTree = "<group>"; };
-		4719657E3D6D78337DEF2B8D = { isa = PBXFileReference; lastKnownFileType = "folder"; path = "Resources/Tarot"; sourceTree = "<group>"; };
-		4C0C7F2D19EE90C70F7DE3E6 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/TarotSpreadView.swift"; sourceTree = "<group>"; };
-		55C384363A8589207F9DFF18 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/DeepSeekConfiguration.swift"; sourceTree = "<group>"; };
-		B19802EFAFD481A88DEA4571 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/InteractionUITests.swift"; sourceTree = "<group>"; };
-		E08983289BED6FB7BB35C08E = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/OracleInteractionView.swift"; sourceTree = "<group>"; };
-		F37A3DE18E78597A11D647FB = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/TarotDeck.swift"; sourceTree = "<group>"; };
-		F5D0CE4657728878EA583034 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/DeepSeekConfigurationTests.swift"; sourceTree = "<group>"; };
-		FBA3BC5E25A6B996FC1BD91A = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Plugins/Native/TarotPlugin.swift"; sourceTree = "<group>"; };
-		94C0E7CD9CC3479716966C3A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Core/OracleProgress.swift"; sourceTree = "<group>"; };
-		12951FC3E3F7B5569974CE78 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/OracleProcessingView.swift"; sourceTree = "<group>"; };
-		0816A2498A7B5D421F4FE92A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/OracleProgressTests.swift"; sourceTree = "<group>"; };
-		7C468C36997B89D270418938 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITests/ChatProgressUITests.swift"; sourceTree = "<group>"; };
-		6CDDD152F87AD6596C2D0056 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Core/ProfileDirectory.swift"; sourceTree = "<group>"; };
-		17FF0ECFB4A52EF6C37645E9 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Core/ReadingContextBuilder.swift"; sourceTree = "<group>"; };
-		85A686C20CF5424466E74A5D = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/GroupIntakeView.swift"; sourceTree = "<group>"; };
-		AB7C448BAEADFC42E1C42B8E = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ProfileDirectoryTests.swift"; sourceTree = "<group>"; };
-		06C18B57A601909EF3654E3C = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/MultiPersonReadingTests.swift"; sourceTree = "<group>"; };
-		92F0731FEDC931C2DD157383 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITests/MultiPersonUITests.swift"; sourceTree = "<group>"; };
-		5C95D4D1AADBB38078B06D8F = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Core/ReadingPreparation.swift"; sourceTree = "<group>"; };
-		B784D2B75E9607353C9D9432 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Core/ConversationalIntake.swift"; sourceTree = "<group>"; };
-		52869BFC452B5FC9F80F0A9A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ReadingPreparationTests.swift"; sourceTree = "<group>"; };
-		205A6ED808200F169EFC5A3C = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ConversationalIntakeTests.swift"; sourceTree = "<group>"; };
-		33D171549E71AE201F2AD73B = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITests/ProfileEditingUITests.swift"; sourceTree = "<group>"; };
-		2C0ADB7AF00A0DC236719610 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ReadingDeletionTests.swift"; sourceTree = "<group>"; };
-		677A6D59D043E9D024B38A68 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITests/DataLibraryUITests.swift"; sourceTree = "<group>"; };
-		61A2541CC296E5BA7163C216 /* Core/ReadingContinuationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Core/ReadingContinuationPolicy.swift"; sourceTree = "<group>"; };
-		B3467F6498CE5DB51A8061C4 /* Tests/LocationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/LocationServiceTests.swift"; sourceTree = "<group>"; };
-		ED5CAD6D2C0C6163099DC634 /* Tests/ReadingContinuationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ReadingContinuationTests.swift"; sourceTree = "<group>"; };
-		20234D92C0503593913D8B29 /* Tests/ReadingContinuationStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ReadingContinuationStoreTests.swift"; sourceTree = "<group>"; };
-		2117640136054B5D1E93DE6A /* UITests/ReadingContinuationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITests/ReadingContinuationUITests.swift"; sourceTree = "<group>"; };
-		3648D9B91033B79D49125D03 /* Views/TimeZonePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/TimeZonePicker.swift"; sourceTree = "<group>"; };
-		A0992E666DBA55AB834037B6 /* Tests/ProfileFormTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ProfileFormTests.swift"; sourceTree = "<group>"; };
-		79C8F1B6F4FC8170C35FD889 /* Tests/FormIntakeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/FormIntakeTests.swift"; sourceTree = "<group>"; };
-		D01230A2A838CB347186D484 /* UITests/FormIntakeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITests/FormIntakeUITests.swift"; sourceTree = "<group>"; };
-		ECDCE4EBBF9652643ACF5273 /* Tests/SavedProfileReuseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/SavedProfileReuseTests.swift"; sourceTree = "<group>"; };
-		BF20B46C59FF9D96E2637E58 /* UITests/SavedProfileReuseUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITests/SavedProfileReuseUITests.swift"; sourceTree = "<group>"; };
-		247A9EC788523554F771335E /* Tests/AppLanguageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/AppLanguageTests.swift; sourceTree = "<group>"; };
-		856C499462BBFDE31A946813 /* Resources/Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Resources/Localizable.xcstrings; sourceTree = "<group>"; };
-		F121229E5AFC78F27C460B4B /* Core/AppLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core/AppLanguage.swift; sourceTree = "<group>"; };
-		6723B9E711E25E51CE0BCE8D /* Resources/InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Resources/InfoPlist.xcstrings; sourceTree = "<group>"; };
-		A9908ED988795AD060EACED1 /* Views/LegalDocumentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/LegalDocumentView.swift; sourceTree = "<group>"; };
-		DF10BEC79FD76A40E75F377C /* Tests/ExperienceRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/ExperienceRegressionTests.swift"; sourceTree = "<group>"; };
-		ABCC0926266A89641443A2AF /* UITests/ExperienceFixUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITests/ExperienceFixUITests.swift"; sourceTree = "<group>"; };
-		21E3FD6AD0E55EF5DB9063E7 /* Core/TrueSolarBazi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core/TrueSolarBazi.swift; sourceTree = "<group>"; };
-		8039C36685EC6830637ED006 /* Tests/TrueSolarBaziTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/TrueSolarBaziTests.swift; sourceTree = "<group>"; };
-/* End PBXFileReference section */
-
-/* Begin PBXFrameworksBuildPhase section */
-		F01580CCB5F725E4E879D491 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase section */
-
-/* Begin PBXGroup section */
-		3B91224C671A3400805ED16F /* Resources */ = {
-			isa = PBXGroup;
-			children = (
-				856C499462BBFDE31A946813 /* Resources/Localizable.xcstrings */,
-				6723B9E711E25E51CE0BCE8D /* Resources/InfoPlist.xcstrings */,
-				48759B6513A7FE260F577D41 /* Documentation */,
-				E0E27618A2D2A8FEBDD49F35 /* Resources/Assets.xcassets */,
-				88538569096914C7E497DEFF /* Resources/Native */,
-				7D0DC9BF96A9A9D45B2568DD /* Resources/Locations */,
-				398169473CB0E42EACE9C08D /* Resources/Sky */,
-				25F162EE31CC2A073312F9DC /* Resources/ThirdPartyNotices.txt */,
-				4719657E3D6D78337DEF2B8D,
-			);
-			name = Resources;
-			sourceTree = "<group>";
-		};
-		4D820FADAFBC7A1FCACC4F07 /* Sources */ = {
-			isa = PBXGroup;
-			children = (
-				21E3FD6AD0E55EF5DB9063E7 /* Core/TrueSolarBazi.swift */,
-				F121229E5AFC78F27C460B4B /* Core/AppLanguage.swift */,
-				3648D9B91033B79D49125D03 /* Views/TimeZonePicker.swift */,
-				61A2541CC296E5BA7163C216 /* Core/ReadingContinuationPolicy.swift */,
-				7798695EE7B7021FBF200561 /* App/BlindOracleApp.swift */,
-				69B82AE54AF8208EB0E59DE6 /* App/OracleStore.swift */,
-				002C308C2ABD09C73AFA4BE8 /* Core/ConversationHistory.swift */,
-				7E0774B2DD8CC0AF35CA454E /* Core/LocalVault.swift */,
-				A1FF2DC0CAAB8E896C6DCF3A /* Core/OracleModels.swift */,
-				4133140DB3C7E888EE383751 /* Core/PluginRegistry.swift */,
-				AC2F8C120655A4D337468903 /* Plugins/Native/BaziPlugin.swift */,
-				472406C7D989E466B9DA8BB8 /* Plugins/Native/ChengguPlugin.swift */,
-				A1B45E6CA9A1EB0FBBFDEE04 /* Plugins/Native/LiuyaoPlugin.swift */,
-				D9FBACD5DB4A9378D43274A3 /* Plugins/Native/MeihuaPlugin.swift */,
-				DF77EF2A6D433E476524A995 /* Plugins/Native/NativeSupport.swift */,
-				DC74CA60FB509514320CD8DA /* Plugins/Native/QimenPlugin.swift */,
-				6E037D93B24FECDC028E88E9 /* Plugins/Native/XiaoliurenPlugin.swift */,
-				BE0A31C234F191C3AF5443A3 /* Plugins/Native/XingmingPlugin.swift */,
-				8476580A3DAFCDE4BA2067A1 /* Plugins/Sky/SkyPlugins.swift */,
-				CDBAA86F1747D4914A807631 /* Services/ContextCompressor.swift */,
-				9547081036B521336C169F30 /* Services/DeepSeekClient.swift */,
-				8E51DBF45614D11AA84C0EC5 /* Services/KeychainStore.swift */,
-				F0B356011F6FAEF59E7D63A4 /* Services/LocationService.swift */,
-				AD8DAFF1E2D591F4547537AA /* Vendor/Astronomy/BlindOracleSky.c */,
-				B23A91BB4F68D3CBD8864718 /* Vendor/Astronomy/astronomy.c */,
-				33DBC853DD9D605566BA52A8 /* Vendor/LunarSwift/DaYun.swift */,
-				C83D0942CC9F577D18D6B0ED /* Vendor/LunarSwift/EightChar.swift */,
-				5DAAF1F90BCD343A8C081F7A /* Vendor/LunarSwift/Foto.swift */,
-				115C9EC4B5B56F7EC6C202B2 /* Vendor/LunarSwift/FotoFestival.swift */,
-				1AD62ACA09DB0C13B0201779 /* Vendor/LunarSwift/FotoUtil.swift */,
-				F704CBB7A9003610B62AE67B /* Vendor/LunarSwift/Fu.swift */,
-				92DFB59011F9A040BA8C93BC /* Vendor/LunarSwift/Holiday.swift */,
-				0812CE684BCC5EA099DEB5B5 /* Vendor/LunarSwift/HolidayUtil.swift */,
-				04CAD42427C269F9F760AFBA /* Vendor/LunarSwift/JieQi.swift */,
-				FDE748B901BA0D0C243217BB /* Vendor/LunarSwift/LiuNian.swift */,
-				D93DB7F462232363EE5D8CE3 /* Vendor/LunarSwift/LiuYue.swift */,
-				3FEC68C7279139775AAA7301 /* Vendor/LunarSwift/Lunar.swift */,
-				71A0A2DD63EA672EB9310151 /* Vendor/LunarSwift/LunarMonth.swift */,
-				E5A536FA9087251C4696F365 /* Vendor/LunarSwift/LunarTime.swift */,
-				94BA479195B46046DB8D7DB7 /* Vendor/LunarSwift/LunarUtil.swift */,
-				DC8B3EB2672A26B7ABF9A00B /* Vendor/LunarSwift/LunarYear.swift */,
-				2273C04BA03DEBAC3621ABE3 /* Vendor/LunarSwift/NineStar.swift */,
-				3BE8C2BF27E99086C51BD47F /* Vendor/LunarSwift/ShouXingUtil.swift */,
-				8900E0A5CC06D22EE25BF707 /* Vendor/LunarSwift/ShuJiu.swift */,
-				80AFF95D972AFBA6B05198E6 /* Vendor/LunarSwift/Solar.swift */,
-				E2D7DD003B00C893BE8D52D6 /* Vendor/LunarSwift/SolarHalfYear.swift */,
-				F986D4BB1FCD3D58BD853930 /* Vendor/LunarSwift/SolarMonth.swift */,
-				A0A70EB8937B43119A88EBD3 /* Vendor/LunarSwift/SolarSeason.swift */,
-				9AAFCA4F93C7AC9965F68B5F /* Vendor/LunarSwift/SolarUtil.swift */,
-				32D003CB4E1896D6CABC6A69 /* Vendor/LunarSwift/SolarWeek.swift */,
-				A078C17D7199A7485C2CD159 /* Vendor/LunarSwift/SolarYear.swift */,
-				0540227AC09D5DB982AC2B62 /* Vendor/LunarSwift/Tao.swift */,
-				5FA034C5888B2339F7A89580 /* Vendor/LunarSwift/TaoFestival.swift */,
-				616ED068AC33D4FB9449EB31 /* Vendor/LunarSwift/TaoUtil.swift */,
-				D75A96199EC52C83C9ED1AF9 /* Vendor/LunarSwift/XiaoYun.swift */,
-				4385D45D874D64AD168AA287 /* Vendor/LunarSwift/Yun.swift */,
-				6CBFC10119F66BB40AF54375 /* Views/ChatView.swift */,
-				AAAE2095FD8E3FA1AD8875F7 /* Views/ConversationHistorySidebar.swift */,
-				458DA343CF351A710189AD91 /* Views/DataViews.swift */,
-				A9908ED988795AD060EACED1 /* Views/LegalDocumentView.swift */,
-				8C2D6782D5487BC856F682EB /* Views/InkTheme.swift */,
-				DBC60C2872AB143498164C85 /* Views/IntakeView.swift */,
-				E9658E6981BE22FFEDA80B6C /* Views/ReadingResultsSheet.swift */,
-				27B31E0553E504ABA8D2B310,
-				F37A3DE18E78597A11D647FB,
-				FBA3BC5E25A6B996FC1BD91A,
-				55C384363A8589207F9DFF18,
-				E08983289BED6FB7BB35C08E,
-				4C0C7F2D19EE90C70F7DE3E6,
-				94C0E7CD9CC3479716966C3A,
-				12951FC3E3F7B5569974CE78,
-				6CDDD152F87AD6596C2D0056,
-				17FF0ECFB4A52EF6C37645E9,
-				85A686C20CF5424466E74A5D,
-				5C95D4D1AADBB38078B06D8F,
-				B784D2B75E9607353C9D9432,
-			);
-			name = Sources;
-			sourceTree = "<group>";
-		};
-		536329F47F8EAF961EDFDB02 /* Tests */ = {
-			isa = PBXGroup;
-			children = (
-				8039C36685EC6830637ED006 /* Tests/TrueSolarBaziTests.swift */,
-				DF10BEC79FD76A40E75F377C,
-				247A9EC788523554F771335E /* Tests/AppLanguageTests.swift */,
-				ECDCE4EBBF9652643ACF5273 /* Tests/SavedProfileReuseTests.swift */,
-				79C8F1B6F4FC8170C35FD889 /* Tests/FormIntakeTests.swift */,
-				A0992E666DBA55AB834037B6 /* Tests/ProfileFormTests.swift */,
-				20234D92C0503593913D8B29 /* Tests/ReadingContinuationStoreTests.swift */,
-				ED5CAD6D2C0C6163099DC634 /* Tests/ReadingContinuationTests.swift */,
-				B3467F6498CE5DB51A8061C4 /* Tests/LocationServiceTests.swift */,
-				AD32172FE07185B5709EABAA /* Tests/AIServiceTests.swift */,
-				B5AF1DFCE463B6B761BCA81A /* Tests/ConversationHistoryTests.swift */,
-				03ECE31C7F69A6DD14D6866E /* Tests/LiveIntegrationTests.swift */,
-				1CFFDCE87BF4D13203DA3447 /* Tests/NativePluginTests.swift */,
-				CAF993DB33533D4B616777C5 /* Tests/PersistenceAndPreferenceTests.swift */,
-				BE55F98D9D3E05A5FF30160D /* Tests/SkyPluginTests.swift */,
-				F5D0CE4657728878EA583034,
-				0E670E294D71DD409935A98E,
-				2660E297A06FA807B423590F,
-				0816A2498A7B5D421F4FE92A,
-				AB7C448BAEADFC42E1C42B8E,
-				06C18B57A601909EF3654E3C,
-				52869BFC452B5FC9F80F0A9A,
-				205A6ED808200F169EFC5A3C,
-				2C0ADB7AF00A0DC236719610,
-			);
-			name = Tests;
-			sourceTree = "<group>";
-		};
-		666C2AE724655A458A689DF0 /* UITests */ = {
-			isa = PBXGroup;
-			children = (
-				ABCC0926266A89641443A2AF,
-				BF20B46C59FF9D96E2637E58 /* UITests/SavedProfileReuseUITests.swift */,
-				D01230A2A838CB347186D484 /* UITests/FormIntakeUITests.swift */,
-				2117640136054B5D1E93DE6A /* UITests/ReadingContinuationUITests.swift */,
-				E272884F9DD5FF8215160095 /* UITests/BlindOracleUITests.swift */,
-				B19802EFAFD481A88DEA4571,
-				7C468C36997B89D270418938,
-				92F0731FEDC931C2DD157383,
-				33D171549E71AE201F2AD73B,
-				677A6D59D043E9D024B38A68,
-			);
-			name = UITests;
-			sourceTree = "<group>";
-		};
-		B28B7AF69320201D1CF206EB = {
-			isa = PBXGroup;
-			children = (
-				4D820FADAFBC7A1FCACC4F07 /* Sources */,
-				3B91224C671A3400805ED16F /* Resources */,
-				536329F47F8EAF961EDFDB02 /* Tests */,
-				666C2AE724655A458A689DF0 /* UITests */,
-				FBDC4F23F93125BBEEAE800C /* Products */,
-			);
-			sourceTree = "<group>";
-		};
-		FBDC4F23F93125BBEEAE800C /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				B6CDB6E5D160E013280D3C68 /* BlindOracle.app */,
-				E02A90D9643568EA39115CFB /* BlindOracleTests.xctest */,
-				6876384C1F14AB301558A48A /* BlindOracleUITests.xctest */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
-/* End PBXGroup section */
-
-/* Begin PBXNativeTarget section */
-		4F6027D858B72CC70E5CC8E9 /* BlindOracle */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 60EA43DB068BD71C9709BED5 /* Build configuration list for PBXNativeTarget "BlindOracle" */;
-			buildPhases = (
-				72A8017E75795FC05F78F54C /* Sources */,
-				F01580CCB5F725E4E879D491 /* Frameworks */,
-				963488E8A773A44C9A5DC523 /* Resources */,
-				6AE714225C736D4ADBFFB751 /* Bundled service credential */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = BlindOracle;
-			productName = BlindOracle;
-			productReference = B6CDB6E5D160E013280D3C68 /* BlindOracle.app */;
-			productType = "com.apple.product-type.application";
-		};
-		9EDDF07CDE35AC3E819F75FB /* BlindOracleUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = C57F3D09EA23F69B6FFD791A /* Build configuration list for PBXNativeTarget "BlindOracleUITests" */;
-			buildPhases = (
-				0AA69D9A4583D0A6B3B9DD67 /* Sources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				7049CC82325B8E002825BA60 /* PBXTargetDependency */,
-			);
-			name = BlindOracleUITests;
-			productName = BlindOracleUITests;
-			productReference = 6876384C1F14AB301558A48A /* BlindOracleUITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
-		};
-		DB232FBED708F45A1A18553B /* BlindOracleTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = A0A34E2380831175F5122A0A /* Build configuration list for PBXNativeTarget "BlindOracleTests" */;
-			buildPhases = (
-				EC2E9EAA9E1CA4B18AE2370A /* Sources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				536D435B7D8111256AE5EB34 /* PBXTargetDependency */,
-			);
-			name = BlindOracleTests;
-			productName = BlindOracleTests;
-			productReference = E02A90D9643568EA39115CFB /* BlindOracleTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
-/* End PBXNativeTarget section */
-
-/* Begin PBXProject section */
-		98F54143AB4E86B28C3AFEE0 /* Project object */ = {
-			isa = PBXProject;
-			attributes = {
-				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 2710;
-			};
-			buildConfigurationList = BC7E287B75C6D3E574547D08 /* Build configuration list for PBXProject "BlindOracle" */;
-			compatibilityVersion = "Xcode 14.0";
-			developmentRegion = "zh-Hans";
-			hasScannedForEncodings = 0;
-			knownRegions = (
-				"zh-Hans",
-				en,
-				Base,
-			);
-			mainGroup = B28B7AF69320201D1CF206EB;
-			productRefGroup = FBDC4F23F93125BBEEAE800C /* Products */;
-			projectDirPath = "";
-			projectRoot = "";
-			targets = (
-				4F6027D858B72CC70E5CC8E9 /* BlindOracle */,
-				DB232FBED708F45A1A18553B /* BlindOracleTests */,
-				9EDDF07CDE35AC3E819F75FB /* BlindOracleUITests */,
-			);
-		};
-/* End PBXProject section */
-
-/* Begin PBXResourcesBuildPhase section */
-		963488E8A773A44C9A5DC523 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				4C385A5AC6717F3A602E3EE6 /* Resources/Localizable.xcstrings in Resources */,
-				1206A3F92213CD72DB8E45D3 /* Resources/InfoPlist.xcstrings in Resources */,
-				746C5639EB0CEC99AFBAF471 /* Documentation in Resources */,
-				627BBC9C62B0C159B656E415 /* Resources/Assets.xcassets in Resources */,
-				E20E43DF0EF623694FA77290 /* Resources/Native in Resources */,
-				7C4185D044A69B70C0B2842D /* Resources/Locations in Resources */,
-				F39B1118CA2E5AD9282000D7 /* Resources/Sky in Resources */,
-				039183FC04B9E630ADB31B62 /* Resources/ThirdPartyNotices.txt in Resources */,
-				51042322101E35BFD7ECDE75,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		6AE714225C736D4ADBFFB751 /* Bundled service credential */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "Bundled service credential";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "/usr/bin/python3 \"${SRCROOT}/Scripts/development_key.py\"";
-		};
-/* End PBXShellScriptBuildPhase section */
-
-/* Begin PBXSourcesBuildPhase section */
-		0AA69D9A4583D0A6B3B9DD67 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				19F3AEEF4DE1DC33DA6047FF,
-				51EC3E8B650FB2A8AF7218C0 /* UITests/SavedProfileReuseUITests.swift in Sources */,
-				8FB8B9B0D083B355FCF30CDF /* UITests/FormIntakeUITests.swift in Sources */,
-				52A1BDB30179C2605296AB11 /* UITests/ReadingContinuationUITests.swift in Sources */,
-				67D503817DF9FD0B0CAC3EA1 /* UITests/BlindOracleUITests.swift in Sources */,
-				B2A6A36FECF092F3FAE05A71,
-				75C36303236DCEF68D110F96,
-				106EE0C2BA81B2AAA9258B3F,
-				5B17B68A7FEE3C86E97083C6,
-				29E2F54E63793CEA9CA90B37,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		72A8017E75795FC05F78F54C /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				59344E191E6A4FF6113BE3B5 /* Core/TrueSolarBazi.swift in Sources */,
-				4820144CCCE65F4CB24E180A /* Core/AppLanguage.swift in Sources */,
-				6DB166F23FEA9936B7A6EA4C /* Views/TimeZonePicker.swift in Sources */,
-				53B4DE84F2DA3D0ADDE03AC0 /* Core/ReadingContinuationPolicy.swift in Sources */,
-				24C749653174E5349B4F3351 /* App/BlindOracleApp.swift in Sources */,
-				0A8297633187AD275FE62253 /* App/OracleStore.swift in Sources */,
-				17063F990CA0F9C819D21E47 /* Core/ConversationHistory.swift in Sources */,
-				F241310AF2239B604A24C047 /* Core/LocalVault.swift in Sources */,
-				C3C899EE711D48353C5D67D2 /* Core/OracleModels.swift in Sources */,
-				4DB2469F18EAA1FDEBA34892 /* Core/PluginRegistry.swift in Sources */,
-				D5A3BA585CFBB2EC28E38A2C /* Plugins/Native/BaziPlugin.swift in Sources */,
-				4C5581F0F020AF83D7D02662 /* Plugins/Native/ChengguPlugin.swift in Sources */,
-				9293069317A423FF1B8B8176 /* Plugins/Native/LiuyaoPlugin.swift in Sources */,
-				9D22C8215226F5D79F6617F8 /* Plugins/Native/MeihuaPlugin.swift in Sources */,
-				ED9B130A3387D75AF9D5AF48 /* Plugins/Native/NativeSupport.swift in Sources */,
-				AC483E5005B1C308F0439EF2 /* Plugins/Native/QimenPlugin.swift in Sources */,
-				E66B5BD6F94E13A2AC0D3457 /* Plugins/Native/XiaoliurenPlugin.swift in Sources */,
-				8B427F0BADD80C692437DEBC /* Plugins/Native/XingmingPlugin.swift in Sources */,
-				FC11462A1D5F39B071C88226 /* Plugins/Sky/SkyPlugins.swift in Sources */,
-				D72496060A9C4AFB3638F798 /* Services/ContextCompressor.swift in Sources */,
-				9AB09DD69B6C8DE61FEFFA5C /* Services/DeepSeekClient.swift in Sources */,
-				51E04D8379A6DB36BF561F9F /* Services/KeychainStore.swift in Sources */,
-				587B702876373BF0CEF258DE /* Services/LocationService.swift in Sources */,
-				77D1B4D6E941FE3FA21B98A8 /* Vendor/Astronomy/BlindOracleSky.c in Sources */,
-				C27D346B01DDF74439BD2A66 /* Vendor/Astronomy/astronomy.c in Sources */,
-				3DE6CBA0A22BDCD953774104 /* Vendor/LunarSwift/DaYun.swift in Sources */,
-				7B69A1607CBCAC5312B4C715 /* Vendor/LunarSwift/EightChar.swift in Sources */,
-				04372582E955CE1775FBC427 /* Vendor/LunarSwift/Foto.swift in Sources */,
-				15282667D81C35E388711ADF /* Vendor/LunarSwift/FotoFestival.swift in Sources */,
-				5AD747EF296A761A06F2EAE9 /* Vendor/LunarSwift/FotoUtil.swift in Sources */,
-				0DBCD0A701F634B2B768B352 /* Vendor/LunarSwift/Fu.swift in Sources */,
-				E6C95734662DD72D49181038 /* Vendor/LunarSwift/Holiday.swift in Sources */,
-				7D7C9E9DC387AF2EA0C9B021 /* Vendor/LunarSwift/HolidayUtil.swift in Sources */,
-				FE6A393A73586051011EBA03 /* Vendor/LunarSwift/JieQi.swift in Sources */,
-				6BCF15CE1D308D5A5703596B /* Vendor/LunarSwift/LiuNian.swift in Sources */,
-				5702D4ABFD3BD3B9C84925D2 /* Vendor/LunarSwift/LiuYue.swift in Sources */,
-				F858321910B4E380FCC73483 /* Vendor/LunarSwift/Lunar.swift in Sources */,
-				49BD94E331905E4E63636EB0 /* Vendor/LunarSwift/LunarMonth.swift in Sources */,
-				213C330AF37F39F0DD1A134F /* Vendor/LunarSwift/LunarTime.swift in Sources */,
-				F0B2F8F9B5F719701902F6FD /* Vendor/LunarSwift/LunarUtil.swift in Sources */,
-				4E1F7F891F816AC63C48FC8C /* Vendor/LunarSwift/LunarYear.swift in Sources */,
-				78B96DF05521BE6B1C616A6D /* Vendor/LunarSwift/NineStar.swift in Sources */,
-				E95EA32AA97461216CAF9193 /* Vendor/LunarSwift/ShouXingUtil.swift in Sources */,
-				B6063DE17974A861E59FA914 /* Vendor/LunarSwift/ShuJiu.swift in Sources */,
-				6D1630B5EA75E78F1440AD6F /* Vendor/LunarSwift/Solar.swift in Sources */,
-				B8B32F9D350BAA9B5462D4F3 /* Vendor/LunarSwift/SolarHalfYear.swift in Sources */,
-				74CED8506BD39603E0704024 /* Vendor/LunarSwift/SolarMonth.swift in Sources */,
-				A67B78724C2A4E982CD4492E /* Vendor/LunarSwift/SolarSeason.swift in Sources */,
-				3EA08A340576F6491C5AC7DB /* Vendor/LunarSwift/SolarUtil.swift in Sources */,
-				32040188B3489D3AA795BFF3 /* Vendor/LunarSwift/SolarWeek.swift in Sources */,
-				2F0F4CFC2317D5EB827F400A /* Vendor/LunarSwift/SolarYear.swift in Sources */,
-				81F541DB98F5B14E344CFD7F /* Vendor/LunarSwift/Tao.swift in Sources */,
-				DF2C2CE6AA9AA823003CD183 /* Vendor/LunarSwift/TaoFestival.swift in Sources */,
-				372A1E40C99D01DB3C4820DB /* Vendor/LunarSwift/TaoUtil.swift in Sources */,
-				9AC904784CD622D520494C80 /* Vendor/LunarSwift/XiaoYun.swift in Sources */,
-				52B1BEBAB802F236671500C3 /* Vendor/LunarSwift/Yun.swift in Sources */,
-				30A033228EED3E59F0169C6C /* Views/ChatView.swift in Sources */,
-				876ECDAAA3EB1315056096B9 /* Views/ConversationHistorySidebar.swift in Sources */,
-				0B77E5E4F7CFB30FC448AFB9 /* Views/DataViews.swift in Sources */,
-				5C710B275462269B0D966C86 /* Views/LegalDocumentView.swift in Sources */,
-				A610D2D8AFAD6041D279FAAC /* Views/InkTheme.swift in Sources */,
-				5DA2F73375E50353D155104C /* Views/IntakeView.swift in Sources */,
-				033C56C418649AA9917F4B19 /* Views/ReadingResultsSheet.swift in Sources */,
-				7EAFFA1B1D2E5CD03A97C8D2,
-				6A56EDB92AE3740F0502585C,
-				99A23049938EF439DD00FEE2,
-				9A009DCC2D6BEAA937A5DE5E,
-				D4AE0C2971C14BECBD0ECE6E,
-				B05D8A18785590E6F0C86505,
-				9B95E6272DB497164733D91F,
-				6A7BBD3E7EEAFA04B44C050B,
-				E40891D5A6AF35AD134EB7D6,
-				0DFCA6F45AF58DE0DFE96B43,
-				04840FBF67C1A7637ADAF6AD,
-				050777EA79DCDA1E876D5F45,
-				3E96D138E8A1FD38EC9FF856,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		EC2E9EAA9E1CA4B18AE2370A /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				3A1F69ADF00F6010617C39AA /* Tests/TrueSolarBaziTests.swift in Sources */,
-				AB2691C2C7E51041F1471BF9,
-				AC664F5C1390B30502A5C02B /* Tests/AppLanguageTests.swift in Sources */,
-				35D7067833369C6613CDE5EB /* Tests/SavedProfileReuseTests.swift in Sources */,
-				3F09D9994B7AA981D9A3C01D /* Tests/FormIntakeTests.swift in Sources */,
-				CEF8C6E5786AF9C105533469 /* Tests/ProfileFormTests.swift in Sources */,
-				41FCA247C449BDFC33F40F03 /* Tests/ReadingContinuationStoreTests.swift in Sources */,
-				87EA3B6BDF4A82907B390544 /* Tests/ReadingContinuationTests.swift in Sources */,
-				6EEE4D6CFE5D115EDE5F7078 /* Tests/LocationServiceTests.swift in Sources */,
-				D1C867563B6C7A076B56B7B9 /* Tests/AIServiceTests.swift in Sources */,
-				1BEB9F65990743FA14F6EA46 /* Tests/ConversationHistoryTests.swift in Sources */,
-				D4E0E78DD8A32162315CF6A1 /* Tests/LiveIntegrationTests.swift in Sources */,
-				8A2E3806BC4E3818DC60623B /* Tests/NativePluginTests.swift in Sources */,
-				04A45B0CCBAB6E71A5D7654C /* Tests/PersistenceAndPreferenceTests.swift in Sources */,
-				C336DE80D20BB10B10D16E05 /* Tests/SkyPluginTests.swift in Sources */,
-				07DD1792BAF6420599BEE707,
-				6FCF72462B41723578A32165,
-				9C79F323EE8960ED9D06526C,
-				83C3B4027D23DD2115872E42,
-				8576222752A013A2A7A0DD3F,
-				4BAC15E3752BB819CA79CA51,
-				A1C6C77DBF3FE8C75354B064,
-				C31054DBCC765277FF56A5C1,
-				3449126A9E213EAE8BB0072A,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXSourcesBuildPhase section */
-
-/* Begin PBXTargetDependency section */
-		536D435B7D8111256AE5EB34 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 4F6027D858B72CC70E5CC8E9 /* BlindOracle */;
-			targetProxy = 7F796F1F402F084D42051CB9 /* PBXContainerItemProxy */;
-		};
-		7049CC82325B8E002825BA60 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 4F6027D858B72CC70E5CC8E9 /* BlindOracle */;
-			targetProxy = 9FE15850D9525F77FD6AA721 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
-
-/* Begin XCBuildConfiguration section */
-		0DBF25066740E4B8CB8AB751 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				GCC_WARN_INHIBIT_ALL_WARNINGS = NO;
-				LM_SKIP_METADATA_EXTRACTION = YES;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
-			};
-			name = Release;
-		};
-		19C812D6422FDF71C22582DF /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CODE_SIGN_STYLE = Automatic;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(SRCROOT)/Vendor/Astronomy",
-				);
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.lihao.BlindOracleTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_STRICT_CONCURRENCY = minimal;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BlindOracle.app/BlindOracle";
-			};
-			name = Release;
-		};
-		1FA51788B7965A8459664B67 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 40;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = A82X46N3WS;
-				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(SRCROOT)/Vendor/Astronomy",
-				);
-				INFOPLIST_FILE = App/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 3.0.14;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lihao.BlindOracle;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_OBJC_BRIDGING_HEADER = "App/BlindOracle-Bridging-Header.h";
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_STRICT_CONCURRENCY = minimal;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		62F853339D0D10F1A61A1EFA /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				ENABLE_TESTABILITY = YES;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				GCC_WARN_INHIBIT_ALL_WARNINGS = NO;
-				LM_SKIP_METADATA_EXTRACTION = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-			};
-			name = Debug;
-		};
-		8AD3BB4A5DF33E553662F892 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 40;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = A82X46N3WS;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(SRCROOT)/Vendor/Astronomy",
-				);
-				INFOPLIST_FILE = App/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 3.0.14;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lihao.BlindOracle;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SWIFT_OBJC_BRIDGING_HEADER = "App/BlindOracle-Bridging-Header.h";
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_STRICT_CONCURRENCY = minimal;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
-		8F8256A4919E54295364C19B /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CODE_SIGN_STYLE = Automatic;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(SRCROOT)/Vendor/Astronomy",
-				);
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.lihao.BlindOracleTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_STRICT_CONCURRENCY = minimal;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BlindOracle.app/BlindOracle";
-			};
-			name = Debug;
-		};
-		B7223F84B7658242BC4AD262 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CODE_SIGN_STYLE = Automatic;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(SRCROOT)/Vendor/Astronomy",
-				);
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.lihao.BlindOracleUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_STRICT_CONCURRENCY = minimal;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = BlindOracle;
-			};
-			name = Debug;
-		};
-		C42EE2BD390452B96426F340 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CODE_SIGN_STYLE = Automatic;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(SRCROOT)/Vendor/Astronomy",
-				);
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.lihao.BlindOracleUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_STRICT_CONCURRENCY = minimal;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = BlindOracle;
-			};
-			name = Release;
-		};
-/* End XCBuildConfiguration section */
-
-/* Begin XCConfigurationList section */
-		60EA43DB068BD71C9709BED5 /* Build configuration list for PBXNativeTarget "BlindOracle" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				1FA51788B7965A8459664B67 /* Debug */,
-				8AD3BB4A5DF33E553662F892 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		A0A34E2380831175F5122A0A /* Build configuration list for PBXNativeTarget "BlindOracleTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				8F8256A4919E54295364C19B /* Debug */,
-				19C812D6422FDF71C22582DF /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		BC7E287B75C6D3E574547D08 /* Build configuration list for PBXProject "BlindOracle" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				62F853339D0D10F1A61A1EFA /* Debug */,
-				0DBF25066740E4B8CB8AB751 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		C57F3D09EA23F69B6FFD791A /* Build configuration list for PBXNativeTarget "BlindOracleUITests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				B7223F84B7658242BC4AD262 /* Debug */,
-				C42EE2BD390452B96426F340 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-/* End XCConfigurationList section */
-	};
-	rootObject = 98F54143AB4E86B28C3AFEE0 /* Project object */;
-}
+{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {
+7798695EE7B7021FBF200561 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "App/BlindOracleApp.swift"; sourceTree = "<group>"; };
+24C749653174E5349B4F3351 = { isa = PBXBuildFile; fileRef = 7798695EE7B7021FBF200561; };
+69B82AE54AF8208EB0E59DE6 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "App/OracleStore.swift"; sourceTree = "<group>"; };
+0A8297633187AD275FE62253 = { isa = PBXBuildFile; fileRef = 69B82AE54AF8208EB0E59DE6; };
+F121229E5AFC78F27C460B4B = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/AppLanguage.swift"; sourceTree = "<group>"; };
+4820144CCCE65F4CB24E180A = { isa = PBXBuildFile; fileRef = F121229E5AFC78F27C460B4B; };
+002C308C2ABD09C73AFA4BE8 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/ConversationHistory.swift"; sourceTree = "<group>"; };
+17063F990CA0F9C819D21E47 = { isa = PBXBuildFile; fileRef = 002C308C2ABD09C73AFA4BE8; };
+B784D2B75E9607353C9D9432 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/ConversationalIntake.swift"; sourceTree = "<group>"; };
+3E96D138E8A1FD38EC9FF856 = { isa = PBXBuildFile; fileRef = B784D2B75E9607353C9D9432; };
+7E0774B2DD8CC0AF35CA454E = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/LocalVault.swift"; sourceTree = "<group>"; };
+F241310AF2239B604A24C047 = { isa = PBXBuildFile; fileRef = 7E0774B2DD8CC0AF35CA454E; };
+27B31E0553E504ABA8D2B310 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/OracleInteraction.swift"; sourceTree = "<group>"; };
+7EAFFA1B1D2E5CD03A97C8D2 = { isa = PBXBuildFile; fileRef = 27B31E0553E504ABA8D2B310; };
+A1FF2DC0CAAB8E896C6DCF3A = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/OracleModels.swift"; sourceTree = "<group>"; };
+C3C899EE711D48353C5D67D2 = { isa = PBXBuildFile; fileRef = A1FF2DC0CAAB8E896C6DCF3A; };
+94C0E7CD9CC3479716966C3A = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/OracleProgress.swift"; sourceTree = "<group>"; };
+9B95E6272DB497164733D91F = { isa = PBXBuildFile; fileRef = 94C0E7CD9CC3479716966C3A; };
+4133140DB3C7E888EE383751 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/PluginRegistry.swift"; sourceTree = "<group>"; };
+4DB2469F18EAA1FDEBA34892 = { isa = PBXBuildFile; fileRef = 4133140DB3C7E888EE383751; };
+6CDDD152F87AD6596C2D0056 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/ProfileDirectory.swift"; sourceTree = "<group>"; };
+E40891D5A6AF35AD134EB7D6 = { isa = PBXBuildFile; fileRef = 6CDDD152F87AD6596C2D0056; };
+17FF0ECFB4A52EF6C37645E9 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/ReadingContextBuilder.swift"; sourceTree = "<group>"; };
+0DFCA6F45AF58DE0DFE96B43 = { isa = PBXBuildFile; fileRef = 17FF0ECFB4A52EF6C37645E9; };
+61A2541CC296E5BA7163C216 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/ReadingContinuationPolicy.swift"; sourceTree = "<group>"; };
+53B4DE84F2DA3D0ADDE03AC0 = { isa = PBXBuildFile; fileRef = 61A2541CC296E5BA7163C216; };
+5C95D4D1AADBB38078B06D8F = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/ReadingPreparation.swift"; sourceTree = "<group>"; };
+050777EA79DCDA1E876D5F45 = { isa = PBXBuildFile; fileRef = 5C95D4D1AADBB38078B06D8F; };
+F37A3DE18E78597A11D647FB = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/TarotDeck.swift"; sourceTree = "<group>"; };
+6A56EDB92AE3740F0502585C = { isa = PBXBuildFile; fileRef = F37A3DE18E78597A11D647FB; };
+21E3FD6AD0E55EF5DB9063E7 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Core/TrueSolarBazi.swift"; sourceTree = "<group>"; };
+59344E191E6A4FF6113BE3B5 = { isa = PBXBuildFile; fileRef = 21E3FD6AD0E55EF5DB9063E7; };
+AC2F8C120655A4D337468903 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Plugins/Native/BaziPlugin.swift"; sourceTree = "<group>"; };
+D5A3BA585CFBB2EC28E38A2C = { isa = PBXBuildFile; fileRef = AC2F8C120655A4D337468903; };
+472406C7D989E466B9DA8BB8 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Plugins/Native/ChengguPlugin.swift"; sourceTree = "<group>"; };
+4C5581F0F020AF83D7D02662 = { isa = PBXBuildFile; fileRef = 472406C7D989E466B9DA8BB8; };
+A1B45E6CA9A1EB0FBBFDEE04 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Plugins/Native/LiuyaoPlugin.swift"; sourceTree = "<group>"; };
+9293069317A423FF1B8B8176 = { isa = PBXBuildFile; fileRef = A1B45E6CA9A1EB0FBBFDEE04; };
+D9FBACD5DB4A9378D43274A3 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Plugins/Native/MeihuaPlugin.swift"; sourceTree = "<group>"; };
+9D22C8215226F5D79F6617F8 = { isa = PBXBuildFile; fileRef = D9FBACD5DB4A9378D43274A3; };
+DF77EF2A6D433E476524A995 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Plugins/Native/NativeSupport.swift"; sourceTree = "<group>"; };
+ED9B130A3387D75AF9D5AF48 = { isa = PBXBuildFile; fileRef = DF77EF2A6D433E476524A995; };
+DC74CA60FB509514320CD8DA = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Plugins/Native/QimenPlugin.swift"; sourceTree = "<group>"; };
+AC483E5005B1C308F0439EF2 = { isa = PBXBuildFile; fileRef = DC74CA60FB509514320CD8DA; };
+FBA3BC5E25A6B996FC1BD91A = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Plugins/Native/TarotPlugin.swift"; sourceTree = "<group>"; };
+99A23049938EF439DD00FEE2 = { isa = PBXBuildFile; fileRef = FBA3BC5E25A6B996FC1BD91A; };
+6E037D93B24FECDC028E88E9 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Plugins/Native/XiaoliurenPlugin.swift"; sourceTree = "<group>"; };
+E66B5BD6F94E13A2AC0D3457 = { isa = PBXBuildFile; fileRef = 6E037D93B24FECDC028E88E9; };
+BE0A31C234F191C3AF5443A3 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Plugins/Native/XingmingPlugin.swift"; sourceTree = "<group>"; };
+8B427F0BADD80C692437DEBC = { isa = PBXBuildFile; fileRef = BE0A31C234F191C3AF5443A3; };
+8476580A3DAFCDE4BA2067A1 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Plugins/Sky/SkyPlugins.swift"; sourceTree = "<group>"; };
+FC11462A1D5F39B071C88226 = { isa = PBXBuildFile; fileRef = 8476580A3DAFCDE4BA2067A1; };
+0DE0BD2D5F4CBCB82048077C = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/AIDataSharingConsent.swift"; sourceTree = "<group>"; };
+1618EC532038E4A4DE1C616D = { isa = PBXBuildFile; fileRef = 0DE0BD2D5F4CBCB82048077C; };
+C2326A859C0F9DD0BB0B3D41 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/AIQuotaTask.swift"; sourceTree = "<group>"; };
+803F523CFD5DA504F4009E71 = { isa = PBXBuildFile; fileRef = C2326A859C0F9DD0BB0B3D41; };
+54AC633403DB0EB9D164E84B = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/AccountAPI.swift"; sourceTree = "<group>"; };
+27A38B7E714D005B6D348691 = { isa = PBXBuildFile; fileRef = 54AC633403DB0EB9D164E84B; };
+535B5A5D38D5734A247486B2 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/AccountPurchaseProvider.swift"; sourceTree = "<group>"; };
+6DFB7D39FF70DB7AC3804885 = { isa = PBXBuildFile; fileRef = 535B5A5D38D5734A247486B2; };
+7B7C3D299D01EF876449B37E = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/AccountPurchaseStore.swift"; sourceTree = "<group>"; };
+F77F98824D5EEADC6256E916 = { isa = PBXBuildFile; fileRef = 7B7C3D299D01EF876449B37E; };
+002A0AF161F4D00819562651 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/AccountSessionManager.swift"; sourceTree = "<group>"; };
+C3824341E1A5BFEFF992B613 = { isa = PBXBuildFile; fileRef = 002A0AF161F4D00819562651; };
+DB577B94FE8ABDE3086638A7 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/AccountSessionVault.swift"; sourceTree = "<group>"; };
+179060A1B8F6F5DAC0FA7F2D = { isa = PBXBuildFile; fileRef = DB577B94FE8ABDE3086638A7; };
+162ABC339AA6EAB766B60ECA = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/AccountStore.swift"; sourceTree = "<group>"; };
+33D603CB24A052DD25D495A7 = { isa = PBXBuildFile; fileRef = 162ABC339AA6EAB766B60ECA; };
+CF1937D205BA01F32711C460 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/AppServiceBootstrap.swift"; sourceTree = "<group>"; };
+47196819D71F45BD6F44B423 = { isa = PBXBuildFile; fileRef = CF1937D205BA01F32711C460; };
+CDBAA86F1747D4914A807631 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/ContextCompressor.swift"; sourceTree = "<group>"; };
+D72496060A9C4AFB3638F798 = { isa = PBXBuildFile; fileRef = CDBAA86F1747D4914A807631; };
+9547081036B521336C169F30 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/DeepSeekClient.swift"; sourceTree = "<group>"; };
+9AB09DD69B6C8DE61FEFFA5C = { isa = PBXBuildFile; fileRef = 9547081036B521336C169F30; };
+55C384363A8589207F9DFF18 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/DeepSeekConfiguration.swift"; sourceTree = "<group>"; };
+9A009DCC2D6BEAA937A5DE5E = { isa = PBXBuildFile; fileRef = 55C384363A8589207F9DFF18; };
+8E51DBF45614D11AA84C0EC5 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/KeychainStore.swift"; sourceTree = "<group>"; };
+51E04D8379A6DB36BF561F9F = { isa = PBXBuildFile; fileRef = 8E51DBF45614D11AA84C0EC5; };
+F0B356011F6FAEF59E7D63A4 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/LocationService.swift"; sourceTree = "<group>"; };
+587B702876373BF0CEF258DE = { isa = PBXBuildFile; fileRef = F0B356011F6FAEF59E7D63A4; };
+5A2E1DF210081A5759E67370 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/ServiceEnvironment.swift"; sourceTree = "<group>"; };
+7A9C9C9A84BA9FEC99282902 = { isa = PBXBuildFile; fileRef = 5A2E1DF210081A5759E67370; };
+AD8DAFF1E2D591F4547537AA = { isa = PBXFileReference; lastKnownFileType = "sourcecode.c.c"; path = "Vendor/Astronomy/BlindOracleSky.c"; sourceTree = "<group>"; };
+77D1B4D6E941FE3FA21B98A8 = { isa = PBXBuildFile; fileRef = AD8DAFF1E2D591F4547537AA; };
+B23A91BB4F68D3CBD8864718 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.c.c"; path = "Vendor/Astronomy/astronomy.c"; sourceTree = "<group>"; };
+C27D346B01DDF74439BD2A66 = { isa = PBXBuildFile; fileRef = B23A91BB4F68D3CBD8864718; };
+33DBC853DD9D605566BA52A8 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/DaYun.swift"; sourceTree = "<group>"; };
+3DE6CBA0A22BDCD953774104 = { isa = PBXBuildFile; fileRef = 33DBC853DD9D605566BA52A8; };
+C83D0942CC9F577D18D6B0ED = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/EightChar.swift"; sourceTree = "<group>"; };
+7B69A1607CBCAC5312B4C715 = { isa = PBXBuildFile; fileRef = C83D0942CC9F577D18D6B0ED; };
+5DAAF1F90BCD343A8C081F7A = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/Foto.swift"; sourceTree = "<group>"; };
+04372582E955CE1775FBC427 = { isa = PBXBuildFile; fileRef = 5DAAF1F90BCD343A8C081F7A; };
+115C9EC4B5B56F7EC6C202B2 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/FotoFestival.swift"; sourceTree = "<group>"; };
+15282667D81C35E388711ADF = { isa = PBXBuildFile; fileRef = 115C9EC4B5B56F7EC6C202B2; };
+1AD62ACA09DB0C13B0201779 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/FotoUtil.swift"; sourceTree = "<group>"; };
+5AD747EF296A761A06F2EAE9 = { isa = PBXBuildFile; fileRef = 1AD62ACA09DB0C13B0201779; };
+F704CBB7A9003610B62AE67B = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/Fu.swift"; sourceTree = "<group>"; };
+0DBCD0A701F634B2B768B352 = { isa = PBXBuildFile; fileRef = F704CBB7A9003610B62AE67B; };
+92DFB59011F9A040BA8C93BC = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/Holiday.swift"; sourceTree = "<group>"; };
+E6C95734662DD72D49181038 = { isa = PBXBuildFile; fileRef = 92DFB59011F9A040BA8C93BC; };
+0812CE684BCC5EA099DEB5B5 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/HolidayUtil.swift"; sourceTree = "<group>"; };
+7D7C9E9DC387AF2EA0C9B021 = { isa = PBXBuildFile; fileRef = 0812CE684BCC5EA099DEB5B5; };
+04CAD42427C269F9F760AFBA = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/JieQi.swift"; sourceTree = "<group>"; };
+FE6A393A73586051011EBA03 = { isa = PBXBuildFile; fileRef = 04CAD42427C269F9F760AFBA; };
+FDE748B901BA0D0C243217BB = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/LiuNian.swift"; sourceTree = "<group>"; };
+6BCF15CE1D308D5A5703596B = { isa = PBXBuildFile; fileRef = FDE748B901BA0D0C243217BB; };
+D93DB7F462232363EE5D8CE3 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/LiuYue.swift"; sourceTree = "<group>"; };
+5702D4ABFD3BD3B9C84925D2 = { isa = PBXBuildFile; fileRef = D93DB7F462232363EE5D8CE3; };
+3FEC68C7279139775AAA7301 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/Lunar.swift"; sourceTree = "<group>"; };
+F858321910B4E380FCC73483 = { isa = PBXBuildFile; fileRef = 3FEC68C7279139775AAA7301; };
+71A0A2DD63EA672EB9310151 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/LunarMonth.swift"; sourceTree = "<group>"; };
+49BD94E331905E4E63636EB0 = { isa = PBXBuildFile; fileRef = 71A0A2DD63EA672EB9310151; };
+E5A536FA9087251C4696F365 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/LunarTime.swift"; sourceTree = "<group>"; };
+213C330AF37F39F0DD1A134F = { isa = PBXBuildFile; fileRef = E5A536FA9087251C4696F365; };
+94BA479195B46046DB8D7DB7 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/LunarUtil.swift"; sourceTree = "<group>"; };
+F0B2F8F9B5F719701902F6FD = { isa = PBXBuildFile; fileRef = 94BA479195B46046DB8D7DB7; };
+DC8B3EB2672A26B7ABF9A00B = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/LunarYear.swift"; sourceTree = "<group>"; };
+4E1F7F891F816AC63C48FC8C = { isa = PBXBuildFile; fileRef = DC8B3EB2672A26B7ABF9A00B; };
+2273C04BA03DEBAC3621ABE3 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/NineStar.swift"; sourceTree = "<group>"; };
+78B96DF05521BE6B1C616A6D = { isa = PBXBuildFile; fileRef = 2273C04BA03DEBAC3621ABE3; };
+3BE8C2BF27E99086C51BD47F = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/ShouXingUtil.swift"; sourceTree = "<group>"; };
+E95EA32AA97461216CAF9193 = { isa = PBXBuildFile; fileRef = 3BE8C2BF27E99086C51BD47F; };
+8900E0A5CC06D22EE25BF707 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/ShuJiu.swift"; sourceTree = "<group>"; };
+B6063DE17974A861E59FA914 = { isa = PBXBuildFile; fileRef = 8900E0A5CC06D22EE25BF707; };
+80AFF95D972AFBA6B05198E6 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/Solar.swift"; sourceTree = "<group>"; };
+6D1630B5EA75E78F1440AD6F = { isa = PBXBuildFile; fileRef = 80AFF95D972AFBA6B05198E6; };
+E2D7DD003B00C893BE8D52D6 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/SolarHalfYear.swift"; sourceTree = "<group>"; };
+B8B32F9D350BAA9B5462D4F3 = { isa = PBXBuildFile; fileRef = E2D7DD003B00C893BE8D52D6; };
+F986D4BB1FCD3D58BD853930 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/SolarMonth.swift"; sourceTree = "<group>"; };
+74CED8506BD39603E0704024 = { isa = PBXBuildFile; fileRef = F986D4BB1FCD3D58BD853930; };
+A0A70EB8937B43119A88EBD3 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/SolarSeason.swift"; sourceTree = "<group>"; };
+A67B78724C2A4E982CD4492E = { isa = PBXBuildFile; fileRef = A0A70EB8937B43119A88EBD3; };
+9AAFCA4F93C7AC9965F68B5F = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/SolarUtil.swift"; sourceTree = "<group>"; };
+3EA08A340576F6491C5AC7DB = { isa = PBXBuildFile; fileRef = 9AAFCA4F93C7AC9965F68B5F; };
+32D003CB4E1896D6CABC6A69 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/SolarWeek.swift"; sourceTree = "<group>"; };
+32040188B3489D3AA795BFF3 = { isa = PBXBuildFile; fileRef = 32D003CB4E1896D6CABC6A69; };
+A078C17D7199A7485C2CD159 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/SolarYear.swift"; sourceTree = "<group>"; };
+2F0F4CFC2317D5EB827F400A = { isa = PBXBuildFile; fileRef = A078C17D7199A7485C2CD159; };
+0540227AC09D5DB982AC2B62 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/Tao.swift"; sourceTree = "<group>"; };
+81F541DB98F5B14E344CFD7F = { isa = PBXBuildFile; fileRef = 0540227AC09D5DB982AC2B62; };
+5FA034C5888B2339F7A89580 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/TaoFestival.swift"; sourceTree = "<group>"; };
+DF2C2CE6AA9AA823003CD183 = { isa = PBXBuildFile; fileRef = 5FA034C5888B2339F7A89580; };
+616ED068AC33D4FB9449EB31 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/TaoUtil.swift"; sourceTree = "<group>"; };
+372A1E40C99D01DB3C4820DB = { isa = PBXBuildFile; fileRef = 616ED068AC33D4FB9449EB31; };
+D75A96199EC52C83C9ED1AF9 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/XiaoYun.swift"; sourceTree = "<group>"; };
+9AC904784CD622D520494C80 = { isa = PBXBuildFile; fileRef = D75A96199EC52C83C9ED1AF9; };
+4385D45D874D64AD168AA287 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Vendor/LunarSwift/Yun.swift"; sourceTree = "<group>"; };
+52B1BEBAB802F236671500C3 = { isa = PBXBuildFile; fileRef = 4385D45D874D64AD168AA287; };
+387866C0FCE1FCA311ADE566 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/AIDataSharingConsentView.swift"; sourceTree = "<group>"; };
+DD0CFD16B8044BFD9869B32E = { isa = PBXBuildFile; fileRef = 387866C0FCE1FCA311ADE566; };
+A18E520E326C06B6FD3D44E3 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/AccountGateView.swift"; sourceTree = "<group>"; };
+291266AABC8D6B5EE53588A4 = { isa = PBXBuildFile; fileRef = A18E520E326C06B6FD3D44E3; };
+38329ECEE33BF8D868AE3685 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/AccountTopUpView.swift"; sourceTree = "<group>"; };
+29B89979D774823BF2ABE8A1 = { isa = PBXBuildFile; fileRef = 38329ECEE33BF8D868AE3685; };
+D5C6610ECE46618AB777FF04 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/AccountView.swift"; sourceTree = "<group>"; };
+365A19B443D90BEB181C8138 = { isa = PBXBuildFile; fileRef = D5C6610ECE46618AB777FF04; };
+6CBFC10119F66BB40AF54375 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/ChatView.swift"; sourceTree = "<group>"; };
+30A033228EED3E59F0169C6C = { isa = PBXBuildFile; fileRef = 6CBFC10119F66BB40AF54375; };
+AAAE2095FD8E3FA1AD8875F7 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/ConversationHistorySidebar.swift"; sourceTree = "<group>"; };
+876ECDAAA3EB1315056096B9 = { isa = PBXBuildFile; fileRef = AAAE2095FD8E3FA1AD8875F7; };
+458DA343CF351A710189AD91 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/DataViews.swift"; sourceTree = "<group>"; };
+0B77E5E4F7CFB30FC448AFB9 = { isa = PBXBuildFile; fileRef = 458DA343CF351A710189AD91; };
+85A686C20CF5424466E74A5D = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/GroupIntakeView.swift"; sourceTree = "<group>"; };
+04840FBF67C1A7637ADAF6AD = { isa = PBXBuildFile; fileRef = 85A686C20CF5424466E74A5D; };
+8C2D6782D5487BC856F682EB = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/InkTheme.swift"; sourceTree = "<group>"; };
+A610D2D8AFAD6041D279FAAC = { isa = PBXBuildFile; fileRef = 8C2D6782D5487BC856F682EB; };
+DBC60C2872AB143498164C85 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/IntakeView.swift"; sourceTree = "<group>"; };
+5DA2F73375E50353D155104C = { isa = PBXBuildFile; fileRef = DBC60C2872AB143498164C85; };
+A9908ED988795AD060EACED1 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/LegalDocumentView.swift"; sourceTree = "<group>"; };
+5C710B275462269B0D966C86 = { isa = PBXBuildFile; fileRef = A9908ED988795AD060EACED1; };
+E08983289BED6FB7BB35C08E = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/OracleInteractionView.swift"; sourceTree = "<group>"; };
+D4AE0C2971C14BECBD0ECE6E = { isa = PBXBuildFile; fileRef = E08983289BED6FB7BB35C08E; };
+12951FC3E3F7B5569974CE78 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/OracleProcessingView.swift"; sourceTree = "<group>"; };
+6A7BBD3E7EEAFA04B44C050B = { isa = PBXBuildFile; fileRef = 12951FC3E3F7B5569974CE78; };
+E9658E6981BE22FFEDA80B6C = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/ReadingResultsSheet.swift"; sourceTree = "<group>"; };
+033C56C418649AA9917F4B19 = { isa = PBXBuildFile; fileRef = E9658E6981BE22FFEDA80B6C; };
+4C0C7F2D19EE90C70F7DE3E6 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/TarotSpreadView.swift"; sourceTree = "<group>"; };
+B05D8A18785590E6F0C86505 = { isa = PBXBuildFile; fileRef = 4C0C7F2D19EE90C70F7DE3E6; };
+3648D9B91033B79D49125D03 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/TimeZonePicker.swift"; sourceTree = "<group>"; };
+6DB166F23FEA9936B7A6EA4C = { isa = PBXBuildFile; fileRef = 3648D9B91033B79D49125D03; };
+48759B6513A7FE260F577D41 = { isa = PBXFileReference; lastKnownFileType = "folder"; path = "Documentation"; sourceTree = "<group>"; };
+746C5639EB0CEC99AFBAF471 = { isa = PBXBuildFile; fileRef = 48759B6513A7FE260F577D41; };
+E0E27618A2D2A8FEBDD49F35 = { isa = PBXFileReference; lastKnownFileType = "folder.assetcatalog"; path = "Resources/Assets.xcassets"; sourceTree = "<group>"; };
+627BBC9C62B0C159B656E415 = { isa = PBXBuildFile; fileRef = E0E27618A2D2A8FEBDD49F35; };
+6723B9E711E25E51CE0BCE8D = { isa = PBXFileReference; lastKnownFileType = "text.json.xcstrings"; path = "Resources/InfoPlist.xcstrings"; sourceTree = "<group>"; };
+1206A3F92213CD72DB8E45D3 = { isa = PBXBuildFile; fileRef = 6723B9E711E25E51CE0BCE8D; };
+856C499462BBFDE31A946813 = { isa = PBXFileReference; lastKnownFileType = "text.json.xcstrings"; path = "Resources/Localizable.xcstrings"; sourceTree = "<group>"; };
+4C385A5AC6717F3A602E3EE6 = { isa = PBXBuildFile; fileRef = 856C499462BBFDE31A946813; };
+7D0DC9BF96A9A9D45B2568DD = { isa = PBXFileReference; lastKnownFileType = "folder"; path = "Resources/Locations"; sourceTree = "<group>"; };
+7C4185D044A69B70C0B2842D = { isa = PBXBuildFile; fileRef = 7D0DC9BF96A9A9D45B2568DD; };
+88538569096914C7E497DEFF = { isa = PBXFileReference; lastKnownFileType = "folder"; path = "Resources/Native"; sourceTree = "<group>"; };
+E20E43DF0EF623694FA77290 = { isa = PBXBuildFile; fileRef = 88538569096914C7E497DEFF; };
+6327A1005FF0B783151E530B = { isa = PBXFileReference; lastKnownFileType = "text"; path = "Resources/PrivacyInfo.xcprivacy"; sourceTree = "<group>"; };
+FC0CB21E6ADF24E540AC513C = { isa = PBXBuildFile; fileRef = 6327A1005FF0B783151E530B; };
+398169473CB0E42EACE9C08D = { isa = PBXFileReference; lastKnownFileType = "folder"; path = "Resources/Sky"; sourceTree = "<group>"; };
+F39B1118CA2E5AD9282000D7 = { isa = PBXBuildFile; fileRef = 398169473CB0E42EACE9C08D; };
+4719657E3D6D78337DEF2B8D = { isa = PBXFileReference; lastKnownFileType = "folder"; path = "Resources/Tarot"; sourceTree = "<group>"; };
+51042322101E35BFD7ECDE75 = { isa = PBXBuildFile; fileRef = 4719657E3D6D78337DEF2B8D; };
+25F162EE31CC2A073312F9DC = { isa = PBXFileReference; lastKnownFileType = "text"; path = "Resources/ThirdPartyNotices.txt"; sourceTree = "<group>"; };
+039183FC04B9E630ADB31B62 = { isa = PBXBuildFile; fileRef = 25F162EE31CC2A073312F9DC; };
+B6CDB6E5D160E013280D3C68 = { isa = PBXFileReference; explicitFileType = "wrapper.application"; includeInIndex = 0; path = "BlindOracle.app"; sourceTree = "BUILT_PRODUCTS_DIR"; };
+E02A90D9643568EA39115CFB = { isa = PBXFileReference; explicitFileType = "wrapper.cfbundle"; includeInIndex = 0; path = "BlindOracleTests.xctest"; sourceTree = "BUILT_PRODUCTS_DIR"; };
+6876384C1F14AB301558A48A = { isa = PBXFileReference; explicitFileType = "wrapper.cfbundle"; includeInIndex = 0; path = "BlindOracleUITests.xctest"; sourceTree = "BUILT_PRODUCTS_DIR"; };
+FBDC4F23F93125BBEEAE800C = { isa = PBXGroup; children = (
+    B6CDB6E5D160E013280D3C68,
+    E02A90D9643568EA39115CFB,
+    6876384C1F14AB301558A48A,
+); name = "Products"; sourceTree = "<group>"; };
+4D820FADAFBC7A1FCACC4F07 = { isa = PBXGroup; children = (
+    7798695EE7B7021FBF200561,
+    69B82AE54AF8208EB0E59DE6,
+    F121229E5AFC78F27C460B4B,
+    002C308C2ABD09C73AFA4BE8,
+    B784D2B75E9607353C9D9432,
+    7E0774B2DD8CC0AF35CA454E,
+    27B31E0553E504ABA8D2B310,
+    A1FF2DC0CAAB8E896C6DCF3A,
+    94C0E7CD9CC3479716966C3A,
+    4133140DB3C7E888EE383751,
+    6CDDD152F87AD6596C2D0056,
+    17FF0ECFB4A52EF6C37645E9,
+    61A2541CC296E5BA7163C216,
+    5C95D4D1AADBB38078B06D8F,
+    F37A3DE18E78597A11D647FB,
+    21E3FD6AD0E55EF5DB9063E7,
+    AC2F8C120655A4D337468903,
+    472406C7D989E466B9DA8BB8,
+    A1B45E6CA9A1EB0FBBFDEE04,
+    D9FBACD5DB4A9378D43274A3,
+    DF77EF2A6D433E476524A995,
+    DC74CA60FB509514320CD8DA,
+    FBA3BC5E25A6B996FC1BD91A,
+    6E037D93B24FECDC028E88E9,
+    BE0A31C234F191C3AF5443A3,
+    8476580A3DAFCDE4BA2067A1,
+    0DE0BD2D5F4CBCB82048077C,
+    C2326A859C0F9DD0BB0B3D41,
+    54AC633403DB0EB9D164E84B,
+    535B5A5D38D5734A247486B2,
+    7B7C3D299D01EF876449B37E,
+    002A0AF161F4D00819562651,
+    DB577B94FE8ABDE3086638A7,
+    162ABC339AA6EAB766B60ECA,
+    CF1937D205BA01F32711C460,
+    CDBAA86F1747D4914A807631,
+    9547081036B521336C169F30,
+    55C384363A8589207F9DFF18,
+    8E51DBF45614D11AA84C0EC5,
+    F0B356011F6FAEF59E7D63A4,
+    5A2E1DF210081A5759E67370,
+    AD8DAFF1E2D591F4547537AA,
+    B23A91BB4F68D3CBD8864718,
+    33DBC853DD9D605566BA52A8,
+    C83D0942CC9F577D18D6B0ED,
+    5DAAF1F90BCD343A8C081F7A,
+    115C9EC4B5B56F7EC6C202B2,
+    1AD62ACA09DB0C13B0201779,
+    F704CBB7A9003610B62AE67B,
+    92DFB59011F9A040BA8C93BC,
+    0812CE684BCC5EA099DEB5B5,
+    04CAD42427C269F9F760AFBA,
+    FDE748B901BA0D0C243217BB,
+    D93DB7F462232363EE5D8CE3,
+    3FEC68C7279139775AAA7301,
+    71A0A2DD63EA672EB9310151,
+    E5A536FA9087251C4696F365,
+    94BA479195B46046DB8D7DB7,
+    DC8B3EB2672A26B7ABF9A00B,
+    2273C04BA03DEBAC3621ABE3,
+    3BE8C2BF27E99086C51BD47F,
+    8900E0A5CC06D22EE25BF707,
+    80AFF95D972AFBA6B05198E6,
+    E2D7DD003B00C893BE8D52D6,
+    F986D4BB1FCD3D58BD853930,
+    A0A70EB8937B43119A88EBD3,
+    9AAFCA4F93C7AC9965F68B5F,
+    32D003CB4E1896D6CABC6A69,
+    A078C17D7199A7485C2CD159,
+    0540227AC09D5DB982AC2B62,
+    5FA034C5888B2339F7A89580,
+    616ED068AC33D4FB9449EB31,
+    D75A96199EC52C83C9ED1AF9,
+    4385D45D874D64AD168AA287,
+    387866C0FCE1FCA311ADE566,
+    A18E520E326C06B6FD3D44E3,
+    38329ECEE33BF8D868AE3685,
+    D5C6610ECE46618AB777FF04,
+    6CBFC10119F66BB40AF54375,
+    AAAE2095FD8E3FA1AD8875F7,
+    458DA343CF351A710189AD91,
+    85A686C20CF5424466E74A5D,
+    8C2D6782D5487BC856F682EB,
+    DBC60C2872AB143498164C85,
+    A9908ED988795AD060EACED1,
+    E08983289BED6FB7BB35C08E,
+    12951FC3E3F7B5569974CE78,
+    E9658E6981BE22FFEDA80B6C,
+    4C0C7F2D19EE90C70F7DE3E6,
+    3648D9B91033B79D49125D03,
+); name = "Sources"; sourceTree = "<group>"; };
+3B91224C671A3400805ED16F = { isa = PBXGroup; children = (
+    48759B6513A7FE260F577D41,
+    E0E27618A2D2A8FEBDD49F35,
+    6723B9E711E25E51CE0BCE8D,
+    856C499462BBFDE31A946813,
+    7D0DC9BF96A9A9D45B2568DD,
+    88538569096914C7E497DEFF,
+    6327A1005FF0B783151E530B,
+    398169473CB0E42EACE9C08D,
+    4719657E3D6D78337DEF2B8D,
+    25F162EE31CC2A073312F9DC,
+); name = "Resources"; sourceTree = "<group>"; };
+72A8017E75795FC05F78F54C = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+    24C749653174E5349B4F3351,
+    0A8297633187AD275FE62253,
+    4820144CCCE65F4CB24E180A,
+    17063F990CA0F9C819D21E47,
+    3E96D138E8A1FD38EC9FF856,
+    F241310AF2239B604A24C047,
+    7EAFFA1B1D2E5CD03A97C8D2,
+    C3C899EE711D48353C5D67D2,
+    9B95E6272DB497164733D91F,
+    4DB2469F18EAA1FDEBA34892,
+    E40891D5A6AF35AD134EB7D6,
+    0DFCA6F45AF58DE0DFE96B43,
+    53B4DE84F2DA3D0ADDE03AC0,
+    050777EA79DCDA1E876D5F45,
+    6A56EDB92AE3740F0502585C,
+    59344E191E6A4FF6113BE3B5,
+    D5A3BA585CFBB2EC28E38A2C,
+    4C5581F0F020AF83D7D02662,
+    9293069317A423FF1B8B8176,
+    9D22C8215226F5D79F6617F8,
+    ED9B130A3387D75AF9D5AF48,
+    AC483E5005B1C308F0439EF2,
+    99A23049938EF439DD00FEE2,
+    E66B5BD6F94E13A2AC0D3457,
+    8B427F0BADD80C692437DEBC,
+    FC11462A1D5F39B071C88226,
+    1618EC532038E4A4DE1C616D,
+    803F523CFD5DA504F4009E71,
+    27A38B7E714D005B6D348691,
+    6DFB7D39FF70DB7AC3804885,
+    F77F98824D5EEADC6256E916,
+    C3824341E1A5BFEFF992B613,
+    179060A1B8F6F5DAC0FA7F2D,
+    33D603CB24A052DD25D495A7,
+    47196819D71F45BD6F44B423,
+    D72496060A9C4AFB3638F798,
+    9AB09DD69B6C8DE61FEFFA5C,
+    9A009DCC2D6BEAA937A5DE5E,
+    51E04D8379A6DB36BF561F9F,
+    587B702876373BF0CEF258DE,
+    7A9C9C9A84BA9FEC99282902,
+    77D1B4D6E941FE3FA21B98A8,
+    C27D346B01DDF74439BD2A66,
+    3DE6CBA0A22BDCD953774104,
+    7B69A1607CBCAC5312B4C715,
+    04372582E955CE1775FBC427,
+    15282667D81C35E388711ADF,
+    5AD747EF296A761A06F2EAE9,
+    0DBCD0A701F634B2B768B352,
+    E6C95734662DD72D49181038,
+    7D7C9E9DC387AF2EA0C9B021,
+    FE6A393A73586051011EBA03,
+    6BCF15CE1D308D5A5703596B,
+    5702D4ABFD3BD3B9C84925D2,
+    F858321910B4E380FCC73483,
+    49BD94E331905E4E63636EB0,
+    213C330AF37F39F0DD1A134F,
+    F0B2F8F9B5F719701902F6FD,
+    4E1F7F891F816AC63C48FC8C,
+    78B96DF05521BE6B1C616A6D,
+    E95EA32AA97461216CAF9193,
+    B6063DE17974A861E59FA914,
+    6D1630B5EA75E78F1440AD6F,
+    B8B32F9D350BAA9B5462D4F3,
+    74CED8506BD39603E0704024,
+    A67B78724C2A4E982CD4492E,
+    3EA08A340576F6491C5AC7DB,
+    32040188B3489D3AA795BFF3,
+    2F0F4CFC2317D5EB827F400A,
+    81F541DB98F5B14E344CFD7F,
+    DF2C2CE6AA9AA823003CD183,
+    372A1E40C99D01DB3C4820DB,
+    9AC904784CD622D520494C80,
+    52B1BEBAB802F236671500C3,
+    DD0CFD16B8044BFD9869B32E,
+    291266AABC8D6B5EE53588A4,
+    29B89979D774823BF2ABE8A1,
+    365A19B443D90BEB181C8138,
+    30A033228EED3E59F0169C6C,
+    876ECDAAA3EB1315056096B9,
+    0B77E5E4F7CFB30FC448AFB9,
+    04840FBF67C1A7637ADAF6AD,
+    A610D2D8AFAD6041D279FAAC,
+    5DA2F73375E50353D155104C,
+    5C710B275462269B0D966C86,
+    D4AE0C2971C14BECBD0ECE6E,
+    6A7BBD3E7EEAFA04B44C050B,
+    033C56C418649AA9917F4B19,
+    B05D8A18785590E6F0C86505,
+    6DB166F23FEA9936B7A6EA4C,
+); runOnlyForDeploymentPostprocessing = 0; };
+963488E8A773A44C9A5DC523 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (
+    746C5639EB0CEC99AFBAF471,
+    627BBC9C62B0C159B656E415,
+    1206A3F92213CD72DB8E45D3,
+    4C385A5AC6717F3A602E3EE6,
+    7C4185D044A69B70C0B2842D,
+    E20E43DF0EF623694FA77290,
+    FC0CB21E6ADF24E540AC513C,
+    F39B1118CA2E5AD9282000D7,
+    51042322101E35BFD7ECDE75,
+    039183FC04B9E630ADB31B62,
+); runOnlyForDeploymentPostprocessing = 0; };
+F01580CCB5F725E4E879D491 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+6AE714225C736D4ADBFFB751 = { isa = PBXShellScriptBuildPhase; alwaysOutOfDate = 1; buildActionMask = 2147483647; files = (); inputPaths = (); name = "Prepare application resources"; outputPaths = (); runOnlyForDeploymentPostprocessing = 0; shellPath = "/bin/sh"; shellScript = "rm -f \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/dev-key.txt\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/qwen-key.txt\"\nfor oracle_locale in zh-Hans en; do\n    oracle_strings=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/${oracle_locale}.lproj/InfoPlist.strings\"\n    if [ \"$oracle_locale\" = en ]; then oracle_display_name=\"$BLINDORACLE_APP_DISPLAY_NAME_EN\"; else oracle_display_name=\"$BLINDORACLE_APP_DISPLAY_NAME\"; fi\n    if [ -f \"$oracle_strings\" ]; then /usr/bin/plutil -replace CFBundleDisplayName -string \"$oracle_display_name\" -- \"$oracle_strings\" || exit 1; fi\ndone"; };
+1FA51788B7965A8459664B67 = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = "5.0"; IPHONEOS_DEPLOYMENT_TARGET = "17.0"; SDKROOT = "iphoneos"; CODE_SIGN_STYLE = "Automatic"; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_STRICT_CONCURRENCY = "minimal"; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; GCC_C_LANGUAGE_STANDARD = "gnu11"; ENABLE_USER_SCRIPT_SANDBOXING = NO; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; HEADER_SEARCH_PATHS = (
+    "$(inherited)",
+    "$(SRCROOT)/Vendor/Astronomy",
+); PRODUCT_BUNDLE_IDENTIFIER = "com.lihao.BlindOracle"; BLINDORACLE_SANDBOX = "NO"; BLINDORACLE_APP_DISPLAY_NAME = "瞎子"; BLINDORACLE_APP_DISPLAY_NAME_EN = "BlindOracle"; ORACLE_SERVICE_ENVIRONMENT = "Production"; ORACLE_SERVICE_ENVIRONMENT_RESOLUTION = "AppleVerified"; DEVELOPMENT_TEAM = "A82X46N3WS"; INFOPLIST_FILE = "App/Info.plist"; CODE_SIGN_ENTITLEMENTS = "App/BlindOracle.entitlements"; CURRENT_PROJECT_VERSION = 48; MARKETING_VERSION = "3.0.22"; ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon"; SWIFT_OBJC_BRIDGING_HEADER = "App/BlindOracle-Bridging-Header.h"; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = "dwarf"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; GCC_PREPROCESSOR_DEFINITIONS = (
+    "DEBUG=1",
+    "$(inherited)",
+); ENABLE_TESTABILITY = YES; }; name = "Debug"; };
+8AD3BB4A5DF33E553662F892 = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = "5.0"; IPHONEOS_DEPLOYMENT_TARGET = "17.0"; SDKROOT = "iphoneos"; CODE_SIGN_STYLE = "Automatic"; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_STRICT_CONCURRENCY = "minimal"; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; GCC_C_LANGUAGE_STANDARD = "gnu11"; ENABLE_USER_SCRIPT_SANDBOXING = NO; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; HEADER_SEARCH_PATHS = (
+    "$(inherited)",
+    "$(SRCROOT)/Vendor/Astronomy",
+); PRODUCT_BUNDLE_IDENTIFIER = "com.lihao.BlindOracle"; BLINDORACLE_SANDBOX = "NO"; BLINDORACLE_APP_DISPLAY_NAME = "瞎子"; BLINDORACLE_APP_DISPLAY_NAME_EN = "BlindOracle"; ORACLE_SERVICE_ENVIRONMENT = "Production"; ORACLE_SERVICE_ENVIRONMENT_RESOLUTION = "AppleVerified"; DEVELOPMENT_TEAM = "A82X46N3WS"; INFOPLIST_FILE = "App/Info.plist"; CODE_SIGN_ENTITLEMENTS = "App/BlindOracle.entitlements"; CURRENT_PROJECT_VERSION = 48; MARKETING_VERSION = "3.0.22"; ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon"; SWIFT_OBJC_BRIDGING_HEADER = "App/BlindOracle-Bridging-Header.h"; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)"; }; name = "Release"; };
+60EA43DB068BD71C9709BED5 = { isa = XCConfigurationList; buildConfigurations = (
+    1FA51788B7965A8459664B67,
+    8AD3BB4A5DF33E553662F892,
+); defaultConfigurationIsVisible = 0; defaultConfigurationName = "Release"; };
+4F6027D858B72CC70E5CC8E9 = { isa = PBXNativeTarget; buildConfigurationList = 60EA43DB068BD71C9709BED5; buildPhases = (
+    72A8017E75795FC05F78F54C,
+    F01580CCB5F725E4E879D491,
+    963488E8A773A44C9A5DC523,
+    6AE714225C736D4ADBFFB751,
+); buildRules = (); dependencies = (); name = "BlindOracle"; productName = "BlindOracle"; productReference = B6CDB6E5D160E013280D3C68; productType = "com.apple.product-type.application"; };
+6F6E3862BC55584DD30E0E36 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/AIDataSharingConsentTests.swift"; sourceTree = "<group>"; };
+F4AA549F539E0B918CC9847A = { isa = PBXBuildFile; fileRef = 6F6E3862BC55584DD30E0E36; };
+AD32172FE07185B5709EABAA = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/AIServiceTests.swift"; sourceTree = "<group>"; };
+D1C867563B6C7A076B56B7B9 = { isa = PBXBuildFile; fileRef = AD32172FE07185B5709EABAA; };
+386A768CFA72E3C23752ADF2 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/AccountServiceTests.swift"; sourceTree = "<group>"; };
+AA6A500738027AD4D4CFA265 = { isa = PBXBuildFile; fileRef = 386A768CFA72E3C23752ADF2; };
+2BA7F87AF90CEB2C5E625595 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/AllowanceAndPurchaseTests.swift"; sourceTree = "<group>"; };
+78942A60516732A5E47D3AF9 = { isa = PBXBuildFile; fileRef = 2BA7F87AF90CEB2C5E625595; };
+247A9EC788523554F771335E = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/AppLanguageTests.swift"; sourceTree = "<group>"; };
+AC664F5C1390B30502A5C02B = { isa = PBXBuildFile; fileRef = 247A9EC788523554F771335E; };
+B9C3A8C03C7A1ED3E68BF1EC = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/AppStoreIapReviewScreenshotTests.swift"; sourceTree = "<group>"; };
+291A12D7815D54BDC758BFB0 = { isa = PBXBuildFile; fileRef = B9C3A8C03C7A1ED3E68BF1EC; };
+B5AF1DFCE463B6B761BCA81A = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/ConversationHistoryTests.swift"; sourceTree = "<group>"; };
+1BEB9F65990743FA14F6EA46 = { isa = PBXBuildFile; fileRef = B5AF1DFCE463B6B761BCA81A; };
+205A6ED808200F169EFC5A3C = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/ConversationalIntakeTests.swift"; sourceTree = "<group>"; };
+C31054DBCC765277FF56A5C1 = { isa = PBXBuildFile; fileRef = 205A6ED808200F169EFC5A3C; };
+F5D0CE4657728878EA583034 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/DeepSeekConfigurationTests.swift"; sourceTree = "<group>"; };
+07DD1792BAF6420599BEE707 = { isa = PBXBuildFile; fileRef = F5D0CE4657728878EA583034; };
+DF10BEC79FD76A40E75F377C = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/ExperienceRegressionTests.swift"; sourceTree = "<group>"; };
+AB2691C2C7E51041F1471BF9 = { isa = PBXBuildFile; fileRef = DF10BEC79FD76A40E75F377C; };
+79C8F1B6F4FC8170C35FD889 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/FormIntakeTests.swift"; sourceTree = "<group>"; };
+3F09D9994B7AA981D9A3C01D = { isa = PBXBuildFile; fileRef = 79C8F1B6F4FC8170C35FD889; };
+03ECE31C7F69A6DD14D6866E = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/LiveIntegrationTests.swift"; sourceTree = "<group>"; };
+D4E0E78DD8A32162315CF6A1 = { isa = PBXBuildFile; fileRef = 03ECE31C7F69A6DD14D6866E; };
+B3467F6498CE5DB51A8061C4 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/LocationServiceTests.swift"; sourceTree = "<group>"; };
+6EEE4D6CFE5D115EDE5F7078 = { isa = PBXBuildFile; fileRef = B3467F6498CE5DB51A8061C4; };
+06C18B57A601909EF3654E3C = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/MultiPersonReadingTests.swift"; sourceTree = "<group>"; };
+4BAC15E3752BB819CA79CA51 = { isa = PBXBuildFile; fileRef = 06C18B57A601909EF3654E3C; };
+1CFFDCE87BF4D13203DA3447 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/NativePluginTests.swift"; sourceTree = "<group>"; };
+8A2E3806BC4E3818DC60623B = { isa = PBXBuildFile; fileRef = 1CFFDCE87BF4D13203DA3447; };
+0E670E294D71DD409935A98E = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/OracleInteractionTests.swift"; sourceTree = "<group>"; };
+6FCF72462B41723578A32165 = { isa = PBXBuildFile; fileRef = 0E670E294D71DD409935A98E; };
+0816A2498A7B5D421F4FE92A = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/OracleProgressTests.swift"; sourceTree = "<group>"; };
+83C3B4027D23DD2115872E42 = { isa = PBXBuildFile; fileRef = 0816A2498A7B5D421F4FE92A; };
+CAF993DB33533D4B616777C5 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/PersistenceAndPreferenceTests.swift"; sourceTree = "<group>"; };
+04A45B0CCBAB6E71A5D7654C = { isa = PBXBuildFile; fileRef = CAF993DB33533D4B616777C5; };
+AB7C448BAEADFC42E1C42B8E = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/ProfileDirectoryTests.swift"; sourceTree = "<group>"; };
+8576222752A013A2A7A0DD3F = { isa = PBXBuildFile; fileRef = AB7C448BAEADFC42E1C42B8E; };
+A0992E666DBA55AB834037B6 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/ProfileFormTests.swift"; sourceTree = "<group>"; };
+CEF8C6E5786AF9C105533469 = { isa = PBXBuildFile; fileRef = A0992E666DBA55AB834037B6; };
+388B78BF092E4B4E32AAD072 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/PurchaseRecoveryTests.swift"; sourceTree = "<group>"; };
+424075F08ECF142B79EF6481 = { isa = PBXBuildFile; fileRef = 388B78BF092E4B4E32AAD072; };
+20234D92C0503593913D8B29 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/ReadingContinuationStoreTests.swift"; sourceTree = "<group>"; };
+41FCA247C449BDFC33F40F03 = { isa = PBXBuildFile; fileRef = 20234D92C0503593913D8B29; };
+ED5CAD6D2C0C6163099DC634 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/ReadingContinuationTests.swift"; sourceTree = "<group>"; };
+87EA3B6BDF4A82907B390544 = { isa = PBXBuildFile; fileRef = ED5CAD6D2C0C6163099DC634; };
+2C0ADB7AF00A0DC236719610 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/ReadingDeletionTests.swift"; sourceTree = "<group>"; };
+3449126A9E213EAE8BB0072A = { isa = PBXBuildFile; fileRef = 2C0ADB7AF00A0DC236719610; };
+52869BFC452B5FC9F80F0A9A = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/ReadingPreparationTests.swift"; sourceTree = "<group>"; };
+A1C6C77DBF3FE8C75354B064 = { isa = PBXBuildFile; fileRef = 52869BFC452B5FC9F80F0A9A; };
+ECDCE4EBBF9652643ACF5273 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/SavedProfileReuseTests.swift"; sourceTree = "<group>"; };
+35D7067833369C6613CDE5EB = { isa = PBXBuildFile; fileRef = ECDCE4EBBF9652643ACF5273; };
+310DFB6DCFE55C4CB42AF2CD = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/ServiceEnvironmentTests.swift"; sourceTree = "<group>"; };
+283C3AD53C32C20D1A2608EF = { isa = PBXBuildFile; fileRef = 310DFB6DCFE55C4CB42AF2CD; };
+BE55F98D9D3E05A5FF30160D = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/SkyPluginTests.swift"; sourceTree = "<group>"; };
+C336DE80D20BB10B10D16E05 = { isa = PBXBuildFile; fileRef = BE55F98D9D3E05A5FF30160D; };
+35E4D0E2DCF7976EAC5FD95F = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/StoreKitLocalPurchaseTests.swift"; sourceTree = "<group>"; };
+0654D4A332F63734E0A216C2 = { isa = PBXBuildFile; fileRef = 35E4D0E2DCF7976EAC5FD95F; };
+2660E297A06FA807B423590F = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/TarotPluginTests.swift"; sourceTree = "<group>"; };
+9C79F323EE8960ED9D06526C = { isa = PBXBuildFile; fileRef = 2660E297A06FA807B423590F; };
+8039C36685EC6830637ED006 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/TrueSolarBaziTests.swift"; sourceTree = "<group>"; };
+3A1F69ADF00F6010617C39AA = { isa = PBXBuildFile; fileRef = 8039C36685EC6830637ED006; };
+6F7C2242AC1FABACA52B0670 = { isa = PBXFileReference; lastKnownFileType = "text"; path = "Tests/Fixtures/QuotaProducts.storekit"; sourceTree = "<group>"; };
+DFD4894D9D213E0155E03331 = { isa = PBXBuildFile; fileRef = 6F7C2242AC1FABACA52B0670; };
+536329F47F8EAF961EDFDB02 = { isa = PBXGroup; children = (
+    6F6E3862BC55584DD30E0E36,
+    AD32172FE07185B5709EABAA,
+    386A768CFA72E3C23752ADF2,
+    2BA7F87AF90CEB2C5E625595,
+    247A9EC788523554F771335E,
+    B9C3A8C03C7A1ED3E68BF1EC,
+    B5AF1DFCE463B6B761BCA81A,
+    205A6ED808200F169EFC5A3C,
+    F5D0CE4657728878EA583034,
+    DF10BEC79FD76A40E75F377C,
+    79C8F1B6F4FC8170C35FD889,
+    03ECE31C7F69A6DD14D6866E,
+    B3467F6498CE5DB51A8061C4,
+    06C18B57A601909EF3654E3C,
+    1CFFDCE87BF4D13203DA3447,
+    0E670E294D71DD409935A98E,
+    0816A2498A7B5D421F4FE92A,
+    CAF993DB33533D4B616777C5,
+    AB7C448BAEADFC42E1C42B8E,
+    A0992E666DBA55AB834037B6,
+    388B78BF092E4B4E32AAD072,
+    20234D92C0503593913D8B29,
+    ED5CAD6D2C0C6163099DC634,
+    2C0ADB7AF00A0DC236719610,
+    52869BFC452B5FC9F80F0A9A,
+    ECDCE4EBBF9652643ACF5273,
+    310DFB6DCFE55C4CB42AF2CD,
+    BE55F98D9D3E05A5FF30160D,
+    35E4D0E2DCF7976EAC5FD95F,
+    2660E297A06FA807B423590F,
+    8039C36685EC6830637ED006,
+    6F7C2242AC1FABACA52B0670,
+); name = "Tests"; sourceTree = "<group>"; };
+EC2E9EAA9E1CA4B18AE2370A = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+    F4AA549F539E0B918CC9847A,
+    D1C867563B6C7A076B56B7B9,
+    AA6A500738027AD4D4CFA265,
+    78942A60516732A5E47D3AF9,
+    AC664F5C1390B30502A5C02B,
+    291A12D7815D54BDC758BFB0,
+    1BEB9F65990743FA14F6EA46,
+    C31054DBCC765277FF56A5C1,
+    07DD1792BAF6420599BEE707,
+    AB2691C2C7E51041F1471BF9,
+    3F09D9994B7AA981D9A3C01D,
+    D4E0E78DD8A32162315CF6A1,
+    6EEE4D6CFE5D115EDE5F7078,
+    4BAC15E3752BB819CA79CA51,
+    8A2E3806BC4E3818DC60623B,
+    6FCF72462B41723578A32165,
+    83C3B4027D23DD2115872E42,
+    04A45B0CCBAB6E71A5D7654C,
+    8576222752A013A2A7A0DD3F,
+    CEF8C6E5786AF9C105533469,
+    424075F08ECF142B79EF6481,
+    41FCA247C449BDFC33F40F03,
+    87EA3B6BDF4A82907B390544,
+    3449126A9E213EAE8BB0072A,
+    A1C6C77DBF3FE8C75354B064,
+    35D7067833369C6613CDE5EB,
+    283C3AD53C32C20D1A2608EF,
+    C336DE80D20BB10B10D16E05,
+    0654D4A332F63734E0A216C2,
+    9C79F323EE8960ED9D06526C,
+    3A1F69ADF00F6010617C39AA,
+); runOnlyForDeploymentPostprocessing = 0; };
+FF93C0DD54B18EA1A6227C5A = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (
+    DFD4894D9D213E0155E03331,
+); runOnlyForDeploymentPostprocessing = 0; };
+7F796F1F402F084D42051CB9 = { isa = PBXContainerItemProxy; containerPortal = 98F54143AB4E86B28C3AFEE0; proxyType = 1; remoteGlobalIDString = 4F6027D858B72CC70E5CC8E9; remoteInfo = "BlindOracle"; };
+536D435B7D8111256AE5EB34 = { isa = PBXTargetDependency; target = 4F6027D858B72CC70E5CC8E9; targetProxy = 7F796F1F402F084D42051CB9; };
+8F8256A4919E54295364C19B = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = "5.0"; IPHONEOS_DEPLOYMENT_TARGET = "17.0"; SDKROOT = "iphoneos"; CODE_SIGN_STYLE = "Automatic"; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_STRICT_CONCURRENCY = "minimal"; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; GCC_C_LANGUAGE_STANDARD = "gnu11"; ENABLE_USER_SCRIPT_SANDBOXING = NO; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; HEADER_SEARCH_PATHS = (
+    "$(inherited)",
+    "$(SRCROOT)/Vendor/Astronomy",
+); PRODUCT_BUNDLE_IDENTIFIER = "com.lihao.BlindOracleTests"; GENERATE_INFOPLIST_FILE = YES; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BlindOracle.app/BlindOracle"; BUNDLE_LOADER = "$(TEST_HOST)"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = "dwarf"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; GCC_PREPROCESSOR_DEFINITIONS = (
+    "DEBUG=1",
+    "$(inherited)",
+); ENABLE_TESTABILITY = YES; }; name = "Debug"; };
+19C812D6422FDF71C22582DF = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = "5.0"; IPHONEOS_DEPLOYMENT_TARGET = "17.0"; SDKROOT = "iphoneos"; CODE_SIGN_STYLE = "Automatic"; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_STRICT_CONCURRENCY = "minimal"; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; GCC_C_LANGUAGE_STANDARD = "gnu11"; ENABLE_USER_SCRIPT_SANDBOXING = NO; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; HEADER_SEARCH_PATHS = (
+    "$(inherited)",
+    "$(SRCROOT)/Vendor/Astronomy",
+); PRODUCT_BUNDLE_IDENTIFIER = "com.lihao.BlindOracleTests"; GENERATE_INFOPLIST_FILE = YES; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BlindOracle.app/BlindOracle"; BUNDLE_LOADER = "$(TEST_HOST)"; SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)"; }; name = "Release"; };
+A0A34E2380831175F5122A0A = { isa = XCConfigurationList; buildConfigurations = (
+    8F8256A4919E54295364C19B,
+    19C812D6422FDF71C22582DF,
+); defaultConfigurationIsVisible = 0; defaultConfigurationName = "Release"; };
+DB232FBED708F45A1A18553B = { isa = PBXNativeTarget; buildConfigurationList = A0A34E2380831175F5122A0A; buildPhases = (
+    EC2E9EAA9E1CA4B18AE2370A,
+    FF93C0DD54B18EA1A6227C5A,
+); buildRules = (); dependencies = (
+    536D435B7D8111256AE5EB34,
+); name = "BlindOracleTests"; productName = "BlindOracleTests"; productReference = E02A90D9643568EA39115CFB; productType = "com.apple.product-type.bundle.unit-test"; };
+41601D34E66D9C1E39D6E33F = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/AIDataSharingConsentUITests.swift"; sourceTree = "<group>"; };
+9BCEFA6CEAE20825F05B6B9E = { isa = PBXBuildFile; fileRef = 41601D34E66D9C1E39D6E33F; };
+4411CD8FBC8DBD739C800E9D = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/AccountUITests.swift"; sourceTree = "<group>"; };
+133B2259F58BEFC432DDEFCF = { isa = PBXBuildFile; fileRef = 4411CD8FBC8DBD739C800E9D; };
+68359BEC0C559A57E84FCEAD = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/AppStoreScreenshotTests.swift"; sourceTree = "<group>"; };
+B42DA2D439E15A159F78F595 = { isa = PBXBuildFile; fileRef = 68359BEC0C559A57E84FCEAD; };
+E272884F9DD5FF8215160095 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/BlindOracleUITests.swift"; sourceTree = "<group>"; };
+67D503817DF9FD0B0CAC3EA1 = { isa = PBXBuildFile; fileRef = E272884F9DD5FF8215160095; };
+7C468C36997B89D270418938 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/ChatProgressUITests.swift"; sourceTree = "<group>"; };
+75C36303236DCEF68D110F96 = { isa = PBXBuildFile; fileRef = 7C468C36997B89D270418938; };
+A5AEBA2CBECBA4B4F8D57F7B = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/DataLibraryUITests.swift"; sourceTree = "<group>"; };
+9DA630566C269F4FD0F81DD4 = { isa = PBXBuildFile; fileRef = A5AEBA2CBECBA4B4F8D57F7B; };
+ABCC0926266A89641443A2AF = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/ExperienceFixUITests.swift"; sourceTree = "<group>"; };
+19F3AEEF4DE1DC33DA6047FF = { isa = PBXBuildFile; fileRef = ABCC0926266A89641443A2AF; };
+D01230A2A838CB347186D484 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/FormIntakeUITests.swift"; sourceTree = "<group>"; };
+8FB8B9B0D083B355FCF30CDF = { isa = PBXBuildFile; fileRef = D01230A2A838CB347186D484; };
+B19802EFAFD481A88DEA4571 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/InteractionUITests.swift"; sourceTree = "<group>"; };
+B2A6A36FECF092F3FAE05A71 = { isa = PBXBuildFile; fileRef = B19802EFAFD481A88DEA4571; };
+92F0731FEDC931C2DD157383 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/MultiPersonUITests.swift"; sourceTree = "<group>"; };
+106EE0C2BA81B2AAA9258B3F = { isa = PBXBuildFile; fileRef = 92F0731FEDC931C2DD157383; };
+33D171549E71AE201F2AD73B = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/ProfileEditingUITests.swift"; sourceTree = "<group>"; };
+5B17B68A7FEE3C86E97083C6 = { isa = PBXBuildFile; fileRef = 33D171549E71AE201F2AD73B; };
+2117640136054B5D1E93DE6A = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/ReadingContinuationUITests.swift"; sourceTree = "<group>"; };
+52A1BDB30179C2605296AB11 = { isa = PBXBuildFile; fileRef = 2117640136054B5D1E93DE6A; };
+BF20B46C59FF9D96E2637E58 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/SavedProfileReuseUITests.swift"; sourceTree = "<group>"; };
+51EC3E8B650FB2A8AF7218C0 = { isa = PBXBuildFile; fileRef = BF20B46C59FF9D96E2637E58; };
+666C2AE724655A458A689DF0 = { isa = PBXGroup; children = (
+    41601D34E66D9C1E39D6E33F,
+    4411CD8FBC8DBD739C800E9D,
+    68359BEC0C559A57E84FCEAD,
+    E272884F9DD5FF8215160095,
+    7C468C36997B89D270418938,
+    A5AEBA2CBECBA4B4F8D57F7B,
+    ABCC0926266A89641443A2AF,
+    D01230A2A838CB347186D484,
+    B19802EFAFD481A88DEA4571,
+    92F0731FEDC931C2DD157383,
+    33D171549E71AE201F2AD73B,
+    2117640136054B5D1E93DE6A,
+    BF20B46C59FF9D96E2637E58,
+); name = "UITests"; sourceTree = "<group>"; };
+0AA69D9A4583D0A6B3B9DD67 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+    9BCEFA6CEAE20825F05B6B9E,
+    133B2259F58BEFC432DDEFCF,
+    B42DA2D439E15A159F78F595,
+    67D503817DF9FD0B0CAC3EA1,
+    75C36303236DCEF68D110F96,
+    9DA630566C269F4FD0F81DD4,
+    19F3AEEF4DE1DC33DA6047FF,
+    8FB8B9B0D083B355FCF30CDF,
+    B2A6A36FECF092F3FAE05A71,
+    106EE0C2BA81B2AAA9258B3F,
+    5B17B68A7FEE3C86E97083C6,
+    52A1BDB30179C2605296AB11,
+    51EC3E8B650FB2A8AF7218C0,
+); runOnlyForDeploymentPostprocessing = 0; };
+9FE15850D9525F77FD6AA721 = { isa = PBXContainerItemProxy; containerPortal = 98F54143AB4E86B28C3AFEE0; proxyType = 1; remoteGlobalIDString = 4F6027D858B72CC70E5CC8E9; remoteInfo = "BlindOracle"; };
+7049CC82325B8E002825BA60 = { isa = PBXTargetDependency; target = 4F6027D858B72CC70E5CC8E9; targetProxy = 9FE15850D9525F77FD6AA721; };
+B7223F84B7658242BC4AD262 = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = "5.0"; IPHONEOS_DEPLOYMENT_TARGET = "17.0"; SDKROOT = "iphoneos"; CODE_SIGN_STYLE = "Automatic"; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_STRICT_CONCURRENCY = "minimal"; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; GCC_C_LANGUAGE_STANDARD = "gnu11"; ENABLE_USER_SCRIPT_SANDBOXING = NO; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; HEADER_SEARCH_PATHS = (
+    "$(inherited)",
+    "$(SRCROOT)/Vendor/Astronomy",
+); PRODUCT_BUNDLE_IDENTIFIER = "com.lihao.BlindOracleUITests"; GENERATE_INFOPLIST_FILE = YES; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks"; TEST_TARGET_NAME = "BlindOracle"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = "dwarf"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; GCC_PREPROCESSOR_DEFINITIONS = (
+    "DEBUG=1",
+    "$(inherited)",
+); ENABLE_TESTABILITY = YES; }; name = "Debug"; };
+C42EE2BD390452B96426F340 = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = "5.0"; IPHONEOS_DEPLOYMENT_TARGET = "17.0"; SDKROOT = "iphoneos"; CODE_SIGN_STYLE = "Automatic"; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_STRICT_CONCURRENCY = "minimal"; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; GCC_C_LANGUAGE_STANDARD = "gnu11"; ENABLE_USER_SCRIPT_SANDBOXING = NO; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; HEADER_SEARCH_PATHS = (
+    "$(inherited)",
+    "$(SRCROOT)/Vendor/Astronomy",
+); PRODUCT_BUNDLE_IDENTIFIER = "com.lihao.BlindOracleUITests"; GENERATE_INFOPLIST_FILE = YES; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks"; TEST_TARGET_NAME = "BlindOracle"; SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)"; }; name = "Release"; };
+C57F3D09EA23F69B6FFD791A = { isa = XCConfigurationList; buildConfigurations = (
+    B7223F84B7658242BC4AD262,
+    C42EE2BD390452B96426F340,
+); defaultConfigurationIsVisible = 0; defaultConfigurationName = "Release"; };
+9EDDF07CDE35AC3E819F75FB = { isa = PBXNativeTarget; buildConfigurationList = C57F3D09EA23F69B6FFD791A; buildPhases = (
+    0AA69D9A4583D0A6B3B9DD67,
+); buildRules = (); dependencies = (
+    7049CC82325B8E002825BA60,
+); name = "BlindOracleUITests"; productName = "BlindOracleUITests"; productReference = 6876384C1F14AB301558A48A; productType = "com.apple.product-type.bundle.ui-testing"; };
+B28B7AF69320201D1CF206EB = { isa = PBXGroup; children = (
+    4D820FADAFBC7A1FCACC4F07,
+    3B91224C671A3400805ED16F,
+    536329F47F8EAF961EDFDB02,
+    666C2AE724655A458A689DF0,
+    FBDC4F23F93125BBEEAE800C,
+); sourceTree = "<group>"; };
+62F853339D0D10F1A61A1EFA = { isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; CLANG_WARN_DOCUMENTATION_COMMENTS = NO; GCC_WARN_INHIBIT_ALL_WARNINGS = NO; LM_SKIP_METADATA_EXTRACTION = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = "dwarf"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; GCC_PREPROCESSOR_DEFINITIONS = (
+    "DEBUG=1",
+    "$(inherited)",
+); ENABLE_TESTABILITY = YES; }; name = "Debug"; };
+0DBF25066740E4B8CB8AB751 = { isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; CLANG_WARN_DOCUMENTATION_COMMENTS = NO; GCC_WARN_INHIBIT_ALL_WARNINGS = NO; LM_SKIP_METADATA_EXTRACTION = YES; SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)"; }; name = "Release"; };
+BC7E287B75C6D3E574547D08 = { isa = XCConfigurationList; buildConfigurations = (
+    62F853339D0D10F1A61A1EFA,
+    0DBF25066740E4B8CB8AB751,
+); defaultConfigurationIsVisible = 0; defaultConfigurationName = "Release"; };
+98F54143AB4E86B28C3AFEE0 = { isa = PBXProject; attributes = { BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 2710; }; buildConfigurationList = BC7E287B75C6D3E574547D08; compatibilityVersion = "Xcode 14.0"; developmentRegion = "zh-Hans"; hasScannedForEncodings = 0; knownRegions = (
+    "zh-Hans",
+    "en",
+    "Base",
+); mainGroup = B28B7AF69320201D1CF206EB; productRefGroup = FBDC4F23F93125BBEEAE800C; projectDirPath = ""; projectRoot = ""; targets = (
+    4F6027D858B72CC70E5CC8E9,
+    DB232FBED708F45A1A18553B,
+    9EDDF07CDE35AC3E819F75FB,
+); };
+}; rootObject = 98F54143AB4E86B28C3AFEE0; }

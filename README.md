@@ -2,16 +2,50 @@
 
 一个以水墨宣纸为视觉语言的原生 SwiftUI iOS 应用。只有「对话」「数据」两个标签。十种方法在设备本地执行，固定的联网 Agent 负责选择适用插件、提出资料与交互需求、整合解读和回答追问。
 
-当前版本：**3.0.14（Build 40）**。
+当前版本：**3.0.22（Build 48）**。
 
 每批修改提交前同时递增补丁版本和 Build，运行一次 `python3 Scripts/version.py` 即可同步版本配置。单一版本源为 `Configuration/Version.json`，工程生成脚本也从这里读取；构建和测试不会自动加版本。`python3 Scripts/version.py --check` 检查工作区同步状态，提交钩子用 `--check-staged` 检查暂存区相对 HEAD 的递增。首次克隆后使用 `git config core.hooksPath .githooks` 启用密钥及版本检查。
+
+## Apple 登录与账号
+
+应用启动先验证 StoreKit AppTransaction 并冻结服务环境，再恢复该环境的账号。已有会话在独立的品牌启动画面完成 Apple 状态与服务器 me/refresh 校验，然后直接进入主界面；此过程不挂载登录页。安装凭据验证失败停留品牌恢复页，不降级环境、不自动弹商店认证；3.0.21 起用户点击「重新验证 App Store」才调用 `AppTransaction.refresh()`，可能出现系统商店认证提示，刷新后仍须通过同一签名、应用和环境校验。临时网络故障或 Keychain 暂不可读保留凭据。只有确实没有会话、最终认证失效或用户主动选择重新登录时才显示 Apple 登录页。未登录不能访问聊天、资料或设置，但可阅读协议和隐私政策。
+
+「数据」页直接展示账号姓名、Apple 身份与剩余额度百分比，点整张卡片进入账号设置；邮箱仅在 Apple 提供时显示。尚未取得的额度显示占位而非虚构零值。设置页也提供简洁的账号设置入口。原生 Apple 授权前先取得服务器挑战，将 raw nonce 的 SHA-256 设置为 Apple request nonce，使用 challenge ID 绑定 state；服务器验证 Apple identity token 并交换授权码。账号会话独立保存在 ThisDeviceOnly Keychain，刷新采用 single-flight，退出、账号变更和迟到回调不能恢复旧账号状态。
+
+服务器接口使用 snake_case：`auth/apple/challenge/`、`auth/apple/`、`auth/refresh/`、`auth/logout/`、`me/`、`wallet/`、`usage/summary/`。账号页只展示剩余额度百分比和进度条，不展示底层计量单位、余额数值或调用统计。服务端决定首次赠送、剩余比例及新任务资格；无限测试账号通过后台设置，客户端同样显示完整进度。购买只使用服务端批准的消耗型商品与 StoreKit 返回的本地化价格，未配置真实商品时显示准备中。删除账号只有服务器明确成功才退出；503 会保留会话并提示尚未删除。
+
+本机人员资料、历史与推演不绑定云账号、不自动上传同步，退出/切换/删除账号也不会隔离或清除这些本机记录，但需重新登录后才能访问。删除账号前应先清理需要删除的本机资料。账号页与隐私政策明确提示共享设备前分别清理数据和历史。发起在线解读时，必要正文与上下文会经过开发者服务器再转交 AI，默认不长期留存为账号正文记录。
+
+工程带有 Sign in with Apple entitlement，生成脚本保留该配置。真机和发布仍需开发者门户的 `com.lihao.BlindOracle` App ID 已启用该能力，且签名描述文件包含相应 entitlement；端到端 Apple 授权与服务器部署验证须单独记录，不以模拟器 mock 测试代替。
+
+## 隔离沙盒测试
+
+默认发布工程采用 Apple 签名环境自动识别：仅通过验证的 AppTransaction Production/Sandbox 决定全部账号、AI、钱包、Keychain 和任务的环境；进程内不能切换。Sandbox 连接 `https://wellecho.cn/xiazi-sandbox-api/v1/`，正式账本只接受 Production。自动 Sandbox 登录附带 AppTransaction JWS，由服务器独立验签后与已验证 Apple 登录身份绑定；不能用客户端环境字段、偏好或发布版启动参数开通测试权限。
+
+3.0.22 起，首次 AI 发送前独立说明问题、人员资料目录、相关上下文与地点数据经 wellecho.cn 交由 DeepSeek 处理，并提供同意、拒绝及撤回入口。拒绝保留输入草稿，仍可查看账号与本机资料；中央请求入口在账号刷新、任务准入及网络发送前校验许可。第三方可能按适用条款留存内容、使用去标识化数据优化服务或训练，具体 API 账户安排尚未核实。正式包包含 `PrivacyInfo.xcprivacy`，按实际 UserDefaults 用途声明 CA92.1，并列出与审核资料一致的数据类型。
+
+开发签名安装可能没有 App Store 下载凭据。仅供既有 owner 测试的 `BLINDORACLE_SANDBOX=YES python3 Scripts/generate_project.py` 保留固定 Sandbox 路径和服务器白名单，名称为「瞎子·测试」。默认发布包名称仍为「瞎子」，选中 Sandbox 后显示「测试环境 · 购买不扣款」。不能用 owner 开发包测试结果替代同一归档的 TestFlight 自动环境验收。
+
+App 登录继续使用之前的正常 Apple 账号；Sandbox tester 仅用于系统购买。沙盒只交付 Sandbox 交易，生产只交付 Production 交易，商品价格与币种仍须和服务器配置一致。两套服务器会话、Keychain 失效标记、任务请求快照和结束队列独立；共享本机历史中的逻辑任务也映射为不同服务器任务。安装同一 Bundle ID 的测试包会保留本机资料和生产会话，但沙盒需单独 Apple 登录。沙盒删除只删除测试服务器账号并保留 Apple 授权，不影响正式版本授权。
+
+沙盒构建后运行 `env -u BLINDORACLE_SANDBOX python3 Scripts/generate_project.py` 恢复默认生产工程。准备提交 App Store 的构建须从生产配置生成；不要将测试显示名或沙盒编译条件带入发布包。
+
+## 额度、购买与完整任务
+
+服务端首次登录赠送策略为 300,000 计量单位，充值配置暂定人民币 6 元对应 1,000,000；这些是服务端业务参数，用户界面只显示剩余百分比、进度条和「补充额度」。无限测试账号由后台管理。百分比分母、欠额及退款处理均以服务端 quota 为准。
+
+StoreKit 2 从服务端 `products/` 获取已配置商品，再用 Apple 的 `Product.products(for:)` 读取真实价格；只展示 `displayPrice`，不使用本地硬编码金额。商品币种及金额必须和服务端批准配置精确匹配。购买绑定当前账号 UUID 为 `appAccountToken`；仅 StoreKit 验证通过、归属一致且服务器 `purchases/apple/verify/` 确认交付后才 finish。网络失败不 finish，`Transaction.updates` 和 `Transaction.unfinished` 在启动、登录、返回前台和「核对购买」时恢复；切换账号不会将旧交易交给新账号。付款入口在首次异步前锁定，等待确认或验单的购买会阻止重复付款；服务器已入账但响应丢失时保留原交易重试。商品尚未完成真实 App Store Connect 配置时不能假装付款成功。验收步骤及已知待验项见 [审核与购买验收](Documentation/ReviewPurchaseValidation.md)。
+
+一次问事从整理上下文、规划、填写资料、抽牌/投掷到最终回答共用持久 task UUID。失败、停止或重启重试保留任务与步骤身份，原始请求以系统文件保护保存在本机，重试复用原始 bytes，避免时间戳或档案变化改变已绑定目标。服务端准入后，即使该任务耗尽剩余额度，后续步骤仍可完成；已成功结束的任务不能承载新问题。新问题重新申请准入。最终答案先持久化，再写入持久完成意图并通知服务器 end；网络中断会继续补发结束通知。
+
+服务器不保存原始问题正文，只保留请求 HMAC；为断线重试临时加密缓存完整回答，48 小时后不可重放，过期响应由每分钟运行的清理任务删除。数据库加密备份按 14 天轮换，历史备份中的临时回答可能在相应备份轮换后才清除。删除本机对话也会清理对应本机请求快照，不宣称立即清除第三方数据或所有历史备份。
 
 ## 打开与运行
 
 1. 用 Xcode 27.1 打开 `BlindOracle.xcodeproj`，选择 `BlindOracle` scheme。
 2. 选择 iOS 17 或更高版本的模拟器运行。真机需在 Signing & Capabilities 选择自己的开发团队；本项目的 bundle identifier 保持为 `com.lihao.BlindOracle`。
-3. Debug 与 Release 随包提供内置 DeepSeek 服务凭据，从 `Configuration/Secrets.local.json` 的 `deepseek_api_key` 或既有开发配置读取。只生成 `dev-key.txt`，沿用设备现有的 ThisDeviceOnly 钥匙串标识。配置规则见[本地与随包密钥](Configuration/README.md)。
-4. 所有对话与解读统一通过内置 DeepSeek Agent 联网完成，固定使用 `deepseek-v4-pro` 和 max 思考。产品设置提供语言、口吻与协议许可信息，不展示供应商、模型、密钥或网络模式。网络失败保留数据并允许重试，不提供替代解读。
+3. Debug 与 Release 均不再打包 AI 服务方密钥。使用原生 Apple 登录取得 wellecho.cn 的账号会话，ThisDeviceOnly Keychain 仅保存账号会话；历史本地秘密配置文件保留，但工程构建不再读取。部署配置见[账号与服务配置](Configuration/README.md)。
+4. 所有 AI 调用（规划、解读、追问、摘要、地址辅助与诊断）都经 `https://wellecho.cn/xiazi-api/v1/ai/chat/completions/`，由服务器认证、控制供应商参数并记录用量。客户端保持 OpenAI 兼容 JSON/SSE 解析，已过期的自有 access token 通过单次并发刷新恢复。应用启动后必须先完成 Apple 登录，已有会话通过服务器验证后自动恢复；未登录时仅可查看登录页与协议政策。网络失败保留数据，不提供替代解读。
 
 没有 XcodeGen、CocoaPods 或 npm 安装步骤。全部运行依赖已随源码或资源提供；`iztro` 在构建前已打成 JavaScriptCore 可执行的本地 bundle，应用运行时不带 Node/Python。
 
@@ -37,7 +71,7 @@
 
 塔罗作为独立本地方法，使用完整 78 张牌、正逆位与固定牌阵。牌名和牌义保留英文，联网 Agent 依据本次实际抽牌结果生成所选语言的解读。抽牌和六爻结果连同输入快照保存在本机；继续未完成的交互、重新打开历史或再次请求解读不会重新抽取。同一问事补算保留原起问时刻、随机种子、报数和已完成交互，明确说只用某种方法时，本次只保留所选方法，旧记录仍留存。已有塔罗或六爻不要求重做；新增塔罗或六爻且尚无有效保存选择时，才接着完成对应操作。补算会另存一份包含复用与新增结果的完整记录，再结合本条追问解读，历史原盘保持原样。
 
-DeepSeek 请求提供 65,536 token 输出预算，包含推理与最终回答。请求超时为 300 秒，资源总超时为 900 秒。聊天只显示最终回答。
+客户端请求保留 65,536 token 的兼容输出预算参数（包含推理与最终回答），实际预算以服务器按 purpose 设置的上限为准。请求超时为 300 秒，资源总超时为 900 秒。聊天只显示最终回答。
 
 「数据」页将「留存资料」和「推演方法」作为同级分区，统一标题样式和卡片对齐。可管理留存人员，也可进入方法说明。留存人员完整平铺展示，点按资料行可编辑；左滑可直接删除，不再弹出确认提示。基础资料单独保存，修改资料不会改写旧记录的输入快照。撤回旧出生时刻后，后续解读会重新计算受影响的项目，按时辰未知的可用范围回答，不沿用旧时柱和大运。为他人问事会使用独立资料，不会自动套用本人的生辰。手动选择的地区即使暂时没有坐标也会保留。
 
@@ -113,9 +147,7 @@ xcodebuild -project BlindOracle.xcodeproj -scheme BlindOracle \
 python3 Scripts/generate_project.py
 ```
 
-授权分发的 Release 包包含内置凭据。检查包资源时核对 `dev-key.txt`，确认没有遗留的其他服务资源；核对过程不打印密钥值。具体导入与轮换规则见[配置说明](Configuration/README.md)。
-
-安装包中的内置密钥可被提取，仅用于本次明确授权的分发，不能对安装包接收者保证密钥保密。
+Debug 与 Release 包均不得包含供应商密钥。检查包资源时确认 `dev-key.txt`、`qwen-key.txt` 及其他旧凭据资源不存在；构建不读取历史本地秘密配置。供应商密钥仅由服务器保管和轮换，App 使用独立 Keychain 中的自有账号会话访问网关。具体配置见[账号与服务配置](Configuration/README.md)。
 
 开发验证通过受控测试读取内部连接元数据，检查固定请求模型、实际模型、思考强度及输出预算。连接诊断不出现在产品设置中。真机未测试时，不依据模拟器结果宣称已诊断手机。
 

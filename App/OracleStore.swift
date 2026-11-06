@@ -27,6 +27,7 @@ enum OraclePhase: String {
     @Published var pendingInteraction: OracleInteractionSession?
     @Published var showInteraction = false
     @Published var notice: String?
+    @Published private(set) var requiresTopUp = false
     @Published private(set) var hasCredential = false
     @Published private(set) var credentialIssue: String?
     @Published var selectedTab = 0
@@ -34,10 +35,11 @@ enum OraclePhase: String {
     private lazy var deepSeekClient = DeepSeekClient()
     private let aiClient: DeepSeekClient?
     var client: DeepSeekClient { aiClient ?? deepSeekClient }
-    private var credentialStore: KeychainStore { .shared }
     private let vault: LocalVault
     private var task: Task<Void, Never>?
     private var operationID: UUID?
+    @Published private(set) var quotaTaskID: UUID?
+    private var quotaEndIntents: [String: String] = [:]
     private var activityRunID: UUID?
     @Published private var analysisAttempt: OracleAnalysisAttempt?
     var isBusy: Bool { phase.isBusy }
@@ -78,6 +80,7 @@ enum OraclePhase: String {
         usesTestAgent = aiClient == nil && (!bootstrapCredential || ProcessInfo.processInfo.arguments.contains("--ui-testing-local"))
         #endif
         self.vault = vault
+        quotaEndIntents = vault.load([String: String].self, from: ServiceEnvironment.current.endIntentsFilename, fallback: [:])
         self.aiClient = aiClient
         let history = ConversationHistory.load(from: vault)
         conversations = history.archive.conversations
@@ -105,6 +108,7 @@ enum OraclePhase: String {
         pendingPlan = active?.pendingPlan
         pendingInteraction = active?.pendingInteraction
         analysisAttempt = active?.analysisAttempt
+        quotaTaskID = active?.quotaTaskID ?? active?.pendingPlan?.quotaTaskID ?? active?.pendingInteraction?.plan.quotaTaskID
         phase = waitingPhase
         let recoveredClarification = recoverCommittedClarification()
         let discardedSupplement = discardMissingSupplement()
@@ -136,23 +140,17 @@ enum OraclePhase: String {
         #if DEBUG
         if usesTestAgent { hasCredential = true; return }
         #endif
-        let keychain = credentialStore
-        var bootstrapIssue: String?
-        if importBundledKey {
-            do { try keychain.bootstrapDevelopmentKey() }
-            catch { bootstrapIssue = error.localizedDescription }
+        Task { [weak self] in
+            let session = await AccountSessionManager.shared.snapshot()
+            self?.hasCredential = session != nil
+            self?.credentialIssue = nil
         }
-        var issue: String?
-        do { hasCredential = try keychain.load() != nil }
-        catch { hasCredential = false; issue = error.localizedDescription }
-        credentialIssue = issue
-        if issue != nil || bootstrapIssue != nil { notice = L10n.text("服务暂时不可用，请稍后重试。", "The service is temporarily unavailable. Try again later.") }
     }
 
     /// Save the latest streamed text before the app can be suspended. The live
     /// task continues; only a later process restart marks its work interrupted.
     func checkpoint() { persist() }
-    private func persist() {
+    @discardableResult private func persist() -> Bool {
         syncActivities()
         captureCurrentConversation()
         do {
@@ -166,7 +164,10 @@ enum OraclePhase: String {
             try vault.save(messages, as: "conversation")
             try vault.save(summary, as: "context")
             try vault.save(pendingPlan, as: "pending-intake")
-        } catch { notice = L10n.text("本次资料暂未写入磁盘，请检查设备可用空间。", "Could not save these details. Check your available storage.") }
+            // Completion intents are written after the answer/history snapshots, before any server end request.
+            try vault.save(quotaEndIntents, as: ServiceEnvironment.current.endIntentsFilename)
+            return true
+        } catch { notice = L10n.text("本次资料暂未写入磁盘，请检查设备可用空间。", "Could not save these details. Check your available storage."); return false }
     }
     func saveProfile(_ value: OracleProfile) {
         var copy = ProfileDirectory.assigningDefaultBirthTimeZone(to: value)
@@ -370,7 +371,7 @@ enum OraclePhase: String {
         cancelConversationTask()
         captureCurrentConversation()
         if !messages.isEmpty || pendingPlan != nil || pendingInteraction != nil || !summary.text.isEmpty { activeConversationID = UUID() }
-        messages = []; summary = ConversationSummary(); pendingPlan = nil; pendingInteraction = nil; analysisAttempt = nil
+        messages = []; summary = ConversationSummary(); pendingPlan = nil; pendingInteraction = nil; analysisAttempt = nil; quotaTaskID = nil
         clearConversationPresentation()
         persist()
     }
@@ -382,6 +383,7 @@ enum OraclePhase: String {
         messages = target.messages; summary = target.summary; pendingPlan = target.pendingPlan
         pendingInteraction = target.pendingInteraction
         analysisAttempt = target.analysisAttempt
+        quotaTaskID = target.quotaTaskID ?? target.pendingPlan?.quotaTaskID ?? target.pendingInteraction?.plan.quotaTaskID
         recoverCommittedClarification()
         clearConversationPresentation()
         _ = discardMissingSupplement()
@@ -391,13 +393,16 @@ enum OraclePhase: String {
     }
     func deleteConversation(_ id: UUID) {
         guard conversations.contains(where: { $0.id == id }) else { return }
+        let linkedRuns = Set(conversations.first(where: { $0.id == id })?.messages.compactMap(\.runID) ?? [])
+        for index in runs.indices where linkedRuns.contains(runs[index].id) && runs[index].completedAt == nil { runs[index].plan.quotaTaskID = nil }
+        if !usesTestAgent { Task { try? await AIQuotaTaskService.shared.eraseConversation(id) } }
         if id == activeConversationID {
             // Invalidate callbacks before removing the record. Do not capture
             // the deleted transcript again during the following persist.
             cancelConversationTask()
             conversations.removeAll { $0.id == id }
             activeConversationID = UUID()
-            messages = []; summary = ConversationSummary(); pendingPlan = nil; pendingInteraction = nil; analysisAttempt = nil
+            messages = []; summary = ConversationSummary(); pendingPlan = nil; pendingInteraction = nil; analysisAttempt = nil; quotaTaskID = nil
             clearConversationPresentation()
         } else { conversations.removeAll { $0.id == id } }
         persist()
@@ -405,8 +410,10 @@ enum OraclePhase: String {
     func clearConversationHistory() {
         // Invalidate every async callback before dropping the active transcript.
         task?.cancel(); task = nil; operationID = nil
+        for index in runs.indices where runs[index].completedAt == nil { runs[index].plan.quotaTaskID = nil }
+        if !usesTestAgent { Task { try? await AIQuotaTaskService.shared.eraseConversation(nil) } }
         conversations = []; messages = []; summary = ConversationSummary()
-        pendingPlan = nil; pendingInteraction = nil; analysisAttempt = nil
+        pendingPlan = nil; pendingInteraction = nil; analysisAttempt = nil; quotaTaskID = nil
         activeConversationID = UUID()
         clearConversationPresentation()
         historyResetID = UUID()
@@ -417,6 +424,8 @@ enum OraclePhase: String {
 
     func cancelPendingReading() {
         guard pendingPlan != nil || pendingInteraction != nil else { return }
+        if let id = quotaTaskID ?? pendingPlan?.quotaTaskID ?? pendingInteraction?.plan.quotaTaskID { quotaEndIntents[id.uuidString.lowercased()] = "cancelled" }
+        quotaTaskID = nil
         task?.cancel(); task = nil; operationID = nil
         pendingPlan = nil; pendingInteraction = nil; analysisAttempt = nil
         showIntake = false; showInteraction = false; intakeError = nil; notice = nil
@@ -427,13 +436,13 @@ enum OraclePhase: String {
             content: L10n.text("已取消这次未完成的操作。可以继续聊，也可以重新开始。", "The unfinished reading was canceled. You can keep chatting or start another reading."), kind: .notice))
         phase = .idle
         activityMessageID = nil; activityRunID = nil
-        persist()
+        if persist(), !usesTestAgent { Task { await flushQuotaEnds() } }
     }
     private func captureCurrentConversation() {
         let previous = conversations.first { $0.id == activeConversationID }
         let snapshot = OracleConversation(id: activeConversationID, messages: messages, summary: summary,
                                           pendingPlan: pendingPlan, pendingInteraction: pendingInteraction,
-                                          createdAt: previous?.createdAt, analysisAttempt: analysisAttempt)
+                                          createdAt: previous?.createdAt, analysisAttempt: analysisAttempt, quotaTaskID: quotaTaskID)
         conversations.removeAll { $0.id == activeConversationID }
         if !snapshot.isEmpty { conversations.append(snapshot) }
         conversations = ConversationHistory.ordered(conversations)
@@ -474,6 +483,8 @@ enum OraclePhase: String {
         return true
     }
     private func beginActivitySession() {
+        requiresTopUp = false
+        if quotaTaskID == nil { quotaTaskID = UUID() }
         activities = []; status = ""; activitySessionID = UUID(); activityMessageID = nil; activityRunID = nil
     }
     private func progress(_ text: String, detail: String? = nil, method: OracleMethod? = nil,
@@ -592,6 +603,8 @@ enum OraclePhase: String {
 
     private func prepareConversation(_ proposed: OraclePlan, clarification: String? = nil, pendingAnswer: String? = nil, appendMessage: Bool = true) {
         var plan = proposed
+        plan.quotaTaskID = quotaTaskID ?? proposed.quotaTaskID ?? UUID()
+        quotaTaskID = plan.quotaTaskID
         // Legacy field-by-field preparations reopen as one complete form.
         plan.preparationStage = .collecting
         plan.requestedProfileID = nil; plan.requestedFields = nil
@@ -895,8 +908,10 @@ enum OraclePhase: String {
     }
 
     private func startTarotClarification(_ suggestion: TarotClarificationSuggestion, base: OracleRun, question: String) {
+        quotaTaskID = UUID()
         let clarification = TarotClarificationRequest(focus: suggestion.focus, originalPosition: suggestion.originalPosition, question: question)
         var plan = base.plan
+        plan.quotaTaskID = quotaTaskID
         plan.action = "supplement"; plan.baseRunID = base.id; plan.followUpQuestion = question
         plan.tarotClarification = suggestion
         let request = OracleInteractionRequest(method: .tarot, kind: .tarot, tarotClarification: clarification)
@@ -955,6 +970,7 @@ enum OraclePhase: String {
     }
 
     private func answerWhileAwaitingInteraction(_ message: ChatMessage) {
+        quotaTaskID = UUID()
         beginActivitySession(); notice = nil; showInteraction = false
         activityMessageID = message.id; analysisAttempt = .planning(questionID: message.id)
         phase = .planning
@@ -1041,6 +1057,14 @@ enum OraclePhase: String {
     }
 
     private func planQuestion(_ message: ChatMessage) {
+        let isPlanningRetry: Bool
+        if case .planning(let previousID) = analysisAttempt { isPlanningRetry = previousID == message.id }
+        else { isPlanningRetry = false }
+        if !isPlanningRetry {
+            let parent = pendingPlan?.quotaTaskID ?? pendingInteraction?.plan.quotaTaskID
+            if let parent { quotaTaskID = parent }
+            else if activities.last?.status != .waiting || quotaTaskID == nil { quotaTaskID = UUID() }
+        }
         let text = message.content
         let questionID = message.id
         beginActivitySession(); notice = nil
@@ -1178,7 +1202,11 @@ enum OraclePhase: String {
             }
             progress(L10n.text("选择适用方法与所需资料", "Choosing methods and checking what details they need"))
             if usesAI {
-                do { plan = try await client.plan(question: text, profile: profile, plugins: registry.descriptors, history: history, profiles: profiles, pendingPlan: keepsPendingScope ? pendingPlan : nil, existingRun: base, references: references, language: replyLanguage) }
+                do {
+                    plan = try await AIQuotaTaskScope.$stage.withValue(quotaStage("plan:" + questionID.uuidString.lowercased())) {
+                        try await self.client.plan(question: text, profile: self.profile, plugins: self.registry.descriptors, history: history, profiles: self.profiles, pendingPlan: keepsPendingScope ? self.pendingPlan : nil, existingRun: base, references: references, language: replyLanguage)
+                    }
+                }
                 catch {
                     guard operationID == id, !Task.isCancelled else { return }
                     failAnalysis(L10n.text("暂未能处理这次问题", "Couldn’t process this question"), error: error)
@@ -1374,6 +1402,7 @@ enum OraclePhase: String {
                 messages.append(ChatMessage(role: .assistant, content: L10n.text("已按姓名更新留存资料：\(names.joined(separator: "、"))。", "Updated profiles for \(names.joined(separator: ", "))."), kind: .notice))
             }
             if plan.action == "reply" {
+                if let parent = pendingPlan?.quotaTaskID, parent == quotaTaskID { quotaTaskID = UUID(); persist() }
                 await answerFollowUp(text, history: history, operation: id, run: base,
                                      tarotOffer: plan.tarotClarification, resolvedQuestion: effectiveQuestion); return
             }
@@ -1470,7 +1499,10 @@ enum OraclePhase: String {
         progress(L10n.text("整理此前对话与已确认资料", "Reviewing earlier messages and confirmed details"))
         if !usesTestAgent {
             do {
-                if let newSummary = try await ContextCompressor.compact(messages: messages, summary: summary, using: client, language: language) {
+                let newSummary = try await AIQuotaTaskScope.$stage.withValue(quotaStage("summary:" + (activityMessageID ?? activeConversationID).uuidString.lowercased()), operation: {
+                    try await ContextCompressor.compact(messages: self.messages, summary: self.summary, using: self.client, language: language)
+                })
+                if let newSummary {
                     guard operationID == operation, !Task.isCancelled else { return }
                     summary = newSummary; persist(); return
                 }
@@ -1612,6 +1644,8 @@ enum OraclePhase: String {
     }
 
     private func calculateReading(_ run: OracleRun) {
+        quotaTaskID = quotaTaskID ?? run.plan.quotaTaskID ?? UUID()
+        if let index = runs.firstIndex(where: { $0.id == run.id }) { runs[index].plan.quotaTaskID = quotaTaskID }
         let input = run.input
         let plan = run.plan
         let isTarotClarification = input.tarotClarificationRounds?.last.map { round in
@@ -1669,6 +1703,8 @@ enum OraclePhase: String {
         resumeReading(current, messageID: nil, needsCalculation: false)
     }
     private func resumeReading(_ run: OracleRun, messageID: UUID?, needsCalculation: Bool) {
+        if run.completedAt == nil { quotaTaskID = run.plan.quotaTaskID ?? quotaTaskID ?? UUID() }
+        else if analysisAttempt?.runID != run.id { quotaTaskID = UUID() }
         beginActivitySession(); notice = nil; activityRunID = run.id
         activityMessageID = messageID
         progress(L10n.text("沿用已保存的推演结果", "Using saved results"), detail: run.results.map { $0.method.progressName }.joined(separator: L10n.text("、", ", ")), state: .completed)
@@ -1752,11 +1788,13 @@ enum OraclePhase: String {
             return testAgentReading(run, reason: L10n.text("这次推演已完成。", "Your reading is ready.", language: language), language: language)
         }
         #endif
-        return try await client.synthesize(run: run, history: history, language: language,
+        return try await AIQuotaTaskScope.$stage.withValue(quotaStage("answer")) {
+        try await client.synthesize(run: run, history: history, language: language,
                                            voice: OracleVoiceStyle.current, onProgress: { [weak self] stage in
             await self?.readingProgress(stage, runID: run.id, operation: operation)
         }) { [weak self] delta in
             await self?.appendStreamDelta(delta, to: messageID, operation: operation)
+        }
         }
     }
 
@@ -1844,10 +1882,12 @@ enum OraclePhase: String {
         }
         #endif
         do {
-            let text = try await client.followUp(question: question, run: run, profile: profile, history: history,
+            let text = try await AIQuotaTaskScope.$stage.withValue(quotaStage("answer")) {
+            try await client.followUp(question: question, run: run, profile: profile, history: history,
                                                 resolvedQuestion: resolvedQuestion, citedQuestion: citedQuestion,
                                                 preparationContext: pendingPreparationContext(), language: replyLanguage, voice: OracleVoiceStyle.current) { [weak self] delta in
                 await self?.appendStreamDelta(delta, to: messageID, operation: operation, followUp: true)
+            }
             }
             guard operationID == operation, !Task.isCancelled else { return }
             if let index = messages.firstIndex(where: { $0.id == messageID }) {
@@ -1897,14 +1937,34 @@ enum OraclePhase: String {
         }
     }
 
+    private func quotaStage(_ name: String) -> AIQuotaStage {
+        if quotaTaskID == nil { quotaTaskID = UUID(); persist() }
+        return AIQuotaStage(taskID: quotaTaskID!, stageID: name, conversationID: activeConversationID)
+    }
     private func finishOperation(keepRetry: Bool = false) {
         task = nil; operationID = nil
+        let pendingID = pendingPlan?.quotaTaskID ?? pendingInteraction?.plan.quotaTaskID
+        let completedID = !keepRetry && activities.last?.status != .waiting && pendingID != quotaTaskID ? quotaTaskID : nil
         if !keepRetry { analysisAttempt = nil }
+        if completedID != nil { quotaTaskID = nil }
+        if let completedID { quotaEndIntents[completedID.uuidString.lowercased()] = "completed" }
         phase = waitingPhase
-        persist()
+        let saved = persist()
+        if saved, completedID != nil, !usesTestAgent { Task { await flushQuotaEnds() } }
+    }
+    func flushQuotaEnds() async {
+        guard !usesTestAgent else { return }
+        var changed = false
+        for (key, status) in quotaEndIntents {
+            guard let id = UUID(uuidString: key) else { continue }
+            await AIQuotaTaskService.shared.end(id, status: status)
+            if !(await AIQuotaTaskService.shared.containsTask(id)) { quotaEndIntents.removeValue(forKey: key); changed = true }
+        }
+        if changed { persist() }
     }
 
     private func failAnalysis(_ text: String, error: Error? = nil) {
+        if let error, case DeepSeekError.http(402) = error { requiresTopUp = true }
         notice = error?.localizedDescription
         finishActivity(status: .failed)
         progress(text, state: .failed)

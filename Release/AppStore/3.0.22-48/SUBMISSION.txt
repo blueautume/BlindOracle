@@ -1,0 +1,60 @@
+瞎子 / BlindOracle · 3.0.22 (48) 审核资料使用清单
+整理日期：2026年11月7日
+
+本目录是审核资料包，不代表已提交、已获准或已经满足全部上线条件。
+当前只制作正式包和补齐资料；备案后的非 owner 登录、通知、退款等联调仍按原安排等待，不在本轮新增测试或付款。
+
+1. 现有审核与新包状态
+ASC 原有 1.0 / build 21 仍为 Waiting for Review，未撤回；root 已把该版本改为手动发布。
+新 build 48 已正常分发上传成功（非 internal-only），尚未提交 App Review；上传记录为 processing，最终处理完成状态尚未读取。上传新构建不会自动替换原排队版本，也不代表商品已经审核通过。
+后续由主任务统一核对当前 ASC 版本与构建，明确处理旧审核再选择新包；本资料和脚本不会撤回、提交或发布任何版本。
+最终归档和导出已完成：App Store 分发 IPA 的签名/描述文件、Apple 登录 entitlement、AppleVerified 构建环境、测试资源与凭据缺席、PrivacyInfo.xcprivacy 均已通过检查；503项本地单测和7项聚焦UI测试通过。
+状态依据为 final-artifacts.json 及 build/review-archive-3.0.22-48 的 candidate-verification.json / upload-verification.json。上传成功不代表 Apple 最终处理完成或已提交审核。
+
+2. 可填写的资料与步骤
+按 metadata.zh-Hans.json / metadata.en-US.json 分语言填写名称、副标题、宣传文本、描述、关键词及支持/营销/隐私 URL。
+类别、版权、年龄分级、加密出口和发行地区按实际内容及已有 ASC 状态核对；联系人沿用 ASC 已存在的审核联系人，无需重复索取。
+whats-new.txt 仅在 ASC 实际提供更新说明字段时使用；首次公开版本不应硬塞入不适用字段。
+review-notes.txt 用于审核说明；不把 intended reviewer path 写成已完成非 owner 实测。
+公开网址候选已部署本版页面，服务器自身 HTTPS 与正文校验通过：
+  简中：https://wellecho.cn/xiazi/zh-Hans/{privacy,support,terms,marketing}.html
+  英文：https://wellecho.cn/xiazi/en-US/{privacy,support,terms,marketing}.html
+上面的花括号表示四个独立页面，不是要粘贴进 ASC 的完整 URL；准确地址在两份 metadata 的对应字段中。
+外部及 Apple 审核网络可达性尚未验证，必须备案放行后核对；当前 ASC 旧 kiki.group 隐私 URL 不等于新页面已经替换。
+web/ 只有8个内容页、index.html 和必要 CSS，不包含表单、分析脚本、私有审计或部署凭据。
+
+3. 额度商品
+沿用已创建的 com.lihao.BlindOracle.quota.1m，类型 Consumable；不要重复建商品。
+按 iap-metadata.json 核对当前 CNY 6.00 价格、本地化、可用地区和审核截图；以 ASC 的真实商品配置为准。
+首次消耗型 IAP 需要随 App 一并提交审核，在版本页明确关联；商品草稿或沙盒购买成功不等于生产商品获准。
+这不是 VIP 或自动续费。额度累加到账后以合计剩余余额为新100%，不设到期；赠额每 Apple 身份一次，交易只入账一次。
+退款由 Apple 受理审核，服务器收到可信退款信息后冲正；不承诺固定退款资格、时限或未核实的退款验收结果。
+
+4. 隐私与 manifest
+不能沿用“未收集数据”。本地 privacy-labels.json 有11类草稿：
+Name、Email Address、User ID、Purchase History、Other User Content、Precise Location、Coarse Location、Other Usage Data、Other Diagnostic Data、Other Data Types、Performance Data。
+账号、购买、用量及可恢复回答与用户关联，Linked to User=true；源码未见广告追踪，Tracking=false；开发者侧用途为 App Functionality。
+上传给 AI 的 Name、Precise/Coarse Location、Other User Content、Other Data Types 另保守列 Other Purposes。
+DeepSeek 通用条款允许在去标识化等条件下训练/优化；本 API 账户的具体用途、留存、处理地区和有效退出安排仍待确认，不能宣称绝不训练或只有功能用途。
+自由文本按 Other User Content 处理，不因用户可能自行填写而枚举所有健康、财务或敏感类型；结构化生日、时刻与排盘性别归 Other Data Types。
+当前 ASC 仍是旧的 Data Not Collected。长隐私表单的 Safari 自动化曾挂住（历史原因）；最后一次CUA复核明确Mac锁屏，当前无法继续操作或保存，新11类答案未保存、未发布；本地 JSON 和随包 manifest 都不代表 ASC 已填写。
+最终ASC构建处理完成状态也因最后Mac锁屏而未读取；不用等待解锁即可整理本地资料，但不能把未读取状态当成已完成。
+PrivacyInfo.xcprivacy 与 ASC 标签是不同事项：最终归档和导出IPA已确认随包包含有效清单，11类数据与本地标签一致，UserDefaults required-reason为CA92.1；这不代表ASC答案已经保存或发布。
+privacy-manifest-audit.json 中 needs_resource_repackaging=true 是重打包前的历史源审计快照；后续最终 candidate-verification 已确认该步骤完成，保留历史文件不改写。
+
+5. 截图与可重复打包
+只使用 screenshots-approved.json 明确 approved=true 且 SHA 匹配的29张商店截图：两种iPhone尺寸的中英四组各5张，共20张；iPad中文5张、英文4张，共9张。
+唯一排除项为英文iPad第5张 local-bazi-preview：原生日期选择辅助步骤失败，未批准、不补造；失败证据留在私有build目录，不入ZIP。其他29张仍全部必需。每设备/语言组4或5张，处于Apple每组1–10张范围。
+商店图不得混用旧2.0.8图、测试账号/假余额图、私人手机图、review-evidence、原始 xcresult 或任何密钥/日志。
+唯一另包的审核专用图为 review-only/iap-review.png，必须有批准且SHA匹配的 iap-review-provenance.json，并由 iap-metadata.json 明确引用。
+该图已生成并获目视批准，使用真实 AccountTopUpView 和隔离的 CNY6 SKU 展示夹具，来源说明明确标注 fixture_no_financial_event；不代表真实 Apple 商品加载、付款或到账事件，不混入商店营销图。
+先运行：python3 assemble_review_package.py --check
+本批商店截图批准清单、IAP审核专用图/来源说明和 final-artifacts.json 已齐备；通过校验后运行：python3 assemble_review_package.py --assemble
+脚本不含 IPA，不上传、登录或写入 ASC；生成的是资料 ZIP，供 root 后续核对并合并最终 IPA。
+本批 final-artifacts.json 已如实记录正常上传成功、非 internal-only、未提交 App Review；最终归档/导出/manifest 已核对。29张商店图和独立IAP图均已批准，资料 ZIP 不是自动提审动作；ASC首次IAP关联及已备审核图的上传/关联仍待人工核对。
+
+6. 备案后、最终提交前核对
+核对真实备案结果、备案名称（ICP Name）、备案号、主体与 ASC 简中信息一致；不猜测、不填服务器编号代替备案号。
+从外网及审核可访问路径核对新隐私/支持网址和账号/商品服务，确认足够的测试容量；不能把服务器自身200当成公网验收。
+完成仍未确认的隐私用途、发行地区、首次 IAP 关联和所需审核材料核对后，再人工保存正确 ASC 隐私答案、选择正确新构建并决定提交。
+本清单没有授权现在执行额外非 owner、通知、退款测试或真实付款，也不声称这些验收已经通过。

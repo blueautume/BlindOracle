@@ -1,0 +1,257 @@
+{
+  "app_version": "3.0.22",
+  "build": "48",
+  "reviewed_on": "2026-11-07",
+  "draft": true,
+  "published_to_app_store_connect_by_this_file": false,
+  "collects_data": true,
+  "data_linked_to_user": true,
+  "uses_data_for_tracking": false,
+  "developer_purposes": [
+    "APP_FUNCTIONALITY"
+  ],
+  "developer_purposes_confirmed_from_source": true,
+  "provider_purposes_confirmed": false,
+  "provider_retention_confirmed": false,
+  "requires_provider_confirmation": true,
+  "requires_account_holder_review_before_publication": true,
+  "app_functionality_basis": [
+    "账号认证",
+    "功能提供",
+    "额度与账务核对",
+    "防欺诈/反滥用",
+    "服务稳定与排障"
+  ],
+  "tracking_basis": "源码未见广告ID、广告SDK、跨App广告测量或数据经纪共享；服务商对下游数据的具体安排尚待确认，不把未证实的训练或分析用途写成不存在。",
+  "types": [
+    {
+      "type": "NAME",
+      "name_zh": "姓名",
+      "collected": true,
+      "linked_to_user": true,
+      "used_for_tracking": false,
+      "purposes": [
+        "APP_FUNCTIONALITY",
+        "OTHER_PURPOSES"
+      ],
+      "source_observation": "Apple提供的姓名，以及明确填写并发送的人员姓名或称呼。",
+      "evidence": [
+        "accounts/models.py:11",
+        "BlindOracle/Services/DeepSeekClient.swift:785-790"
+      ],
+      "proposedAdditionalPurpose": "OTHER_PURPOSES",
+      "provider_specific_final_confirmation_pending": true,
+      "purpose_note": "保守草稿：DeepSeek用户协议4.3允许在去标识化等条件下训练和优化；开放平台具体API账户安排尚未核实。未据此声称每笔请求已被训练使用。"
+    },
+    {
+      "type": "EMAIL_ADDRESS",
+      "name_zh": "电子邮件地址",
+      "collected": true,
+      "linked_to_user": true,
+      "used_for_tracking": false,
+      "purposes": [
+        "APP_FUNCTIONALITY"
+      ],
+      "source_observation": "Apple提供并保存在账号中的真实或隐藏邮箱。",
+      "evidence": [
+        "accounts/models.py:12",
+        "accounts/services.py:94-115"
+      ]
+    },
+    {
+      "type": "USER_ID",
+      "name_zh": "用户ID",
+      "collected": true,
+      "linked_to_user": true,
+      "used_for_tracking": false,
+      "purposes": [
+        "APP_FUNCTIONALITY"
+      ],
+      "source_observation": "服务器账号UUID、Apple subject、购买账号标识及去标识防重/准入摘要；摘要不等于完全匿名。",
+      "evidence": [
+        "accounts/models.py:10,42",
+        "accounts/models.py:99-110",
+        "billing/models.py:174,193"
+      ]
+    },
+    {
+      "type": "PURCHASE_HISTORY",
+      "name_zh": "购买记录",
+      "collected": true,
+      "linked_to_user": true,
+      "used_for_tracking": false,
+      "purposes": [
+        "APP_FUNCTIONALITY"
+      ],
+      "source_observation": "IAP商品和交易标识、金额币种、到账与退款记录以及账号绑定。",
+      "evidence": [
+        "billing/models.py:147-176"
+      ]
+    },
+    {
+      "type": "OTHER_USER_CONTENT",
+      "name_zh": "其他用户内容",
+      "collected": true,
+      "linked_to_user": true,
+      "used_for_tracking": false,
+      "purposes": [
+        "APP_FUNCTIONALITY",
+        "OTHER_PURPOSES"
+      ],
+      "source_observation": "问事、相关对话和摘要、推演输入和结果；完整AI回答48小时加密可恢复，可能包含输入资料回显。",
+      "evidence": [
+        "BlindOracle/Services/DeepSeekClient.swift:259-269,439-472",
+        "aigateway/models.py:27-28",
+        "aigateway/services.py:227-228"
+      ],
+      "proposedAdditionalPurpose": "OTHER_PURPOSES",
+      "provider_specific_final_confirmation_pending": true,
+      "purpose_note": "保守草稿：DeepSeek用户协议4.3允许在去标识化等条件下训练和优化；开放平台具体API账户安排尚未核实。未据此声称每笔请求已被训练使用。"
+    },
+    {
+      "type": "PRECISE_LOCATION",
+      "name_zh": "精确位置",
+      "collected": true,
+      "linked_to_user": true,
+      "used_for_tracking": false,
+      "purposes": [
+        "APP_FUNCTIONALITY",
+        "OTHER_PURPOSES"
+      ],
+      "source_observation": "profileContext发送未经粗化的出生/当前经纬度；坐标可能来自用户授权系统定位或地名解析。",
+      "evidence": [
+        "BlindOracle/Services/DeepSeekClient.swift:801-802",
+        "BlindOracle/Services/LocationService.swift:392-398,601-606"
+      ],
+      "proposedAdditionalPurpose": "OTHER_PURPOSES",
+      "provider_specific_final_confirmation_pending": true,
+      "purpose_note": "保守草稿：DeepSeek用户协议4.3允许在去标识化等条件下训练和优化；开放平台具体API账户安排尚未核实。未据此声称每笔请求已被训练使用。"
+    },
+    {
+      "type": "COARSE_LOCATION",
+      "name_zh": "粗略位置",
+      "collected": true,
+      "linked_to_user": true,
+      "used_for_tracking": false,
+      "purposes": [
+        "APP_FUNCTIONALITY",
+        "OTHER_PURPOSES"
+      ],
+      "source_observation": "发送出生地、当前地及地区名称/代码等低精度地点信息。",
+      "evidence": [
+        "BlindOracle/Services/DeepSeekClient.swift:795-798,475-493"
+      ],
+      "proposedAdditionalPurpose": "OTHER_PURPOSES",
+      "provider_specific_final_confirmation_pending": true,
+      "purpose_note": "保守草稿：DeepSeek用户协议4.3允许在去标识化等条件下训练和优化；开放平台具体API账户安排尚未核实。未据此声称每笔请求已被训练使用。"
+    },
+    {
+      "type": "OTHER_USAGE_DATA",
+      "name_zh": "其他使用数据",
+      "collected": true,
+      "linked_to_user": true,
+      "used_for_tracking": false,
+      "purposes": [
+        "APP_FUNCTIONALITY"
+      ],
+      "source_observation": "每账号请求用途、时间、输入/输出/cache/reasoning用量、成本估算及状态。",
+      "evidence": [
+        "metering/models.py:6-24",
+        "aigateway/models.py:43-55"
+      ]
+    },
+    {
+      "type": "OTHER_DIAGNOSTIC_DATA",
+      "name_zh": "其他诊断数据",
+      "collected": true,
+      "linked_to_user": true,
+      "used_for_tracking": false,
+      "purposes": [
+        "APP_FUNCTIONALITY"
+      ],
+      "source_observation": "网关错误/运行状态和网络技术日志；Nginx日志含IP、路径、UA、状态与字节数，用于排障和安全。",
+      "evidence": [
+        "aigateway/models.py:45,53",
+        "read-only /etc/nginx/nginx.conf: log_format main"
+      ]
+    },
+    {
+      "type": "OTHER_DATA_TYPES",
+      "name_zh": "其他数据类型",
+      "collected": true,
+      "linked_to_user": true,
+      "used_for_tracking": false,
+      "purposes": [
+        "APP_FUNCTIONALITY",
+        "OTHER_PURPOSES"
+      ],
+      "source_observation": "结构化要求填写的出生日期、时刻、时区及排盘性别，实际发送用于推演；不是仅因自由问事可能提及而枚举。",
+      "evidence": [
+        "BlindOracle/Core/OracleModels.swift:63-72",
+        "BlindOracle/Services/DeepSeekClient.swift:791-799"
+      ],
+      "proposedAdditionalPurpose": "OTHER_PURPOSES",
+      "provider_specific_final_confirmation_pending": true,
+      "purpose_note": "保守草稿：DeepSeek用户协议4.3允许在去标识化等条件下训练和优化；开放平台具体API账户安排尚未核实。未据此声称每笔请求已被训练使用。"
+    },
+    {
+      "type": "PERFORMANCE_DATA",
+      "name_zh": "性能数据",
+      "collected": true,
+      "linked_to_user": true,
+      "used_for_tracking": false,
+      "purposes": [
+        "APP_FUNCTIONALITY"
+      ],
+      "source_observation": "网关持久保存请求开始和结束时间，可得到服务请求耗时；没有宣称采集设备电量、启动耗时或崩溃报告。",
+      "evidence": [
+        "aigateway/models.py:54-55"
+      ]
+    }
+  ],
+  "collection_boundary": "Apple把实时请求服务结束后仍可读取的数据视作收集。本应用保存账号/账务/用量及48小时可解密回答缓存，不能选择无数据收集；位置与结构化资料明确离开设备，供应商留存和用途仍需核实。",
+  "free_form_text_boundary": "自由问事使用Other User Content，不因用户可能自行输入健康/财务/性取向等内容便枚举所有敏感类别；明确要求的姓名、生日和坐标另按对应类型申报。",
+  "not_supported_as_collected_by_current_source": [
+    "PHONE_NUMBER",
+    "PAYMENT_INFO_CARD_OR_BANK_DETAILS",
+    "CONTACTS_ADDRESS_BOOK",
+    "PHOTOS_OR_VIDEOS",
+    "AUDIO_DATA",
+    "BROWSING_HISTORY",
+    "ADVERTISING_DATA"
+  ],
+  "device_identifier_review": {
+    "idfa_or_idfv_usage_found": false,
+    "legacy_storekit_device_proof_digest_supported_in_sandbox": true,
+    "requires_account_holder_classification_review": true,
+    "note": "旧系统签名deviceVerification+nonce可形成去标识准入摘要，不把它描述为广告标识；需按实际StoreKit运行分支复核Device ID分类，不能因HMAC就说完全匿名。"
+  },
+  "third_party": {
+    "provider": "DeepSeek Open Platform",
+    "api_terms_url": "https://cdn.deepseek.com/policies/zh-CN/deepseek-open-platform-terms-of-service.html",
+    "terms_effective_on": "2026-04-29",
+    "downstream_end_user_privacy_covered_by_consumer_policy": false,
+    "api_account_specific_retention_verified": false,
+    "api_account_specific_training_exclusion_verified": false,
+    "api_account_specific_analytics_exclusion_verified": false,
+    "api_account_specific_processing_region_verified": false,
+    "note": "开放平台协议引用通用用户协议；通用用户协议4.3允许在去标识化等条件下训练和优化。开放平台5.5另明确消费者隐私政策不覆盖下游用户。本API账户具体安排仍待核实；相关payload类别保守增加OTHER_PURPOSES，不宣称实际全部用于训练或绝对不训练。",
+    "general_terms_training_and_optimization_clause_found": true,
+    "general_terms_url": "https://cdn.deepseek.com/policies/zh-CN/deepseek-terms-of-use.html",
+    "general_terms_clause": "4.3"
+  },
+  "official_references": [
+    "https://developer.apple.com/app-store/app-privacy-details/",
+    "https://developer.apple.com/app-store/review/guidelines/#data-use-and-sharing"
+  ],
+  "public_site_status": {
+    "candidate_base": "https://wellecho.cn/xiazi/",
+    "new_pages_generated": true,
+    "new_pages_deployed": true,
+    "external_reachability_verified": false,
+    "note": "本版页面已静态原子部署，服务器自身HTTPS/正文版本验证通过；备案放行后的外部及Apple审核网络可达性仍待验，不代表可直接提审。",
+    "server_origin_https_verified": true
+  },
+  "proposed_additional_provider_purpose": "OTHER_PURPOSES",
+  "provider_specific_final_confirmation_pending": true
+}

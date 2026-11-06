@@ -1,18 +1,29 @@
 {
-  "date": "2026-11-03",
+  "date": "2026-11-06",
   "xcode": "27.1 (27A9275)",
   "minimum_iOS": "17.0",
-  "release_arm64_bundle_bytes": 17115130,
-  "release_contains_development_key_resource": true,
-  "source_credential_matches": [],
-  "release_credential_matches": [],
-  "unit_tests_passed": 219,
+  "release_arm64_bundle_bytes": 18992718,
+  "release_contains_development_key_resource": false,
+  "source_credential_matches": null,
+  "release_credential_matches": null,
+  "unit_tests_passed": 498,
   "ui_tests_passed": 5,
-  "live_api_tests_passed": 1,
+  "live_api_tests_passed": 0,
   "default_live_test_skipped_intentionally": 3,
   "local_plugin_count": 10,
   "release_is_signed": true,
   "notes": [
+    "Authorized follow-up for 3.0.20 / 46: OwnerSandbox developer app installed in place on 穷奇 and launched with no app test arguments, preserving all nine pre-existing data filenames (sizes/mtimes unchanged before launch). The same default AppleVerified archive was uploaded with testFlightInternalTestingOnly=true; App Store Connect visibly lists build 46 as Internal / Testing in the existing internal group blind. This does not submit App Review or expose the build to external TestFlight. A real TestFlight install and automatic Sandbox routing are pending user action, not claimed from the developer installation.",
+    "Review purchase compatibility 3.0.20 / 46: Apple-verified immutable bootstrap before account/AI/task creation; independently verified Sandbox app-download admission and first-binding; strict environment ledgers; durable unfinished reconciliation and cancellation handling. Final default 493 core units, 78 owner Sandbox units, 5 genuine local StoreKit cases and 5 account UI tests passed. PostgreSQL full 205 and one additional real-SDK bad-JWS test passed. Both backends deployed; cache ownership repaired without deleting throttle files, internal notification rejection 400 verified. Signed App Store export prepared; no TestFlight upload/App Review submission or new physical purchase/installation is claimed. Live callback remains unverified pending filing/network restoration.",
+    "Follow-up real Sandbox purchase verification for the same 3.0.19 / Build 45: the user reported the allowance-delivered message. The live Sandbox database contains one officially signed CNY 6.00 consumable order granting 1,000,000 test units and exactly one corresponding paid ledger entry. A fresh official Apple Server API reverification and resubmission returned the existing order with no additional order or credit entry. No real-money charge or production-wallet credit occurred. Cancellation/interruption recovery, refund notifications and the App Review purchase route remain separately unverified; no store submission was made.",
+    "Physical Sandbox install 3.0.19 / Build 45: signed development Release verified OracleServiceEnvironment=Sandbox and both localized test names, Apple entitlements in App/profile, zero compiler warnings and absence of provider/private keys. Installed in place on 穷奇 with no uninstall/reset, all previous local file names retained by metadata, empty launch arguments and a running process verified. Production project settings restored after building. Backend Sandbox release 20261106-064955 uses independent PostgreSQL/runtime/secrets/account allowlist and passed 185 PostgreSQL tests plus real HTTPS catalog/AI/task recovery and credential isolation checks. Apple Sandbox Server API authentication was checked with a nonexistent transaction returning 4040010; no real purchase was simulated as success. Device Apple sign-in and Sandbox payment confirmation require the user. Evidence: build/device-sandbox-3.0.19-45/verification.json.",
+    "Isolated Sandbox 3.0.19 / Build 45: the generated project defaults to Production; only explicit BLINDORACLE_SANDBOX=YES generation adds the Sandbox compile condition. One ServiceEnvironment selects both account and AI routes. Sandbox Keychain/invalidation, task snapshots, stable server task IDs and completion-intent queue are isolated while the production namespace and device-owned profiles/history remain unchanged. Only matching StoreKit transaction environments are submitted or finished; currency/amount checks remain strict. The Sandbox UI identifies test purchases and normal Apple App sign-in versus the system Sandbox tester; test-account deletion explicitly retains Apple authorization. Each environment passed 90 affected unit tests and five account UI tests; two generator tests passed. Final metadata checks passed three Sandbox tests and 16 Production environment/task/purchase tests, followed by two successful visual retests after fixing the Sandbox banner layering. A metadata assertion initially caught localized InfoPlist names overriding the test name; the build resource phase now synchronizes both localized names, and the final checks passed. The repository project was restored to default Production. No new physical Apple sign-in, real StoreKit transaction, live AI call or phone installation was performed by the iOS agent. Root records signed Sandbox build and installation separately; historical evidence retains its actual version.",
+    "Physical update 3.0.18 / Build 44: final signed arm64 Release passed strict signature verification and both App/profile Apple sign-in entitlements, with zero compiler warnings and no old/new provider key or private .p8 files. Installed in place on 穷奇; device confirms version/build, empty launch arguments and a running process. Seven prior local file names remain (metadata only). Backend release 20261106-060546 passed 168 PostgreSQL tests and real HTTPS ordinary-answer/stream-disconnect quota recovery with synthetic accounts. New Apple authorization and real StoreKit purchases were not performed; the live catalog remains empty until the user creates the SKU and isolated sandbox validation is complete. Evidence: build/device-3.0.18-44/verification.json.",
+    "Allowance, StoreKit and durable tasks 3.0.18 / Build 44: account surfaces show only server quota percentage and a progress bar, including unlimited/refund-hold handling; raw billing units and invocation statistics are hidden. StoreKit 2 uses server-approved consumables and native displayPrice, validates currency/amount and current appAccountToken, and finishes only after official server confirmation; foreign ownership, failures and account changes do not finish or miscredit. One persistent task spans planning, intake, interactions and the final answer; retries retain stage ID and exact protected request bytes across relaunch. Successful output and a durable completion intent are saved before end notification; deleting local history removes its request snapshots even offline. The full non-live suite passed 465 tests and four account UI regressions; after final task persistence/erasure hardening, 124 focused tests passed, followed by 79 affected tests after two compiler-warning-only edits. Data/account screenshots were visually reviewed. No live AI call, real StoreKit sandbox purchase, new Apple authorization or store upload was performed by the iOS agent; root records signed build/device installation separately. Product catalog is intentionally unavailable until a real approved App Store Connect SKU is configured.",
+    "Account experience 3.0.17 / Build 43: redesigned the first-use Apple sign-in page with centered brand artwork and a lower primary action. Returning accounts use a separate launch surface and go directly to main after server validation, without rendering sign-in controls; transient network/5xx/secure-storage failures preserve the session and show an explicit recovery view. Data displays the actual name, optional email, Apple identity, available credits and total token usage directly; the whole account card opens settings. No invented zero balance or VIP/subscription state. Thirty-one focused account tests and four final UI tests passed; three screenshots were visually reviewed. Signed arm64 Release passed with zero compiler warnings, verified App/profile Apple entitlements and absent provider keys/Debug restore fixture. Installed in place on 穷奇, version 3.0.17 / 43 and a running process verified without reset/test arguments; all pre-update local file names remain (metadata only). Initial Debug test compilation retained prior test-fixture Sendable warnings; failed UI selector assertions were corrected before the final four-test pass. No new real Apple authorization, purchase, full application regression, archive or store upload was performed. Evidence: build/device-3.0.17-43/verification.json and build/account-ui-3.0.17-final.xcresult.",
+    "Physical-device installation 3.0.16 / Build 42: the mandatory launch login gate passed 59 focused unit tests and three simulator UI regressions. A fresh automatically signed Release build completed with zero compiler warnings; strict signature verification and both App/profile Sign in with Apple entitlements passed. Installed in place on 穷奇 (iPhone 15 Plus) without uninstalling or resetting. Device metadata confirms 3.0.16 / 42, launch arguments are empty and the process is running. The data-container UUID was relocated by installation; seven nonempty existing local files retain timestamps predating this update (metadata only, no personal file contents read). Existing Keychain namespace remains unchanged. The login-gate screenshot was visually reviewed. Actual Apple authorization on this gated version remains for the user to test; a successful server-side authorization on the preceding 3.0.15 was observed separately. No store upload was performed. Evidence: build/device-3.0.16-42/verification.json.",
+    "Mandatory launch sign-in 3.0.16 / Build 42: the app renders only the login gate or a restoration indicator until Apple/session checks and server me/refresh validation succeed. Unauthenticated users cannot reach tabs, local records or settings, but User Agreement and Privacy Policy remain available. Temporary restoration errors offer retry without deleting local data; wallet outages do not invalidate login. Logout, revocation and final unauthorized responses close the gate even if Keychain deletion fails, with a persistent invalidation marker preventing stale-token restoration. Already authenticated foreground transitions preserve navigation and editors. Debug UI fixtures are compiled out of Release. The final 59 focused unit tests (26 account/gate and 33 AI) and three iPhone UI tests passed, covering hidden main routes, legal access, local record preservation, settings-sheet dismissal and foreground continuity. Added CFBundleDevelopmentRegion as a standard string; the build resolves it to zh-Hans. No device keychain or local records were cleared. Root agent records signed build and physical installation evidence separately; prior evidence retains its actual version and scope.",
+    "Apple accounts and gateway 3.0.15 / Build 41: native Apple sign-in uses a server challenge, SHA-256 nonce and matching state. Account sessions use a separate ThisDeviceOnly Keychain and a shared actor with single-flight refresh, late-401 reuse, account-generation isolation including late deletion responses and safe handling of rotated-token storage failures. Account balance/usage, logout and deletion are available from Data and Settings. Local profiles/chats/readings remain device-owned and are explicitly disclosed as independent of cloud accounts. All six AI purposes use the wellecho gateway; provider credentials are no longer read or bundled. The full non-live unit regression passed 436 tests before final session hardening, followed by 51 final focused tests (18 account and 33 AI). One iPhone UI regression passed and its screenshot was visually reviewed. The final unsigned arm64 Release build passed with zero compiler warnings, and dev-key/qwen-key resources are absent. No physical Apple authorization, real model call, purchase, automatic charging, device installation, archive or store upload was performed. Existing test-only Sendable warnings and older historical evidence retain their recorded scope.",
     "Preference retirement and first Data-tab stall fix 3.0.14 / Build 40 (2026-11-06): removed the complete Settings on-device data section, backup/export/reset actions, preference learning/selection/weights, stored snapshots, and request fields. Language, voice and legal/license links remain. Disagreements are explained in result prose; archived disagreement text remains readable without selection controls. Old choice turns are excluded from outbound history and online/local compaction; planner, answer and summary instructions do not restore retired preferences from old context. Migration deletes only obsolete preference files/recovery copies and preserves profiles, readings and chats. Bilingual in-app policy copy reflects these changes. The first Data view previously synchronously built the entire district alias index while displaying saved profile locations; display/browsing now avoids it, and Chinese/English matching indexes initialize separately on demand with locking and original parent/ambiguity constraints. Apple M2 independent Foundation source-extraction benchmark, median of three fresh Release processes: catalog initialization 793.357 to 14.824 ms; this is not a physical-device whole-tab timing. Final unit suite: 436 tests, 11 opt-in tests skipped, zero failures (425 passed); four distinct UI regressions passed, plus a final bilingual legal-navigation rerun after policy edits. Two retained screenshots were visually reviewed; five version-script tests passed. Final signed Release built with zero compiler warnings, passed strict code-sign verification and was installed in place on 穷奇 with unchanged bundle ID, no uninstall/reset arguments. Installed 3.0.14 / 40, empty launch arguments and a running process were verified. No live API or store upload was performed. Evidence: build/no-preferences-3.0.14/verification.json and associated xcresult/log/benchmark/device artifacts. Earlier broader evidence retains its actual tested version.",
     "BaZi copy and spacing refinement 3.0.13 / Build 39 (2026-11-06): removed extra vertical padding from the BaZi row and reduced only the birth/location card bottom inset from 18 to 8 points. Added a 44-point copy button aligned with the existing clear-button column; it copies only a current complete Chinese Four Pillars value, shows temporary confirmation, and disables when the preview is missing or stale. The focused UI regression passed, verifying alignment, readonly text, clipboard content pasted through the native edit menu, updated clipboard content after changing birthplace, current-location independence, and disabled copying after clearing birth date. Screenshot was visually reviewed; five version-script tests passed. Signed Release built with zero compiler warnings and was installed in place on 穷奇 without uninstall/reset arguments; installed 3.0.13 / 39, launch and a running process were verified. The broader 422-unit/14-solar evidence remains under its tested 3.0.12 version. No store upload or live API test was performed. Evidence: build/bazi-copy-3.0.13/verification.json and associated screenshot/xcresult/log/device artifacts.",
     "True-solar BaZi and readonly intake preview 3.0.12 / Build 38 (2026-11-06): the current-location row is followed by original Chinese Four Pillars that update from birth date/time/place using the same serialized offline engine as formal BaZi. NOAA Julian-century equation-of-time plus longitude determines apparent-solar day/hour; actual fixed UTC+08:00 solar-term instants determine year/month and birth-to-term luck intervals. Missing/withdrawn coordinates never fall back to clock charts or current location; unknown birth time yields candidate solar dates/pillars. CN/HK/MO/TW use their regional IANA zones for historical DST. Complete unit suite: 433 tests, 11 opt-in tests skipped, 0 failures (422 passed); 14 focused solar tests plus one UI regression passed again after adding the legacy-withdrawal case. Eight coordinate/rebuild checks and five version tests passed. The UI screenshot was visually reviewed. Signed Release built with zero compiler warnings and was installed in place on 穷奇 (iPhone 15 Plus), replacing 3.0.10 / 36 without uninstalling or UI-reset arguments; installed 3.0.12 / 38, launch and a running process were verified. No live API calls or store upload were performed. Evidence: build/true-solar-3.0.12/verification.json and its xcresult/log/installation artifacts. Earlier broader evidence keeps its actual tested version.",
@@ -52,14 +63,14 @@
     "Earlier offline tarot deck, keyboard, broader interaction, and history regression evidence remains at the retained paths. No reasoning_content is decoded, displayed, or persisted.",
     "Changing the requested method while supplying data preserves the original question, applies the new method, and requires a new summary confirmation. A clock correction alone cannot change methods; ambiguous questions or negative replies cannot act as confirmation."
   ],
-  "unit_test_result": "build-saved-profile/units-closed.xcresult",
-  "final_ui_result": "build-saved-profile/saved-ui-final.xcresult",
+  "unit_test_result": "build/review-3.0.20-46-release-candidate-unit.xcresult",
+  "final_ui_result": "build/review-3.0.20-46-ui-final.xcresult",
   "live_api_result": "build-conversation/live-verified.xcresult",
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "3.0.14",
-  "build": "40",
+  "version": "3.0.22",
+  "build": "48",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",
@@ -79,7 +90,7 @@
   "tarot_live_api_result": "build-interactions/chat-progress-live.xcresult",
   "multi_person_live_api_tests_passed": 1,
   "multi_person_live_api_requests": 4,
-  "release_bundle_kind": "signed arm64 archive; App Store distribution IPA exported",
+  "release_bundle_kind": "signed arm64 Release app installed in place on physical iPhone; no archive or store upload in this batch",
   "build_warning_cleanup": {
     "debug_clean_build_warning_count": 0,
     "release_archive_warning_count": 0,
@@ -148,8 +159,9 @@
   "reading_deletion_tests_passed": 8,
   "reading_deletion_ui_tests_passed": 2,
   "unit_test_evidence_version": {
-    "version": "0.1.6",
-    "build": "7"
+    "version": "3.0.20",
+    "build": "46",
+    "scope": "493 core non-live unit tests; native StoreKit 5 and owner Sandbox 78 are separately recorded."
   },
   "reading_deletion": {
     "right_side_trash_in_recent_and_all_lists": true,
@@ -374,8 +386,9 @@
     "release_bundle_kind": "stripped unsigned arm64 archive app"
   },
   "release_metadata_evidence_version": {
-    "version": "0.1.10",
-    "build": "11"
+    "version": "3.0.20",
+    "build": "46",
+    "scope": "signed App Store export; AppleVerified; not uploaded"
   },
   "bundled_credential_release": {
     "date": "2026-11-03",
@@ -1039,5 +1052,716 @@
     "testflight_processing_complete_verified": false,
     "current_version_validation": "Two iPhone data-library UI tests and screenshot review; prior broader tests retain their original version.",
     "final_data_page_screenshot": "build/data-layout-3.0.10/iphone-ui-attachments/7906B026-8366-4F10-ABB0-92589593E3C3.png"
+  },
+  "historical_summary_before_account_integration": {
+    "date": "2026-11-03",
+    "release_arm64_bundle_bytes": 17115130,
+    "release_contains_development_key_resource": true,
+    "source_credential_matches": [],
+    "release_credential_matches": [],
+    "unit_tests_passed": 219,
+    "ui_tests_passed": 5,
+    "live_api_tests_passed": 1,
+    "release_is_signed": true,
+    "release_bundle_kind": "signed arm64 archive; App Store distribution IPA exported",
+    "unit_test_result": "build-saved-profile/units-closed.xcresult",
+    "final_ui_result": "build-saved-profile/saved-ui-final.xcresult"
+  },
+  "account_gateway_3_0_15": {
+    "non_live_full_unit_regression_tests_passed_before_final_session_hardening": 436,
+    "full_regression_result": "/tmp/blindoracle-account-regression-3.0.15.xcresult",
+    "account_ui_tests_passed": 1,
+    "account_ui_screenshot": "build-account-3.0.15/account-signed-out.png",
+    "account_ui_visually_reviewed": true,
+    "gateway": "https://wellecho.cn/xiazi-api/v1/ai/chat/completions/",
+    "all_ai_purposes_use_gateway": true,
+    "provider_key_bundling_removed": true,
+    "physical_apple_sign_in_verified": false,
+    "live_provider_requests_performed": false,
+    "purchase_or_automatic_credit_charging_enabled": false,
+    "local_records_bound_to_cloud_account": false,
+    "local_record_boundary_disclosed_in_account_ui": true,
+    "release_build_log": "/tmp/blindoracle-account-release-final-build.log",
+    "release_signed": false,
+    "prior_test_only_sendable_warnings": [
+      "ExperienceRegressionTests.AuditResponseProtocol",
+      "OracleProgressTests.AnalysisURLProtocol"
+    ],
+    "final_focused_tests_passed": 51,
+    "final_account_tests_passed": 18,
+    "final_ai_service_tests_passed": 33,
+    "final_focused_result": "/tmp/blindoracle-account-safe-final-3.0.15.xcresult",
+    "release_build_passed": true,
+    "release_compiler_warning_count": 0
+  },
+  "account_3_0_15_summary": {
+    "unit_tests_passed": 51,
+    "ui_tests_passed": 1,
+    "unit_test_result": "/tmp/blindoracle-account-safe-final-3.0.15.xcresult",
+    "final_ui_result": "/tmp/blindoracle-account-regression-3.0.15.xcresult",
+    "release_bundle_kind": "unsigned arm64 .app build; no archive, physical-device install or store upload in this batch",
+    "release_is_signed": false
+  },
+  "launch_gate_3_0_16": {
+    "final_focused_unit_tests_passed": 59,
+    "account_and_gate_tests_passed": 26,
+    "ai_service_tests_passed": 33,
+    "unit_result": "/tmp/blindoracle-gate-final-3.0.16.xcresult",
+    "ui_tests_passed": 3,
+    "ui_result": "/tmp/blindoracle-gate-3.0.16.xcresult",
+    "ui_gate_screenshot": "build-account-3.0.16/login-gate.png",
+    "ui_privacy_screenshot": "build-account-3.0.16/login-gate-privacy.png",
+    "cold_start_server_me_validation_required": true,
+    "wallet_failure_does_not_log_out": true,
+    "known_invalid_session_locks_gate_when_keychain_unavailable": true,
+    "foreground_preserves_authenticated_navigation": true,
+    "release_fixture_paths_compiled_out": true,
+    "local_records_deleted_by_gate": false,
+    "cf_bundle_development_region": "zh-Hans",
+    "unsigned_release_build_passed": true,
+    "unsigned_release_build_log": "/tmp/blindoracle-gate-release.log",
+    "physical_installation_evidence": "build/device-3.0.16-42/verification.json",
+    "signed_device_release_build_passed": true,
+    "signed_device_release_build_log": "build/device-3.0.16-42/build.log",
+    "gate_screenshot_visually_reviewed_by_root": true
+  },
+  "physical_device_installation_3_0_16": {
+    "version": "3.0.16",
+    "build": "42",
+    "bundle_id": "com.lihao.BlindOracle",
+    "app_and_profile_apple_signin": true,
+    "device_registered": true,
+    "signature_valid": true,
+    "provider_key_absent": true,
+    "build_warning_count": 0,
+    "development_region": "zh-Hans",
+    "source_inputs_unchanged": true,
+    "date": "2026-11-06",
+    "device_name": "穷奇",
+    "device_model": "iPhone 15 Plus",
+    "installed_in_place": true,
+    "uninstall_or_reset_performed": false,
+    "installed_version_verified": true,
+    "launch_arguments": [],
+    "launched_and_process_observed": true,
+    "data_container_uuid_changed": true,
+    "pre_update_local_files_present_by_metadata": 7,
+    "local_file_contents_read": false,
+    "physical_apple_login_tested_on_this_version": false,
+    "gate_screenshot_visually_reviewed": true,
+    "signed_app_path": "build/device-3.0.16-42/Build/Products/Release-iphoneos/BlindOracle.app",
+    "build_log": "build/device-3.0.16-42/build.log"
+  },
+  "account_experience_3_0_17": {
+    "login_page_redesigned": true,
+    "restoration_uses_separate_launch_surface": true,
+    "valid_session_restoration_does_not_publish_signed_out": true,
+    "transient_restoration_failure_preserves_session_and_uses_recovery_view": true,
+    "data_tab_shows_identity_credits_and_total_tokens_directly": true,
+    "missing_usage_or_balance_uses_placeholder": true,
+    "focused_account_tests_passed": 31,
+    "account_test_result": "/tmp/blindoracle-auth-state-3.0.17.xcresult",
+    "focused_ui_tests_passed": 4,
+    "final_ui_result": "build/account-ui-3.0.17-final.xcresult",
+    "screenshots": [
+      "build/account-ui-3.0.17-preview/login.png",
+      "build/account-ui-3.0.17-preview/data.png",
+      "build/account-ui-3.0.17-preview/restoring.png"
+    ],
+    "screenshots_use_debug_synthetic_account": true,
+    "screenshots_visually_reviewed": true,
+    "release_build_logs": [
+      "build/device-3.0.17-43/build.log",
+      "build/device-3.0.17-43/build-final.log"
+    ],
+    "release_compiler_warning_count": 0,
+    "initial_debug_build_prior_test_fixture_sendable_warnings": [
+      "ExperienceRegressionTests.AuditResponseProtocol",
+      "OracleProgressTests.AnalysisURLProtocol"
+    ],
+    "ui_query_corrections": "Initial UI runs exposed grouped accessibility labels and an instantaneous hittable assertion; corrected queries, then all four tests passed in the final bundle.",
+    "physical_installation_evidence": "build/device-3.0.17-43/verification.json",
+    "real_apple_authorization_repeated_this_batch": false,
+    "store_upload_performed": false
+  },
+  "physical_device_installation_3_0_17": {
+    "version": "3.0.17",
+    "build": "43",
+    "signature_valid": true,
+    "app_and_profile_apple_signin": true,
+    "provider_key_absent": true,
+    "debug_restoration_fixture_absent": true,
+    "release_warning_count": 0,
+    "date": "2026-11-06",
+    "device_name": "穷奇",
+    "device_model": "iPhone 15 Plus",
+    "installed_in_place": true,
+    "installed_version_verified": true,
+    "uninstall_or_reset_performed": false,
+    "launch_arguments": [],
+    "launched_and_process_observed": true,
+    "prior_local_file_names_retained": 7,
+    "local_file_contents_read": false,
+    "physical_apple_authorization_repeated": false,
+    "screenshots_visually_reviewed": true
+  },
+  "allowance_iap_tasks_3_0_18": {
+    "version": "3.0.18",
+    "build": 44,
+    "quota_ui": "server remaining_percent only; no raw billing units, usage counters or invented balance; unlimited is 100% unless refund hold",
+    "storekit": {
+      "native_storekit2": true,
+      "server_catalog_required": true,
+      "native_display_price_only": true,
+      "exact_approved_currency_and_price_required": true,
+      "app_account_token_current_user_uuid": true,
+      "official_server_confirmation_before_finish": true,
+      "pending_or_failed_verification_not_finished": true,
+      "unfinished_and_updates_replayed": true,
+      "foreign_account_not_finished_or_credited": true,
+      "real_app_store_connect_product_configured": false,
+      "real_sandbox_purchase_verified": false
+    },
+    "task_reliability": {
+      "persistent_task_uuid_across_plan_form_interactions_and_answer": true,
+      "failed_or_stopped_retry_reuses_task": true,
+      "new_question_and_completed_followup_new_task": true,
+      "raw_stage_request_bytes_protected_and_reused": true,
+      "semantic_repair_same_stage_and_body": true,
+      "answer_saved_before_durable_end_intent": true,
+      "end_intents_retried_after_relaunch": true,
+      "history_deletion_erases_request_snapshots_while_offline": true,
+      "account_ownership_checked_before_resume": true
+    },
+    "privacy": {
+      "original_questions_not_persisted_on_server": "request HMAC only",
+      "response_cache": "encrypted, 48-hour replay lifetime; periodic cleanup",
+      "encrypted_database_backups": "14-day rotation; temporary response may remain until backup rotation"
+    },
+    "validation": {
+      "full_non_live_unit_tests_passed_before_final_hardening": 465,
+      "account_ui_tests_passed": 4,
+      "full_result": "/tmp/blindoracle-allowance-regression-3.0.18.xcresult",
+      "final_focused_tests_passed": 124,
+      "final_focused_result": "/tmp/blindoracle-allowance-final-3.0.18.xcresult",
+      "warning_cleanup_affected_tests_passed": 79,
+      "warning_cleanup_result": "/tmp/blindoracle-allowance-warning-fix-3.0.18.xcresult",
+      "new_allowance_purchase_tests_passed": 10,
+      "ui_screenshots": "build-account-3.0.18/screenshots",
+      "screenshots_visually_reviewed": [
+        "data-apple-account-summary.png",
+        "account-details.png"
+      ],
+      "version_check_passed": true,
+      "diff_check_passed": true,
+      "real_apple_authorization_rerun": false,
+      "live_ai_requests_performed": false,
+      "signed_release_and_device_installation_status": "Parent/root records separately after final signing and device verification; not independently performed by iOS agent."
+    },
+    "backend_postgres_tests_passed": 168,
+    "backend_real_https_json_and_sse_disconnect_tests_passed": true
+  },
+  "physical_device_installation_3_0_18": {
+    "date": "2026-11-06",
+    "version": "3.0.18",
+    "build": "44",
+    "bundle_id": "com.lihao.BlindOracle",
+    "device_name": "穷奇",
+    "device_model": "iPhone 15 Plus",
+    "installed_in_place": true,
+    "uninstall_or_reset_performed": false,
+    "installed_version_verified": true,
+    "signature_valid": true,
+    "app_and_profile_apple_signin": true,
+    "provider_credentials_absent": true,
+    "private_keys_absent": true,
+    "release_warnings": 0,
+    "prior_local_files_retained": 7,
+    "local_file_contents_read": false,
+    "launch_arguments": [],
+    "running_process_verified": true,
+    "process_id": 20924,
+    "physical_apple_authorization_repeated": false,
+    "real_storekit_purchase_tested": false,
+    "executable_sha256": "655ebae7dae20cbae1616d7db57d70d1ddfa681b422821b2b651c187cf2bdfd5",
+    "evidence_directory": "/Users/lihao/code/Xcode/赛博算命/BlindOracle/build/device-3.0.18-44"
+  },
+  "full_non_live_unit_tests_passed": 493,
+  "isolated_sandbox_3_0_19": {
+    "version": "3.0.19",
+    "build": 45,
+    "environment_selection": {
+      "single_compile_helper": "ServiceEnvironment.current",
+      "default": "Production",
+      "sandbox_generation": "BLINDORACLE_SANDBOX=YES python3 Scripts/generate_project.py",
+      "restore_production_generation": "env -u BLINDORACLE_SANDBOX python3 Scripts/generate_project.py",
+      "runtime_preferences_cannot_select_environment": true,
+      "production_base": "https://wellecho.cn/xiazi-api/v1/",
+      "sandbox_base": "https://wellecho.cn/xiazi-sandbox-api/v1/",
+      "info_environment_key": "OracleServiceEnvironment",
+      "production_localized_display_names": [
+        "瞎子",
+        "BlindOracle"
+      ],
+      "sandbox_localized_display_names": [
+        "瞎子·测试",
+        "BlindOracle·Test"
+      ],
+      "final_repository_project_default": "Production"
+    },
+    "isolation": {
+      "production_keychain_service_unchanged": "com.lihao.BlindOracle.wellecho.account",
+      "sandbox_keychain_service": "com.lihao.BlindOracle.wellecho.account.sandbox",
+      "invalidation_namespaces_independent": true,
+      "request_snapshot_directories_independent": true,
+      "completion_intent_queues_independent": true,
+      "same_logical_history_task_uses_distinct_stable_server_uuid": true,
+      "copied_foreign_environment_task_ticket_rejected": true,
+      "legacy_unmarked_task_records_only_accepted_in_production": true,
+      "local_profiles_and_history_storage_namespace_unchanged": true,
+      "phone_keychain_or_records_not_reset_by_ios_agent": true
+    },
+    "purchase_and_account_ui": {
+      "sandbox_only_sandbox_transactions": true,
+      "production_only_production_transactions": true,
+      "approved_currency_and_price_checks_retained": true,
+      "sandbox_region_mismatch_has_system_tester_guidance": true,
+      "account_displays_only_allowance_percentage": true,
+      "sandbox_app_sign_in_uses_normal_apple_account": true,
+      "sandbox_tester_only_for_system_purchase": true,
+      "sandbox_deletion_discloses_apple_authorization_retained": true,
+      "production_deletion_copy_unchanged": true,
+      "sandbox_charge_notice_visible": true,
+      "real_native_storekit_transaction_verified": false
+    },
+    "tests": {
+      "production_affected_unit_tests_passed": 90,
+      "production_account_ui_tests_passed": 5,
+      "production_result": "/tmp/blindoracle-environment-production-3.0.19.xcresult",
+      "sandbox_affected_unit_tests_passed": 90,
+      "sandbox_account_ui_tests_passed": 5,
+      "sandbox_result": "/tmp/blindoracle-environment-sandbox-3.0.19.xcresult",
+      "sandbox_layout_retest_ui_tests_passed": 5,
+      "sandbox_layout_result": "/tmp/blindoracle-environment-sandbox-final-3.0.19.xcresult",
+      "sandbox_layout_result_limitation": "UI tests passed; one newly added metadata/display-name unit assertion failed before localized names were fixed.",
+      "sandbox_final_metadata_tests_passed": 3,
+      "sandbox_final_metadata_result": "/tmp/blindoracle-environment-sandbox-metadata-3.0.19.xcresult",
+      "sandbox_final_visual_tests_passed": 2,
+      "sandbox_final_visual_result": "/tmp/blindoracle-environment-sandbox-visual-3.0.19.xcresult",
+      "production_final_environment_task_purchase_tests_passed": 16,
+      "production_final_metadata_result": "/tmp/blindoracle-environment-production-metadata-3.0.19.xcresult",
+      "generator_tests_passed": 2,
+      "generator_test_command": "python3 -m unittest discover -s Scripts/tests -p test_service_environment.py -v",
+      "version_check_passed": true,
+      "diff_check_passed": true,
+      "screenshots": "build-account-3.0.19/screenshots",
+      "visually_reviewed": [
+        "data-apple-account-summary.png",
+        "build-environment-login.png"
+      ],
+      "known_test_fixture_warnings": "Prior unavailable Sendable conformance warnings remain in ExperienceRegressionTests and OracleProgressTests; no Release warning claim is made here.",
+      "live_ai_calls_performed": false,
+      "real_native_iap_transaction_performed": false,
+      "phone_installation_performed_by_ios_agent": false,
+      "signed_release_and_installation_status": "Parent/root records separately after signing and device verification."
+    }
+  },
+  "physical_device_installation_3_0_19_sandbox": {
+    "version": "3.0.19",
+    "build": "45",
+    "environment": "Sandbox",
+    "display_name": "瞎子·测试",
+    "localized_names_verified": true,
+    "signature_valid": true,
+    "app_and_profile_apple_signin": true,
+    "development_signed": true,
+    "provider_keys_absent": true,
+    "private_p8_absent": true,
+    "build_warnings": 0,
+    "date": "2026-11-06",
+    "device_name": "穷奇",
+    "device_model": "iPhone 15 Plus",
+    "installed_in_place": true,
+    "uninstall_or_reset_performed": false,
+    "installed_version_verified": true,
+    "installed_name": "BlindOracle·Test",
+    "prior_local_file_names_retained": 8,
+    "local_file_contents_read": false,
+    "launch_arguments": [],
+    "running_process_verified": true,
+    "process_id": 21008,
+    "physical_apple_login_tested": false,
+    "real_sandbox_purchase_tested": true,
+    "server_observed_verified_sandbox_apple_login": true,
+    "backend_postgres_tests_passed": 185,
+    "backend_sandbox_release": "20261106-064955",
+    "production_configuration_preserved": true,
+    "real_money_charged": false,
+    "actual_purchase_verification": {
+      "environment": "Sandbox",
+      "verified_sandbox_orders": 1,
+      "signed_amount_cny": "6.00",
+      "credits_granted": 1000000,
+      "paid_ledger_entries_for_order": 1,
+      "fresh_official_apple_reverification": true,
+      "same_transaction_replay_added_orders": 0,
+      "same_transaction_replay_added_credit_entries": 0,
+      "real_money_charged": false
+    }
+  },
+  "review_purchase_3_0_20": {
+    "date": "2026-11-06",
+    "version": "3.0.20",
+    "build": "46",
+    "tests": {
+      "core_non_live_units": {
+        "passed": 493,
+        "failed": 0,
+        "skipped": 0,
+        "result": "build/review-3.0.20-46-release-candidate-unit.xcresult",
+        "runtimes": [
+          "27.2"
+        ]
+      },
+      "owner_sandbox_units": {
+        "passed": 78,
+        "failed": 0,
+        "skipped": 0,
+        "result": "build/review-owner-tests-3.0.20-46.xcresult",
+        "runtimes": [
+          "27.2"
+        ]
+      },
+      "native_storekit": {
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0,
+        "result": "build/review-storekit-3.0.20-46-cancel-final.xcresult",
+        "runtimes": [
+          "27.2"
+        ]
+      },
+      "account_ui": {
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0,
+        "result": "build/review-3.0.20-46-ui-final.xcresult",
+        "runtimes": [
+          "27.2"
+        ]
+      }
+    },
+    "backend_postgresql_full_suite": {
+      "passed": 205,
+      "skipped": 0,
+      "live_network_calls": false
+    },
+    "backend_additional_real_sdk_invalid_notification_test": {
+      "passed": 1,
+      "environment_payload_combinations": 4,
+      "live_network_calls": false
+    },
+    "backend_deployed": true,
+    "deployment_verification_passed": true,
+    "automatic_environment": "Only verified AppTransaction Production/Sandbox before constructing account/AI/task services; immutable per-process; failures keep a retry surface without environment fallback or automatic store authentication.",
+    "sandbox_admission": "Server verifies signed app transaction plus Apple login; pseudonymous first binding, isolated database and global budget; legacy device proof is not stable account binding.",
+    "purchase_recovery": "Before-await purchase lock; pending/unverified/environment-mismatch block duplicate payments; resume on launch/login/foreground/manual check; latest-account rescan; owner cleanup after finish even during account change; cancellation normalized.",
+    "archive": "build/review-archive-3.0.20-46/BlindOracle.xcarchive",
+    "distribution_verification": "build/review-archive-3.0.20-46/candidate-verification.json",
+    "owner_device_app": "build/device-owner-3.0.20-46/Build/Products/Release-iphoneos/BlindOracle.app",
+    "phone_installation": "OwnerSandbox developer app 3.0.20/46 installed in place and launched on 穷奇; nine pre-existing files retained; real TestFlight download still awaits user action.",
+    "testflight_uploaded": true,
+    "real_testflight_automatic_environment_verified": false,
+    "real_new_build_purchase_verified": false,
+    "app_review_submitted": false,
+    "apple_live_callback_passed": false,
+    "limitations": [
+      "Live notification/real refund delivery awaits public-domain access restoration.",
+      "Developer owner install and local StoreKit cannot substitute for TestFlight real download credentials/non-owner sign-in.",
+      "iOS26.5 local StoreKit control-plane failure and initial cold iOS27.2 Ask-to-Buy timeout are retained as failed evidence; final complete native run passed without skips."
+    ],
+    "testflight_upload": {
+      "version": "3.0.20",
+      "build": "46",
+      "source_archive": "/Users/lihao/code/Xcode/赛博算命/BlindOracle/build/review-archive-3.0.20-46/BlindOracle.xcarchive",
+      "destination": "App Store Connect / internal TestFlight",
+      "testflight_internal_testing_only": true,
+      "xcode_upload_succeeded": true,
+      "app_store_connect_status": "正在测试",
+      "app_store_connect_internal_group": "blind",
+      "app_store_connect_verified_by": "Safari visible accessibility state",
+      "app_review_submitted": false,
+      "publicly_released": false,
+      "real_testflight_installation_verified": false,
+      "verified_at": "2026-11-06T20:41:58.223406+08:00",
+      "log": "build/review-3.0.20-46-internal-upload.log",
+      "device_testflight_app_present": true,
+      "device_testflight_app_launched": true,
+      "device_current_installation": "OwnerSandbox developer app 3.0.20 (46); awaiting replacement from TestFlight",
+      "device_query_correction": "Initial default devicectl app filter excludes nondeveloper apps; exact include-default-apps query confirmed TestFlight 4.4.1 installed and launched.",
+      "device_testflight_evidence": "build/testflight-device-3.0.20-46/testflight-inclusive.json",
+      "device_current_installation_evidence": "build/testflight-device-3.0.20-46/blindoracle-current-inclusive.json"
+    },
+    "phone_installation_evidence": "build/device-owner-3.0.20-46/verification.json",
+    "testflight_device_app_ready": true,
+    "real_testflight_installation_verified": false
+  },
+  "testflight_bootstrap_recovery_3_0_21": {
+    "version": "3.0.21",
+    "build": "47",
+    "status": "real_testflight_owner_login_purchase_and_replay_passed",
+    "previous_real_testflight_result": "3.0.20/46 failed before account services: purchase environment recovery screen reported by user",
+    "failure_stage": "AppTransaction bootstrap; underlying StoreKit error not captured in build46",
+    "change": "Explicit user action refreshes AppTransaction; automatic launch still shared-only and verified-only",
+    "functional_tests_rerun": true,
+    "real_testflight_verification_passed": true,
+    "uploaded_to_internal_testflight": true,
+    "app_review_submitted": false,
+    "publicly_released": false,
+    "focused_tests": {
+      "count": 16,
+      "failures": 0,
+      "result": "build/review-bootstrap-3.0.21-47.xcresult",
+      "scope": "ServiceEnvironmentTests with injected evidence; no real App Store authentication"
+    },
+    "unit_tests": {
+      "count": 499,
+      "failures": 0,
+      "live_provider_or_apple_calls": false,
+      "result": "build/review-3.0.21-47-unit.xcresult"
+    },
+    "release_archive": {
+      "result": "succeeded",
+      "warnings": 0,
+      "path": "build/review-archive-3.0.21-47/BlindOracle.xcarchive"
+    },
+    "ui_tests": {
+      "count": 5,
+      "failures": 0,
+      "result": "build/review-3.0.21-47-ui.xcresult",
+      "scope": "AccountUITests: login gate, returning-session restoration, account display, logout and environment notice"
+    },
+    "candidate_verification": "build/review-archive-3.0.21-47/candidate-verification.json",
+    "testflight_upload": {
+      "version": "3.0.21",
+      "build": "47",
+      "source_archive": "/Users/lihao/code/Xcode/赛博算命/BlindOracle/build/review-archive-3.0.21-47/BlindOracle.xcarchive",
+      "destination": "App Store Connect / internal TestFlight",
+      "testflight_internal_testing_only": true,
+      "xcode_upload_succeeded": true,
+      "app_store_connect_status": "正在测试",
+      "app_review_submitted": false,
+      "publicly_released": false,
+      "real_testflight_installation_verified": true,
+      "timestamp_utc": "2026-11-06T13:09:37.836408+00:00",
+      "upload_log": "build/review-3.0.21-47-internal-upload.log",
+      "candidate_verification": "build/review-archive-3.0.21-47/candidate-verification.json",
+      "internal_group": "blind",
+      "internal_invitations": 7,
+      "verified_by": "Safari visible accessibility state: version3.0.21 / build47 Internal / Testing / blind",
+      "ready_verified_at_utc": "2026-11-06T13:13:38.739621+00:00",
+      "installation_confirmation": "User reports installing47 from TestFlight and successful Sandbox entry; device metadata check follows.",
+      "real_testflight_bootstrap_verified": true,
+      "real_testflight_purchase_verified": true,
+      "device_version_confirmed": "3.0.21/47",
+      "confirmation_scope": "User TestFlight entry + device version metadata + Sandbox server login and one successful simulated purchase; nonowner flow not tested.",
+      "real_purchase_reverification_idempotent": true
+    },
+    "verification_scope": "User-confirmed TestFlight47 entry and simulated purchase, device version metadata, correlated Sandbox login/overview and exactly-once ledger, two real repeat-verifications, and one read-only real AppTransaction signature/schema check. Explicit refresh usage and nonowner HTTP login are not inferred.",
+    "user_bootstrap_confirmation": {
+      "reported_at_utc": "2026-11-06T13:17:48.947579+00:00",
+      "response": "已进入，显示“测试环境 · 购买不扣款”",
+      "explicit_refresh_used": "not confirmed; entry does not prove that the refresh button was needed",
+      "result": "AppTransaction bootstrap and Sandbox environment notice passed"
+    },
+    "real_testflight_purchase_passed": true,
+    "user_purchase_confirmation": {
+      "response": "已显示“额度已补充”",
+      "scope": "user reports a new build47 TestFlight simulated purchase; server ledger verification pending"
+    },
+    "backend_login_evidence": {
+      "path": "../OracleBackend/.secrets/deploy/review-3.0.21-testflight-post-bootstrap.json",
+      "sandbox_apple_login_succeeded": true,
+      "sandbox_account_overview_succeeded": true,
+      "production_has_new_sessions_or_orders": false,
+      "nonowner_proof_verified": false,
+      "build_attribution": "User report and timing; server session schema has no app build field."
+    },
+    "local_data_metadata_review": {
+      "status": "user_confirmed_expected_cleanup_or_reinstallation",
+      "evidence": "build/testflight-device-3.0.21-47/build47-device-verification.json",
+      "observation": "Profile, reading, and conversation file sizes shrank relative to developer-install baseline; cleanup/reinstallation and actual visible data status not yet confirmed.",
+      "contents_read": false,
+      "preservation_claim": "Cannot claim prior contents preserved based on filenames alone.",
+      "user_confirmation": "清理或重装过，数据变化符合预期",
+      "conclusion": "Observed file-size changes are consistent with the user-confirmed intentional cleanup/reinstallation; no unexpected data-loss claim."
+    },
+    "device_version_evidence": "build/testflight-device-3.0.21-47/build47-device-verification.json",
+    "purchase_ledger_verification": {
+      "evidence": "../OracleBackend/.secrets/deploy/review-3.0.21-testflight-first-purchase-verification.json",
+      "sandbox_order_delta": 1,
+      "apple_verified_transaction_delta": 1,
+      "paid_ledger_delta": 1,
+      "paid_credits_delta": 1000000,
+      "quantity": 1,
+      "currency": "CNY",
+      "price_milliunits": 6000,
+      "production_financials_unchanged": true
+    },
+    "real_purchase_idempotency": {
+      "passed": true,
+      "apple_fetches": 2,
+      "apply_attempts": 2,
+      "same_existing_order_both_times": true,
+      "wallet_ledger_order_verified_record_unchanged": true,
+      "transaction_rollback_guard": true,
+      "production_financials_unchanged": true,
+      "evidence": "../OracleBackend/.secrets/deploy/review-3.0.21-testflight-idempotency-and-apptransaction.json"
+    },
+    "completed_at_utc": "2026-11-06T13:36:11.364349+00:00",
+    "real_apptransaction_server_schema_check": {
+      "passed": true,
+      "official_api_calls": 1,
+      "signature_verified": true,
+      "sandbox_environment": true,
+      "bundle_matches": true,
+      "app_id_absent_or_match": true,
+      "stable_app_transaction_id_present": true,
+      "proof_material_compatible": true,
+      "proof_kind": "app_transaction",
+      "created_proof_or_session_or_grant": false,
+      "device_identity_verified": false,
+      "nonowner_http_flow_verified": false,
+      "evidence": "../OracleBackend/.secrets/deploy/review-3.0.21-testflight-idempotency-and-apptransaction.json"
+    },
+    "remaining_acceptance": [
+      "Real nonowner Sandbox HTTP login and proof binding; current successful tester uses owner compatibility path.",
+      "Official Apple notifications and refund sync after filing/network access is restored."
+    ]
+  },
+  "review_ready_3_0_22": {
+    "version": "3.0.22",
+    "build": "48",
+    "status": "normal_candidate_uploaded_local_review_package_complete_asc_and_filing_pending",
+    "scope": "Review-eligible build and review materials only; no nonowner login, Apple notifications, refund or payment testing after filing requested this batch.",
+    "unit_tests": {
+      "count": 503,
+      "failures": 0,
+      "result": "build/review-3.0.22-48-unit-retry.xcresult",
+      "real_network": false
+    },
+    "unit_initial_attempt": {
+      "result": "build/review-3.0.22-48-unit.xcresult",
+      "status": "test_host_never_started_in_high_host_load; stopped, no tests counted"
+    },
+    "ai_data_sharing_consent": {
+      "implemented": true,
+      "explicit_allow_decline_withdraw": true,
+      "transport_gate": true,
+      "ui_acceptance_pending": false
+    },
+    "archive_initial": {
+      "path": "build/review-archive-3.0.22-48/Superseded-before-privacy-manifest/BlindOracle.xcarchive",
+      "compiled": true,
+      "requires_rearchive_with_privacy_manifest": true,
+      "status": "historical_superseded_by_verified_final_archive"
+    },
+    "review_materials": "Release/AppStore/3.0.22-48",
+    "screenshots_approved": true,
+    "public_web": {
+      "deployment_evidence": "../OracleBackend/.secrets/deploy/review-3.0.22-48-web-deployment.json",
+      "origin_https_verified": true,
+      "external_and_apple_reachability_verified": false,
+      "backend_services_unchanged": true
+    },
+    "app_store_connect": {
+      "existing_review_version": "1.0",
+      "existing_review_build": "2.0.8/21",
+      "observed_status": "Waiting for Review",
+      "existing_release_changed_to_manual": true,
+      "manual_release_evidence": "Release/AppStore/3.0.22-48/evidence/existing-version-manual-release.png",
+      "existing_review_withdrawn": false,
+      "new_build_uploaded": true,
+      "new_submission_sent": false,
+      "privacy_form_saved": false,
+      "browser_auth_or_response_needed": false,
+      "current_ui_blocker": "Mac locked; user asked to unlock. New privacy answers not saved/published.",
+      "mac_unlock_needed": true,
+      "final_processed_status_read": false,
+      "privacy_published": false
+    },
+    "deferred_until_filing": [
+      "nonowner login/proof admission verification",
+      "Apple official notification and refund reconciliation",
+      "public network reachability and filing identity/number checks"
+    ],
+    "notes": [
+      "Do not use earlier build47 results as reruns of48.",
+      "Unit fixture grants are DEBUG only; release requests require explicit AI-sharing consent."
+    ],
+    "ui_tests": {
+      "count": 7,
+      "failures": 0,
+      "result": "build/review-3.0.22-48-ui.xcresult"
+    },
+    "archive_final": {
+      "verified": true,
+      "path": "build/review-archive-3.0.22-48/BlindOracle.xcarchive",
+      "privacy_manifest_present": true,
+      "compiler_warnings": 0
+    },
+    "candidate_verification": "build/review-archive-3.0.22-48/candidate-verification.json",
+    "upload_verification": {
+      "version": "3.0.22",
+      "build": "48",
+      "source_archive": "/Users/lihao/code/Xcode/赛博算命/BlindOracle/build/review-archive-3.0.22-48/BlindOracle.xcarchive",
+      "destination": "App Store Connect / TestFlight & App Store",
+      "testflight_internal_testing_only": false,
+      "xcode_upload_succeeded": true,
+      "app_store_connect_status": "processing; final processed state not yet read",
+      "new_app_review_submitted": false,
+      "existing_review_withdrawn": false,
+      "publicly_released": false,
+      "timestamp_utc": "2026-11-06T17:07:26.339112+00:00",
+      "log": "build/review-3.0.22-48-upload.log",
+      "candidate_verification": "build/review-archive-3.0.22-48/candidate-verification.json"
+    },
+    "storefront_screenshots": {
+      "count": 29,
+      "languages": [
+        "zh-Hans",
+        "en-US"
+      ],
+      "device_groups": [
+        "iphone-large",
+        "iphone-medium",
+        "ipad-13"
+      ],
+      "approval_record": "Release/AppStore/3.0.22-48/screenshots-approved.json",
+      "count_by_group": "iPhone: 5 per locale/device; iPad: zh-Hans 5, en-US 4",
+      "omitted": "English iPad local-bazi-preview: bounded screenshot automation did not reach the birth-date confirmation. Excluded; not a manual functional pass/fail finding.",
+      "original_native_png_bytes_retained": true
+    },
+    "iap_review_rendering": {
+      "tests": 1,
+      "failures": 0,
+      "result": "build/review-iap-3.0.22-48-rgb8.xcresult",
+      "review_image": "Release/AppStore/3.0.22-48/review-only/iap-review.png",
+      "sha256": "0b523e0f57274525842ea6c98f4ba9d3dee7d33bab9cb1ffbf35411f95338ad3",
+      "isolated_fixture": true,
+      "real_network": false,
+      "financial_event_performed": false,
+      "initial_fixture_failure": "First capture test failed because the test-only URLProtocol path normalization was incomplete. Fixed in test helper only.",
+      "superseded_rendering": "The second successful render used 16-bit PNG; the final successful capture uses native standard-range 8-bit RGB. No image pixels were post-edited."
+    },
+    "review_package": {
+      "package": "Release/AppStore/3.0.22-48/BlindOracle-3.0.22-48-review-materials.zip",
+      "zip_sha256": "e1e6abe53522dcfab43163b27a26481cbbf8bbbad336f2110cf4a7f6b65b3bd3",
+      "zip_bytes": 13689773,
+      "file_count": 54,
+      "all_manifest_hashes_matched": true,
+      "zip_crc_passed": true
+    },
+    "final_verification": "build/review-3.0.22-48-final-verification.json"
   }
 }

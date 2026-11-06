@@ -2,8 +2,10 @@ import SwiftUI
 
 struct DataLibraryView: View {
     @EnvironmentObject private var store: OracleStore
+    @EnvironmentObject private var account: AccountStore
     @Binding var settingsPresented: Bool
     @State private var editingProfile: OracleProfile?
+    @State private var accountDetailsPresented = false
 
     var body: some View {
         NavigationStack {
@@ -19,6 +21,15 @@ struct DataLibraryView: View {
                             .listRowInsets(EdgeInsets(top: 0, leading: 18, bottom: 0, trailing: 18))
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
+                    }
+
+                    Section {
+                        Button { accountDetailsPresented = true } label: { AccountSummaryContent() }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("accountEntry")
+                        .listRowInsets(EdgeInsets(top: 20, leading: 18, bottom: 20, trailing: 18))
+                        .listRowBackground(Color.white.opacity(0.35))
+                        .listRowSeparator(.hidden)
                     }
 
                     Section {
@@ -115,6 +126,11 @@ struct DataLibraryView: View {
                 }
             }
             .toolbarBackground(InkTheme.paper, for: .navigationBar)
+            .navigationDestination(isPresented: $accountDetailsPresented) { AccountView() }
+            .task {
+                await account.refreshOverview()
+            }
+            .refreshable { await account.refreshOverview() }
             .sheet(isPresented: Binding(get: { editingProfile != nil }, set: { if !$0 { editingProfile = nil } })) {
                 if let profile = editingProfile {
                     ProfileEditor(profile: profile) { updated in store.saveProfile(updated); editingProfile = nil }
@@ -190,6 +206,7 @@ private struct PluginDocumentView: View {
 
 struct OracleSettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var account: AccountStore
 
     var body: some View {
         NavigationStack {
@@ -197,6 +214,18 @@ struct OracleSettingsView: View {
                 PaperBackground()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
+                        PaperCard {
+                            NavigationLink { AccountView() } label: {
+                                HStack {
+                                    Label(L10n.text("账号设置", "Account settings"), systemImage: "person.crop.circle")
+                                    Spacer()
+                                    if let user = account.user {
+                                        Text(user.presentationName).font(.footnote).foregroundStyle(InkTheme.secondary).lineLimit(1)
+                                    }
+                                    Image(systemName: "chevron.right").font(.caption)
+                                }.font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.ink)
+                            }.accessibilityIdentifier("settingsAccountEntry")
+                        }
                         PaperCard {
                             VStack(alignment: .leading, spacing: 12) {
                                 AppLanguageSettingsRow()

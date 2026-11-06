@@ -28,7 +28,7 @@ final class ExperienceRegressionTests: XCTestCase {
         addTeardownBlock { AuditResponseProtocol.remove(key) }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [AuditResponseProtocol.self]
-        return DeepSeekClient(apiKey: key, sessionConfiguration: configuration)
+        return DeepSeekClient(accessToken: key, sessionConfiguration: configuration)
     }
 
     @MainActor private func wait(_ store: OracleStore) async throws {

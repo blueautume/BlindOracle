@@ -1,0 +1,201 @@
+{
+  "preparedAt": "2026-11-07",
+  "version": "3.0.22",
+  "build": "48",
+  "status": "draft_requires_final_checks_do_not_submit",
+  "actionsNotPerformed": [
+    "No App Store Connect metadata was changed by this draft.",
+    "No submission, review withdrawal, public release, price change, or real purchase was performed.",
+    "No filing number, reviewer password, or final SDK data declaration has been invented."
+  ],
+  "reviewContact": {
+    "entryAction": "retain_existing_App_Store_Connect_values",
+    "confirmedPresentByMainTeam": true,
+    "replacementValuesProvided": false,
+    "note": "The main team checked that contact information and copyright are already present in ASC. Do not overwrite them with guessed values or request the same private contact details again."
+  },
+  "requiresHumanFactsOrAscConfirmation": [
+    {
+      "field": "China mainland filing",
+      "status": "pending",
+      "requiredFact": "Wait for the real App filing result and actual number. Verify the Simplified Chinese name, operator, and other ASC metadata match MIIT records. Do not substitute a server identifier or invent a filing number."
+    },
+    {
+      "field": "Existing App Review submission",
+      "status": "existing_1.0_build21_waiting_for_review_manual_release_not_withdrawn",
+      "requiredFact": "The existing 1.0/build21 submission remains Waiting for Review and has not been withdrawn. The main team changed it to manual release. The normally distributed build48 upload succeeded, but no new App Review submission or replacement occurred. Before eventual submission, explicitly select the correct ASC version/build and attach the first consumable; uploading alone does not replace the queued submission.",
+      "existing_release_is_manual": true,
+      "existing_review_withdrawn": false,
+      "new_build48_uploaded": true,
+      "new_build48_app_review_submitted": false
+    },
+    {
+      "field": "App Review contact",
+      "status": "already_present_in_asc_confirmed_by_main_team",
+      "requiredFact": "Retain the existing App Store Connect contact; replacement contact details are not required for this draft."
+    },
+    {
+      "field": "App and IAP availability / final price",
+      "status": "needs_asc_confirmation",
+      "requiredFact": "Confirm app storefront availability, consumable availability, CNY6 final price schedule, paid agreements, tax and banking status, and the reviewers' ability to load the product. English metadata does not itself enable US storefront sales."
+    },
+    {
+      "field": "Age rating, content rights, privacy, export compliance, distribution declarations",
+      "status": "needs_owner_confirmation",
+      "requiredFact": "Answer the current questionnaires from actual app content, data processing, distribution territories, and rights. Existing copyright can be retained. Confirm the Entertainment category proposal rather than automatically changing it."
+    },
+    {
+      "field": "What's New",
+      "status": "conditional",
+      "requiredFact": "ASC has an existing unreleased 1.0 submission. Confirm whether this is still the first public App Store version; What's New is not available on a first version. The supplied text is only for an update field when applicable."
+    }
+  ],
+  "engineeringAndContentChecksBeforeEventualSubmission": [
+    {
+      "item": "Explicit third-party AI sharing permission",
+      "status": "implemented_local_unit_and_UI_acceptance_passed",
+      "detail": "The main team added the real first-AI disclosure naming wellecho.cn and DeepSeek, explicit agree/decline, privacy access, withdrawal and a central request gate. On2026-11-07 the main team reported503 selected unit tests and7 focused UI tests passed (new Consent2 plus Account5), including decline preserving the draft/local access and consent followed by withdrawal requiring consent again. Review notes describe the implemented flow; no live AI, non-owner account or refund acceptance is inferred from these local tests."
+    },
+    {
+      "item": "Current public privacy/support/terms/marketing pages",
+      "status": "updated_deployed_origin_verified_external_pending",
+      "detail": "The backend agent deployed the current 3.0.22 (48) ten-file static site. Server-side domain HTTPS returned200 and every body hash matched the release. Obsolete drafts and backups are outside the public root. This does not confirm access from the public internet or Apple review networks; verify after filing. Metadata URLs now point to the updated candidate pages with explicit unapproved/external-pending status. ASC itself has not been updated by this action.",
+      "existingAscPrivacyUrl": "https://kiki.group/blindoracle/zh-Hans/privacy.html",
+      "existingAscPrivacyUrlIsNotVerifiedAsCurrent": true,
+      "server_origin_https_verified": true,
+      "external_or_apple_review_network_verified": false,
+      "approved_for_submission": false
+    },
+    {
+      "item": "App Privacy answers",
+      "status": "old_Data_Not_Collected_still_current_new_11_type_answers_not_saved_or_published",
+      "detail": "ASC still has the old Data Not Collected answer. The long Safari privacy dialog previously stalled; the latest root CUA check instead confirmed the Mac is locked, preventing further CUA access or saving. The new eleven-type answers were not saved or published. Local labels and the bundled manifest do not update the ASC form. All proposed types are linked to the user; developer functionality/billing/security purposes remain separate from the five AI-payload types conservatively also marked Other Purposes. API-account-specific supplier handling remains unconfirmed.",
+      "new_answers_saved": false,
+      "new_answers_published": false,
+      "local_proposed_type_count": 11,
+      "ai_payload_additional_other_purpose_type_count": 5,
+      "current_cua_blocker": "Mac locked at the final root check",
+      "prior_cua_issue": "Long Safari privacy form stalled (historical)"
+    },
+    {
+      "item": "Unlisted reviewer / non-owner Sandbox access",
+      "status": "full_end_to_end_acceptance_not_confirmed",
+      "detail": "Actual TestFlight47 owner login and Sandbox top-up succeeded, but that owner was on a legacy allowlist which bypasses AppTransaction proof verification. Unit/backend checks do not replace an independent non-owner end-to-end access test. Do not claim all reviewer accounts have been validated. The review-notes file describes the intended product path, not a completed acceptance result."
+    },
+    {
+      "item": "Current-build screenshots and IAP review screenshot",
+      "status": "29_storefront_screenshots_approved_and_separate_iap_review_fixture_complete",
+      "detail": "The approved manifest contains exactly twenty-nine storefront PNGs: both iPhone sizes have five screenshots per language (20); iPad has five Chinese and four English screenshots (9). The English iPad local-bazi-preview date-picker helper step failed, was not approved and is omitted; its private build evidence is excluded from the ZIP. Do not infer a business-feature failure or claim all six screenshot helper cases passed. Every approved screenshot has been visually reviewed and keeps its original native RGB PNG bytes. The separate, visually approved review-only IAP image renders actual AccountTopUpView with synthetic 100% allowance and an isolated CNY6 SKU fixture. Its provenance explicitly records no financial event, no private user data and no live StoreKit product lookup. The IAP metadata references this image; local preparation is complete, while upload/association of the first consumable and its review image in ASC remain to be confirmed.",
+      "approved_storefront_screenshot_count": 29,
+      "storefront_counts": {
+        "iphone-large": {
+          "zh-Hans": 5,
+          "en-US": 5
+        },
+        "iphone-medium": {
+          "zh-Hans": 5,
+          "en-US": 5
+        },
+        "ipad-13": {
+          "zh-Hans": 5,
+          "en-US": 4
+        }
+      },
+      "unapproved_omission": "screenshots/en-US/ipad-13/05-local-bazi-preview.png",
+      "omitted_step_evidence_is_private_and_not_packaged": true,
+      "iap_review_image_prepared": true,
+      "iap_review_image_visually_approved": true,
+      "iap_review_fixture_no_financial_event": true,
+      "iap_review_image_asc_upload_or_attachment_verified": false
+    },
+    {
+      "item": "Service availability and review capacity",
+      "status": "check_after_filing_before_submission",
+      "detail": "Verify reviewer access to the online backend and sufficient Sandbox capacity. Do not state the service is unlimited or fully reachable from all networks. Keep the existing quota and safety limits."
+    },
+    {
+      "item": "Third-party API processing purposes and training",
+      "status": "not_publicly_confirmed_for_this_API_account",
+      "detail": "Do not claim DeepSeek API inputs/outputs are never used for training or analytics. Current open-platform terms refer to general terms, whose section4.3 allows de-identified input/output use for training and service optimization and mentions a product toggle. No public API-account opt-out procedure or verified setting covering this account was established. API docs explicitly mention content-safety review and KVCache. Obtain provider confirmation of purposes, retention, processing region and effective API opt-out before final privacy declarations.",
+      "sources": [
+        "https://cdn.deepseek.com/policies/zh-CN/deepseek-open-platform-terms-of-service.html",
+        "https://cdn.deepseek.com/policies/zh-CN/deepseek-terms-of-use.html",
+        "https://api-docs.deepseek.com/zh-cn/quick_start/rate_limit/"
+      ]
+    },
+    {
+      "item": "Bundled required-reason API privacy manifest",
+      "status": "verified_in_final_archive_and_app_store_distribution_ipa",
+      "detail": "Final build48 archive and exported IPA checks passed after resource regeneration/repackaging. The manifest is present at the app root, is a valid plist, declares the audited UserDefaults CA92.1 reason and eleven data types matching the release labels, with tracking=false and the reviewed supplier-purpose scope. Final exported IPA signature/profile, Sign in with Apple entitlement, debugging-disabled and normal App Store distribution checks passed. The source-audit needs_resource_repackaging=true flag is an earlier audit snapshot; final candidate-verification supersedes that pending step without rewriting historical evidence. ASC privacy answers and provider-purpose confirmation remain separate.",
+      "source": "https://developer.apple.com/documentation/technotes/tn3183-adding-required-reason-api-entries-to-your-privacy-manifest",
+      "final_resource_repackaging_complete": true,
+      "final_archive_manifest_verified": true,
+      "exported_ipa_manifest_verified": true,
+      "historical_source_audit_needs_repackaging_flag": true,
+      "evidence": [
+        "build/review-archive-3.0.22-48/privacy-manifest-audit.json",
+        "build/review-archive-3.0.22-48/candidate-verification.json",
+        "Release/AppStore/3.0.22-48/final-artifacts.json"
+      ]
+    },
+    {
+      "item": "Final archive, distribution export and upload",
+      "status": "archive_export_signing_verified_normal_upload_succeeded_final_processing_unread",
+      "detail": "The final 3.0.22/build48 candidate and exported App Store distribution IPA passed validation, including signature/profile, Apple sign-in entitlements, expected AppleVerified environment resolution, no owner-only compiler define, no bundled test assets or credentials, and the privacy manifest. Xcode normal distribution upload succeeded with internal-only=false. The upload record reports processing; the final ASC processed state has not been read. The latest root CUA check confirmed the Mac is locked, so this remains unverified. No new App Review submission, withdrawal of the queued 1.0/build21, or public release was performed. Selected local regressions passed: 503 unit tests and 7 focused UI tests.",
+      "archive_verified": true,
+      "export_verified": true,
+      "normal_distribution_upload_succeeded": true,
+      "testflight_internal_only": false,
+      "final_asc_processing_state_verified": false,
+      "new_app_review_submitted": false,
+      "existing_review_withdrawn": false,
+      "publicly_released": false,
+      "unit_tests_passed": 503,
+      "ui_tests_passed": 7,
+      "evidence": [
+        "Release/AppStore/3.0.22-48/final-artifacts.json",
+        "build/review-archive-3.0.22-48/candidate-verification.json",
+        "build/review-archive-3.0.22-48/upload-verification.json"
+      ],
+      "current_cua_blocker": "Mac locked at the final root check"
+    }
+  ],
+  "honestValidationBoundary": {
+    "confirmed": [
+      "Actual TestFlight47 Sandbox environment entry, owner Apple sign-in and first consumable delivery were confirmed by the main team.",
+      "The main team confirmed repeated verification does not issue duplicate allowance.",
+      "Build48 local regressions: 503 selected unit tests and 7 focused UI tests passed.",
+      "Final build48 archive/export/signature/privacy-manifest checks passed and the normal distribution upload succeeded; it is not an internal-only upload.",
+      "Twenty-nine original storefront screenshots were visually approved; one unapproved English iPad helper step was excluded.",
+      "The separate IAP review image and provenance are complete and explicitly fixture_no_financial_event; this is not a live purchase or product-loading acceptance claim."
+    ],
+    "notClaimed": [
+      "Independent non-owner App Review access acceptance.",
+      "Actual refund lifecycle or successful server-notification delivery.",
+      "Approved filing, approved IAP, or approved App Store version.",
+      "Final ASC processing completion for build48.",
+      "Saved or published new eleven-type ASC privacy answers.",
+      "Successful completion or approval of the omitted English iPad fifth screenshot helper step.",
+      "ASC upload/association of the prepared IAP review image and first consumable with the eventual app version."
+    ],
+    "notificationNote": "Apple describes the notification URL as optional. A failing TEST callback is not documented as an independent submission prerequisite. Do not call notification/refund acceptance passed; continue the agreed follow-up after filing."
+  },
+  "finalBuild48": {
+    "archive_verified": true,
+    "export_verified": true,
+    "privacy_manifest_verified": true,
+    "uploaded": true,
+    "testflight_internal_only": false,
+    "app_review_submitted": false,
+    "final_processing_verified": false,
+    "unit_tests_passed": 503,
+    "ui_tests_passed": 7
+  },
+  "currentCuaBlocker": {
+    "reason": "Mac locked",
+    "new_privacy_form_saved": false,
+    "new_privacy_answers_published": false,
+    "final_build48_processing_state_read": false,
+    "older_safari_form_stall_is_historical": true
+  }
+}

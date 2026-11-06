@@ -369,7 +369,7 @@ final class AIServiceTests: XCTestCase {
         defer { ChoiceFreeSummaryURLProtocol.remove(key) }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [ChoiceFreeSummaryURLProtocol.self]
-        let client = DeepSeekClient(apiKey: key, sessionConfiguration: configuration)
+        let client = DeepSeekClient(accessToken: key, sessionConfiguration: configuration)
         let fact = ChatMessage(role: .user, content: "real-user-fact: meeting is confirmed for Tuesday")
         let choice = ChatMessage(role: .user, content: "retired-choice-must-not-be-summarized", kind: .choice)
         let messages = [choice, fact] + (0..<60).map { index in
@@ -404,7 +404,7 @@ extension AIServiceTests {
         do {
             let configuration = URLSessionConfiguration.ephemeral
             configuration.protocolClasses = [ReadingURLProtocol.self]
-            let client = DeepSeekClient(apiKey: "test-key", sessionConfiguration: configuration)
+            let client = DeepSeekClient(accessToken: "test-key", sessionConfiguration: configuration)
             let plan = try await client.plan(question: question, profile: profile, plugins: plugins, history: history, language: .english)
             XCTAssertEqual(plan.action, "intake")
             XCTAssertEqual(plan.subject, "本人")
@@ -441,7 +441,7 @@ extension AIServiceTests {
             for voice in OracleVoiceStyle.allCases {
                 let configuration = URLSessionConfiguration.ephemeral
                 configuration.protocolClasses = [ReadingURLProtocol.self]
-                let client = DeepSeekClient(apiKey: "test-voice-\(voice.rawValue)",
+                let client = DeepSeekClient(accessToken: "test-voice-\(voice.rawValue)",
                                             sessionConfiguration: configuration)
                 let synthesisDelta = expectation(description: "DeepSeek \(voice) streamed synthesis text")
                 let synthesis = try await client.synthesize(run: run, history: history,
@@ -508,7 +508,7 @@ extension AIServiceTests {
         defer { SynthesisTaskURLProtocol.remove(key) }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [SynthesisTaskURLProtocol.self]
-        let client = DeepSeekClient(apiKey: key, sessionConfiguration: configuration)
+        let client = DeepSeekClient(accessToken: key, sessionConfiguration: configuration)
         let synthesis = try await client.synthesize(run: run, history: history, language: .simplifiedChinese) { _ in }
         await fulfillment(of: [inspected], timeout: 1)
         XCTAssertFalse(synthesis.text.isEmpty)
@@ -543,7 +543,7 @@ private final class ReadingURLProtocol: URLProtocol, @unchecked Sendable {
                   let system = turns.first?["content"],
                   let latest = turns.last?["content"],
                   turns.contains(["role": "assistant", "content": "上次的对话原文"]),
-                  host == "api.deepseek.com", model == DeepSeekConfiguration.defaultModel,
+                  host == "wellecho.cn", model == DeepSeekConfiguration.defaultModel,
                   (body["thinking"] as? [String: String])?["type"] == "enabled",
                   body["reasoning_effort"] as? String == "max",
                   body["max_tokens"] as? Int == 65_536 else {

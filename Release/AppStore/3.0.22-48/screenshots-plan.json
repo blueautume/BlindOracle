@@ -1,0 +1,115 @@
+{
+  "status": "frozen_29_images_with_documented_incomplete_step",
+  "runtime": "iOS27.2 (24B114)",
+  "newBuild": "3.0.22 (48)",
+  "testClass": "BlindOracleUITests/AppStoreScreenshotTests",
+  "countPerDevicePerLocale": {
+    "iphone-large": {
+      "zh-Hans": 5,
+      "en-US": 5
+    },
+    "iphone-medium": {
+      "zh-Hans": 5,
+      "en-US": 5
+    },
+    "ipad-13": {
+      "zh-Hans": 5,
+      "en-US": 4
+    }
+  },
+  "locales": [
+    "zh-Hans",
+    "en-US"
+  ],
+  "devices": [
+    {
+      "device": "iPhone17 Pro",
+      "udid": "6963B8E6-BD94-4665-B4CC-A8CA6048EB34",
+      "expectedPortraitPixels": [
+        1206,
+        2622
+      ],
+      "group": "Dynamic Island medium"
+    },
+    {
+      "device": "iPhone17 Pro Max",
+      "udid": "D9A036BC-136E-4CF6-8E12-61D37B0579BF",
+      "expectedPortraitPixels": [
+        1320,
+        2868
+      ],
+      "group": "Dynamic Island large"
+    },
+    {
+      "device": "iPad Pro13 M4",
+      "udid": "4EF12611-583C-438E-9F09-41BB7961ADE1",
+      "expectedPortraitPixels": [
+        2064,
+        2752
+      ],
+      "group": "iPad13"
+    }
+  ],
+  "publicScreens": [
+    "Empty question screen",
+    "Explicit example question and actual intake form",
+    "Native tarot selection with two cards selected, before generated response",
+    "Native method directory",
+    "Native BaZi preview from explicit sample birth details"
+  ],
+  "additionalReviewOnlyCapture": "Real explicit AI-sharing disclosure before allowing it through the visible button",
+  "excluded": [
+    "Fake/test account or wallet screens",
+    "Fabricated AI response or payment-success screens",
+    "Private phone data",
+    "Old 2.0.8 screenshots"
+  ],
+  "captureGuard": "Wait for root code freeze and project generation; use dedicated derived data and devices. No live model, Apple login, or payment requests. Verify actual pixels and alpha after capture before marking ready.",
+  "officialScreenshotRequirements": "https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/",
+  "firstAttempt": {
+    "result": "two_test_failures_in_screenshot_harness",
+    "detail": "Both locales rendered the empty Chat and real AI-sharing disclosure. A redundant assertion requiring the disclosure to be exposed as XCUIElementTypeScrollView failed. The harness now taps the visible Agree button directly, scrolling the real sheet only when needed; the change has not yet been rerun.",
+    "log": "BlindOracle/build/review-storefront-3.0.22-48-iphone-large.log",
+    "approvedScreenshotCount": 0
+  },
+  "incrementalAttempt": {
+    "result": "cancelled_before_UI_execution_by_team_resource_pause",
+    "log": "BlindOracle/build/review-storefront-3.0.22-48-iphone-large-final.log"
+  },
+  "pauseState": {
+    "ownBuildOrCompilerProcessesActive": false,
+    "allOwnSimulatorsShutdown": true,
+    "handoff": "IAP capture agent may run serially."
+  },
+  "successfulRuns": [
+    {
+      "deviceGroup": "iphone-large",
+      "testsPassed": 2,
+      "exitCode": 0,
+      "log": "BlindOracle/build/review-storefront-3.0.22-48-iphone-large-serial.log"
+    },
+    {
+      "deviceGroup": "iphone-medium",
+      "testsPassed": 2,
+      "exitCode": 0,
+      "log": "BlindOracle/build/review-storefront-3.0.22-48-iphone-medium.log"
+    },
+    {
+      "deviceGroup": "ipad-13",
+      "locale": "zh-Hans",
+      "testsPassed": 1,
+      "caseResult": "passed_in_otherwise_failing_result_bundle",
+      "log": "BlindOracle/build/review-storefront-3.0.22-48-ipad13-final.log"
+    }
+  ],
+  "publicImagesVerifiedSoFar": 29,
+  "incompleteRun": {
+    "deviceGroup": "ipad-13",
+    "locale": "en-US",
+    "exitCode": 65,
+    "caseResult": "failed_before_fifth_image_after_two_actual_birth_date_taps",
+    "log": "BlindOracle/build/review-storefront-3.0.22-48-ipad13-english-final.log",
+    "failureVideoFrame": "BlindOracle/build/review-storefront-3.0.22-48-ipad-english-date-tap-evidence.png",
+    "interpretation": "AX marked the partly obscured date field hittable; its rectangle overlaps the navigation bar. This suggests scrolling/targeting as a candidate, but no actual hit-target receipt or manual business-behavior verification is available. No further retry authorized or performed."
+  }
+}

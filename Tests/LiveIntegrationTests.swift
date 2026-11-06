@@ -8,13 +8,7 @@ final class LiveIntegrationTests: XCTestCase {
         guard ProcessInfo.processInfo.environment["BLINDORACLE_LIVE_SMOKE"] == "1" else {
             throw XCTSkip("Live API smoke is opt-in")
         }
-        // Read the ignored bundled fixture in memory; never log credentials.
-        let bundled = Bundle.main.url(forResource: "dev-key", withExtension: "txt")
-            .flatMap { try? String(contentsOf: $0, encoding: .utf8) }
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        let key = KeychainStore.shared.string() ?? bundled
-        guard let key, !key.isEmpty else { throw XCTSkip("Development key unavailable") }
-        return DeepSeekClient(apiKey: key)
+        return DeepSeekClient()
     }
 
     @MainActor func testMissingChinaDistrictUsesDeepSeekAndAppleGeocoding() async throws {
@@ -299,7 +293,7 @@ final class LiveIntegrationTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("staged-tarot-live-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = OracleStore(vault: LocalVault(directory: directory))
-        guard store.hasCredential else { throw XCTSkip("The test host could not load the bundled credential") }
+        guard store.hasCredential else { throw XCTSkip("The test host needs an Apple account session") }
         XCTAssertEqual(DeepSeekConfiguration.model(), "deepseek-v4-pro")
         defer { if store.isBusy { store.stop() } }
 

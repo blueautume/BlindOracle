@@ -1,0 +1,13 @@
+[zh-Hans]
+新增 Apple 登录与账号管理，可查看剩余额度，并通过 Apple 应用内购买补充额度。
+改进购买核对、待完成购买恢复，以及 App Store 验证失败时的重试提示。
+完善账号删除、隐私说明与在线服务错误提示。
+
+[en-US]
+Added Sign in with Apple and account management, with a remaining-allowance view and Apple In-App Purchases to replenish it.
+Improved purchase checks, recovery of unfinished purchases, and retry guidance when App Store verification fails.
+Updated account deletion, privacy information, and online-service error messages.
+
+[填写说明 / Entry instruction]
+只复制对应语言段落；首个 App Store 版本没有“此版本新增内容”字段。请先核对实际发布历史。
+Copy the matching language paragraph only. What's New is unavailable for an app's first App Store version; confirm the actual release history.

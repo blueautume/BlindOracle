@@ -57,6 +57,8 @@ struct DeepSeekTokenUsage: Decodable, Sendable {
 
 enum DeepSeekError: LocalizedError, Sendable {
     case missingKey
+    case signInRequired
+    case dataSharingConsentRequired
     case invalidResponse
     case malformedJSON
     case truncated
@@ -70,8 +72,16 @@ enum DeepSeekError: LocalizedError, Sendable {
             L10n.text("收到的回答不完整，请重试；已填写的资料仍保留。", "The reply was incomplete. Try again. Your details are saved.")
         case .truncated:
             L10n.text("回答在传输中中断，请重试；推演结果已保留。", "The reply was interrupted in transit. Try again. Your reading is saved.")
+        case .http(409):
+            L10n.text("这次请求已提交，服务未重复生成。若回答未完成，可稍后重试。", "This request was already submitted and was not generated again. If the reply is incomplete, try again later.")
+        case .http(402):
+            L10n.text("请先在数据页补充额度，再继续新的问事。", "Replenish your allowance in Data before starting a new reading.")
         case .http(429):
             L10n.text("解读服务暂时繁忙，请稍后再试。", "The reading service is busy. Try again in a moment.")
+        case .signInRequired:
+            L10n.text("请先打开「数据 → 账号」，使用 Apple 登录后再进行在线解读。", "Open Data → Account and sign in with Apple before requesting an online reading.")
+        case .dataSharingConsentRequired:
+            L10n.text("请先在对话页右上角查看并同意「AI 数据使用」，再开始在线解读。", "Review and agree to AI data use at the top right of Chat before requesting an online reading.")
         case .missingKey, .invalidResponse, .http, .provider, .missingResponseModel, .unexpectedModel:
             L10n.text("解读服务暂时无法完成回答，请检查网络后重试。", "The reading service couldn’t finish this reply. Check your connection and try again.")
         }
@@ -85,6 +95,13 @@ actor DeepSeekClient {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private let credential: String?
+    private let accountSessions: AccountSessionManager
+    private let quotaTasks: AIQuotaTaskService
+    private let manageQuota: Bool
+    private let dataSharingConsent: AIDataSharingConsentStore
+    #if DEBUG
+    private let bypassConsentForFixture: Bool
+    #endif
     private(set) var lastSuccessfulConnection: AIConnectionReport?
     private(set) var lastResponseReport: AIConnectionReport?
 
@@ -143,8 +160,18 @@ actor DeepSeekClient {
     Example: {"action":"intake","intent":"Career decision","subject":"本人","methods":["tarot"],"requiredFields":[],"note":"Let's review the details before we draw.","question":"Should I apply for the new job?","understanding":{"relation":"newQuestion","resolvedQuestion":"Should I apply for the new job?"},"interactions":[{"method":"tarot","kind":"tarot","prompt":"Choose three cards."}]}
     """
 
-    init(apiKey: String? = nil, sessionConfiguration: URLSessionConfiguration? = nil) {
-        credential = apiKey
+    init(accessToken: String? = nil, accountSessions: AccountSessionManager = .shared, quotaTasks: AIQuotaTaskService = .shared, manageQuota: Bool = true, sessionConfiguration: URLSessionConfiguration? = nil, dataSharingConsent: AIDataSharingConsentStore? = nil) {
+        credential = accessToken
+        self.accountSessions = accountSessions
+        self.quotaTasks = quotaTasks
+        self.manageQuota = manageQuota && accessToken == nil
+        self.dataSharingConsent = dataSharingConsent ?? .shared
+        #if DEBUG
+        // Existing isolated URLProtocol fixtures exercise transport, not user
+        // permission. An explicit consent store always enables the real gate.
+        bypassConsentForFixture = dataSharingConsent == nil && AppServiceBootstrapPolicy.isUnitTestHost
+            && !(sessionConfiguration?.protocolClasses?.isEmpty ?? true)
+        #endif
         let configuration = sessionConfiguration ?? URLSessionConfiguration.ephemeral
         configuration.urlCache = nil
         configuration.httpCookieStorage = nil
@@ -253,7 +280,7 @@ actor DeepSeekClient {
         let turns = [AIConversationTurn(role: "system", content: system)]
             + sanitizedHistory(history)
             + [AIConversationTurn(role: "user", content: user)]
-        let payload: PlanPayload = try await structured(turns, maxTokens: 2400)
+        let payload: PlanPayload = try await structured(turns, maxTokens: 2400, purpose: "plan")
         let understanding = Self.validatedUnderstanding(payload.understanding, question: question, references: offeredReferences)
         let referencedRun = understanding?.referenceMessageID.flatMap { id in offeredReferences.first { $0.messageID == id }?.run }
         let relatedRun: OracleRun?
@@ -380,7 +407,7 @@ actor DeepSeekClient {
         var extractor = JSONTextStreamExtractor()
         var hasWrittenText = false
         await onProgress?(.requesting)
-        let content = try await stream(turns, jsonMode: true, maxTokens: 4000) { piece in
+        let content = try await stream(turns, jsonMode: true, maxTokens: 4000, purpose: "synthesize") { piece in
             if let delta = extractor.append(piece), !delta.isEmpty {
                 if !hasWrittenText { hasWrittenText = true; await onProgress?(.writing) }
                 await onDelta(delta)
@@ -390,8 +417,10 @@ actor DeepSeekClient {
         guard let data = content.data(using: .utf8),
               let result = try? decoder.decode(SynthesisPayload.self, from: data),
               !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            if manageQuota { try? await quotaTasks.markRepair(AIQuotaTaskScope.stage, needed: true) }
             throw DeepSeekError.malformedJSON
         }
+        if manageQuota { try? await quotaTasks.markRepair(AIQuotaTaskScope.stage, needed: false) }
         let supported = Set(eligible.map(\.method))
         let text = result.textWithLegacyConflictDetails(supported: supported)
         var synthesis = ReadingSynthesis(text: text)
@@ -446,7 +475,7 @@ actor DeepSeekClient {
         let turns = [AIConversationTurn(role: "system", content: system + "\n" + context)]
             + sanitizedHistory(history)
             + [AIConversationTurn(role: "user", content: user)]
-        return try await stream(turns, jsonMode: false, maxTokens: 3500) { piece in await onDelta(piece) }
+        return try await stream(turns, jsonMode: false, maxTokens: 3500, purpose: "follow_up") { piece in await onDelta(piece) }
     }
 
     func summarize(transcript: String, previous: String, language: AppLanguage = .current) async throws -> String {
@@ -454,18 +483,26 @@ actor DeepSeekClient {
             AIConversationTurn(role: "system", content: "将聊天整理成紧凑的延续摘要，保留用户明确提供的真实事实、现实决定、问题、待确认事项，以及解读分歧的依据和适用条件；不要新增事实。忽略旧版本分歧选项的选择、解读偏好和方法权重，也不要从旧摘要恢复这些偏好；真实事实和现实决定仍应保留。不要保存密钥；不要重写个人基础档案；档案由应用独立保存。不要输出隐藏推理。" + Self.languageInstruction(language) + (language.isEnglish ? " Aim for 350 to 650 words." : "目标800到1200汉字。")),
             AIConversationTurn(role: "user", content: "已有摘要：\(previous)\n待合并记录：\(transcript)")
         ]
-        return try await completion(messages, jsonMode: false, maxTokens: 2200)
+        return try await completion(messages, jsonMode: false, maxTokens: 2200, purpose: "summarize")
     }
 
     /// Only the selected public district path is shared for this lookup.
     func districtGeocodingQuery(for district: ChinaDistrict) async throws -> String {
+        if manageQuota, AIQuotaTaskScope.stage == nil {
+            let id = UUID()
+            return try await AIQuotaTaskScope.$stage.withValue(AIQuotaStage(taskID: id, stageID: "geocoding:" + district.id)) {
+                let result = try await districtGeocodingQuery(for: district)
+                await quotaTasks.end(id, status: "completed")
+                return result
+            }
+        }
         let system = """
         为苹果地图地址查询准备选定的中国行政区名称。输出合法 json 对象，字段 id 原样返回、query 为所给完整区划名称，可使用简繁字形与逗号分隔，内地可加“中国”。香港、澳门和台湾也可省略一级地区名称。不要输出地址、地标或经纬度，不要换到同名地区。
         """
         let user = try json(["id": district.id, "path": district.components.joined(separator: "，")])
         let payload: DistrictQueryPayload = try await structured([
             .init(role: "system", content: system), .init(role: "user", content: user)
-        ], maxTokens: 200)
+        ], maxTokens: 200, purpose: "geocoding")
         let query = payload.query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard payload.id == district.id, district.acceptsLookupQuery(query) else { throw DeepSeekError.malformedJSON }
         return query
@@ -481,14 +518,21 @@ actor DeepSeekClient {
     /// Uses the same model and reasoning configuration as real interpretation,
     /// with synthetic text only. No profile or conversation is sent.
     func checkConnection() async throws -> AIConnectionReport {
+        if manageQuota, AIQuotaTaskScope.stage == nil {
+            let id = UUID()
+            return try await AIQuotaTaskScope.$stage.withValue(AIQuotaStage(taskID: id, stageID: "diagnostic")) {
+                let report = try await checkConnection()
+                await quotaTasks.end(id, status: "completed")
+                return report
+            }
+        }
         try Task.checkCancellation()
         let requestedModel = model
         let messages = [AIConversationTurn(role: "system", content: "Connection check only. Reply with exactly OK."),
                         AIConversationTurn(role: "user", content: "Reply OK.")]
         let started = Date()
-        let request = try request(messages, jsonMode: false, streaming: false,
-                                  maxTokens: DeepSeekConfiguration.outputTokenBudget)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await gatewayData(messages, jsonMode: false,
+            maxTokens: DeepSeekConfiguration.outputTokenBudget, purpose: "diagnostic", requestID: UUID().uuidString)
         try Task.checkCancellation()
         guard let http = response as? HTTPURLResponse else { throw DeepSeekError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode) }
@@ -504,9 +548,10 @@ actor DeepSeekClient {
     /// Exposes only the request payload so parameter regressions can be checked
     /// without credentials or a network request.
     static func requestBody(_ messages: [AIConversationTurn], jsonMode: Bool,
-                            streaming: Bool, maxTokens: Int) -> [String: Any] {
+                            streaming: Bool, maxTokens: Int, purpose: String = "follow_up") -> [String: Any] {
         var body: [String: Any] = [
             "model": DeepSeekConfiguration.defaultModel,
+            "purpose": purpose,
             "messages": messages.map { ["role": $0.role, "content": $0.content] },
             "stream": streaming,
             "max_tokens": max(DeepSeekConfiguration.outputTokenBudget, maxTokens),
@@ -518,19 +563,93 @@ actor DeepSeekClient {
     }
 
     private func request(_ messages: [AIConversationTurn], jsonMode: Bool, streaming: Bool,
-                         maxTokens: Int) throws -> URLRequest {
-        let key: String?
+                         maxTokens: Int, purpose: String, requestID: String, sessionGeneration: UUID? = nil) async throws -> URLRequest {
+        try await requireDataSharingConsent()
+        let key: String
         if let credential { key = credential }
-        else { key = try KeychainStore.shared.load() }
-        guard let key, !key.isEmpty else { throw DeepSeekError.missingKey }
+        else {
+            do { key = try await accountSessions.accessToken(expectedGeneration: sessionGeneration) }
+            catch AccountAPIError.unauthorized { throw DeepSeekError.signInRequired }
+        }
+        guard !key.isEmpty else { throw DeepSeekError.signInRequired }
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
+        request.setValue(requestID, forHTTPHeaderField: "Idempotency-Key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(streaming ? "text/event-stream" : "application/json", forHTTPHeaderField: "Accept")
-        request.httpBody = try JSONSerialization.data(withJSONObject: Self.requestBody(messages,
-            jsonMode: jsonMode, streaming: streaming, maxTokens: maxTokens))
+        let proposedBody = try JSONSerialization.data(withJSONObject: Self.requestBody(messages,
+            jsonMode: jsonMode, streaming: streaming, maxTokens: maxTokens, purpose: purpose))
+        if manageQuota {
+            let stage = AIQuotaTaskScope.stage ?? AIQuotaStage(taskID: UUID(uuidString: requestID) ?? UUID(), stageID: purpose)
+            let prepared: PreparedAIStage
+            do { prepared = try await quotaTasks.prepare(stage: stage, body: proposedBody, purpose: purpose) }
+            catch AccountAPIError.server(let status, _) { throw DeepSeekError.http(status) }
+            request.httpBody = prepared.body
+            request.setValue(prepared.taskID.uuidString.lowercased(), forHTTPHeaderField: "X-Task-ID")
+            request.setValue(prepared.stageID, forHTTPHeaderField: "X-Stage-ID")
+            request.setValue(prepared.admissionToken, forHTTPHeaderField: "X-Task-Token")
+            if prepared.needsRepair { request.setValue("1", forHTTPHeaderField: "X-Stage-Repair") }
+        } else { request.httpBody = proposedBody }
         return request
+    }
+
+    private func requireDataSharingConsent() async throws {
+        #if DEBUG
+        if bypassConsentForFixture { return }
+        #endif
+        do { try await dataSharingConsent.requireAuthorization() }
+        catch { throw DeepSeekError.dataSharingConsentRequired }
+    }
+
+    private func renewGatewaySession(rejectedRequest: URLRequest, expectedGeneration: UUID?) async throws {
+        try await requireDataSharingConsent()
+        let rejectedToken = String((rejectedRequest.value(forHTTPHeaderField: "Authorization") ?? "").dropFirst(7))
+        do { _ = try await accountSessions.refreshAfterRejection(of: rejectedToken, expectedGeneration: expectedGeneration) }
+        catch { throw DeepSeekError.signInRequired }
+    }
+
+    private func gatewayData(_ messages: [AIConversationTurn], jsonMode: Bool, maxTokens: Int,
+                             purpose: String, requestID: String, sessionGeneration: UUID? = nil) async throws -> (Data, URLResponse) {
+        let currentGeneration = await accountSessions.sessionGeneration()
+        let expected = sessionGeneration ?? currentGeneration
+        let initialRequest = try await request(messages, jsonMode: jsonMode, streaming: false,
+            maxTokens: maxTokens, purpose: purpose, requestID: requestID, sessionGeneration: expected)
+        try await requireDataSharingConsent()
+        var result = try await session.data(for: initialRequest)
+        if (result.1 as? HTTPURLResponse)?.statusCode == 401, credential == nil {
+            try await renewGatewaySession(rejectedRequest: initialRequest, expectedGeneration: expected)
+            let retryRequest = try await request(messages, jsonMode: jsonMode, streaming: false,
+                maxTokens: maxTokens, purpose: purpose, requestID: requestID, sessionGeneration: expected)
+            try await requireDataSharingConsent()
+            result = try await session.data(for: retryRequest)
+            if (result.1 as? HTTPURLResponse)?.statusCode == 401 {
+                try? await accountSessions.invalidate(expectedGeneration: expected)
+                throw DeepSeekError.signInRequired
+            }
+        }
+        if credential == nil, await accountSessions.sessionGeneration() != expected { throw AccountAPIError.staleSession }
+        return result
+    }
+
+    private func gatewayBytes(_ messages: [AIConversationTurn], jsonMode: Bool, maxTokens: Int,
+                              purpose: String, requestID: String, sessionGeneration: UUID) async throws -> (URLSession.AsyncBytes, URLResponse) {
+        let initialRequest = try await request(messages, jsonMode: jsonMode, streaming: true,
+            maxTokens: maxTokens, purpose: purpose, requestID: requestID, sessionGeneration: sessionGeneration)
+        try await requireDataSharingConsent()
+        var result = try await session.bytes(for: initialRequest)
+        if (result.1 as? HTTPURLResponse)?.statusCode == 401, credential == nil {
+            try await renewGatewaySession(rejectedRequest: initialRequest, expectedGeneration: sessionGeneration)
+            let retryRequest = try await request(messages, jsonMode: jsonMode, streaming: true,
+                maxTokens: maxTokens, purpose: purpose, requestID: requestID, sessionGeneration: sessionGeneration)
+            try await requireDataSharingConsent()
+            result = try await session.bytes(for: retryRequest)
+            if (result.1 as? HTTPURLResponse)?.statusCode == 401 {
+                try? await accountSessions.invalidate(expectedGeneration: sessionGeneration)
+                throw DeepSeekError.signInRequired
+            }
+        }
+        return result
     }
 
     static func modelsMatch(requested: String, returned: String) -> Bool {
@@ -592,53 +711,56 @@ actor DeepSeekClient {
             totalTokens: usage?.totalTokens, reasoningTokens: usage?.reasoningTokens)
     }
 
-    private func structured<T: Decodable>(_ messages: [AIConversationTurn], maxTokens: Int) async throws -> T {
+    private func structured<T: Decodable>(_ messages: [AIConversationTurn], maxTokens: Int, purpose: String) async throws -> T {
         for attempt in 0..<2 {
-            let text = try await completion(messages, jsonMode: true, maxTokens: maxTokens)
-            if let data = text.data(using: .utf8), let value = try? decoder.decode(T.self, from: data) { return value }
+            let text = try await completion(messages, jsonMode: true, maxTokens: maxTokens, purpose: purpose)
+            if let data = text.data(using: .utf8), let value = try? decoder.decode(T.self, from: data) {
+                if manageQuota { try? await quotaTasks.markRepair(AIQuotaTaskScope.stage, needed: false) }
+                return value
+            }
+            if manageQuota { try? await quotaTasks.markRepair(AIQuotaTaskScope.stage, needed: true) }
             if attempt == 1 { throw DeepSeekError.malformedJSON }
         }
         throw DeepSeekError.malformedJSON
     }
 
-    private func completion(_ messages: [AIConversationTurn], jsonMode: Bool, maxTokens: Int) async throws -> String {
+    private func completion(_ messages: [AIConversationTurn], jsonMode: Bool, maxTokens: Int, purpose: String) async throws -> String {
+        defer { if manageQuota { NotificationCenter.default.post(name: .accountBalanceChanged, object: nil) } }
         let requestedModel = model
-        for attempt in 0..<3 {
-            try Task.checkCancellation()
-            let started = Date()
-            let (data, response) = try await session.data(for: request(messages, jsonMode: jsonMode, streaming: false,
-                maxTokens: maxTokens))
-            try Task.checkCancellation()
-            guard let http = response as? HTTPURLResponse else { throw DeepSeekError.invalidResponse }
-            if (http.statusCode == 429 || http.statusCode >= 500), attempt < 2 {
-                try await Task.sleep(nanoseconds: UInt64(attempt + 1) * 1_500_000_000)
-                continue
-            }
-            guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode) }
-            let result = try decoder.decode(CompletionEnvelope.self, from: data)
-            let report = Self.report(result, requestedModel: requestedModel,
-                host: http.url?.host ?? endpoint.host ?? "", started: started)
-            lastResponseReport = report
-            try Self.verifyModel(requested: requestedModel, actual: result.model)
-            guard let choice = result.choices.first else { throw DeepSeekError.invalidResponse }
-            if choice.finish_reason == "length" { throw DeepSeekError.truncated }
-            let text = choice.message.content ?? ""
-            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                if attempt < 2 { continue }
-                throw DeepSeekError.invalidResponse
-            }
-            lastSuccessfulConnection = report
-            return text
+        let requestID = UUID().uuidString
+        let expectedSession = await accountSessions.sessionGeneration()
+        try Task.checkCancellation()
+        let started = Date()
+        let (data, response) = try await gatewayData(messages, jsonMode: jsonMode,
+            maxTokens: maxTokens, purpose: purpose, requestID: requestID, sessionGeneration: expectedSession)
+        try Task.checkCancellation()
+        guard let http = response as? HTTPURLResponse else { throw DeepSeekError.invalidResponse }
+        // A gateway attempt may already have reached the provider. Only an explicit user retry starts another one.
+        guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode) }
+        let result = try decoder.decode(CompletionEnvelope.self, from: data)
+        let report = Self.report(result, requestedModel: requestedModel,
+            host: http.url?.host ?? endpoint.host ?? "", started: started)
+        lastResponseReport = report
+        try Self.verifyModel(requested: requestedModel, actual: result.model)
+        guard let choice = result.choices.first else { throw DeepSeekError.invalidResponse }
+        if choice.finish_reason == "length" {
+            if manageQuota { try? await quotaTasks.markRepair(AIQuotaTaskScope.stage, needed: true) }
+            throw DeepSeekError.truncated
         }
-        throw DeepSeekError.invalidResponse
+        let text = choice.message.content ?? ""
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw DeepSeekError.invalidResponse }
+        lastSuccessfulConnection = report
+        return text
     }
 
-    private func stream(_ messages: [AIConversationTurn], jsonMode: Bool, maxTokens: Int,
+    private func stream(_ messages: [AIConversationTurn], jsonMode: Bool, maxTokens: Int, purpose: String,
                         onPiece: (String) async -> Void) async throws -> String {
+        defer { if manageQuota { NotificationCenter.default.post(name: .accountBalanceChanged, object: nil) } }
         let requestedModel = model
         let started = Date()
-        let (bytes, response) = try await session.bytes(for: request(messages, jsonMode: jsonMode, streaming: true,
-            maxTokens: maxTokens))
+        let expectedSession = await accountSessions.sessionGeneration()
+        let (bytes, response) = try await gatewayBytes(messages, jsonMode: jsonMode,
+            maxTokens: maxTokens, purpose: purpose, requestID: UUID().uuidString, sessionGeneration: expectedSession)
         guard let http = response as? HTTPURLResponse else { throw DeepSeekError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode) }
         let host = http.url?.host ?? endpoint.host ?? ""
@@ -667,11 +789,15 @@ actor DeepSeekClient {
 
         for try await line in bytes.lines {
             try Task.checkCancellation()
+            if credential == nil, await accountSessions.sessionGeneration() != expectedSession { throw AccountAPIError.staleSession }
             if let chunk = try framer.push(line) { try await consume(chunk) }
             if done { break }
         }
         if !done { try framer.finish() }
-        if finalReason == "length" { throw DeepSeekError.truncated }
+        if finalReason == "length" {
+            if manageQuota { try? await quotaTasks.markRepair(AIQuotaTaskScope.stage, needed: true) }
+            throw DeepSeekError.truncated
+        }
         guard done || finalReason == "stop" else { throw DeepSeekError.invalidResponse }
         guard !full.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw DeepSeekError.invalidResponse }
         try Task.checkCancellation()
@@ -839,6 +965,26 @@ actor DeepSeekClient {
         var mandatoryMethods: [String]?
         var tarotClarification: TarotClarificationPayload?
         var understanding: ConversationUnderstandingPayload?
+
+        private enum CodingKeys: String, CodingKey { case action, intent, subject, methods, requiredFields, note, interactions, profileUpdates, participantIDs, participantNames, relationship, resumePending, mandatoryMethods, tarotClarification, understanding }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            action = try? c.decode(String.self, forKey: .action)
+            intent = try c.decode(String.self, forKey: .intent)
+            subject = try c.decode(String.self, forKey: .subject)
+            methods = try? c.decode([String].self, forKey: .methods)
+            requiredFields = try? c.decode([String].self, forKey: .requiredFields)
+            note = try c.decode(String.self, forKey: .note)
+            interactions = try? c.decode([InteractionPayload].self, forKey: .interactions)
+            profileUpdates = try? c.decode([ProfileUpdate].self, forKey: .profileUpdates)
+            participantIDs = try? c.decode([String].self, forKey: .participantIDs)
+            participantNames = try? c.decode([String].self, forKey: .participantNames)
+            relationship = try? c.decode(String.self, forKey: .relationship)
+            resumePending = try? c.decode(Bool.self, forKey: .resumePending)
+            mandatoryMethods = try? c.decode([String].self, forKey: .mandatoryMethods)
+            tarotClarification = try? c.decode(TarotClarificationPayload.self, forKey: .tarotClarification)
+            understanding = try? c.decode(ConversationUnderstandingPayload.self, forKey: .understanding)
+        }
     }
     private struct InteractionPayload: Decodable { var method: String; var kind: String; var prompt: String? }
     private struct SynthesisPayload: Decodable {
@@ -847,6 +993,14 @@ actor DeepSeekClient {
         // supported explanatory text, never selectable objects or feedback.
         private var alternatives: [LegacyConflictDetail]?
         var tarotClarification: TarotClarificationPayload?
+
+        private enum CodingKeys: String, CodingKey { case text, alternatives, tarotClarification }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            text = try c.decode(String.self, forKey: .text)
+            alternatives = try? c.decode([LegacyConflictDetail].self, forKey: .alternatives)
+            tarotClarification = try? c.decode(TarotClarificationPayload.self, forKey: .tarotClarification)
+        }
 
         private struct LegacyConflictDetail: Decodable {
             var title: String

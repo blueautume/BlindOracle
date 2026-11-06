@@ -1,14 +1,10 @@
 import BackgroundTasks
 import SwiftUI
 import UIKit
+import AuthenticationServices
 
 @main struct BlindOracleApp: App {
-    @StateObject private var store = OracleStore()
-    @State private var analysisBackgroundExecution = AnalysisBackgroundExecution()
-    @State private var chatDraft = ""
-    @State private var settingsPresented = false
-    @Environment(\.scenePhase) private var scenePhase
-    @AppStorage(AppLanguage.preferenceKey) private var preference: AppLanguagePreference = .system
+    @StateObject private var bootstrap = AppServiceLaunchCoordinator()
     init() {
         #if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
@@ -25,30 +21,166 @@ import UIKit
     }
     var body: some Scene {
         WindowGroup {
-            TabView(selection: $store.selectedTab) {
-                ChatView(draft: $chatDraft).tabItem { Label(L10n.ui("tab.chat", language: preference.language), systemImage: "bubble.left.and.bubble.right") }.tag(0)
-                DataLibraryView(settingsPresented: $settingsPresented).tabItem { Label(L10n.ui("tab.data", language: preference.language), systemImage: "books.vertical").accessibilityIdentifier("dataTab") }.tag(1)
+            Group {
+                switch bootstrap.state {
+                case .resolving:
+                    AppServiceLaunchSurface(isRecovering: false) { }
+                case .recoveryRequired:
+                    AppServiceLaunchSurface(isRecovering: true, failure: bootstrap.failure) {
+                        Task { await bootstrap.retryFromUser() }
+                    }
+                case .ready(let context):
+                    #if DEBUG
+                    if AppServiceBootstrapPolicy.isUnitTestHost { AccountRestoringView() }
+                    else { ResolvedBlindOracleRoot(context: context) }
+                    #else
+                    ResolvedBlindOracleRoot(context: context)
+                    #endif
+                }
             }
-            // Refresh values from view helpers and stores while retaining the app's store.
-            .id(preference.language)
-            .sheet(isPresented: $settingsPresented) { OracleSettingsView().id(preference.language) }
-            .tint(InkTheme.cinnabar).preferredColorScheme(.light)
-            .environment(\.locale, preference.language.locale)
-            .environmentObject(store)
-            .onReceive(store.$phase.removeDuplicates()) { phase in
-                analysisBackgroundExecution.update(phase, store: store)
+            .preferredColorScheme(.light).tint(InkTheme.cinnabar)
+            .task { await bootstrap.resolve() }
+        }
+    }
+}
+
+private struct AppServiceLaunchSurface: View {
+    let isRecovering: Bool
+    var failure: AppServiceLaunchFailure? = nil
+    let retry: () -> Void
+    private var recoveryMessage: String {
+        switch failure?.kind {
+        case .network:
+            return L10n.text("暂时无法连接 App Store，请检查网络后重新验证。", "Couldn’t connect to the App Store. Check your connection and try verifying again.")
+        case .cancelled:
+            return L10n.text("验证已取消，重新验证后即可继续。", "Verification was cancelled. Verify again to continue.")
+        case .unverified:
+            return L10n.text("App Store 凭据暂未通过验证，请重新验证后继续。", "Your App Store credentials couldn’t be verified. Verify again to continue.")
+        default:
+            return L10n.text("暂时无法验证 App Store 凭据，请重新验证后继续。", "Couldn’t verify your App Store credentials. Verify again to continue.")
+        }
+    }
+    var body: some View {
+        ZStack {
+            PaperBackground()
+            VStack(spacing: 20) {
+                OracleMark(size: 80)
+                Text(L10n.text("瞎子", "BlindOracle"))
+                    .font(.system(size: 28, weight: .medium, design: .serif)).foregroundStyle(InkTheme.ink)
+                if isRecovering {
+                    Text(recoveryMessage)
+                        .font(.subheadline).foregroundStyle(InkTheme.secondary).multilineTextAlignment(.center)
+                    Button(L10n.text("重新验证 App Store", "Verify with App Store"), action: retry)
+                        .buttonStyle(InkPrimaryButton()).accessibilityIdentifier("retryServiceEnvironment")
+                    Text(L10n.text("系统可能要求验证你的 App Store 账号。", "You may be asked to authenticate your App Store account."))
+                        .font(.caption).foregroundStyle(InkTheme.secondary).multilineTextAlignment(.center)
+                    if let failure {
+                        Text(L10n.text("验证代码：", "Verification code: ") + failure.diagnosticCode)
+                            .font(.caption2).foregroundStyle(InkTheme.secondary).textSelection(.enabled)
+                            .accessibilityIdentifier("serviceEnvironmentFailureCode")
+                    }
+                } else {
+                    ProgressView().controlSize(.small).tint(InkTheme.secondary)
+                        .accessibilityLabel(L10n.text("正在准备应用", "Preparing the app"))
+                }
+            }.padding(28).frame(maxWidth: 460).padding(.bottom, 30)
+        }.accessibilityIdentifier(isRecovering ? "serviceEnvironmentRecovery" : "serviceEnvironmentLaunch")
+    }
+}
+
+/// No account/session/task service exists until the outer launcher freezes its route.
+private struct ResolvedBlindOracleRoot: View {
+    let context: AppServiceContext
+    @StateObject private var store = OracleStore()
+    @StateObject private var account = AccountStore.makeAppStore()
+    @StateObject private var purchases = AccountPurchaseStore()
+    @State private var analysisBackgroundExecution = AnalysisBackgroundExecution()
+    @State private var chatDraft = ""
+    @State private var settingsPresented = false
+    @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(AppLanguage.preferenceKey) private var preference: AppLanguagePreference = .system
+    var body: some View {
+        VStack(spacing: 0) {
+            if ServiceEnvironment.current.isSandbox {
+                Text(L10n.text("测试环境 · 购买不扣款", "Test environment · No purchase charges"))
+                    .font(.system(size: 12, weight: .medium)).foregroundStyle(InkTheme.cinnabar)
+                    .frame(maxWidth: .infinity).padding(.vertical, 6).background(InkTheme.paper)
+                    .accessibilityIdentifier("serviceEnvironmentNotice")
+                    .zIndex(1)
             }
-            .onReceive(store.$messages) { messages in
-                analysisBackgroundExecution.recordOutput(in: messages)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
-                store.checkpoint()
-            }
-            .onChange(of: scenePhase) { _, phase in
-                if phase != .background { analysisBackgroundExecution.protectCurrentWork() }
-                if phase == .active { store.refreshCredential() }
+            Group {
+                switch account.accessState {
+                case .authenticated:
+                    TabView(selection: $store.selectedTab) {
+                        ChatView(draft: $chatDraft).tabItem { Label(L10n.ui("tab.chat", language: preference.language), systemImage: "bubble.left.and.bubble.right") }.tag(0)
+                        DataLibraryView(settingsPresented: $settingsPresented).tabItem { Label(L10n.ui("tab.data", language: preference.language), systemImage: "books.vertical").accessibilityIdentifier("dataTab") }.tag(1)
+                    }
+                    .sheet(isPresented: $settingsPresented) { OracleSettingsView().id(preference.language) }
+                case .restoring: AccountRestoringView()
+                case .recoveryRequired: AccountRecoveryView()
+                case .signedOut: AccountGateView()
+                }
             }
         }
+        // Refresh values from view helpers and stores while retaining the app's store.
+        .id(preference.language)
+        .tint(InkTheme.cinnabar).preferredColorScheme(.light)
+        .environment(\.locale, preference.language.locale)
+        .environmentObject(store)
+        .environmentObject(account)
+        .environmentObject(purchases)
+        .task {
+            if context.source != .debugFixture { purchases.startObserving() }
+            await account.restore(); store.refreshCredential()
+            if account.canAccessMain { await resumeBillingAndTasks() }
+        }
+        .onChange(of: account.canAccessMain) { _, allowed in
+            if !allowed { settingsPresented = false }
+            else { Task { await resumeBillingAndTasks() } }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .accountBalanceChanged).receive(on: RunLoop.main)) { _ in
+            if account.canAccessMain { Task { await account.refreshOverview() } }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .accountSessionChanged).receive(on: RunLoop.main)) { _ in
+            store.refreshCredential()
+            Task {
+                await account.sessionChanged()
+                if account.accessState == .restoring { await account.restore(force: true) }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ASAuthorizationAppleIDProvider.credentialRevokedNotification).receive(on: RunLoop.main)) { _ in
+            Task { await account.verifyAppleCredentialState() }
+        }
+        .onReceive(store.$phase.removeDuplicates()) { phase in
+            analysisBackgroundExecution.update(phase, store: store)
+        }
+        .onReceive(store.$messages) { messages in
+            analysisBackgroundExecution.recordOutput(in: messages)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+            store.checkpoint()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .background { analysisBackgroundExecution.protectCurrentWork() }
+            if phase == .active {
+                store.refreshCredential()
+                Task {
+                    if account.canAccessMain {
+                        await account.verifyAppleCredentialState()
+                        if account.canAccessMain {
+                            if context.source != .debugFixture { await purchases.resumeUnfinished() }
+                            await account.refreshOverview()
+                        }
+                    } else { await account.restore(force: true) }
+                }
+            }
+        }
+    }
+    private func resumeBillingAndTasks() async {
+        guard context.source != .debugFixture else { return }
+        await purchases.resumeUnfinished()
+        await store.flushQuotaEnds()
+        await AIQuotaTaskService.shared.flushPendingEnds()
     }
 }
 

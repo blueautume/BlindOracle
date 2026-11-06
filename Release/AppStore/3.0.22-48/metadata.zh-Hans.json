@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "status": "draft_not_submitted",
+  "locale": "zh-Hans",
+  "app_apple_id": "6829770002",
+  "bundle_id": "com.lihao.BlindOracle",
+  "version": "3.0.22",
+  "build": "48",
+  "app_information_localization": {
+    "name": "瞎子",
+    "subtitle": "八字排盘、塔罗抽牌与占星",
+    "privacyPolicyUrl": "https://wellecho.cn/xiazi/zh-Hans/privacy.html"
+  },
+  "version_localization": {
+    "promotionalText": "从一个问题开始，亲手抽牌、查看排盘，再结合解读整理思路。保留原有结果继续追问，也能回看资料、计算依据与方法边界。",
+    "description": "瞎子将传统文化中的排盘、抽牌与 AI 解读放在同一段问事流程中，供文化体验、娱乐与自我反思。\n\n从问题开始\n写下你关心的问题，选择人物资料与适合的推演方法。需要哪些信息、哪些可以留空，都会在过程中提示。\n\n亲手参与，查看过程\n塔罗支持亲手选牌，六爻支持交互起卦。排盘与抽牌由应用执行；结果页面保留所用资料、牌面或盘面，让解读有所依据。\n\n十种方法，各有边界\n可使用八字、紫微斗数、六爻、梅花易数、奇门遁甲、小六壬、称骨、姓名学、西方占星与塔罗。方法说明列出所需资料、结果内容、来源与计算限制，便于了解各方法的适用范围。\n\n沿着原结果继续追问\n解读后可以结合当前结果追问，继续讨论同一个问题。已保存的人物资料、聊天与推演记录保留在当前设备，方便回看。它们不会随 Apple 账号自动同步；退出或删除账号也不会自动清除本机记录。\n\n纸墨界面，中英可选\n以纸色、墨色与朱色呈现问事过程，支持 iPhone 与 iPad。可在设置中切换中文或英文界面与回复语言。\n\n账号与使用额度\n使用前需要通过 Apple 登录。首次符合条件的账号可获得体验额度，剩余用量以百分比呈现，需要时可通过 Apple 应用内购买补充额度。在线问事、解读与追问需要网络及可用额度。\n\n在线 AI 会处理完成请求所需的问题、资料与上下文；内容经 wellecho.cn 服务器转交第三方 AI 服务。请阅读应用内隐私政策，并谨慎输入个人或他人的敏感信息。\n\n本应用不保证预测结果。内容仅供娱乐、文化体验与思考参考，不构成医疗、法律或投资建议，也不应代替专业意见或个人判断。",
+    "keywords": "紫微斗数,梅花易数,奇门遁甲,小六壬,六爻起卦,姓名学,自我反思,传统文化",
+    "supportUrl": "https://wellecho.cn/xiazi/zh-Hans/support.html",
+    "marketingUrl": "https://wellecho.cn/xiazi/zh-Hans/marketing.html",
+    "whatsNew": "新增 Apple 登录与账号管理，可查看剩余额度，并通过 Apple 应用内购买补充额度。\n改进购买核对、待完成购买恢复，以及 App Store 验证失败时的重试提示。\n完善账号删除、隐私说明与在线服务错误提示。"
+  },
+  "shared_fields_proposal": {
+    "copyright": "2026 lihao",
+    "primaryCategory": "ENTERTAINMENT",
+    "secondaryCategory": null,
+    "primaryCategoryRequiresConfirmation": true,
+    "releaseType": "MANUAL",
+    "releaseTypeIsRecommendationOnly": true
+  },
+  "url_candidates_not_approved": {
+    "privacyPolicyUrl": "https://wellecho.cn/xiazi/zh-Hans/privacy.html",
+    "supportUrl": "https://wellecho.cn/xiazi/zh-Hans/support.html",
+    "marketingUrl": "https://wellecho.cn/xiazi/zh-Hans/marketing.html",
+    "termsUrl": "https://wellecho.cn/xiazi/zh-Hans/terms.html",
+    "status": "Updated content deployed for version 3.0.22 (48). Server-origin HTTPS and body checks passed. External/Apple review network reachability remains unverified pending filing; these are review-package URL candidates, not final submission approval."
+  },
+  "field_notes": {
+    "whatsNew": "仅在这是现有公开 App 的新版本时填写；首个 App Store 版本没有此字段。需在 App Store Connect 核对实际发布历史。",
+    "name": "保持既有品牌；中国大陆备案通过后，核对简中名称及主体信息与备案一致。",
+    "price": "不在公共营销文案写固定价格；实际金额由 Apple 本地化购买页面显示。",
+    "privacy": "此文件不是 App Privacy 标签申报答案。数据处理与第三方服务必须另行逐项核对。"
+  },
+  "public_url_verification": {
+    "content_deployed": true,
+    "document_version": "3.0.22 (48)",
+    "server_origin_https_verified": true,
+    "external_reachability_verified": false,
+    "apple_review_network_verified": false,
+    "approved_for_submission": false,
+    "app_store_connect_updated_by_this_operation": false,
+    "verified_at_utc": "2026-11-06T16:29:26.958931+00:00"
+  }
+}

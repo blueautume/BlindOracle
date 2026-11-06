@@ -80,6 +80,7 @@ struct OracleConversation: Codable, Identifiable, Sendable {
     var pendingPlan: OraclePlan?
     var pendingInteraction: OracleInteractionSession?
     var analysisAttempt: OracleAnalysisAttempt?
+    var quotaTaskID: UUID?
 
     var title: String {
         let source = messages.first(where: { $0.role == .user && !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })?.content
@@ -95,13 +96,14 @@ struct OracleConversation: Codable, Identifiable, Sendable {
     init(id: UUID = UUID(), messages: [ChatMessage] = [],
          summary: ConversationSummary = ConversationSummary(), pendingPlan: OraclePlan? = nil,
          pendingInteraction: OracleInteractionSession? = nil,
-         createdAt: Date? = nil, fallbackDate: Date = Date(), analysisAttempt: OracleAnalysisAttempt? = nil) {
+         createdAt: Date? = nil, fallbackDate: Date = Date(), analysisAttempt: OracleAnalysisAttempt? = nil, quotaTaskID: UUID? = nil) {
         self.id = id
         self.messages = messages
         self.summary = summary
         self.pendingPlan = pendingPlan
         self.pendingInteraction = pendingInteraction
         self.analysisAttempt = analysisAttempt
+        self.quotaTaskID = quotaTaskID
         self.createdAt = createdAt ?? messages.map(\.date).min() ?? pendingPlan?.createdAt ?? fallbackDate
         // Reading a historical conversation must not make it appear newly active.
         self.updatedAt = (messages.map(\.date) + [pendingPlan?.createdAt, summary.updatedAt].compactMap { $0 }).max() ?? self.createdAt

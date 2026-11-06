@@ -23,7 +23,7 @@ final class DeepSeekConfigurationTests: XCTestCase {
     func testFreshInstallUsesFixedOnlineInterpretationSettings() throws {
         let defaults = try isolatedDefaults()
         XCTAssertEqual(DeepSeekConfiguration.model(in: defaults), "deepseek-v4-pro")
-        XCTAssertEqual(DeepSeekConfiguration.endpoint.absoluteString, "https://api.deepseek.com/chat/completions")
+        XCTAssertEqual(DeepSeekConfiguration.endpoint, ServiceEnvironment.current.aiEndpoint)
         XCTAssertTrue(DeepSeekConfiguration.thinkingEnabled)
         XCTAssertEqual(DeepSeekConfiguration.reasoningEffort, "max")
         XCTAssertEqual(DeepSeekConfiguration.outputTokenBudget, 65_536)

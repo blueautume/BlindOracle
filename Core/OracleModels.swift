@@ -203,6 +203,7 @@ struct ConversationUnderstanding: Codable, Sendable {
 }
 
 struct OraclePlan: Codable, Sendable {
+    var quotaTaskID: UUID? = nil
     var intent: String
     var subject: String
     var methods: [OracleMethod]

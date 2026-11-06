@@ -1,0 +1,45 @@
+{
+  "status": "draft_not_submitted",
+  "appAppleId": "6829770002",
+  "bundleId": "com.lihao.BlindOracle",
+  "productId": "com.lihao.BlindOracle.quota.1m",
+  "inAppPurchaseType": "CONSUMABLE",
+  "referenceName": "BlindOracle allowance replenishment 1m",
+  "existingProductMustNotBeRecreated": true,
+  "priceProposal": {
+    "baseTerritory": "CHN",
+    "currency": "CNY",
+    "customerPrice": "6.00",
+    "requiresFinalConfirmation": true,
+    "note": "Existing SKU has been purchased in Sandbox. Confirm its final price schedule and availability in App Store Connect; do not hard-code this amount into public app marketing text."
+  },
+  "localizations": [
+    {
+      "locale": "zh-Hans",
+      "name": "瞎子解读额度",
+      "description": "补充用于在线问事、解读及追问的可用额度。"
+    },
+    {
+      "locale": "en-US",
+      "name": "BlindOracle Allowance",
+      "description": "Replenish your allowance for online readings."
+    }
+  ],
+  "reviewNote": "Consumable allowance replenishment for online questions, readings, and follow-ups. Sign in with Apple, open Data > account card > Replenish allowance, then choose the product. The intended China mainland price is CNY 6; use a China mainland Sandbox storefront. The app displays remaining allowance as a percentage. Delivery requires server verification of the Apple-signed transaction and is idempotent. Check purchases retries unfinished delivery. This is not a subscription. Sandbox allowance is isolated from production. No real payment occurs in Sandbox.",
+  "reviewScreenshot": {
+    "file": "review-only/iap-review.png",
+    "required": true,
+    "instruction": "Use the approved actual AccountTopUpView rendering for IAP review only. Its CNY6 catalog and 100% allowance are isolated synthetic fixtures; no live StoreKit price lookup or financial event is asserted. See the adjacent provenance file.",
+    "sha256": "0b523e0f57274525842ea6c98f4ba9d3dee7d33bab9cb1ffbf35411f95338ad3",
+    "fixtureNoFinancialEvent": true,
+    "notForMarketing": true
+  },
+  "submission": {
+    "includeWithAppVersion": "3.0.22",
+    "includeBuild": "48",
+    "firstIapTypeMustAccompanyAppVersion": true,
+    "readyToSubmitDoesNotMeanApproved": true,
+    "sandboxDoesNotRequirePriorReviewApproval": true,
+    "noSubmissionPerformed": true
+  }
+}

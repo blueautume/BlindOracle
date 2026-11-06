@@ -5,6 +5,11 @@ struct ChatView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var draft: String
     @State private var showHistory = false
+    @State private var topUpPresented = false
+    @State private var aiConsentPresented = false
+    @State private var pendingConsentSubmission = false
+    @State private var resumeSubmissionAfterConsent = false
+    @State private var checkingAIConsent = false
     @State private var selectedReading: ReadingReference?
     @State private var inspectingActivities = false
     @State private var followsLatest = true
@@ -58,6 +63,10 @@ struct ChatView: View {
                                 HStack(alignment: .top, spacing: 8) {
                                     Image(systemName: "info.circle")
                                     Text(notice).textSelection(.enabled)
+                                    if store.requiresTopUp {
+                                        Button(L10n.text("补充额度", "Replenish")) { topUpPresented = true }
+                                            .accessibilityIdentifier("chatTopUpEntry")
+                                    }
                                     Spacer(minLength: 0)
                                     Button { store.notice = nil } label: { Image(systemName: "xmark") }.accessibilityLabel(L10n.text("收起提示", "Dismiss notice"))
                                 }.font(.system(size: 12)).foregroundStyle(InkTheme.secondary).padding(12)
@@ -138,6 +147,16 @@ struct ChatView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         composing = false
+                        pendingConsentSubmission = false
+                        aiConsentPresented = true
+                    } label: { Image(systemName: "hand.raised").font(.system(size: 16)).foregroundStyle(InkTheme.secondary) }
+                        .accessibilityLabel(L10n.text("AI 数据使用", "AI data use"))
+                        .accessibilityIdentifier("aiDataSharingSettings")
+                        .accessibilityHidden(showHistory)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        composing = false
                         store.newConversation()
                     } label: { Image(systemName: "square.and.pencil").font(.system(size: 17)).foregroundStyle(InkTheme.secondary) }
                         .disabled(store.isBusy || store.messages.isEmpty).accessibilityLabel(L10n.text("开启新对话", "New conversation"))
@@ -170,6 +189,15 @@ struct ChatView: View {
                     .id("\(session.id.uuidString)-\(session.currentIndex)")
                     .interactiveDismissDisabled(false)
                 }
+            }
+            .sheet(isPresented: $topUpPresented) { NavigationStack { AccountTopUpView() } }
+            .sheet(isPresented: $aiConsentPresented, onDismiss: consentDismissed) {
+                AIDataSharingConsentView(onContinue: {
+                    resumeSubmissionAfterConsent = pendingConsentSubmission
+                }, onDecline: {
+                    pendingConsentSubmission = false
+                    resumeSubmissionAfterConsent = false
+                })
             }
             .sheet(item: $selectedReading) { reference in
                 ReadingResultsSheet(runID: reference.id)
@@ -422,6 +450,34 @@ struct ChatView: View {
             .accessibilityIdentifier("chatComposerPanel")
     }
     private func submit() {
+        guard !checkingAIConsent else { return }
+        let question = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !question.isEmpty else { return }
+        checkingAIConsent = true
+        Task { @MainActor in
+            let authorized = await AIDataSharingConsentStore.shared.isAuthorized()
+            checkingAIConsent = false
+            if authorized { performSubmit() }
+            else {
+                pendingConsentSubmission = true
+                composing = false
+                aiConsentPresented = true
+            }
+        }
+    }
+
+    private func consentDismissed() {
+        let shouldSend = resumeSubmissionAfterConsent
+        pendingConsentSubmission = false
+        resumeSubmissionAfterConsent = false
+        guard shouldSend else { return }
+        Task { @MainActor in
+            guard await AIDataSharingConsentStore.shared.isAuthorized() else { return }
+            performSubmit()
+        }
+    }
+
+    private func performSubmit() {
         let question = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty else { return }
         draft = ""

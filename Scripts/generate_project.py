@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = json.loads((ROOT / 'Configuration/Version.json').read_text())
+SANDBOX = os.environ.get('BLINDORACLE_SANDBOX') == 'YES'
 objects = {}
 def ident(value): return hashlib.sha1(value.encode()).hexdigest()[:24].upper()
 def add(key, value):
@@ -20,8 +21,9 @@ def configs(key, settings):
         s=dict(settings)
         s['SWIFT_OPTIMIZATION_LEVEL']=q('-Onone' if configuration == 'Debug' else '-O')
         s['DEBUG_INFORMATION_FORMAT']=q('dwarf' if configuration == 'Debug' else 'dwarf-with-dsym')
+        s['SWIFT_ACTIVE_COMPILATION_CONDITIONS']=q('$(inherited)' + (' BLINDORACLE_SANDBOX' if SANDBOX else ''))
         if configuration=='Debug':
-            s['SWIFT_ACTIVE_COMPILATION_CONDITIONS']=q('DEBUG $(inherited)')
+            s['SWIFT_ACTIVE_COMPILATION_CONDITIONS']=q('DEBUG $(inherited)' + (' BLINDORACLE_SANDBOX' if SANDBOX else ''))
             s['GCC_PREPROCESSOR_DEFINITIONS']=array([q('DEBUG=1'),q('$(inherited)')])
             s['ENABLE_TESTABILITY']='YES'
         configs.append(add(key+configuration,obj(isa='XCBuildConfiguration',buildSettings=obj(**s),name=q(configuration))))
@@ -34,8 +36,14 @@ common = dict(SWIFT_VERSION=q('5.0'), IPHONEOS_DEPLOYMENT_TARGET=q('17.0'), SDKR
     SUPPORTED_PLATFORMS=q('iphoneos iphonesimulator'),
     HEADER_SEARCH_PATHS=array([q('$(inherited)'),q('$(SRCROOT)/Vendor/Astronomy')]))
 appsettings=dict(common, PRODUCT_BUNDLE_IDENTIFIER=q('com.lihao.BlindOracle'),
+    BLINDORACLE_SANDBOX=q('YES' if SANDBOX else 'NO'),
+    BLINDORACLE_APP_DISPLAY_NAME=q('瞎子·测试' if SANDBOX else '瞎子'),
+    BLINDORACLE_APP_DISPLAY_NAME_EN=q('BlindOracle·Test' if SANDBOX else 'BlindOracle'),
+    ORACLE_SERVICE_ENVIRONMENT=q('Sandbox' if SANDBOX else 'Production'),
+    ORACLE_SERVICE_ENVIRONMENT_RESOLUTION=q('OwnerSandbox' if SANDBOX else 'AppleVerified'),
     DEVELOPMENT_TEAM=q(os.environ.get('DEVELOPMENT_TEAM', 'A82X46N3WS')),
-    INFOPLIST_FILE=q('App/Info.plist'), CURRENT_PROJECT_VERSION=VERSION['build'], MARKETING_VERSION=q(VERSION['version']),
+    INFOPLIST_FILE=q('App/Info.plist'), CODE_SIGN_ENTITLEMENTS=q('App/BlindOracle.entitlements'),
+    CURRENT_PROJECT_VERSION=VERSION['build'], MARKETING_VERSION=q(VERSION['version']),
     ASSETCATALOG_COMPILER_APPICON_NAME=q('AppIcon'),
     SWIFT_OBJC_BRIDGING_HEADER=q('App/BlindOracle-Bridging-Header.h'),
     HEADER_SEARCH_PATHS=array([q('$(inherited)'),q('$(SRCROOT)/Vendor/Astronomy')]),
@@ -71,7 +79,13 @@ resourcegroup=add('resourcesgroup',obj(isa='PBXGroup',children=array(resourceids
 sources=add('sourcesphase',obj(isa='PBXSourcesBuildPhase',buildActionMask=2147483647,files=array(appbuild),runOnlyForDeploymentPostprocessing=0))
 resources=add('resourcesphase',obj(isa='PBXResourcesBuildPhase',buildActionMask=2147483647,files=array(resourcebuild),runOnlyForDeploymentPostprocessing=0))
 frameworks=add('frameworksphase',obj(isa='PBXFrameworksBuildPhase',buildActionMask=2147483647,files='()',runOnlyForDeploymentPostprocessing=0))
-credentialphase=add('credentialphase',obj(isa='PBXShellScriptBuildPhase',alwaysOutOfDate=1,buildActionMask=2147483647,files='()',inputPaths='()',name=q('Bundled service credential'),outputPaths='()',runOnlyForDeploymentPostprocessing=0,shellPath=q('/bin/sh'),shellScript=q('/usr/bin/python3 "${SRCROOT}/Scripts/development_key.py"')))
+resourcePreparation='''rm -f "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/dev-key.txt" "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/qwen-key.txt"
+for oracle_locale in zh-Hans en; do
+    oracle_strings="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/${oracle_locale}.lproj/InfoPlist.strings"
+    if [ "$oracle_locale" = en ]; then oracle_display_name="$BLINDORACLE_APP_DISPLAY_NAME_EN"; else oracle_display_name="$BLINDORACLE_APP_DISPLAY_NAME"; fi
+    if [ -f "$oracle_strings" ]; then /usr/bin/plutil -replace CFBundleDisplayName -string "$oracle_display_name" -- "$oracle_strings" || exit 1; fi
+done'''
+credentialphase=add('credentialphase',obj(isa='PBXShellScriptBuildPhase',alwaysOutOfDate=1,buildActionMask=2147483647,files='()',inputPaths='()',name=q('Prepare application resources'),outputPaths='()',runOnlyForDeploymentPostprocessing=0,shellPath=q('/bin/sh'),shellScript=q(resourcePreparation)))
 appconfig=configs('appconfig',appsettings)
 apptarget=add('apptarget',obj(isa='PBXNativeTarget',buildConfigurationList=appconfig,buildPhases=array([sources,frameworks,resources,credentialphase]),buildRules='()',dependencies='()',name=q('BlindOracle'),productName=q('BlindOracle'),productReference=appproduct,productType=q('com.apple.product-type.application')))
 
@@ -82,8 +96,17 @@ for label,folder,product,ui in [('BlindOracleTests','Tests',testproduct,False),(
         path=p.relative_to(ROOT).as_posix()
         f=add('file:'+path,obj(isa='PBXFileReference',lastKnownFileType=q('sourcecode.swift'),path=q(path),sourceTree=q('<group>')))
         refs.append(f);build.append(add('build:'+path,obj(isa='PBXBuildFile',fileRef=f)))
+    fixturebuild=[]
+    if not ui:
+        for p in sorted((ROOT/folder/'Fixtures').glob('*.storekit')):
+            path=p.relative_to(ROOT).as_posix()
+            f=add('file:'+path,obj(isa='PBXFileReference',lastKnownFileType=q('text'),path=q(path),sourceTree=q('<group>')))
+            refs.append(f);fixturebuild.append(add('build:'+path,obj(isa='PBXBuildFile',fileRef=f)))
     testgroups.append(add(folder+'group',obj(isa='PBXGroup',children=array(refs),name=q(folder),sourceTree=q('<group>'))))
     phase=add(folder+'sourcesphase',obj(isa='PBXSourcesBuildPhase',buildActionMask=2147483647,files=array(build),runOnlyForDeploymentPostprocessing=0))
+    phases=[phase]
+    if fixturebuild:
+        phases.append(add(folder+'resourcesphase',obj(isa='PBXResourcesBuildPhase',buildActionMask=2147483647,files=array(fixturebuild),runOnlyForDeploymentPostprocessing=0)))
     proxy=add(folder+'proxy',obj(isa='PBXContainerItemProxy',containerPortal=ident('project'),proxyType=1,remoteGlobalIDString=apptarget,remoteInfo=q('BlindOracle')))
     dependency=add(folder+'dependency',obj(isa='PBXTargetDependency',target=apptarget,targetProxy=proxy))
     settings=dict(common,PRODUCT_BUNDLE_IDENTIFIER=q('com.lihao.'+label),GENERATE_INFOPLIST_FILE='YES',LD_RUNPATH_SEARCH_PATHS=q('$(inherited) @executable_path/Frameworks @loader_path/Frameworks'))
@@ -91,7 +114,7 @@ for label,folder,product,ui in [('BlindOracleTests','Tests',testproduct,False),(
     else:
         settings['TEST_HOST']=q('$(BUILT_PRODUCTS_DIR)/BlindOracle.app/BlindOracle');settings['BUNDLE_LOADER']=q('$(TEST_HOST)')
     config=configs(folder+'config',settings)
-    target=add(folder+'target',obj(isa='PBXNativeTarget',buildConfigurationList=config,buildPhases=array([phase]),buildRules='()',dependencies=array([dependency]),name=q(label),productName=q(label),productReference=product,productType=q('com.apple.product-type.bundle.ui-testing' if ui else 'com.apple.product-type.bundle.unit-test')))
+    target=add(folder+'target',obj(isa='PBXNativeTarget',buildConfigurationList=config,buildPhases=array(phases),buildRules='()',dependencies=array([dependency]),name=q(label),productName=q(label),productReference=product,productType=q('com.apple.product-type.bundle.ui-testing' if ui else 'com.apple.product-type.bundle.unit-test')))
     targets.append(target)
 
 main=add('main',obj(isa='PBXGroup',children=array([sourcegroup,resourcegroup]+testgroups+[products]),sourceTree=q('<group>')))
@@ -103,7 +126,7 @@ directory=ROOT/'BlindOracle.xcodeproj';directory.mkdir(exist_ok=True)
 schemes=directory/'xcshareddata/xcschemes';schemes.mkdir(parents=True,exist_ok=True)
 reference=lambda target,name: f'<BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{target}" BuildableName="{name}" BlueprintName="{name.split(".")[0]}" ReferencedContainer="container:BlindOracle.xcodeproj"/>'
 appref=reference(apptarget,'BlindOracle.app')
-tests=''.join('<TestableReference skipped="NO">'+reference(t,name+'.xctest')+'</TestableReference>' for t,name in [(targets[1],'BlindOracleTests'),(targets[2],'BlindOracleUITests')])
+tests=''.join('<TestableReference skipped="NO">'+reference(t,name+'.xctest')+('<SkippedTests><Test Identifier="StoreKitLocalPurchaseTests"/></SkippedTests>' if name=='BlindOracleTests' else '')+'</TestableReference>' for t,name in [(targets[1],'BlindOracleTests'),(targets[2],'BlindOracleUITests')])
 testenv='<EnvironmentVariables><EnvironmentVariable key="BLINDORACLE_LIVE_SMOKE" value="1" isEnabled="YES"/></EnvironmentVariables>' if os.environ.get('BLINDORACLE_LIVE_SMOKE')=='1' else ''
 (schemes/'BlindOracle.xcscheme').write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
 <Scheme LastUpgradeVersion="2710" version="1.3">

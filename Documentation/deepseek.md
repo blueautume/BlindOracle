@@ -1,6 +1,6 @@
 # AI 调度与对话
 
-本地插件负责排盘、抽牌、起卦与确定性规则。设置中所选的 DeepSeek 或千问负责选择适用插件、说明需要的资料与交互，以及整合本地结果和回答中文追问。
+本地插件负责排盘、抽牌、起卦与确定性规则。账号网关调用服务器配置的 AI，负责选择适用插件、说明需要的资料与交互，以及整合本地结果和回答追问。产品设置不提供供应商或模型选择。
 
 ## 调用接口
 
@@ -17,17 +17,19 @@
 
 补算生成新的`OracleRun`，完整复制仍有效的旧结果并合并新计算，保留原记录不变。`OraclePlan.baseRunID/followUpQuestion`记录来源及本条细化诉求，`OracleRun.reusedResultIDs`标记复用结果；综合上下文同时提供原问题和补充问题。删除源记录会取消尚未完成资料或交互的补算，已经完成的新记录因持有独立输入与完整结果仍可解读。
 
-API 使用 `https://api.deepseek.com/chat/completions`，默认模型为 DeepSeek Pro（`deepseek-v4-pro`）。`DeepSeekConfiguration` 在首次升级时，将旧的 `deepseek-flash`、`deepseek-v4-flash`、`deepseek-chat` 默认值迁移为 Pro；迁移完成后，用户在设置中主动选择的模型会保留。模型名存于 `UserDefaults` 的 `deepseek.model`。
+API 统一使用 wellecho.cn 的账号网关，客户端兼容模型标识为 `deepseek-v4-pro`，实际模型由服务器配置。`DeepSeekConfiguration` 清理旧 provider、模型和离线模式偏好，不再读取 `deepseek.model` 或保留设置中的模型选择入口。
 
-设置提供用户主动发起的连接检查，展示该设备实际请求模型、API 返回模型，以及 `thinking`、`reasoning_effort=max` 和 `max_tokens` 参数，用于区分请求配置与服务端响应。未连接真机并读取设备设置或检查报告时，不能将开发机的模型与密钥状态当作 iPhone 的诊断结论。
+连接检查仅供开发验证使用，不出现在产品设置中。测试可读取请求与返回模型、thinking、推理强度和输出预算元数据；这些请求同样经过账号网关并受服务器策略约束。未完成真实设备授权和请求验证时，不将模拟器或 mock 结果当作 iPhone 的诊断结论。
 
-DeepSeek 使用 `thinking.type=enabled`、`reasoning_effort=max` 和 `max_tokens`。千问使用百炼北京的 OpenAI 兼容端点和 `qwen3.8-max-0902`，设置 `enable_thinking=true`、`reasoning_effort=xhigh` 和 `max_completion_tokens`。两种服务的 65,536 token 输出预算均包含推理和最终回答。`URLSession` 的请求超时为 300 秒，资源总超时为 900 秒。应用仅消费最终 `content`，隐藏推理不会写入聊天记录或后续请求。
+3.0.15 起所有 AI 调用统一走 `https://wellecho.cn/xiazi-api/v1/ai/chat/completions/`，使用自有账号 access token，不读取或携带供应商 key。请求包含 plan / synthesize / follow_up / summarize / geocoding / diagnostic purpose；服务器执行真实模型与预算策略并记录用量。客户端保留兼容模型配置、thinking 参数与 65,536 请求预算，服务器上限优先。`URLSession` 请求超时为 300 秒，资源总超时为 900 秒。仅最终 `content` 进入聊天，隐藏推理不会写入聊天或后续请求。
+
+3.0.19 起显式沙盒构建使用 `ServiceEnvironment.current` 切换整套账号与 AI base 至 `https://wellecho.cn/xiazi-sandbox-api/v1/`。默认工程仍为生产，运行期没有环境开关。沙盒会话、失效标记、请求快照及结束队列独立；同一本机历史任务在沙盒映射为另一个稳定服务器 UUID，不能沿用生产票据。任务记录也校验环境标记，旧无标记记录仅允许生产迁移。
 
 SSE 帧按每条完整 `data:` JSON 即时消费，不依赖 `AsyncBytes.lines` 是否保留空行；只有真正尚未闭合的 JSON 才跨行累积，避免把连续 JSON 对象拼接成无效响应。
 
-计划与综合响应使用 JSON Output，并在 system 提示中给出 json 示例。若响应为空、截断或无效 JSON，应用返回可恢复错误，保留本地结果。计划 JSON 有一次格式重试；非流请求遇到 429/5xx 最多重试两次。流式请求开始后不会自动重复发送，以免重复输出或多次计费。
+计划与综合响应使用 JSON Output，并在 system 提示中给出 json 示例。若响应为空、截断或无效 JSON，应用返回可恢复错误并保留本地结果；429/5xx 不自动重发。结构化解析可进行一次即时格式修复，用户也可稍后重试。重试复用同一 task、stage 与本机保存的原始请求 bytes；解析修复额外携带 `X-Stage-Repair: 1`，受服务器最多两次显式修复策略约束。已完成步骤优先由服务器重放临时响应缓存，避免将同一步骤当成新任务重复计费。
 
-塔罗原始数据保留本地英文牌名、牌位与对应正逆位牌义，按本次保存的抽牌结果送入综合和追问。所选模型结合问题生成中文解读，重新请求解读时复用已有本地结果。
+塔罗原始数据保留本地英文牌名、牌位与对应正逆位牌义，按本次保存的抽牌结果送入综合和追问。服务器配置的模型结合问题生成所选语言的解读，重新请求解读时复用已有本地结果。
 
 ## 解读口吻
 
@@ -37,11 +39,11 @@ SSE 帧按每条完整 `data:` JSON 即时消费，不依赖 `AsyncBytes.lines` 
 
 ## 密钥
 
-`KeychainStore.store(for:)` 按服务选取钥匙串项。钥匙串使用 `AfterFirstUnlockThisDeviceOnly`，无 iCloud 同步，不进入档案、消息或日志。
+`AccountSessionVault` 用独立命名空间保存自有 access/refresh token 与 Apple 用户标识，采用 `AfterFirstUnlockThisDeviceOnly`。`AccountSessionManager` actor 供账号 UI 与 AI transport 共用，刷新 single-flight，防止过期 refresh 重放。供应商 key 只配置在服务端，历史 KeychainStore 保留供兼容测试，生产调用不再读取。
 
-Debug 与 Release 分别生成 `dev-key.txt` 和 `qwen-key.txt`，来源和优先级见[配置说明](../Configuration/README.md)。密钥值不进入程序源码、Git、资料 JSON、导出备份或日志。包内密钥可被提取，本次内置仅面向已授权分发。
+Debug 与 Release 均不读取、生成或打包 `dev-key.txt`、`qwen-key.txt` 等供应商凭据；构建阶段清理可能残留的旧资源。供应商 key 只由服务器保管和轮换，不下发给 App。历史配置脚本仅用于回归测试，合成测试凭据不能用于真实服务。详见[配置说明](../Configuration/README.md)。
 
-启动时将随包密钥导入 ThisDeviceOnly 钥匙串。无有效凭据时导入；用户手工保存或来源不明的已有凭据均不覆盖。只有当前凭据仍匹配上次成功导入的 SHA-256 指纹，且未标记为手工保存时，才自动采用轮换后的 bundle key；写入成功后再更新指纹。`UserDefaults` 仅保存指纹与来源标记，空配置不会清除用户已有钥匙串凭据。设置仍允许用户录入自己的密钥。
+启动从独立 Keychain 恢复账号会话，必要时刷新并检查 Apple 授权状态。Apple 原生登录使用服务器挑战及 SHA-256 nonce。退出先确保可用 access，再撤销当前 refresh；无法联网仍清理本机会话并明确提示。账号更换的 generation 会使旧刷新、账号响应与网关请求失效。401 只在同一账号代次内刷新并重发，复用 Idempotency-Key；最终 401 使会话失效并关闭主界面。主动重试复用逻辑任务及步骤，新问题申请新任务；请求是否重放缓存、重新调用上游及其实际用量均由服务器确认。
 
 ## 冲突说明
 
@@ -57,6 +59,5 @@ Debug 与 Release 分别生成 `dev-key.txt` 和 `qwen-key.txt`，来源和优�
 - [JSON Output](https://api-docs.deepseek.com/guides/json_mode/)
 - [Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode/)
 - [Tool Calls](https://api-docs.deepseek.com/guides/tool_calls/)
-- [阿里云百炼 OpenAI 兼容 Chat API](https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions)
 
 本版本采用“结构化计划＋客户端白名单执行”模式：语言模型不能直接运行任意代码或访问未登记的插件。

@@ -3,7 +3,7 @@ import Foundation
 /// Application-owned interpretation settings. Legacy preferences never select
 /// an endpoint, model, or offline interpretation mode.
 enum DeepSeekConfiguration {
-    static let endpoint = URL(string: "https://api.deepseek.com/chat/completions")!
+    static var endpoint: URL { ServiceEnvironment.current.aiEndpoint }
     static let defaultModel = "deepseek-v4-pro"
     static let thinkingEnabled = true
     static let reasoningEffort = "max"

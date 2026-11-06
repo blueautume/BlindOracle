@@ -1,0 +1,199 @@
+{
+  "checkedAt": "2026-11-07",
+  "allTextLimitsPassed": true,
+  "asciiMarkupNotRequired": true,
+  "checks": [
+    {
+      "file": "metadata.zh-Hans.json",
+      "field": "name",
+      "unit": "characters",
+      "count": 2,
+      "limit": 30,
+      "passed": true
+    },
+    {
+      "file": "metadata.zh-Hans.json",
+      "field": "subtitle",
+      "unit": "characters",
+      "count": 12,
+      "limit": 30,
+      "passed": true
+    },
+    {
+      "file": "metadata.zh-Hans.json",
+      "field": "promotionalText",
+      "unit": "characters",
+      "count": 56,
+      "limit": 170,
+      "passed": true
+    },
+    {
+      "file": "metadata.zh-Hans.json",
+      "field": "description",
+      "unit": "characters",
+      "count": 670,
+      "limit": 4000,
+      "passed": true
+    },
+    {
+      "file": "metadata.zh-Hans.json",
+      "field": "whatsNew",
+      "unit": "characters",
+      "count": 107,
+      "limit": 4000,
+      "passed": true
+    },
+    {
+      "file": "metadata.zh-Hans.json",
+      "field": "keywords",
+      "unit": "characters",
+      "count": 37,
+      "limit": 100,
+      "passed": true
+    },
+    {
+      "file": "metadata.zh-Hans.json",
+      "field": "keywords",
+      "unit": "utf8_bytes",
+      "count": 97,
+      "limit": 100,
+      "passed": true
+    },
+    {
+      "file": "metadata.en-US.json",
+      "field": "name",
+      "unit": "characters",
+      "count": 11,
+      "limit": 30,
+      "passed": true
+    },
+    {
+      "file": "metadata.en-US.json",
+      "field": "subtitle",
+      "unit": "characters",
+      "count": 23,
+      "limit": 30,
+      "passed": true
+    },
+    {
+      "file": "metadata.en-US.json",
+      "field": "promotionalText",
+      "unit": "characters",
+      "count": 168,
+      "limit": 170,
+      "passed": true
+    },
+    {
+      "file": "metadata.en-US.json",
+      "field": "description",
+      "unit": "characters",
+      "count": 2260,
+      "limit": 4000,
+      "passed": true
+    },
+    {
+      "file": "metadata.en-US.json",
+      "field": "whatsNew",
+      "unit": "characters",
+      "count": 320,
+      "limit": 4000,
+      "passed": true
+    },
+    {
+      "file": "metadata.en-US.json",
+      "field": "keywords",
+      "unit": "characters",
+      "count": 93,
+      "limit": 100,
+      "passed": true
+    },
+    {
+      "file": "metadata.en-US.json",
+      "field": "keywords",
+      "unit": "utf8_bytes",
+      "count": 93,
+      "limit": 100,
+      "passed": true
+    },
+    {
+      "file": "iap-metadata.json",
+      "field": "referenceName",
+      "unit": "characters",
+      "count": 38,
+      "limit": 64,
+      "passed": true
+    },
+    {
+      "file": "iap-metadata.json",
+      "field": "productId",
+      "unit": "characters",
+      "count": 30,
+      "limit": 100,
+      "passed": true
+    },
+    {
+      "file": "iap-metadata.json",
+      "field": "zh-Hans.name",
+      "unit": "characters",
+      "count": 6,
+      "limit": 30,
+      "passed": true
+    },
+    {
+      "file": "iap-metadata.json",
+      "field": "zh-Hans.description",
+      "unit": "characters",
+      "count": 20,
+      "limit": 45,
+      "passed": true
+    },
+    {
+      "file": "iap-metadata.json",
+      "field": "en-US.name",
+      "unit": "characters",
+      "count": 21,
+      "limit": 30,
+      "passed": true
+    },
+    {
+      "file": "iap-metadata.json",
+      "field": "en-US.description",
+      "unit": "characters",
+      "count": 45,
+      "limit": 45,
+      "passed": true
+    },
+    {
+      "file": "iap-metadata.json",
+      "field": "reviewNote",
+      "unit": "characters",
+      "count": 558,
+      "limit": 4000,
+      "passed": true
+    },
+    {
+      "file": "review-notes.txt",
+      "field": "entire_file",
+      "unit": "utf8_bytes",
+      "count": 3474,
+      "limit": 4000,
+      "passed": true
+    }
+  ],
+  "pendingRequiredFields": [
+    "filing_information",
+    "final_privacy_answers",
+    "public_privacy_and_support_URL_external_access_validation"
+  ],
+  "notUploadPayload": "Metadata files include draft annotations and null fields; copy only approved ASC fields after resolving submission-status.json.",
+  "reviewContact": "Existing ASC contact confirmed present by main team; preserve it.",
+  "urlStatus": "Current release pages deployed and origin hashes verified; public/Apple review access pending. URLs are present but not submission-approved.",
+  "screenshots": {
+    "approved": 29,
+    "nativeRgbNoAlpha": true,
+    "allThreeRequiredSizeGroupsPresent": true,
+    "allTwoLocalizationsPresent": true,
+    "approvalManifest": "screenshots-approved.json",
+    "omitted": "English iPad local BaZi preview; no workflow success inferred."
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "status": "draft_not_submitted",
+  "locale": "en-US",
+  "app_apple_id": "6829770002",
+  "bundle_id": "com.lihao.BlindOracle",
+  "version": "3.0.22",
+  "build": "48",
+  "app_information_localization": {
+    "name": "BlindOracle",
+    "subtitle": "Tarot, Astrology & BaZi",
+    "privacyPolicyUrl": "https://wellecho.cn/xiazi/en-US/privacy.html"
+  },
+  "version_localization": {
+    "promotionalText": "Start with a question, draw your cards, and explore the chart behind a reading. Follow up on the same result and revisit saved profiles, inputs, and method limitations.",
+    "description": "BlindOracle brings traditional chart calculations, interactive card draws, and AI interpretations into a guided experience for cultural exploration, entertainment, and self-reflection.\n\nStart with your question\nDescribe what is on your mind, choose a profile, and select a reading method. The app explains which details are needed and which can be left blank.\n\nTake part and inspect the result\nSelect tarot cards yourself or cast a Liu Yao hexagram through an interactive flow. The app performs the calculations and draws. Reading results retain the relevant inputs, cards, or chart so you can see what the interpretation refers to.\n\nExplore ten methods\nTry BaZi, Zi Wei Dou Shu, Liu Yao, Mei Hua Yi Shu, Qi Men Dun Jia, Xiao Liu Ren, traditional bone-weight verses, name numerology, Western astrology, and tarot. Each method includes an explanation of its inputs, outputs, references, and calculation limitations.\n\nContinue the same conversation\nAsk follow-up questions using the existing reading. Save profiles, chats, and reading records on your device for later reference. These records do not automatically sync with your Apple account. Signing out or deleting an account does not erase local records; they can be removed in the app.\n\nPaper and ink, in two languages\nAn interface inspired by paper, ink, and cinnabar, designed for iPhone and iPad. Choose Chinese or English for the interface and new replies in Settings.\n\nAccount and allowance\nSign in with Apple to use the app. An eligible first-time account receives a welcome allowance. View the remaining percentage and replenish your allowance through Apple In-App Purchase when needed. Online questions, readings, and follow-ups require an internet connection and available allowance.\n\nOnline AI processing uses the question, relevant profile details, and context needed for your request. Content passes through the wellecho.cn server to a third-party AI service. Read the in-app privacy policy and take care when entering sensitive information about yourself or others.\n\nBlindOracle does not guarantee predictions. Its content is for entertainment, cultural exploration, and reflection. It is not medical, legal, or investment advice and does not replace professional guidance or your own judgment.",
+    "keywords": "tarot,astrology,bazi,hexagram,numerology,reflection,divination,chinese,culture,charts,journal",
+    "supportUrl": "https://wellecho.cn/xiazi/en-US/support.html",
+    "marketingUrl": "https://wellecho.cn/xiazi/en-US/marketing.html",
+    "whatsNew": "Added Sign in with Apple and account management, with a remaining-allowance view and Apple In-App Purchases to replenish it.\nImproved purchase checks, recovery of unfinished purchases, and retry guidance when App Store verification fails.\nUpdated account deletion, privacy information, and online-service error messages."
+  },
+  "shared_fields_proposal": {
+    "copyright": "2026 lihao",
+    "primaryCategory": "ENTERTAINMENT",
+    "secondaryCategory": null,
+    "primaryCategoryRequiresConfirmation": true,
+    "releaseType": "MANUAL",
+    "releaseTypeIsRecommendationOnly": true
+  },
+  "url_candidates_not_approved": {
+    "privacyPolicyUrl": "https://wellecho.cn/xiazi/en-US/privacy.html",
+    "supportUrl": "https://wellecho.cn/xiazi/en-US/support.html",
+    "marketingUrl": "https://wellecho.cn/xiazi/en-US/marketing.html",
+    "termsUrl": "https://wellecho.cn/xiazi/en-US/terms.html",
+    "status": "Updated content deployed for version 3.0.22 (48). Server-origin HTTPS and body checks passed. External/Apple review network reachability remains unverified pending filing; these are review-package URL candidates, not final submission approval."
+  },
+  "field_notes": {
+    "whatsNew": "Use only for an update to an existing public App Store version. This field is unavailable for the first version. Confirm the actual App Store release history.",
+    "localization": "English localization does not imply availability in every storefront. Confirm app and IAP availability separately.",
+    "price": "Public marketing text omits a fixed price. Apple's localized purchase sheet determines the final charge.",
+    "privacy": "This file does not supply final App Privacy questionnaire answers. Audit developer and third-party data handling separately."
+  },
+  "public_url_verification": {
+    "content_deployed": true,
+    "document_version": "3.0.22 (48)",
+    "server_origin_https_verified": true,
+    "external_reachability_verified": false,
+    "apple_review_network_verified": false,
+    "approved_for_submission": false,
+    "app_store_connect_updated_by_this_operation": false,
+    "verified_at_utc": "2026-11-06T16:29:26.958931+00:00"
+  }
+}
