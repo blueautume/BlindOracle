@@ -200,6 +200,8 @@ struct ConversationUnderstanding: Codable, Sendable {
     var relation: Relation
     var resolvedQuestion: String
     var referenceMessageID: UUID?
+    /// What the user wants done is independent of which topic they refer to.
+    var execution: ReadingExecutionIntent? = nil
 }
 
 struct OraclePlan: Codable, Sendable {

@@ -157,7 +157,7 @@ actor DeepSeekClient {
     }
 
     private static let englishPlanExample = """
-    Example: {"action":"intake","intent":"Career decision","subject":"本人","methods":["tarot"],"requiredFields":[],"note":"Let's review the details before we draw.","question":"Should I apply for the new job?","understanding":{"relation":"newQuestion","resolvedQuestion":"Should I apply for the new job?"},"interactions":[{"method":"tarot","kind":"tarot","prompt":"Choose three cards."}]}
+    Example: {"action":"intake","intent":"Career decision","subject":"本人","methods":["tarot"],"requiredFields":[],"note":"Let's review the details before we draw.","question":"Should I apply for the new job?","understanding":{"relation":"newQuestion","resolvedQuestion":"Should I apply for the new job?","execution":{"operation":"calculate","coverage":"changed","evidence":"Should I apply for the new job?"}},"interactions":[{"method":"tarot","kind":"tarot","prompt":"Choose three cards."}]}
     """
 
     init(accessToken: String? = nil, accountSessions: AccountSessionManager = .shared, quotaTasks: AIQuotaTaskService = .shared, manageQuota: Bool = true, sessionConfiguration: URLSessionConfiguration? = nil, dataSharingConsent: AIDataSharingConsentStore? = nil) {
@@ -194,7 +194,13 @@ actor DeepSeekClient {
         你是瞎子的对话路由与本地插件调度器。只输出一个合法 json 对象，不输出 Markdown。
         \(Self.methodReadinessGuidelines)
         旧版本的分歧选项选择和方法偏好权重不影响路由或方法选择，不从历史摘要恢复此机制；保留用户明确提供的现实事实和当前指令。
-        先结合历史和可引用消息判断用户此刻在做什么，再决定 action。每个 action 都要返回 understanding 对象，字段为 relation、resolvedQuestion、可选 referenceMessageID。
+        先结合历史和可引用消息判断用户此刻在做什么，再决定 action。每个 action 都要返回 understanding 对象，字段为 relation、resolvedQuestion、可选 referenceMessageID，以及必须填写的 execution 对象。relation 只表示引用哪件事、谁和哪些条件；它不等于本条是否要求计算。不能因为 relation=continuation 就忽略用户要求的新计算，也不能因为 changedConditions 或 changedParticipants 就自动发起计算。
+        execution 的完整格式为 {"operation":"answer|calculate|recast|collect|clarify","coverage":"existing|additional|changed|unknown","evidence":"本条用户原文中连续、逐字的一段，最多1000字"}。每个枚举只能选择其中一个值，evidence不能空白，不能来自历史消息、模型note、resolvedQuestion或你补写的解释。可以引用本条原文的完整短句，不要生成新的证据文字。
+        operation=answer 表示解释已有结果、普通问答、咨询、感谢或仅提供背景；calculate 表示用户确实要求进行推演或计算；recast 表示明确要求重新起局、重抽或重算；collect 表示只保存或更正真实人员资料而没有要求计算；clarify 表示无法确定本条所问或要求执行的事。
+        coverage=existing 表示引用的已有可用结果足以覆盖本条要求；additional 表示仍为同一目标和条件，但需补充缺失的方法能力或更新确实改变的计算资料；changed 表示本条要求计算的目标时段、对象、关键条件、地点或问题范围已经超出原结果覆盖范围，或本身就是新问题；unknown 表示无法确定覆盖范围。既有全年范围里缩小到下半年可以是existing；改为原结果尚未覆盖的日期、阶段、安排或对象并要求计算，则是changed。不按某个特定日期词或时间自然流逝决定是否重算。
+        action 按 execution 一致输出：answer→reply；collect→collect；clarify→clarify；recast且coverage非unknown→intake；calculate+changed→intake；calculate+additional有对应推演→supplement，没有对应推演→intake；calculate+existing有对应可用推演→reply，没有对应推演→intake；calculate或recast的coverage=unknown→clarify。reply、clarify、collect不选择计算方法；intake和supplement必须从能力目录中给出适用methods，不靠默认混合全部方法。已有关联推演且用户未指定新方法时，可沿用其中仍适用的方法；不能把另一条无关事项的方法或对象带入。
+        引述他人的计算指令、被引号引用的文字、否定指令、原理咨询和“是否需要重算”的问题不是执行授权。按分句理解：“不要算旧安排，按新安排计算”仍有明确的肯定执行部分；“为什么要重新计算”“不是让你计算，只解释原结果”没有执行授权。用户只陈述改期、换对象或条件变化时，不擅自发起计算；只有本条确实请求推演该变化时才用calculate。用户明确要求按假设情形计算可以用calculate+changed，但假设情形不能写成已发生事实，也不能更改真实出生资料。
+        本条目标日期、时段或相对时间保留在resolvedQuestion与问题文字中。它们不是实际起局时间；不得据此修改castingDate、真实出生日期或出生时刻。新起局使用应用确认时的真实时刻，补算沿用原快照的时刻、种子和已确认交互。
         relation 只能为 newQuestion、continuation、changedConditions、changedParticipants、ambiguous：
         newQuestion 是独立的新问题、闲聊等独立消息，不带 referenceMessageID。
         continuation 是沿用同一事项和已知对象，解释、展开、改变观察角度，或补充方法与背景。“那工作呢”或“那下半年呢”若接着刚才的全年运势，就是细问同一主题的方面或时段；“回到上周面试那件事”可回指较早的消息。明确要求为同一件事重新起卦或抽牌，仍是 continuation，action 用 intake。
@@ -207,13 +213,13 @@ actor DeepSeekClient {
         每件事的对象和条件要跟着它自己的问答走。可引用消息中，助手回复的 resolvedQuestion 是它回答的问题。只有本条原话或被引用的问答能确定姓名，才将姓名写进本轮补全的问题。其他事项里出现过的人名不能带进来。名字无从确定且不影响回答时，用“刚才那段关系”“对方”等原有称呼。
         action 只允许 intake、supplement、reply、clarify、collect：
         collect：用户正在提供或更正人员资料，尚未提出新问题；输出profileUpdates及自然简短的保存确认，methods和requiredFields为空，不新建推演。已收集的姓名即可单独留存，无需称谓、角色或昵称。
-        intake：用户提出真正不同的新问题，明确要求重新起卦、重新抽牌、全部重算，或事件的实际日程、目标、交易对象、关键约束发生实质变化，使原起卦所问不再成立，确实需要一轮新的本地推演。换了询问对象时，按用户明确要求的对象重新选择资料，不默认沿用原人员。resolvedQuestion 保留用户明确改变的条件，选择适用插件与所需资料。
+        intake：用户要求计算真正不同的新问题，明确要求重新起卦、重新抽牌、全部重算，或明确要求计算超出旧结果覆盖范围的目标时段、对象、安排或关键约束。仅陈述条件变化并不自动授权计算。换了询问对象并要求计算时，按用户明确要求的对象重新选择资料，不默认沿用原人员。resolvedQuestion 保留用户明确改变的条件，选择适用插件与所需资料。
         supplement：同一询问对象的已有推演快照且本条追问需要它尚未覆盖的能力，或用户明确改变了客户端输入中可定位的出生资料或地点等字段。methods只列本条确需补充或更新的方法，可以包含新增方法和受变化影响的已算方法；客户端按每个方法与人员的实际输入判断复用还是计算，不由你宣称已算或要求全部重算。
         reply：问候、感谢、普通闲聊、能力介绍，或已有结果足以回答的解释、追问、展开；methods 与 requiredFields 都返回空数组，不重新发问事笺。追问更详细不自动构成supplement，但也不能因为是追问就拒绝补充真正需要的新能力。
         clarify：事项或询问对象仍模糊，尚不能决定该推演什么；note 只给一句自然简短的澄清问题，methods 与 requiredFields 都返回空数组。不要为了模糊问题强行选择插件。
         回复和澄清也保持瞎子安静亲切的口吻，不讲工程术语，不提插件名字。
         对于 intake和supplement，你的工作是根据具体问题选择适用的本地插件，并列出所需资料；禁止自己心算或编造命盘。
-        有已引用的推演时，先看本条追问、已算方法与人员归属、已知输入和可用结果：普通解释用reply；需要缺失的新能力、补齐曾缺资料的方法或更新受结构化输入变化影响的方法用supplement；真正换问题、原问事的关键条件已改变或明确要求新一轮推演才用intake。不能只在note里声称条件变化，却仍交给客户端完全相同的输入要求重算。没有关联推演时不能使用supplement。
+        有已引用的推演时，先看本条执行意图、追问覆盖范围、已算方法与人员归属、已知输入和可用结果：普通解释用reply；明确要求补充缺失的新能力、补齐曾缺资料的方法或更新受真实结构化输入变化影响的方法用supplement；要求计算新的目标范围、条件、对象或明确要求新一轮推演才用intake。不能只在note里声称条件变化，却仍交给客户端完全相同的输入要求重算。没有关联推演时不能使用supplement；如本条确实要求计算，应选择适用methods并用intake，不能降成没有计算的reply。
         同一方法、同一人员、相关输入没有变化且已有complete/partial结果时直接复用，不因新消息、时间自然流逝、用户要求展开、方法名称被提到或结果是partial就重复计算。partial的限制不能通过相同输入再算一次消除；failed/unavailable不是可用结果。相关资料被明确补充或更正时，仅请求确实依赖这些资料的方法；不影响它的方法继续复用。不要仅为增加方法数量而补算。
         supplement沿用原问题、对象、人员和已确认交互；本条follow-up是需要回答的细化问题，不擅自改成新主题。新增或更换参与人员仅在用户本条明确提出时输出完整participantIDs/participantNames；否则省略这些字段。已有牌面、爻值和报数仍属原快照，不要求重复抽牌、投掷或报数；只有新增方法确实缺少必要交互时才发起该交互。用户明确要求重新抽取时用intake。
         已有塔罗牌阵时，询问牌义或细化原建议用reply，沿用首阵和已确认补牌。用户明确要换题、换掉已抽的牌或重新抽一整阵时用intake。
@@ -237,9 +243,9 @@ actor DeepSeekClient {
         collect时，如果用户明确给待问问题增加或更换参与人员，可用resumePending=true并给出完整participantIDs/participantNames名单，仅更新参与者而不启动推演；单纯保存另一人的档案不改变待问参与者。
         question 保持用户原问题（resumePending时由客户端恢复待问问题，supplement时由客户端恢复已有推演原问题并另外保存本条追问）；subject 只能是 本人、他人、事件、多人。
         intent 为简短概括，note 为给用户的一句简洁说明，不提方法名字。
-        新问题示例：{"action":"intake","intent":"职业选择","subject":"本人","methods":["bazi","meihua"],"requiredFields":["birthDate","birthTime"],"note":"先确认一下这次问事的资料。","question":"我要换工作吗？","understanding":{"relation":"newQuestion","resolvedQuestion":"我要换工作吗？"}}
-        感谢示例：{"action":"reply","intent":"日常回应","subject":"本人","methods":[],"requiredFields":[],"note":"不必客气，慢慢来。","question":"谢谢你","understanding":{"relation":"newQuestion","resolvedQuestion":"谢谢你"}}
-        模糊问题示例：{"action":"clarify","intent":"确认所问","subject":"事件","methods":[],"requiredFields":[],"note":"你最想问的，是哪一件具体的事？","question":"帮我看看","understanding":{"relation":"ambiguous","resolvedQuestion":"帮我看看"}}
+        新问题示例：{"action":"intake","intent":"职业选择","subject":"本人","methods":["bazi","meihua"],"requiredFields":["birthDate","birthTime"],"note":"先确认一下这次问事的资料。","question":"我要换工作吗？","understanding":{"relation":"newQuestion","resolvedQuestion":"我要换工作吗？","execution":{"operation":"calculate","coverage":"changed","evidence":"我要换工作吗？"}}}
+        感谢示例：{"action":"reply","intent":"日常回应","subject":"本人","methods":[],"requiredFields":[],"note":"不必客气，慢慢来。","question":"谢谢你","understanding":{"relation":"newQuestion","resolvedQuestion":"谢谢你","execution":{"operation":"answer","coverage":"existing","evidence":"谢谢你"}}}
+        模糊问题示例：{"action":"clarify","intent":"确认所问","subject":"事件","methods":[],"requiredFields":[],"note":"你最想问的，是哪一件具体的事？","question":"帮我看看","understanding":{"relation":"ambiguous","resolvedQuestion":"帮我看看","execution":{"operation":"clarify","coverage":"unknown","evidence":"帮我看看"}}}
         If an action needs the intake form, use intake or supplement and the corresponding structured fields. A clarify note asks only about the question or subject, not about profile fields.
         \(Self.languageInstruction(language))
         \(language.isEnglish ? Self.englishPlanExample : "")
@@ -281,8 +287,19 @@ actor DeepSeekClient {
             + sanitizedHistory(history)
             + [AIConversationTurn(role: "user", content: user)]
         let payload: PlanPayload = try await structured(turns, maxTokens: 2400, purpose: "plan")
-        let understanding = Self.validatedUnderstanding(payload.understanding, question: question, references: offeredReferences)
-        let referencedRun = understanding?.referenceMessageID.flatMap { id in offeredReferences.first { $0.messageID == id }?.run }
+        var understanding = Self.validatedUnderstanding(payload.understanding, question: question, references: offeredReferences)
+        let citedReference = understanding?.referenceMessageID.flatMap { id in offeredReferences.first { $0.messageID == id } }
+        let referencedRun = citedReference?.run
+        let pendingReferenceMatches: Bool
+        if let pendingPlan, let citedReference, citedReference.run == nil,
+           understanding?.relation != .newQuestion, understanding?.relation != .ambiguous {
+            let citedQuestion = (citedReference.resolvedQuestion ?? citedReference.excerpt)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let pendingQuestion = pendingPlan.question.trimmingCharacters(in: .whitespacesAndNewlines)
+            pendingReferenceMatches = !pendingQuestion.isEmpty && citedQuestion == pendingQuestion
+        } else {
+            pendingReferenceMatches = false
+        }
         let relatedRun: OracleRun?
         switch understanding?.relation {
         case nil: relatedRun = existingRun
@@ -291,9 +308,14 @@ actor DeepSeekClient {
         }
         let available = Set(plugins.map(\.method))
         let proposedAction = AIPlanRouting.normalizedAction(payload.action)
-        let isAmbiguous = understanding?.relation == .ambiguous
-        let action: String
-        if isAmbiguous {
+        let executionAction = ReadingExecutionPolicy.validatedAction(understanding: understanding, rawQuestion: question,
+                                                                    proposedAction: proposedAction, hasRelatedRun: relatedRun != nil)
+        var action: String
+        if let executionAction {
+            // Resolve the work before selectedMethods can discard a planner's
+            // methods merely because its action was incorrectly labelled reply.
+            action = executionAction
+        } else if understanding?.relation == .ambiguous {
             action = "clarify"
         } else if proposedAction == "supplement", understanding?.relation == .changedParticipants {
             action = "intake"
@@ -303,9 +325,39 @@ actor DeepSeekClient {
             action = proposedAction
         }
         let mayResume = understanding == nil ? action != "supplement"
-            : understanding?.referenceMessageID != nil && referencedRun == nil && ["intake", "collect"].contains(action)
-        let resume = mayResume && payload.resumePending == true && pendingPlan != nil
-        let requestedMethods = resume ? pendingPlan!.methods.map(\.rawValue) : payload.methods ?? []
+            : pendingReferenceMatches && ["intake", "collect"].contains(action)
+        // A new calculation can inherit the bound form's methods, not its
+        // original question or partially confirmed interaction. Actual data
+        // collection and old plans keep their existing resume semantics.
+        let allowsPendingResume = understanding?.execution == nil || understanding?.execution?.operation == .collect
+        var resume = mayResume && allowsPendingResume && payload.resumePending == true && pendingPlan != nil
+        var requestedMethods = resume ? pendingPlan!.methods.map(\.rawValue) : payload.methods ?? []
+        var needsMethodClarification = false
+        if executionAction != nil, ["intake", "supplement"].contains(action),
+           !requestedMethods.compactMap(OracleMethod.init(rawValue:)).contains(where: { available.contains($0) }) {
+            // A missing method in the new protocol must never silently expand
+            // into the legacy four-method intake fallback. Explicit selection
+            // and the cited reading provide bounded, relevant recovery paths.
+            let explicit = ReadingContinuationPolicy.requestedCalculationMethods(in: question).filter { available.contains($0) }
+            let inherited = (referencedRun ?? relatedRun).map { run in
+                unique(run.plan.methods + run.results.filter { [.complete, .partial].contains($0.status) }.map(\.method))
+                    .filter { available.contains($0) }
+            } ?? []
+            let pendingMethods = pendingReferenceMatches
+                ? (pendingPlan?.methods ?? []).filter { available.contains($0) } : []
+            let fallback = !explicit.isEmpty ? explicit : !inherited.isEmpty ? inherited : pendingMethods
+            requestedMethods = fallback.map(\.rawValue)
+            if requestedMethods.isEmpty {
+                needsMethodClarification = true
+                action = "clarify"; resume = false
+                // Store applies the same execution policy again. Preserve the
+                // fail-closed result instead of allowing that pass to reinstate
+                // an intake with no supported method.
+                understanding = ConversationUnderstanding(relation: .ambiguous, resolvedQuestion: question, referenceMessageID: nil)
+            }
+        }
+        let isAmbiguous = understanding?.relation == .ambiguous
+        let suppressRoutingDetails = isAmbiguous || executionAction == "clarify"
         let methods = AIPlanRouting.selectedMethods(action: action, requested: requestedMethods, available: available)
         let subject = ["本人", "他人", "事件", "多人"].contains(payload.subject) ? payload.subject : "事件"
         let methodSet = Set(methods)
@@ -313,9 +365,14 @@ actor DeepSeekClient {
         let requested = (payload.requiredFields ?? []).compactMap(OracleField.init(rawValue:))
         let permitted = Set(plugins.filter { methodSet.contains($0.method) }.flatMap { $0.requiredFields + $0.optionalFields })
         let fields = unique(derived + requested.filter { permitted.contains($0) })
-        let note = isAmbiguous && (proposedAction != "clarify" || payload.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            ? L10n.text("你想接着问的是哪件事，还是换个新问题？", "Which earlier topic did you mean, or is this a new question?", language: language)
-            : payload.note
+        let note: String
+        if needsMethodClarification {
+            note = L10n.text("你希望用哪种方法推演这次问题？", "Which method would you like to use for this reading?", language: language)
+        } else if suppressRoutingDetails && (proposedAction != "clarify" || payload.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+            note = L10n.text("你想接着问的是哪件事，还是换个新问题？", "Which earlier topic did you mean, or is this a new question?", language: language)
+        } else {
+            note = payload.note
+        }
         var plan = OraclePlan(intent: String(payload.intent.prefix(40)), subject: subject,
                               methods: methods, requiredFields: fields,
                               note: String(note.prefix(400)), question: resume ? pendingPlan!.question : question)
@@ -324,12 +381,12 @@ actor DeepSeekClient {
         if action == "reply", (understanding?.relation == .continuation || (understanding == nil && pendingPlan == nil)), let relatedRun {
             plan.tarotClarification = Self.validatedTarotClarification(payload.tarotClarification, for: relatedRun)
         }
-        plan.profileUpdates = isAmbiguous ? nil : payload.profileUpdates
-        plan.participantIDs = isAmbiguous ? nil : payload.participantIDs?.compactMap(UUID.init(uuidString:))
-        plan.participantNames = isAmbiguous ? nil : payload.participantNames?.map { String($0.prefix(80)) }
-        plan.relationship = isAmbiguous ? nil : payload.relationship.map { String($0.prefix(80)) }
+        plan.profileUpdates = suppressRoutingDetails ? nil : payload.profileUpdates
+        plan.participantIDs = suppressRoutingDetails ? nil : payload.participantIDs?.compactMap(UUID.init(uuidString:))
+        plan.participantNames = suppressRoutingDetails ? nil : payload.participantNames?.map { String($0.prefix(80)) }
+        plan.relationship = suppressRoutingDetails ? nil : payload.relationship.map { String($0.prefix(80)) }
         plan.resumesPendingQuestion = resume
-        plan.mandatoryMethods = isAmbiguous ? nil : payload.mandatoryMethods?.compactMap(OracleMethod.init(rawValue:)).filter { available.contains($0) }
+        plan.mandatoryMethods = suppressRoutingDetails ? nil : payload.mandatoryMethods?.compactMap(OracleMethod.init(rawValue:)).filter { available.contains($0) }
         if resume {
             plan.mandatoryMethods = plan.mandatoryMethods ?? pendingPlan?.mandatoryMethods
             if plan.participantIDs == nil && plan.participantNames == nil {
@@ -865,6 +922,11 @@ actor DeepSeekClient {
         guard var value = payload.value else { return ambiguous }
         let resolved = value.resolvedQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
         value.resolvedQuestion = resolved.isEmpty ? question : String(resolved.prefix(6000))
+        if let execution = value.execution {
+            let evidence = execution.evidence
+            guard !evidence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  evidence.count <= 1000, question.contains(evidence) else { return ambiguous }
+        }
         switch value.relation {
         case .ambiguous:
             return ambiguous
@@ -934,9 +996,20 @@ actor DeepSeekClient {
     /// Invalid structured understanding must never fall back to an unrelated saved reading.
     private struct ConversationUnderstandingPayload: Decodable {
         let value: ConversationUnderstanding?
+        private enum CodingKeys: String, CodingKey { case execution }
 
         init(from decoder: Decoder) {
-            value = try? ConversationUnderstanding(from: decoder)
+            do {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                // Absence supports old plans. A present null, invalid enum or
+                // malformed execution is not an old plan and must fail closed.
+                if container.contains(.execution) {
+                    _ = try container.decode(ReadingExecutionIntent.self, forKey: .execution)
+                }
+                value = try ConversationUnderstanding(from: decoder)
+            } catch {
+                value = nil
+            }
         }
     }
 

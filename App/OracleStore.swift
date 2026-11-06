@@ -85,6 +85,7 @@ struct CastingLocationDraft: Equatable, Sendable {
     let registry = PluginRegistry()
     private lazy var deepSeekClient = DeepSeekClient()
     private let aiClient: DeepSeekClient?
+    private let quotaEndService: AIQuotaTaskService?
     var client: DeepSeekClient { aiClient ?? deepSeekClient }
     private let vault: LocalVault
     private var task: Task<Void, Never>?
@@ -125,7 +126,8 @@ struct CastingLocationDraft: Equatable, Sendable {
     private let usesTestAgent = false
     #endif
 
-    init(vault: LocalVault = .shared, bootstrapCredential: Bool = true, aiClient: DeepSeekClient? = nil) {
+    init(vault: LocalVault = .shared, bootstrapCredential: Bool = true, aiClient: DeepSeekClient? = nil,
+         quotaEndService: AIQuotaTaskService? = nil) {
         DeepSeekConfiguration.migrateDefault()
         #if DEBUG
         usesTestAgent = aiClient == nil && (!bootstrapCredential || ProcessInfo.processInfo.arguments.contains("--ui-testing-local"))
@@ -133,6 +135,7 @@ struct CastingLocationDraft: Equatable, Sendable {
         self.vault = vault
         quotaEndIntents = vault.load([String: String].self, from: ServiceEnvironment.current.endIntentsFilename, fallback: [:])
         self.aiClient = aiClient
+        self.quotaEndService = quotaEndService
         let history = ConversationHistory.load(from: vault)
         conversations = history.archive.conversations
         activeConversationID = history.archive.activeConversationID
@@ -349,7 +352,8 @@ struct CastingLocationDraft: Equatable, Sendable {
         }
         return plan
     }
-    func resolveParticipants(in plan: inout OraclePlan, question: String) {
+    func resolveParticipants(in plan: inout OraclePlan, question: String, allowPersistentCreation: Bool? = nil) {
+        let mayCreate = allowPersistentCreation ?? ProfileFactPolicy.allowsPersistence(in: question)
         let target = ReadingContinuationPolicy.participantIntent(in: question, profiles: profiles)
         let excluded = Set(target.excludedNames)
         plan.participantNames = plan.participantNames?.filter { !excluded.contains($0) }
@@ -388,7 +392,7 @@ struct CastingLocationDraft: Equatable, Sendable {
                 && !profiles.contains(where: { $0.resolvedName == name || $0.participantLabel == name })
                 && ProfileDirectory.isAffirmativeParticipantReference(name, in: question, profiles: profiles)
         }
-        if !newNames.isEmpty { _ = applyProfileUpdates(newNames.map { ProfileUpdate(name: $0) }) }
+        if mayCreate, !newNames.isEmpty { _ = applyProfileUpdates(newNames.map { ProfileUpdate(name: $0) }) }
         let validIDs = Set(profiles.map(\.id))
         if let ids = plan.participantIDs {
             var seen = Set<UUID>()
@@ -1049,6 +1053,7 @@ struct CastingLocationDraft: Equatable, Sendable {
     private func isCancellationRequest(_ text: String) -> Bool {
         guard ReadingContinuationPolicy.requestedCalculationMethods(in: text).isEmpty,
               ReadingContinuationPolicy.bareMethodChange(in: text).isEmpty,
+              !ReadingExecutionPolicy.isExplicitCalculationCommand(text),
               !ReadingContinuationPolicy.explicitlyRequestsNewReading(text) else { return false }
         let compact = text.filter { !$0.isWhitespace }
         return compact.range(of: #"^(?:(?:那(?:就)?|我|我们|请|这次|先|暂时))*(?:不(?:想)?(?:算|抽|掷|测)(?:(?:新|这|本|当前)?(?:卦|牌|牌阵|次))?(?:了|啦|吧)|取消(?:这次|本次|当前)?(?:的)?(?:问事|抽牌|塔罗牌?|投币|投掷|推演|操作|补牌|占卜|测算)?|停止(?:这次|本次|当前)?(?:的)?(?:推演|问事|抽牌|投币|操作)?)(?:[。！!，,；;]|$)"#, options: .regularExpression) != nil
@@ -1119,6 +1124,7 @@ struct CastingLocationDraft: Equatable, Sendable {
             let changesMethod = !ReadingContinuationPolicy.requestedCalculationMethods(in: text).isEmpty
                 || !ReadingContinuationPolicy.bareMethodChange(in: text).isEmpty
                 || ReadingContinuationPolicy.explicitlyRequestsNewReading(text)
+                || ReadingExecutionPolicy.isExplicitCalculationCommand(text)
             if changesMethod {
                 var pending = session.plan
                 pending.draftParticipants = session.input.readingParticipants
@@ -1191,10 +1197,14 @@ struct CastingLocationDraft: Equatable, Sendable {
                     || (target.isGroup && previous.subject != "多人")
             } ?? false
             let keepsPendingScope = scope == .none && !changesPendingPeople
+            // Deciding to calculate a hypothetical case is separate from
+            // asserting that its personal details are true permanent records.
+            let mayPersistProfileFacts = ProfileFactPolicy.allowsPersistence(in: text)
             let scopedPending = keepsPendingScope ? previousPlan : nil
             var answer = scopedPending.map { ConversationalIntake.answer(text, plan: $0, profiles: self.profiles) } ?? IntakeAnswer()
             let pendingContextIDs = scopedPending?.requestedProfileID.map { [$0] } ?? scopedPending?.participantIDs ?? selfProfileID.map { [$0] } ?? []
-            let ownFacts = ProfileDirectory.explicitSelfUpdates(in: text, profiles: profiles, selfProfileID: selfProfileID)
+            let ownFacts = mayPersistProfileFacts
+                ? ProfileDirectory.explicitSelfUpdates(in: text, profiles: profiles, selfProfileID: selfProfileID) : []
             let refersToSelf = target.includesSelf || ProfileDirectory.hasExplicitSelfFacts(in: text)
             let refersToOther = target.refersToOther || EnglishConversation.refersToOtherProfile(text) || text.range(of: #"(?:^|[，,。；;])\s*(?:他|她)(?:的|出生|生日)"#, options: .regularExpression) != nil
             let introducesOtherPerson = ["另外", "另一个", "另一位", "其他人", "别人", "他人", "朋友", "同事", "同学", "家人", "亲戚", "对象", "伴侣", "对方", "父亲", "母亲", "爸爸", "妈妈", "孩子", "儿子", "女儿", "男友", "女友", "丈夫", "妻子", "老公", "老婆"]
@@ -1226,8 +1236,9 @@ struct CastingLocationDraft: Equatable, Sendable {
                (pendingPlan != nil || !["他", "她", "朋友"].contains(where: text.contains)) {
                 explicitUpdates = ProfileDirectory.parseExplicitUpdates(in: "姓名：\(selected.resolvedName)，\(text)", profiles: profiles)
             }
+            if !mayPersistProfileFacts { explicitUpdates = [] }
             let collected = applyProfileUpdates(explicitUpdates)
-            if let name = ProfileDirectory.explicitSelfName(in: text, profiles: profiles) {
+            if mayPersistProfileFacts, let name = ProfileDirectory.explicitSelfName(in: text, profiles: profiles) {
                 let own = ProfileDirectory.resolve(names: [name], in: profiles)
                 selfProfileID = own.ids.count == 1 ? own.ids[0] : nil
                 persist()
@@ -1286,10 +1297,11 @@ struct CastingLocationDraft: Equatable, Sendable {
             }
             let greeting = text.count < 20 && ["你好", "您好", "在吗", "你是谁", "你能做什么", "谢谢", "先聊到这里", "再见"].contains { text.contains($0) }
                 || EnglishConversation.matches(text, #"^(?:hi|hello|hey|thank you|thanks|who are you|what can you do)[.!? ]*$"#)
-            if greeting, additionalMethods.isEmpty, methodsMentioned(in: text, positiveRequestsOnly: true).isEmpty {
+            if greeting, !ReadingExecutionPolicy.isExplicitCalculationCommand(text),
+               additionalMethods.isEmpty, methodsMentioned(in: text, positiveRequestsOnly: true).isEmpty {
                 await answerFollowUp(text, history: history, operation: id, run: nil); return
             }
-            if ReadingContinuationPolicy.isMethodConsultation(text) {
+            if ReadingContinuationPolicy.isMethodConsultation(text), !ReadingExecutionPolicy.isExplicitCalculationCommand(text) {
                 await answerFollowUp(text, history: history, operation: id, run: base, resolvedQuestion: text)
                 return
             }
@@ -1308,25 +1320,135 @@ struct CastingLocationDraft: Equatable, Sendable {
             }
             guard operationID == id, !Task.isCancelled else { return }
             let requestsFreshReading = ReadingContinuationPolicy.explicitlyRequestsNewReading(text)
+            let preservedRecastQuestion = ReadingContinuationPolicy.isBareRecastRequest(text)
+                ? previousPlan?.question ?? base?.input.question ?? currentRun?.input.question : nil
+            let sameQuestionReference = isSameQuestionMethodSelection(text) || text.range(of: #"刚才|同一件|同一事|这件|那件|原问题|原来的问题|same (?:question|topic)|earlier (?:question|topic)"#, options: [.regularExpression, .caseInsensitive]) != nil
+            let effectiveQuestion = resolveConversationUnderstanding(in: &plan, references: references, rawQuestion: text,
+                                                                     base: &base, pending: previousPlan)
+            if let effectiveQuestion, let index = messages.firstIndex(where: { $0.id == questionID }) {
+                messages[index].resolvedQuestion = effectiveQuestion
+                messages[index].referenceMessageID = plan.understanding?.referenceMessageID
+            }
+            if let executionAction = ReadingExecutionPolicy.validatedAction(understanding: plan.understanding,
+                rawQuestion: text, proposedAction: plan.action ?? "clarify", hasRelatedRun: base != nil) {
+                // The validated reference chooses context; the execution intent
+                // chooses work. No later legacy shortcut may turn an intake
+                // back into an explanation or upgrade an answer into a cast.
+                let executionReference = plan.understanding?.referenceMessageID.flatMap { referenceID in
+                    references.first(where: { $0.messageID == referenceID })
+                }
+                let referencedRun = executionReference?.run.flatMap { referenced in
+                    self.runs.first(where: { $0.id == referenced.id })
+                }
+                switch executionAction {
+                case "reply":
+                    if let parent = pendingPlan?.quotaTaskID, parent == quotaTaskID {
+                        // A side answer must not occupy the unfinished reading's
+                        // stable final-answer stage or end its admission ticket.
+                        quotaTaskID = UUID()
+                        persist()
+                    }
+                    await answerFollowUp(text, history: history, operation: id, run: base,
+                                         tarotOffer: plan.tarotClarification, resolvedQuestion: effectiveQuestion)
+                case "clarify":
+                    clarifyReadingExecution(plan.action == "clarify" ? plan.note : nil)
+                case "collect":
+                    let grounded = mayPersistProfileFacts ? ProfileDirectory.groundedUpdates(plan.profileUpdates ?? [], in: text,
+                                                                      profiles: profiles, contextIDs: contextIDs) : []
+                    let extracted = applyProfileUpdates(grounded)
+                    let changed = Set(collected.appliedIDs + extracted.appliedIDs)
+                    let names = profiles.filter { changed.contains($0.id) }.map(\.resolvedName).sorted()
+                    let issues = collected.issues + extracted.issues
+                    let note = !issues.isEmpty ? issues.map(\.message).joined(separator: "\n")
+                        : names.isEmpty
+                            ? L10n.text("请写下需要留存或更正的人员和资料。", "Tell me whose details to save or correct.")
+                            : L10n.text("已分别记下\(names.joined(separator: "、"))的资料。", "Saved the details for \(names.joined(separator: ", ")).")
+                    messages.append(ChatMessage(role: .assistant, content: note))
+                    activityMessageID = messages.last?.id
+                    showIntake = false
+                    progress(names.isEmpty ? L10n.text("等待明确人员资料", "Waiting for profile details") : L10n.text("资料已分别留存", "Profiles saved"), state: names.isEmpty ? .waiting : .completed)
+                    finishOperation()
+                case "supplement":
+                    guard let base else { clarifyReadingExecution(nil); return }
+                    let grounded = mayPersistProfileFacts ? ProfileDirectory.groundedUpdates(plan.profileUpdates ?? [], in: text,
+                                                                      profiles: profiles, contextIDs: contextIDs) : []
+                    _ = applyProfileUpdates(grounded)
+                    resolveParticipants(in: &plan, question: text, allowPersistentCreation: mayPersistProfileFacts)
+                    plan.action = "supplement"
+                    if !prepareSupplement(plan, base: base, question: effectiveQuestion ?? text) {
+                        await answerFollowUp(text, history: history, operation: id, run: base,
+                                             resolvedQuestion: effectiveQuestion)
+                    }
+                case "intake":
+                    let source = referencedRun ?? base ?? (plan.understanding == nil ? currentRun : nil)
+                    let requested = ReadingContinuationPolicy.requestedCalculationMethods(in: text)
+                    if !requested.isEmpty { plan.methods = requested }
+                    if plan.methods.isEmpty { plan.methods = source?.plan.methods ?? previousPlan?.methods ?? [] }
+                    plan.methods = plan.methods.filter { self.registry.plugin($0) != nil }
+                    guard !plan.methods.isEmpty else { clarifyReadingExecution(nil); return }
+                    let sourcePeople = source?.input.readingParticipants ?? []
+                    let sourceIDs = Set(sourcePeople.map(\.id))
+                    let sourceNames = Set(sourcePeople.flatMap { [$0.resolvedName, $0.participantLabel] })
+                    let requestedIDs = Set(plan.participantIDs ?? [])
+                    let requestedNames = Set(plan.participantNames ?? [])
+                    // Reference validation may already have copied these IDs
+                    // into the plan. They still need an editable draft when
+                    // the person no longer exists in the permanent directory.
+                    let keepsSourcePeople = (requestedIDs.isEmpty || requestedIDs == sourceIDs)
+                        && requestedNames.isSubset(of: sourceNames)
+                    if plan.understanding?.relation != .changedParticipants,
+                       scope == .none, let source, keepsSourcePeople {
+                        plan.subject = source.input.subject
+                        plan.participantIDs = source.input.readingParticipants.map(\.id)
+                        plan.participantNames = source.input.readingParticipants.map(\.participantLabel)
+                        plan.draftParticipants = source.input.readingParticipants.map { original in
+                            self.profiles.first(where: { $0.id == original.id }) ?? original
+                        }
+                        plan.relationship = plan.relationship ?? source.input.relationship
+                    } else { plan.draftParticipants = nil }
+                    // A short redraw command refers to the selected turn's
+                    // question, which can already be more specific than the
+                    // old cast. Do not roll that target back to run.input.
+                    let referencedQuestion = executionReference?.resolvedQuestion?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let anchoredBareQuestion = plan.understanding?.execution != nil
+                        && ReadingContinuationPolicy.isBareRecastRequest(text)
+                        && referencedQuestion?.isEmpty == false ? referencedQuestion : nil
+                    plan.question = anchoredBareQuestion ?? preservedRecastQuestion ?? effectiveQuestion ?? text
+                    plan.action = "intake"
+                    plan.baseRunID = nil; plan.followUpQuestion = nil; plan.resumesPendingQuestion = false
+                    plan.castingProfile = nil; plan.draftNumbers = nil; plan.interactions = nil
+                    plan.reviewedParticipants = nil; plan.omittedMethods = nil; plan.preparationNotes = nil
+                    plan.tarotClarification = nil
+                    let freshQuestion = plan.question
+                    resolveParticipants(in: &plan, question: freshQuestion, allowPersistentCreation: mayPersistProfileFacts)
+                    enforceRequestedMethods(&plan, text: text)
+                    // A changed pending question is a new logical AI task, not
+                    // permission to reuse the old task's bound final stage.
+                    let replacedTask = previousPlan?.quotaTaskID.flatMap { $0 == self.quotaTaskID ? $0 : nil }
+                    if let replacedTask {
+                        quotaEndIntents[replacedTask.uuidString.lowercased()] = "cancelled"
+                        quotaTaskID = UUID()
+                    }
+                    plan.quotaTaskID = quotaTaskID
+                    prepareConversation(plan)
+                    if replacedTask != nil, persist(), !usesTestAgent { Task { await self.flushQuotaEnds() } }
+                default:
+                    clarifyReadingExecution(nil)
+                }
+                return
+            }
             if ReadingContinuationPolicy.isBareRecastRequest(text),
                var fresh = previousPlan ?? (base ?? currentRun)?.plan {
-                // A repeated redraw instruction still belongs to the pending
-                // question, even when the planner returns a fresh intake or an
-                // explanation. Never save the operation itself as its subject.
-                fresh.question = previousPlan?.question ?? (base ?? currentRun)?.input.question ?? fresh.question
+                fresh.question = preservedRecastQuestion ?? fresh.question
                 fresh.action = "intake"; fresh.understanding = nil
                 fresh.baseRunID = nil; fresh.followUpQuestion = nil; fresh.resumesPendingQuestion = false
+                fresh.castingProfile = nil; fresh.draftNumbers = nil; fresh.interactions = nil
                 fresh.reviewedParticipants = nil; fresh.omittedMethods = nil; fresh.preparationNotes = nil
                 fresh.tarotClarification = nil
                 enforceRequestedMethods(&fresh, text: text, keepsPendingScope: keepsPendingScope)
                 prepareConversation(fresh)
                 return
             }
-            let preservedRecastQuestion = ReadingContinuationPolicy.isBareRecastRequest(text)
-                ? previousPlan?.question ?? base?.input.question ?? currentRun?.input.question : nil
-            let sameQuestionReference = isSameQuestionMethodSelection(text) || text.range(of: #"刚才|同一件|同一事|这件|那件|原问题|原来的问题|same (?:question|topic)|earlier (?:question|topic)"#, options: [.regularExpression, .caseInsensitive]) != nil
-            let effectiveQuestion = resolveConversationUnderstanding(in: &plan, references: references, rawQuestion: text,
-                                                                     base: &base, pending: previousPlan)
             if !additionalMethods.isEmpty, previousPlan == nil, scope == .none,
                (sameQuestionReference || extendsExistingReading), let currentRun,
                plan.action == "clarify" || plan.understanding?.relation == .ambiguous {
@@ -1342,7 +1464,7 @@ struct CastingLocationDraft: Equatable, Sendable {
             // A verified continuation can answer directly even if the planner
             // proposed a fresh form. Profile corrections and method requests still
             // go through the existing calculation and reuse checks below.
-            var grounded = answer.clarification == nil ? ProfileDirectory.groundedUpdates(plan.profileUpdates ?? [], in: text, profiles: profiles,
+            var grounded = mayPersistProfileFacts && answer.clarification == nil ? ProfileDirectory.groundedUpdates(plan.profileUpdates ?? [], in: text, profiles: profiles,
                                                                                            contextIDs: contextIDs) : []
             if EnglishConversation.isLunarDate(text) { for index in grounded.indices { grounded[index].birthDate = nil } }
             let isContextualReply = previousPlan == nil && plan.understanding?.relation == .continuation
@@ -1388,7 +1510,7 @@ struct CastingLocationDraft: Equatable, Sendable {
                     plan.participantNames = plan.participantNames?.filter { text.contains($0) }
                 }
             }
-            resolveParticipants(in: &plan, question: text)
+            resolveParticipants(in: &plan, question: text, allowPersistentCreation: mayPersistProfileFacts)
             if base != nil, !additionalMethods.isEmpty,
                extendsExistingReading || sameQuestionReference || plan.understanding?.relation == .continuation,
                plan.action != "clarify", plan.action != "collect" {
@@ -1521,7 +1643,8 @@ struct CastingLocationDraft: Equatable, Sendable {
     private func resolveConversationUnderstanding(in plan: inout OraclePlan, references: [ConversationPlanningReference],
                                                   rawQuestion: String, base: inout OracleRun?, pending: OraclePlan?) -> String? {
         guard let understanding = plan.understanding else { return nil }
-        if pending != nil, plan.resumesPendingQuestion == true || plan.action == "collect" || plan.action == "intake" {
+        if pending != nil, understanding.execution == nil,
+           plan.resumesPendingQuestion == true || plan.action == "collect" || plan.action == "intake" {
             // The pending form owns its question and confirmed participants.
             return nil
         }
@@ -1532,6 +1655,7 @@ struct CastingLocationDraft: Equatable, Sendable {
         if understanding.relation == .ambiguous || (needsReference && (reference == nil || question.isEmpty)) {
             base = nil
             plan.baseRunID = nil
+            plan.understanding?.relation = .ambiguous
             plan.action = "clarify"
             plan.mandatoryMethods = []
             plan.profileUpdates = []
@@ -1559,6 +1683,9 @@ struct CastingLocationDraft: Equatable, Sendable {
                 plan.participantNames = current.input.readingParticipants.map(\.participantLabel)
             } else if (understanding.relation == .continuation || plan.action == "reply")
                         && !ReadingContinuationPolicy.explicitlyRequestsNewReading(rawQuestion) {
+                // A rejected reference/scope must stay rejected when the
+                // execution policy is applied again by this store.
+                plan.understanding?.relation = .ambiguous
                 plan.action = "clarify"
                 plan.note = ""
                 plan.mandatoryMethods = []
@@ -1587,6 +1714,15 @@ struct CastingLocationDraft: Equatable, Sendable {
             }
         }
         return question.isEmpty ? nil : question
+    }
+
+    private func clarifyReadingExecution(_ note: String?) {
+        let text = note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        messages.append(ChatMessage(role: .assistant, content: text.isEmpty ? L10n.text(
+            "这次想沿用已有结果，还是按新的问题重新推演？", "Would you like to use the saved reading or start a new reading for this question?") : text))
+        activityMessageID = messages.last?.id
+        progress(L10n.text("等待确认本次所问", "Waiting for you to confirm the question"), state: .waiting)
+        finishOperation()
     }
 
     private func prepareContext(operation: UUID, language: AppLanguage) async {
@@ -2060,11 +2196,12 @@ struct CastingLocationDraft: Equatable, Sendable {
     }
     func flushQuotaEnds() async {
         guard !usesTestAgent else { return }
+        let service = quotaEndService ?? AIQuotaTaskService.shared
         var changed = false
         for (key, status) in quotaEndIntents {
             guard let id = UUID(uuidString: key) else { continue }
-            await AIQuotaTaskService.shared.end(id, status: status)
-            if !(await AIQuotaTaskService.shared.containsTask(id)) { quotaEndIntents.removeValue(forKey: key); changed = true }
+            await service.end(id, status: status)
+            if !(await service.containsTask(id)) { quotaEndIntents.removeValue(forKey: key); changed = true }
         }
         if changed { persist() }
     }
