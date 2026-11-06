@@ -2,17 +2,18 @@
   "date": "2026-11-07",
   "xcode": "27.2 (27B52)",
   "minimum_iOS": "17.0",
-  "release_arm64_bundle_bytes": 28113295,
+  "release_arm64_bundle_bytes": 19324006,
   "release_contains_development_key_resource": false,
   "source_credential_matches": null,
   "release_credential_matches": 0,
-  "unit_tests_passed": 570,
-  "ui_tests_passed": 2,
+  "unit_tests_passed": 581,
+  "ui_tests_passed": 4,
   "live_api_tests_passed": 0,
   "default_live_test_skipped_intentionally": 3,
   "local_plugin_count": 10,
-  "release_is_signed": false,
+  "release_is_signed": true,
   "notes": [
+    "Automatic casting location 3.0.24 / Build 50: new time-based reading forms automatically request When In Use location and apply the actual system coordinates and resolved regional timezone. A new reading never borrows the saved self location; valid drafts and historical supplements preserve their place. Manual choice, clearing, submission, dismissal and no-location methods cancel pending work. Denial/timeout remain retryable with manual fallback, and only authorized coordinate lookup/geocoding has a 30-second deadline. The final 581 non-live unit tests, four Chinese/English UI tests and signed Release archive passed; the distribution IPA passed strict signature, Apple entitlement, privacy and credential checks. Original UI attachments were visually reviewed. No physical GPS or real permission dialog was exercised; test fixtures/stubs are not device verification. TestFlight upload is recorded separately after this development checkpoint.",
     "True solar methods 3.0.23 / Build 49: Zi Wei natal, hourly Qi Men, Chenggu, time/two-number Meihua and Xiaoliuren use the shared apparent-solar clock. Physical instants remain unchanged for solar terms and astronomy. Independent casting place drafts survive reopen and follow-ups; three-number Meihua remains independent of time/place. Historical results remain unchanged. The final 570 non-live unit tests and two Chinese/English casting-place UI tests passed; original simulator attachments were visually reviewed. The unsigned arm64 Release build passed with zero compiler warnings and no credential-shaped content. Existing URLProtocol Sendable warnings remain in test fixtures only. Prior 3.0.22 signed release/review evidence retains its own version; this batch was not uploaded, installed on a phone or submitted for review.",
     "Authorized follow-up for 3.0.20 / 46: OwnerSandbox developer app installed in place on 穷奇 and launched with no app test arguments, preserving all nine pre-existing data filenames (sizes/mtimes unchanged before launch). The same default AppleVerified archive was uploaded with testFlightInternalTestingOnly=true; App Store Connect visibly lists build 46 as Internal / Testing in the existing internal group blind. This does not submit App Review or expose the build to external TestFlight. A real TestFlight install and automatic Sandbox routing are pending user action, not claimed from the developer installation.",
     "Review purchase compatibility 3.0.20 / 46: Apple-verified immutable bootstrap before account/AI/task creation; independently verified Sandbox app-download admission and first-binding; strict environment ledgers; durable unfinished reconciliation and cancellation handling. Final default 493 core units, 78 owner Sandbox units, 5 genuine local StoreKit cases and 5 account UI tests passed. PostgreSQL full 205 and one additional real-SDK bad-JWS test passed. Both backends deployed; cache ownership repaired without deleting throttle files, internal notification rejection 400 verified. Signed App Store export prepared; no TestFlight upload/App Review submission or new physical purchase/installation is claimed. Live callback remains unverified pending filing/network restoration.",
@@ -64,14 +65,14 @@
     "Earlier offline tarot deck, keyboard, broader interaction, and history regression evidence remains at the retained paths. No reasoning_content is decoded, displayed, or persisted.",
     "Changing the requested method while supplying data preserves the original question, applies the new method, and requires a new summary confirmation. A clock correction alone cannot change methods; ambiguous questions or negative replies cannot act as confirmation."
   ],
-  "unit_test_result": "build/true-solar-3.0.23-49-unit-complete.xcresult",
-  "final_ui_result": "build/true-solar-3.0.23-49-ui.xcresult",
+  "unit_test_result": "build/auto-location-3.0.24-50-unit.xcresult",
+  "final_ui_result": "build/auto-location-3.0.24-50-ui.xcresult",
   "live_api_result": "build-conversation/live-verified.xcresult",
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "3.0.23",
-  "build": "49",
+  "version": "3.0.24",
+  "build": "50",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",
@@ -1845,5 +1846,89 @@
         "outcome": "Passed before adding the coordinate-only saved-profile regression and shared helper correction."
       }
     ]
+  },
+  "automatic_casting_location_3_0_24": {
+    "version": "3.0.24",
+    "build": "50",
+    "timestamp_utc": "2026-11-06T20:48:57.202693+00:00",
+    "branch": "codex/true-solar-time-methods",
+    "source_base_commit": "5f45a76",
+    "unit_tests": {
+      "tests": 581,
+      "passed": 581,
+      "failures": 0,
+      "result": "build/auto-location-3.0.24-50-unit.xcresult"
+    },
+    "ui_tests": {
+      "tests": 4,
+      "passed": 4,
+      "failures": 0,
+      "result": "build/auto-location-3.0.24-50-ui.xcresult"
+    },
+    "unit_exclusions": [
+      "LiveIntegrationTests",
+      "StoreKitLocalPurchaseTests",
+      "AppStoreIapReviewScreenshotTests"
+    ],
+    "signed_release_archive": {
+      "passed": true,
+      "compiler_warnings": 0,
+      "path": "build/testflight-archive-3.0.24-50/BlindOracle.xcarchive",
+      "bundle_bytes": 19324006,
+      "localized_location_purpose_verified": true
+    },
+    "candidate_verification": "build/testflight-archive-3.0.24-50/candidate-verification.json",
+    "distribution_ipa_sha256": "94cb6ac4a8618721f26e44e8acf4b4a1911720ab4522749835cb8b9af82ebd4a",
+    "ui_visual_review": {
+      "languages": [
+        "zh-Hans",
+        "en"
+      ],
+      "original_attachments_reviewed": true,
+      "manifest": "build/auto-location-3.0.24-50-ui-attachments/manifest.json"
+    },
+    "coverage": [
+      "automatic current location without tapping the location control",
+      "GPS draft survives relaunch without relocating",
+      "denial blocks missing-place confirmation and allows manual fallback",
+      "cancel/replace rejects late results",
+      "original supplement place remains unchanged",
+      "new reading cannot borrow saved self location",
+      "location timeout starts only after authorization",
+      "stale coordinates rejected"
+    ],
+    "physical_device_gps_verified": false,
+    "real_permission_dialog_verified": false,
+    "test_environment": "DEBUG fixtures and CLLocationManager stubs; no actual GPS, purchase or AI traffic",
+    "upload_state_at_development_checkpoint": "Not yet uploaded; subsequent upload recorded in build/testflight-archive-3.0.24-50/upload-verification.json"
+  },
+  "testflight_3_0_23_49": {
+    "version": "3.0.23",
+    "build": "49",
+    "source_commit": "5f45a76",
+    "source_archive": "/Users/lihao/code/Xcode/赛博算命/BlindOracle/build/testflight-archive-3.0.23-49/BlindOracle.xcarchive",
+    "destination": "App Store Connect / existing internal TestFlight group blind",
+    "testflight_internal_testing_only": false,
+    "candidate_verification": "build/testflight-archive-3.0.23-49/candidate-verification.json",
+    "upload_log": "build/testflight-3.0.23-49-upload.log",
+    "xcode_upload_succeeded": true,
+    "app_store_connect_status": "正在测试 / Testing",
+    "app_review_submitted": false,
+    "publicly_released": false,
+    "timestamp_utc": "2026-11-06T20:16:53.423999+00:00",
+    "privacy_check_baseline": "Release/AppStore/3.0.22-48/privacy-labels.json: unchanged manifest and collected data types",
+    "previous_internal_export": "Unused precursor export retained in Export-internal; final candidate is Export-testflight.",
+    "upload_completed_at_utc": "2026-11-06T20:18:26.688940+00:00",
+    "internal_group": "blind",
+    "existing_internal_testers": 8,
+    "existing_group_automatic_distribution": true,
+    "group_settings_modified": false,
+    "processed_visible_at_utc": "2026-11-06T20:21:06.713690+00:00",
+    "internal_testing_status_verified": true,
+    "processing_completed": true,
+    "ready_verified_at_utc": "2026-11-06T20:21:51.248961+00:00",
+    "verified_by": "Safari visible App Store Connect accessibility state: 瞎子 / blind internal group / 8 testers / 3.0.23 (49) / 正在测试 / iOS",
+    "real_testflight_installation_verified": false,
+    "source_tracked_tree_unchanged": true
   }
 }

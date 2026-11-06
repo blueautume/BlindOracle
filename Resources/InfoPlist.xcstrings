@@ -41,13 +41,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "点击“使用当前位置”后，自动填写你所选栏目中的国内地点和定位坐标。"
+            "value": "用于自动取得本次起卦地点，按当地经度换算真太阳时；你也可以手动选择地点。"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "When you tap Use Current Location, BlindOracle fills the selected field with your place and coordinates in the supported regions."
+            "value": "BlindOracle uses your location to fill the casting place and calculate local apparent solar time. You can also choose a place manually."
           }
         }
       }

@@ -19,6 +19,9 @@ struct GroupIntakeView: View {
     @State private var selectedIDs: [UUID]
     @State private var numberTexts: [String]
     @State private var casting: CastingLocationDraft
+    @StateObject private var castingLocation = LocationService()
+    @State private var locationState = CastingLocationRequestState()
+    @State private var locationError: String?
     @State private var choosingCastingLocation = false
     @State private var keepProfiles = true
     @State private var error: String?
@@ -110,7 +113,7 @@ struct GroupIntakeView: View {
                         Button { confirm() } label: {
                             HStack { Text(L10n.text("确认资料并开始", "Confirm and begin")); Image(systemName: "arrow.right") }
                         }.buttonStyle(InkPrimaryButton()).accessibilityIdentifier("confirmIntake")
-                            .disabled(store.isBusy)
+                            .disabled(store.isBusy || locationState.isWaiting)
                         Text(L10n.text("每人的资料分别保存、分别推演。确认后，抽牌或投掷会接着进行。", "Each person’s details are saved and used separately. After you confirm, you can draw cards or cast if needed."))
                             .font(.system(size: 10)).lineSpacing(4).foregroundStyle(InkTheme.secondary)
                     }.padding(24).frame(maxWidth: 760).frame(maxWidth: .infinity)
@@ -120,6 +123,7 @@ struct GroupIntakeView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(L10n.text("取消本次问事", "Cancel reading"), role: .cancel) {
+                        cancelCastingLocation()
                         submitted = true
                         store.cancelPendingReading()
                         dismiss()
@@ -127,7 +131,11 @@ struct GroupIntakeView: View {
                         .accessibilityIdentifier("cancelPendingIntake")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(L10n.text("稍后填写", "Finish later")) { saveUnsubmittedDraft(); dismiss() }.font(.system(size: 13)).foregroundStyle(InkTheme.secondary)
+                    Button(L10n.text("稍后填写", "Finish later")) {
+                        cancelCastingLocation()
+                        saveUnsubmittedDraft()
+                        dismiss()
+                    }.font(.system(size: 13)).foregroundStyle(InkTheme.secondary)
                         .accessibilityIdentifier("cancelIntake")
                 }
             }
@@ -136,7 +144,14 @@ struct GroupIntakeView: View {
                 if selectedIDs.isEmpty && store.profiles.isEmpty {
                     for _ in 0..<minimumCount { addPerson() }
                 }
+                requestAutomaticCastingLocation()
             }
+            .onChange(of: needsCastingLocation) { _, required in
+                if required { requestAutomaticCastingLocation() }
+                else { cancelCastingLocation() }
+            }
+            .onReceive(castingLocation.$place, perform: receiveCastingLocation)
+            .onReceive(castingLocation.$message, perform: receiveCastingLocationError)
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background { saveUnsubmittedDraft() }
             }
@@ -149,10 +164,14 @@ struct GroupIntakeView: View {
                 catch { return }
                 saveUnsubmittedDraft()
             }
-            .onDisappear(perform: saveUnsubmittedDraft)
+            .onDisappear {
+                cancelCastingLocation()
+                saveUnsubmittedDraft()
+            }
         }
         .sheet(isPresented: $choosingCastingLocation) {
             ChinaDistrictPicker(title: L10n.text("选择起卦地点", "Choose the casting location")) { district in
+                cancelCastingLocation()
                 casting.select(district)
                 error = nil
                 saveUnsubmittedDraft()
@@ -167,6 +186,57 @@ struct GroupIntakeView: View {
         guard savedDraft != snapshot else { return }
         savedDraft = snapshot
         onDraftChange(snapshot.profiles, snapshot.numbers, snapshot.castingProfile)
+    }
+
+    private var hasCastingLocation: Bool {
+        TrueSolarClock.castingCoordinates(profile: casting.profile) != nil
+            && TimeZone(identifier: casting.profile.currentTimeZoneID) != nil
+    }
+
+    private func requestAutomaticCastingLocation() {
+        guard !submitted, !choosingCastingLocation,
+              locationState.beginAutomatic(needsLocation: needsCastingLocation,
+                  isSupplement: plan.baseRunID != nil, hasLocation: hasCastingLocation,
+                  explicitlyCleared: casting.profile.unknownFields.contains(.currentLocation)
+                      || casting.profile.declaredUnknownFields?.contains(.currentLocation) == true) != nil else { return }
+        locationError = nil
+        // Establish the consumer latch before request(): disabled permissions
+        // and services can publish an error synchronously.
+        castingLocation.request()
+    }
+
+    private func requestCurrentCastingLocation() {
+        cancelCastingLocation()
+        guard !submitted, !choosingCastingLocation,
+              locationState.beginManual(needsLocation: needsCastingLocation) != nil else { return }
+        castingLocation.request()
+    }
+
+    private func cancelCastingLocation() {
+        locationState.cancel()
+        castingLocation.cancel()
+        locationError = nil
+    }
+
+    private func receiveCastingLocation(_ place: LocalPlace?) {
+        guard !submitted, needsCastingLocation, !choosingCastingLocation,
+              let requestID = locationState.requestID, let place,
+              locationState.finish(requestID: requestID) else { return }
+        castingLocation.cancel()
+        guard place.apply(to: &casting.profile, purpose: .current) else {
+            locationError = LocationLookupError.unavailable.localizedDescription
+            return
+        }
+        locationError = nil
+        error = nil
+        saveUnsubmittedDraft()
+    }
+
+    private func receiveCastingLocationError(_ message: String?) {
+        guard !submitted, let requestID = locationState.requestID, let message,
+              locationState.finish(requestID: requestID) else { return }
+        castingLocation.cancel()
+        locationError = message
     }
 
     private var questionCard: some View {
@@ -191,10 +261,31 @@ struct GroupIntakeView: View {
         return PaperCard {
             VStack(alignment: .leading, spacing: 13) {
                 SectionEyebrow(text: L10n.text("起卦地点 · 本次问事共用", "Casting location · shared for this reading"))
-                Text(L10n.text("与每位人员的出生地和所在地分开，不需要新增人员或出生资料。按此地点和起卦时刻自动换算真太阳时。", "This is separate from each person’s birthplace and location. No additional person or birth details are needed. Apparent solar time is calculated from this place and the casting instant."))
+                Text(plan.baseRunID == nil
+                     ? L10n.text("自动使用当前位置换算真太阳时。无法定位时可手动选择，无需填写人员资料。", "Your current location is used for apparent solar time. If unavailable, choose a place manually. No person’s details are needed.")
+                     : L10n.text("沿用原问事的地点。需要更改时，可重新定位或手动选择。", "The original reading’s location is kept. Locate again or choose manually if it needs to change."))
                     .font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.secondary).lineSpacing(4)
                     .accessibilityIdentifier("castingLocationExplanation")
-                Button { choosingCastingLocation = true } label: {
+                if locationState.isWaiting {
+                    HStack(spacing: 9) {
+                        ProgressView().tint(InkTheme.sage)
+                        Text(L10n.text("正在获取当前位置…", "Finding your current location…"))
+                            .font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
+                    }.accessibilityElement(children: .combine).accessibilityIdentifier("castingLocationProgress")
+                }
+                Button(action: requestCurrentCastingLocation) {
+                    Label(hasCastingLocation ? L10n.text("重新定位", "Locate again") : L10n.text("使用当前位置", "Use current location"), systemImage: "location")
+                        .font(.system(size: 13, design: .serif)).foregroundStyle(InkTheme.sage)
+                }.buttonStyle(.plain).disabled(locationState.isWaiting)
+                    .accessibilityIdentifier("useCurrentCastingLocation")
+                if let locationError {
+                    Text(locationError).font(.system(size: 12)).foregroundStyle(InkTheme.cinnabar)
+                        .accessibilityIdentifier("castingLocationError")
+                }
+                Button {
+                    cancelCastingLocation()
+                    choosingCastingLocation = true
+                } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "mappin.and.ellipse").foregroundStyle(InkTheme.sage)
                         Text(place.isEmpty ? L10n.text("选择起卦地点", "Choose the casting location") : place)
@@ -207,13 +298,16 @@ struct GroupIntakeView: View {
                     Text(L10n.text("时区：\(casting.profile.currentTimeZoneID) · 经度 \(String(format: "%.4f", coordinates.longitude))°", "Time zone: \(casting.profile.currentTimeZoneID) · Longitude \(String(format: "%.4f", coordinates.longitude))°"))
                         .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                         .accessibilityIdentifier("castingLocationSummary")
-                    Text(TrueSolarClock.coordinateLimitation).font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
-                } else {
-                    Text(L10n.text("请选取有有效坐标和时区的地点；缺少或撤回地点时不能按时间起卦。", "Choose a place with valid coordinates and time zone. Time-based casting cannot continue without that location."))
+                    if casting.profile.currentDistrictCode != nil {
+                        Text(TrueSolarClock.coordinateLimitation).font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                    }
+                } else if !locationState.isWaiting {
+                    Text(L10n.text("请使用当前位置或手动选择地点后继续。", "Use your current location or choose a place manually to continue."))
                         .font(.system(size: 12)).foregroundStyle(InkTheme.cinnabar)
                         .accessibilityIdentifier("castingLocationRequired")
                 }
                 Button(L10n.text("清空起卦地点", "Clear casting location")) {
+                    cancelCastingLocation()
                     casting.clear()
                     error = nil
                     saveUnsubmittedDraft()
@@ -389,6 +483,7 @@ struct GroupIntakeView: View {
         guard errors.isEmpty else { error = errors.joined(separator: "\n"); return }
         error = nil
         if onConfirm(people, plan.methods.contains(.meihua) ? numbers : [], casting.profile, keepProfiles) {
+            cancelCastingLocation()
             submitted = true
         } else {
             error = store.intakeError ?? L10n.text("资料尚未确认，请核对后再试。", "Couldn’t confirm the details. Review them and try again.")

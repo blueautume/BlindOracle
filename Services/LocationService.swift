@@ -379,7 +379,7 @@ enum LocationLookupError: LocalizedError {
 enum LocationPurpose { case birth, current }
 
 extension LocalPlace {
-    /// A location is applied only after the user explicitly chooses its target.
+    /// Apply only to the caller's intended field; casting must not alter birth details.
     /// Its timezone comes from the resolved place, never the device settings.
     @discardableResult func apply(to profile: inout OracleProfile, purpose: LocationPurpose) -> Bool {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -412,19 +412,23 @@ extension LocalPlace {
     private var manager: CLLocationManager?
     private let managerFactory: () -> CLLocationManager
     private let servicesEnabled: () -> Bool
+    private let requestTimeout: TimeInterval
     private var requestID: UUID?
     private var awaitingCoordinate = false
     private var geocodingTask: Task<Void, Never>?
     private var cancelGeocoding: (() -> Void)?
+    private var timeoutTask: Task<Void, Never>?
 
     override convenience init() {
         self.init(managerFactory: { CLLocationManager() },
                   servicesEnabled: { CLLocationManager.locationServicesEnabled() })
     }
 
-    init(managerFactory: @escaping () -> CLLocationManager, servicesEnabled: @escaping () -> Bool) {
+    init(managerFactory: @escaping () -> CLLocationManager, servicesEnabled: @escaping () -> Bool,
+         requestTimeout: TimeInterval = 30) {
         self.managerFactory = managerFactory
         self.servicesEnabled = servicesEnabled
+        self.requestTimeout = requestTimeout
         super.init()
     }
 
@@ -498,6 +502,11 @@ extension LocalPlace {
         let id = UUID(); requestID = id
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-testing-local"),
+           ProcessInfo.processInfo.arguments.contains("--ui-testing-location-denied-fixture") {
+            fail(L10n.text("未获得定位权限，可以在系统设置中允许后重试，或手动选择起卦地点。", "Location access is off. Allow it in Settings and retry, or choose the casting location manually."), id: id)
+            return
+        }
+        if ProcessInfo.processInfo.arguments.contains("--ui-testing-local"),
            ProcessInfo.processInfo.arguments.contains("--ui-testing-location-fixture") {
             // Deterministic, permission-free UI coverage; excluded from Release.
             geocodingTask = Task { [weak self] in
@@ -526,6 +535,7 @@ extension LocalPlace {
 
     func cancel() {
         requestID = nil; awaitingCoordinate = false; isLocating = false
+        timeoutTask?.cancel(); timeoutTask = nil
         stopLocationUpdates()
         geocodingTask?.cancel(); geocodingTask = nil
         cancelGeocoding?(); cancelGeocoding = nil
@@ -536,6 +546,7 @@ extension LocalPlace {
         switch manager.authorizationStatus {
         case .notDetermined: manager.requestWhenInUseAuthorization()
         case .authorizedAlways, .authorizedWhenInUse:
+            startTimeout(id: id)
             awaitingCoordinate = true; manager.requestLocation()
         default: fail(L10n.text("未获得定位权限，可以在系统设置中允许后重试，或从地区列表选择。", "Location access is off. Allow it in Settings or choose a place from the list."), id: id)
         }
@@ -550,6 +561,8 @@ extension LocalPlace {
         guard manager === self.manager, let id = requestID, awaitingCoordinate else { return }
         awaitingCoordinate = false
         guard let location = locations.last, location.horizontalAccuracy >= 0,
+              location.horizontalAccuracy.isFinite,
+              abs(location.timestamp.timeIntervalSinceNow) <= 300,
               CLLocationCoordinate2DIsValid(location.coordinate) else {
             fail(L10n.text("暂时未能取得位置，请重试或从地区列表选择。", "Couldn't get your location. Try again or choose a place from the list."), id: id); return
         }
@@ -609,6 +622,7 @@ extension LocalPlace {
 
     private func finish(_ value: LocalPlace, id: UUID) {
         guard requestID == id else { return }
+        timeoutTask?.cancel(); timeoutTask = nil
         requestID = nil; awaitingCoordinate = false; cancelGeocoding = nil; geocodingTask = nil
         stopLocationUpdates()
         isLocating = false; place = value
@@ -616,9 +630,23 @@ extension LocalPlace {
 
     private func fail(_ text: String, id: UUID) {
         guard requestID == id else { return }
+        timeoutTask?.cancel(); timeoutTask = nil
+        geocodingTask?.cancel(); geocodingTask = nil
+        cancelGeocoding?()
         requestID = nil; awaitingCoordinate = false; cancelGeocoding = nil; geocodingTask = nil
         stopLocationUpdates()
         message = text; isLocating = false
+    }
+
+    private func startTimeout(id: UUID) {
+        guard timeoutTask == nil else { return }
+        let seconds = requestTimeout
+        timeoutTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(seconds)) }
+            catch { return }
+            guard let self, self.requestID == id, !Task.isCancelled else { return }
+            self.fail(L10n.text("定位暂时没有响应，请重试或手动选择地点。", "Location is taking too long. Retry or choose a place manually."), id: id)
+        }
     }
 
     private func stopLocationUpdates() {

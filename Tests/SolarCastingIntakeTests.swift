@@ -87,18 +87,63 @@ final class SolarCastingIntakeTests: XCTestCase {
         XCTAssertNil(TrueSolarClock.castingCoordinates(profile: draft.profile))
     }
 
-    @MainActor func testNewPreparationPrefillsSelfCastingPlaceWithoutChoosingAnotherPerson() async throws {
+    @MainActor func testNewPreparationDoesNotBorrowSavedSelfOrOtherPersonsPlace() async throws {
         let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
         let own = person("本人", longitude: 121.4737), other = person("另一个人", longitude: 87.6)
         store.saveProfile(other); store.saveProfile(own); store.selfProfileID = own.id
         store.send("只用小六壬问这次出行怎样安排")
         try await waitUntilIdle(store)
         let casting = try XCTUnwrap(store.pendingPlan?.castingProfile)
-        XCTAssertEqual(casting.currentLongitude, own.currentLongitude)
-        XCTAssertNotEqual(casting.currentLongitude, other.currentLongitude)
+        XCTAssertNil(casting.currentLongitude)
+        XCTAssertNil(casting.currentLatitude)
+        XCTAssertNil(casting.currentDistrictCode)
+        XCTAssertTrue(casting.currentPlace.isEmpty)
         XCTAssertNil(casting.birthDate)
         XCTAssertTrue(casting.resolvedName.isEmpty)
         XCTAssertTrue(store.runs.isEmpty)
+        XCTAssertFalse(store.canConfirmIntake)
+        // A denied/failed GPS request therefore cannot silently use an old point.
+        XCTAssertFalse(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertEqual(store.profile.currentLongitude, own.currentLongitude)
+    }
+
+    @MainActor func testUnresolvedNewCastingDraftPersistsEmptyWhileSavedSelfKeepsItsLocation() throws {
+        let vault = try temporaryVault()
+        let store = OracleStore(vault: vault, bootstrapCredential: false)
+        let own = person("本人", longitude: 121.4737)
+        store.saveProfile(own); store.selfProfileID = own.id
+        store.pendingPlan = plan()
+        store.saveIntakeDraft(profiles: [], numbers: [], sessionID: store.intakeSessionID)
+        let restarted = OracleStore(vault: vault, bootstrapCredential: false)
+        let saved = try XCTUnwrap(restarted.intakeCastingProfile)
+        XCTAssertNil(TrueSolarClock.castingCoordinates(profile: saved))
+        XCTAssertTrue(saved.currentPlace.isEmpty)
+        XCTAssertEqual(restarted.profile.currentLongitude, own.currentLongitude)
+        XCTAssertFalse(restarted.canConfirmIntake)
+    }
+
+    @MainActor func testGPSPlaceKeepsExactCoordinatesAndSavesIndependentDraftForReopening() throws {
+        let vault = try temporaryVault()
+        let store = OracleStore(vault: vault, bootstrapCredential: false)
+        let own = person("本人", longitude: 121.4737)
+        store.saveProfile(own); store.selfProfileID = own.id
+        store.pendingPlan = plan()
+        var draft = CastingLocationDraft(profile: OracleProfile())
+        draft.clear()
+        let gps = LocalPlace(name: "北京市海淀区", latitude: 40.03102, longitude: 116.22108, timeZone: "Asia/Shanghai")
+        XCTAssertTrue(gps.apply(to: &draft.profile, purpose: .current))
+        store.saveIntakeDraft(profiles: [], numbers: [], castingProfile: draft.profile, sessionID: store.intakeSessionID)
+        let restarted = OracleStore(vault: vault, bootstrapCredential: false)
+        let saved = try XCTUnwrap(restarted.intakeCastingProfile)
+        XCTAssertEqual(saved.currentPlace, gps.name)
+        XCTAssertEqual(saved.currentLatitude, gps.latitude)
+        XCTAssertEqual(saved.currentLongitude, gps.longitude)
+        XCTAssertEqual(saved.currentTimeZoneID, gps.timeZone)
+        XCTAssertNil(saved.currentDistrictCode) // GPS is not converted to a catalog representative point.
+        XCTAssertFalse(saved.unknownFields.contains(.currentLocation))
+        XCTAssertFalse(saved.declaredUnknownFields?.contains(.currentLocation) == true)
+        XCTAssertTrue(restarted.canConfirmIntake)
+        XCTAssertEqual(restarted.profile.currentLongitude, own.currentLongitude)
     }
 
     @MainActor func testCastingDraftAndTwoNumbersPersistWithoutPeopleOrChangingSavedSelf() throws {

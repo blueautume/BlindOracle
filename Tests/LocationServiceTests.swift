@@ -364,6 +364,80 @@ final class LocationServiceTests: XCTestCase {
         XCTAssertEqual(manager.requestCount, 1)
     }
 
+    @MainActor
+    func testLocationTimeoutStopsTheRequestAndRetryDoesNotInheritItsError() async throws {
+        let first = StubLocationManager(), second = StubLocationManager()
+        var managers = [first, second]
+        let service = LocationService(managerFactory: { managers.removeFirst() }, servicesEnabled: { true }, requestTimeout: 0.03)
+        service.request()
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertFalse(service.isLocating)
+        XCTAssertNotNil(service.message)
+        XCTAssertNil(service.place)
+        XCTAssertNil(first.delegate)
+        XCTAssertEqual(first.stopCount, 1)
+        service.request()
+        XCTAssertTrue(service.isLocating)
+        XCTAssertNil(service.message)
+        XCTAssertEqual(second.requestCount, 1)
+        service.cancel()
+        try await Task.sleep(for: .milliseconds(60))
+        XCTAssertNil(service.message)
+        XCTAssertNil(service.place)
+        XCTAssertFalse(service.isLocating)
+    }
+
+    @MainActor
+    func testWaitingForSystemPermissionIsNotMistakenForALocationTimeout() async throws {
+        let manager = StubLocationManager(); manager.simulatedAuthorization = .notDetermined
+        let service = LocationService(managerFactory: { manager }, servicesEnabled: { true }, requestTimeout: 0.02)
+        service.request()
+        try await Task.sleep(for: .milliseconds(60))
+        XCTAssertTrue(service.isLocating)
+        XCTAssertNil(service.message)
+        XCTAssertGreaterThan(manager.authorizationRequestCount, 0)
+        XCTAssertEqual(manager.requestCount, 0)
+        manager.simulatedAuthorization = .authorizedWhenInUse
+        service.locationManagerDidChangeAuthorization(manager)
+        XCTAssertEqual(manager.requestCount, 1)
+        service.cancel()
+    }
+
+    @MainActor
+    func testStaleFutureOrInvalidAccuracyCoordinatesCannotBecomeTheCastingPlace() {
+        for (offset, accuracy) in [(-301.0, 10.0), (301.0, 10.0), (0.0, Double.infinity)] {
+            let manager = StubLocationManager()
+            let service = LocationService(managerFactory: { manager }, servicesEnabled: { true })
+            service.request()
+            let value = CLLocation(coordinate: .init(latitude: 39.9, longitude: 116.4), altitude: 0,
+                                   horizontalAccuracy: accuracy, verticalAccuracy: -1,
+                                   timestamp: Date().addingTimeInterval(offset))
+            service.locationManager(manager, didUpdateLocations: [value])
+            XCTAssertFalse(service.isLocating)
+            XCTAssertNil(service.place)
+            XCTAssertNotNil(service.message)
+            XCTAssertNil(manager.delegate)
+        }
+    }
+
+    @MainActor
+    func testDeniedRestrictedOrDisabledLocationDoesNotRequestCoordinates() {
+        for status in [CLAuthorizationStatus.denied, .restricted] {
+            let manager = StubLocationManager(); manager.simulatedAuthorization = status
+            let service = LocationService(managerFactory: { manager }, servicesEnabled: { true })
+            service.request()
+            XCTAssertFalse(service.isLocating)
+            XCTAssertNotNil(service.message)
+            XCTAssertEqual(manager.requestCount, 0)
+            XCTAssertEqual(manager.authorizationRequestCount, 0)
+        }
+        let service = LocationService(managerFactory: { XCTFail("Disabled services must not create a manager"); return StubLocationManager() }, servicesEnabled: { false })
+        service.request()
+        XCTAssertFalse(service.isLocating)
+        XCTAssertNotNil(service.message)
+        XCTAssertNil(service.place)
+    }
+
     func testBirthLocationResolvesOnlyBirthUnknownsAndPreservesCurrentPlace() {
         var profile = OracleProfile()
         profile.birthDateText = "1990-01-02"; profile.birthTimeText = "08:30"
@@ -434,8 +508,11 @@ final class LocationServiceTests: XCTestCase {
 private final class StubLocationManager: CLLocationManager {
     var requestCount = 0
     var stopCount = 0
+    var authorizationRequestCount = 0
+    var simulatedAuthorization: CLAuthorizationStatus = .authorizedWhenInUse
 
-    override var authorizationStatus: CLAuthorizationStatus { .authorizedWhenInUse }
+    override var authorizationStatus: CLAuthorizationStatus { simulatedAuthorization }
+    override func requestWhenInUseAuthorization() { authorizationRequestCount += 1 }
     override func requestLocation() { requestCount += 1 }
     override func stopUpdatingLocation() { stopCount += 1 }
 }

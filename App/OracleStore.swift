@@ -666,7 +666,10 @@ struct CastingLocationDraft: Equatable, Sendable {
 
     private func castingProfileSnapshot(for plan: OraclePlan) -> OracleProfile {
         if let casting = plan.castingProfile { return casting }
-        let source = plan.baseRunID.flatMap { id in runs.first(where: { $0.id == id })?.input.profile } ?? profile
+        // A new question must acquire its own current place. A saved person's
+        // old location is not evidence of where this casting takes place.
+        // Supplements keep the original casting snapshot and physical instant.
+        let source = plan.baseRunID.flatMap { id in runs.first(where: { $0.id == id })?.input.profile } ?? OracleProfile(id: intakeSessionID)
         return CastingLocationDraft(profile: source).profile
     }
 
