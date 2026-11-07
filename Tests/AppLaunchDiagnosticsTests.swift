@@ -55,6 +55,10 @@ final class AppLaunchDiagnosticsTests: XCTestCase {
         let offline = DiagnosticTestTransport(results: [.retry])
         let reporter = QueuedAppLaunchDiagnosticReporter(transport: offline, fileURL: file, now: { clock.now })
         for _ in 0..<45 { await reporter.report(fixture()) }
+        let beforeFlush = await offline.events.count
+        XCTAssertEqual(beforeFlush, 0, "Recording diagnostics must never request network access")
+        await reporter.flush()
+        await reporter.flush()
         let count = await reporter.pendingCount()
         let calls = await offline.events.count
         XCTAssertEqual(count, 40); XCTAssertEqual(calls, 1, "An offline queue must back off rather than send on every new event")
@@ -93,6 +97,7 @@ final class AppLaunchDiagnosticsTests: XCTestCase {
         let reporter = QueuedAppLaunchDiagnosticReporter(transport: transport, fileURL: nil, now: { clock.now })
         let first = fixture(); let second = fixture()
         await reporter.report(first)
+        await reporter.flush()
         await reporter.report(second)
         clock.advance(61)
         await reporter.flush()
@@ -102,11 +107,208 @@ final class AppLaunchDiagnosticsTests: XCTestCase {
         XCTAssertEqual(sent.map(\.eventID), [first.eventID, first.eventID, second.eventID])
     }
 
+    func testPausedReporterPersistsAndDeduplicatesWithoutSendingDuringVerification() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("events.json")
+        let transport = DiagnosticTestTransport(results: [])
+        let reporter = QueuedAppLaunchDiagnosticReporter(transport: transport, fileURL: file, deliveryAllowed: false)
+        let event = fixture()
+        await reporter.report(event)
+        await reporter.report(event)
+        await reporter.flush()
+        let pausedCount = await reporter.pendingCount()
+        let pausedSent = await transport.events
+        XCTAssertEqual(pausedCount, 1)
+        XCTAssertTrue(pausedSent.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
+        let restored = QueuedAppLaunchDiagnosticReporter(transport: transport, fileURL: file, deliveryAllowed: false)
+        await restored.flush()
+        let restoredSent = await transport.events
+        XCTAssertTrue(restoredSent.isEmpty)
+        await restored.setDeliveryAllowed(true)
+        let delivered = await transport.events
+        let finalCount = await restored.pendingCount()
+        XCTAssertEqual(delivered.map(\.eventID), [event.eventID])
+        XCTAssertEqual(finalCount, 0)
+    }
+
+    func testPauseWaitsForInFlightDeliveryToStopAndCancellationDoesNotBackOff() async {
+        let started = expectation(description: "delivery started")
+        let cancelled = expectation(description: "delivery cancellation requested")
+        let transport = DiagnosticDrainTransport(started: started, cancelled: cancelled)
+        let reporter = QueuedAppLaunchDiagnosticReporter(transport: transport, fileURL: nil)
+        let first = fixture(); let second = fixture()
+        await reporter.report(first)
+        let flushing = Task { await reporter.flush() }
+        await fulfillment(of: [started], timeout: 2)
+        let completion = DiagnosticCompletion()
+        let pause = Task {
+            await reporter.setDeliveryAllowed(false)
+            await completion.finish()
+        }
+        await fulfillment(of: [cancelled], timeout: 2)
+        let stoppedTooSoon = await completion.finished
+        XCTAssertFalse(stoppedTooSoon, "Pausing must drain transport before StoreKit may begin")
+        await reporter.report(second)
+        let whileStopping = await transport.snapshot()
+        XCTAssertEqual(whileStopping.events.map(\.eventID), [first.eventID])
+        await transport.finishFirst(with: .cancelled)
+        await pause.value
+        await flushing.value
+        let stopped = await transport.snapshot()
+        let waitingCount = await reporter.pendingCount()
+        XCTAssertEqual(stopped.active, 0)
+        XCTAssertEqual(waitingCount, 2)
+        await reporter.flush()
+        let stillPaused = await transport.snapshot()
+        XCTAssertEqual(stillPaused.events.count, 1)
+        await reporter.setDeliveryAllowed(true)
+        let resumed = await transport.snapshot()
+        let finalCount = await reporter.pendingCount()
+        XCTAssertEqual(resumed.events.map(\.eventID), [first.eventID, first.eventID, second.eventID])
+        XCTAssertEqual(resumed.maximumActive, 1)
+        XCTAssertEqual(finalCount, 0, "Pause cancellation must not consume the network-error backoff")
+    }
+
+    func testResumeWhileCancelledDeliveryDrainsNeverOverlapsOrDropsLateAcknowledgement() async {
+        let started = expectation(description: "old delivery started")
+        let cancelled = expectation(description: "old delivery cancelling")
+        let transport = DiagnosticDrainTransport(started: started, cancelled: cancelled)
+        let reporter = QueuedAppLaunchDiagnosticReporter(transport: transport, fileURL: nil)
+        let events = [fixture(), fixture(), fixture()]
+        for event in events { await reporter.report(event) }
+        let flushing = Task { await reporter.flush() }
+        await fulfillment(of: [started], timeout: 2)
+        let pause = Task { await reporter.setDeliveryAllowed(false) }
+        await fulfillment(of: [cancelled], timeout: 2)
+        let resume = Task { await reporter.setDeliveryAllowed(true) }
+        // The old request may have been accepted before its cancellation reached
+        // the server. Its late result must not let that old flush continue.
+        await transport.finishFirst(with: .accepted)
+        await pause.value; await flushing.value; await resume.value
+        let sent = await transport.snapshot()
+        let count = await reporter.pendingCount()
+        XCTAssertEqual(sent.maximumActive, 1)
+        XCTAssertEqual(sent.active, 0)
+        XCTAssertEqual(sent.events.map(\.eventID), [events[0].eventID] + events.map(\.eventID))
+        XCTAssertEqual(count, 0)
+    }
+
+    func testCancelledDelayedEnableCannotReopenDeliveryAfterPause() async {
+        let transport = DiagnosticTestTransport(results: [])
+        let reporter = QueuedAppLaunchDiagnosticReporter(transport: transport, fileURL: nil, deliveryAllowed: false)
+        await reporter.report(fixture())
+        let staleEnable = Task {
+            try? await Task.sleep(nanoseconds: 30_000_000_000)
+            await reporter.setDeliveryAllowed(true)
+        }
+        staleEnable.cancel()
+        await staleEnable.value
+        await reporter.flush()
+        let sent = await transport.events
+        let count = await reporter.pendingCount()
+        XCTAssertTrue(sent.isEmpty)
+        XCTAssertEqual(count, 1)
+    }
+
+    func testPausingHTTPDeliveryCancelsURLSessionBeforeReturningToVerification() async {
+        for iteration in 0..<8 {
+            let started = expectation(description: "URLSession started \(iteration)")
+            let stopped = expectation(description: "URLSession stopped \(iteration)")
+            DiagnosticInFlightURLProtocol.observer.configure(started: started, stopped: stopped)
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [DiagnosticInFlightURLProtocol.self]
+            let reporter = QueuedAppLaunchDiagnosticReporter(
+                transport: AppLaunchDiagnosticHTTPTransport(configuration: configuration), fileURL: nil)
+            await reporter.report(fixture())
+            let flushing = Task { await reporter.flush() }
+            await fulfillment(of: [started], timeout: 2)
+            await reporter.setDeliveryAllowed(false)
+            await flushing.value
+            // URLSession's native completion acknowledges the completed task.
+            // URLProtocol.stopLoading is a separate asynchronous cleanup callback;
+            // Foundation does not promise it precedes the task's completion.
+            let nativeTask = DiagnosticInFlightURLProtocol.observer.originatingTask
+            XCTAssertNotNil(nativeTask, "Observe the actual URLSession task rather than its protocol cleanup callback")
+            XCTAssertEqual(nativeTask?.state, .completed,
+                "The delivery gate must wait for the native task to complete (iteration \(iteration))")
+            await fulfillment(of: [stopped], timeout: 2)
+            XCTAssertEqual(DiagnosticInFlightURLProtocol.observer.stopCount, 1)
+            let count = await reporter.pendingCount()
+            XCTAssertEqual(count, 1)
+            DiagnosticInFlightURLProtocol.observer.clear()
+        }
+    }
+
     private func fixture(chain: [AppLaunchDiagnosticError] = []) -> AppLaunchDiagnosticEvent {
         AppLaunchDiagnosticEvent(launchID: UUID(), attemptID: UUID(),
             metadata: AppLaunchDiagnosticMetadata(appVersion: "3.0.32", appBuild: "58", osVersion: "26.1"),
             phase: .current, outcome: .failed, attempt: 1, elapsed: 0.5, diagnosticCode: "env_network", errorChain: chain)
     }
+}
+
+private actor DiagnosticCompletion {
+    private(set) var finished = false
+    func finish() { finished = true }
+}
+
+private actor DiagnosticDrainTransport: AppLaunchDiagnosticTransport {
+    let started: XCTestExpectation
+    let cancelled: XCTestExpectation
+    private var firstContinuation: CheckedContinuation<AppLaunchDiagnosticDeliveryResult, Never>?
+    private var events: [AppLaunchDiagnosticEvent] = []
+    private var active = 0
+    private var maximumActive = 0
+    init(started: XCTestExpectation, cancelled: XCTestExpectation) {
+        self.started = started; self.cancelled = cancelled
+    }
+    func send(_ event: AppLaunchDiagnosticEvent) async -> AppLaunchDiagnosticDeliveryResult {
+        events.append(event); active += 1; maximumActive = max(maximumActive, active)
+        defer { active -= 1 }
+        guard events.count == 1 else { return .accepted }
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                firstContinuation = continuation
+                started.fulfill()
+            }
+        } onCancel: {
+            Task { await self.cancellationRequested() }
+        }
+    }
+    private func cancellationRequested() { cancelled.fulfill() }
+    func finishFirst(with result: AppLaunchDiagnosticDeliveryResult) {
+        firstContinuation?.resume(returning: result); firstContinuation = nil
+    }
+    func snapshot() -> (events: [AppLaunchDiagnosticEvent], active: Int, maximumActive: Int) {
+        (events, active, maximumActive)
+    }
+}
+
+private final class DiagnosticURLProtocolObserver: @unchecked Sendable {
+    private let lock = NSLock()
+    private var started: XCTestExpectation?
+    private var stopped: XCTestExpectation?
+    private var stops = 0
+    private var nativeTask: URLSessionTask?
+    func configure(started: XCTestExpectation, stopped: XCTestExpectation) {
+        lock.lock(); defer { lock.unlock() }
+        self.started = started; self.stopped = stopped; stops = 0; nativeTask = nil
+    }
+    func clear() { lock.lock(); defer { lock.unlock() }; started = nil; stopped = nil; nativeTask = nil }
+    func didStart(task: URLSessionTask?) { lock.lock(); nativeTask = task; let callback = started; lock.unlock(); callback?.fulfill() }
+    func didStop() { lock.lock(); stops += 1; let callback = stopped; lock.unlock(); callback?.fulfill() }
+    var stopCount: Int { lock.lock(); defer { lock.unlock() }; return stops }
+    var originatingTask: URLSessionTask? { lock.lock(); defer { lock.unlock() }; return nativeTask }
+}
+
+private final class DiagnosticInFlightURLProtocol: URLProtocol {
+    static let observer = DiagnosticURLProtocolObserver()
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canInit(with task: URLSessionTask) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() { Self.observer.didStart(task: task) }
+    override func stopLoading() { Self.observer.didStop() }
 }
 
 private actor DiagnosticTestTransport: AppLaunchDiagnosticTransport {

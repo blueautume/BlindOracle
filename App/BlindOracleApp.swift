@@ -31,9 +31,12 @@ import AuthenticationServices
             ZStack {
                 switch bootstrap.state {
                 case .resolving:
-                    AppServiceLaunchSurface(isRecovering: false) { }
+                    AppServiceLaunchSurface(isRecovering: false, isWaitingForNetwork: bootstrap.isWaitingForNetwork,
+                                            isWaitingForStoreKit: bootstrap.isWaitingForStoreKit) { }
                 case .recoveryRequired:
-                    AppServiceLaunchSurface(isRecovering: true, failure: bootstrap.failure, diagnosticText: bootstrap.diagnosticText) {
+                    AppServiceLaunchSurface(isRecovering: true, failure: bootstrap.failure, diagnosticText: bootstrap.diagnosticText,
+                                            isWaitingForNetwork: bootstrap.isWaitingForNetwork,
+                                            isWaitingForStoreKit: bootstrap.isWaitingForStoreKit) {
                         Task { await bootstrap.retryFromUser() }
                     }
                 case .ready(let context):
@@ -46,9 +49,19 @@ import AuthenticationServices
                 }
             }
             .preferredColorScheme(.light).tint(InkTheme.cinnabar)
-            .task { await bootstrap.resolve() }
+            .task {
+                await bootstrap.setApplicationActive(UIApplication.shared.applicationState == .active)
+                await bootstrap.resolve()
+            }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-                Task { await bootstrap.resumeDiagnostics() }
+                Task { @MainActor in
+                    await bootstrap.setApplicationActive(UIApplication.shared.applicationState == .active)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+                Task { @MainActor in
+                    await bootstrap.setApplicationActive(UIApplication.shared.applicationState == .active)
+                }
             }
         }
     }
@@ -58,6 +71,8 @@ private struct AppServiceLaunchSurface: View {
     let isRecovering: Bool
     var failure: AppServiceLaunchFailure? = nil
     var diagnosticText: String = ""
+    var isWaitingForNetwork = false
+    var isWaitingForStoreKit = false
     let retry: () -> Void
     @State private var diagnosticsCopied = false
     private var recoveryMessage: String {
@@ -90,6 +105,7 @@ private struct AppServiceLaunchSurface: View {
                         .font(.subheadline).foregroundStyle(InkTheme.secondary).multilineTextAlignment(.center)
                     Button(L10n.text("重新验证 App Store", "Verify with App Store"), action: retry)
                         .buttonStyle(InkPrimaryButton()).accessibilityIdentifier("retryServiceEnvironment")
+                        .disabled(isWaitingForStoreKit)
                     Text(L10n.text("系统可能要求验证你的 App Store 账号。", "You may be asked to authenticate your App Store account."))
                         .font(.caption).foregroundStyle(InkTheme.secondary).multilineTextAlignment(.center)
                     if let failure {
@@ -113,6 +129,18 @@ private struct AppServiceLaunchSurface: View {
                 } else {
                     ProgressView().controlSize(.small).tint(InkTheme.secondary)
                         .accessibilityLabel(L10n.text("正在准备应用", "Preparing the app"))
+                }
+                if isWaitingForStoreKit {
+                    Text(L10n.text("系统仍在结束上一次验证，请稍候。", "The system is still finishing the previous verification. Please wait."))
+                        .font(.footnote).foregroundStyle(InkTheme.secondary).multilineTextAlignment(.center)
+                } else if isWaitingForNetwork {
+                    Text(L10n.text("正在等待网络连接，允许联网后会自动继续验证。", "Waiting for a network connection. Verification will continue automatically when connected."))
+                        .font(.footnote).foregroundStyle(InkTheme.secondary).multilineTextAlignment(.center)
+                        .accessibilityIdentifier("serviceEnvironmentWaitingForNetwork")
+                    Button(L10n.text("前往系统设置", "Open Settings")) {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                    }
+                    .font(.footnote).accessibilityIdentifier("serviceEnvironmentSettings")
                 }
             }.padding(28).frame(maxWidth: 460).padding(.bottom, 30)
         }.accessibilityIdentifier(isRecovering ? "serviceEnvironmentRecovery" : "serviceEnvironmentLaunch")

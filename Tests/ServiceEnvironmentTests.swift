@@ -312,10 +312,16 @@ final class ServiceEnvironmentTests: XCTestCase {
         await coordinator.resolve()
         XCTAssertEqual(coordinator.state, .recoveryRequired)
         XCTAssertEqual(coordinator.failure?.kind, .timedOut)
+        XCTAssertTrue(coordinator.isWaitingForStoreKit)
         XCTAssertNil(storage.snapshot())
-        await provider.complete()
+        await coordinator.retryFromUser()
+        await coordinator.networkDidChange()
+        let beforeCompletion = await provider.requests
+        XCTAssertEqual(beforeCompletion, [.current], "UI timeout must not release the actual StoreKit call")
+        await provider.complete(evidence: .verified(environment: .production, bundleID: "wrong.application", jws: "late-proof"))
         for _ in 0..<10 { await Task.yield() }
         XCTAssertEqual(coordinator.state, .recoveryRequired)
+        XCTAssertEqual(coordinator.failure?.kind, .timedOut, "Late results must not silently rewrite the reported timeout")
         XCTAssertNil(storage.snapshot(), "A late result from the timed-out request must never freeze routing")
     }
 
@@ -329,6 +335,196 @@ final class ServiceEnvironmentTests: XCTestCase {
         XCTAssertEqual(first, [.current])
         await coordinator.resumeDiagnostics()
         guard case .ready = coordinator.state else { return XCTFail("Foreground may resume a cancelled task") }
+    }
+
+    @MainActor func testNetworkPermissionWaitFinishesBeforeAnyStoreKitAttemptAndContinuesAutomatically() async {
+        let readiness = ControlledLaunchReadiness()
+        let provider = ScriptedAppTransactionEvidence([.success(.verified(environment: .sandbox,
+            bundleID: "com.lihao.BlindOracle", jws: "verified-proof"))])
+        let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: AppServiceContextStore(),
+            bundleID: "com.lihao.BlindOracle", readiness: readiness)
+        let work = Task { await coordinator.resolve() }
+        await readiness.waitUntilStarted()
+        XCTAssertTrue(coordinator.isWaitingForNetwork)
+        let before = await provider.requests
+        XCTAssertEqual(before, [])
+        await readiness.complete(.success(()))
+        await work.value
+        guard case .ready(let context) = coordinator.state else { return XCTFail("Network completion must drive verification without a button") }
+        XCTAssertEqual(context.environment, .sandbox)
+        XCTAssertFalse(coordinator.isWaitingForNetwork)
+    }
+
+    @MainActor func testFailedReadinessStillAllowsOneFullyVerifiedCachedTransaction() async {
+        let readiness = ScriptedLaunchReadiness([.failure(URLError(.notConnectedToInternet))])
+        let provider = ScriptedAppTransactionEvidence([.success(.verified(environment: .sandbox,
+            bundleID: "com.lihao.BlindOracle", jws: "cached-apple-proof"))])
+        let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: AppServiceContextStore(),
+            bundleID: "com.lihao.BlindOracle", readiness: readiness)
+        await coordinator.resolve()
+        guard case .ready(let context) = coordinator.state else { return XCTFail("A verified cache must not depend on the health endpoint") }
+        XCTAssertEqual(context.environment, .sandbox)
+        let calls = await provider.requests
+        XCTAssertEqual(calls, [.current])
+    }
+
+    @MainActor func testFailedNetworkProbeDoesNotBurnThreeReadsAndNetworkHintRequiresFreshProbe() async {
+        let readiness = ScriptedLaunchReadiness([.failure(URLError(.notConnectedToInternet)), .success(())])
+        let provider = ScriptedAppTransactionEvidence([.failure(StoreKitError.unknown),
+            .success(.verified(environment: .production, bundleID: "com.lihao.BlindOracle", jws: "fresh-proof"))])
+        let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: AppServiceContextStore(),
+            bundleID: "com.lihao.BlindOracle", readiness: readiness)
+        await coordinator.resolve()
+        let before = await provider.requests
+        XCTAssertEqual(before, [.current])
+        XCTAssertEqual(coordinator.state, .recoveryRequired)
+        await coordinator.networkDidChange()
+        guard case .ready = coordinator.state else { return XCTFail("A later transport-ready probe should recover") }
+        let probes = await readiness.calls
+        XCTAssertEqual(probes, 2)
+        let after = await provider.requests
+        XCTAssertEqual(after, [.current, .recoveryRead])
+    }
+
+    @MainActor func testInternal21ManualFailureGetsExactlyOneVerifiedRecoveryRead() async {
+        let internalError = StoreKitError.systemError(NSError(domain: "SKInternalErrorDomain", code: 21))
+        XCTAssertFalse(AppServiceLaunchFailure.isTransient(internalError), "Do not label an undocumented code as a known network fault")
+        let provider = ScriptedAppTransactionEvidence([.failure(StoreKitError.notEntitled), .failure(internalError),
+            .success(.verified(environment: .sandbox, bundleID: "com.lihao.BlindOracle", jws: "recovered-proof"))])
+        let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: AppServiceContextStore(), bundleID: "com.lihao.BlindOracle")
+        await coordinator.resolve()
+        await coordinator.retryFromUser()
+        guard case .ready = coordinator.state else { return XCTFail("One shared recovery should be allowed after the manual internal error") }
+        let requests = await provider.requests
+        XCTAssertEqual(requests, [.current, .userInitiatedRefresh, .recoveryRead])
+    }
+
+    @MainActor func testClosingAuthenticationForegroundHintCannotOverrideExplicitUserCancellation() async {
+        let provider = ManualCancellationLaunchEvidence()
+        let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: AppServiceContextStore(), bundleID: "com.lihao.BlindOracle")
+        await coordinator.resolve()
+        let manual = Task { await coordinator.retryFromUser() }
+        await provider.waitForRefresh()
+        await coordinator.setApplicationActive(false)
+        await coordinator.setApplicationActive(true)
+        await provider.cancelRefresh()
+        await manual.value
+        await coordinator.networkDidChange()
+        await coordinator.setApplicationActive(true)
+        let requests = await provider.requests
+        XCTAssertEqual(requests, [.current, .userInitiatedRefresh])
+        XCTAssertEqual(coordinator.failure?.kind, .userCancelled)
+    }
+
+    @MainActor func testInactiveTimeDoesNotConsumeAutomaticDeadlineOrPermitBackgroundSDKCalls() async throws {
+        let provider = DelayedAppTransactionEvidence()
+        let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: AppServiceContextStore(),
+            bundleID: "com.lihao.BlindOracle", timing: AppServiceLaunchTiming(automaticRequestTimeout: 0.02,
+                automaticTotalTimeout: 0.04, retryDelays: []), initiallyActive: false)
+        let work = Task { await coordinator.resolve() }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        let before = await provider.requests
+        XCTAssertEqual(before, [])
+        await coordinator.setApplicationActive(true)
+        await provider.waitUntilStarted()
+        await coordinator.setApplicationActive(false)
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(coordinator.state, .resolving)
+        XCTAssertNil(coordinator.failure)
+        await provider.complete()
+        await coordinator.setApplicationActive(true)
+        await work.value
+        guard case .ready = coordinator.state else { return XCTFail("Inactive time must not exhaust the automatic deadline") }
+    }
+
+    @MainActor func testLateVerifiedResultIsDiscardedAndOnlyAFreshSerialReadCanSelectEnvironment() async {
+        let provider = LateThenFreshLaunchEvidence()
+        let storage = AppServiceContextStore()
+        let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: storage,
+            bundleID: "com.lihao.BlindOracle", timing: AppServiceLaunchTiming(automaticRequestTimeout: 0.01,
+                automaticTotalTimeout: 0.02, recoveryReadTimeout: 1, retryDelays: []))
+        await coordinator.resolve()
+        XCTAssertNil(storage.snapshot()); XCTAssertTrue(coordinator.isWaitingForStoreKit)
+        await coordinator.retryFromUser()
+        let busyRequests = await provider.requests
+        XCTAssertEqual(busyRequests, [.current])
+        await provider.completeFirst()
+        for _ in 0..<1000 {
+            if case .ready = coordinator.state { break }
+            await Task.yield()
+        }
+        guard case .ready(let context) = coordinator.state else { return XCTFail("Actual completion should permit a bounded fresh read") }
+        XCTAssertEqual(context.environment, .production)
+        XCTAssertEqual(context.appTransactionJWS, "fresh-production-proof")
+        let requests = await provider.requests
+        let maximum = await provider.maximumConcurrent
+        XCTAssertEqual(requests, [.current, .recoveryRead]); XCTAssertEqual(maximum, 1)
+    }
+
+    @MainActor func testLateUserCancellationStopsPendingForegroundAndNetworkRecovery() async {
+        let provider = ManualCancellationLaunchEvidence()
+        let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: AppServiceContextStore(),
+            bundleID: "com.lihao.BlindOracle", timing: AppServiceLaunchTiming(manualRefreshTimeout: 0.01, retryDelays: []))
+        await coordinator.resolve()
+        await coordinator.retryFromUser()
+        XCTAssertTrue(coordinator.isWaitingForStoreKit)
+        await coordinator.setApplicationActive(false)
+        await coordinator.setApplicationActive(true)
+        await provider.cancelRefresh()
+        for _ in 0..<30 { await Task.yield() }
+        await coordinator.networkDidChange()
+        await coordinator.setApplicationActive(true)
+        let requests = await provider.requests
+        XCTAssertEqual(requests, [.current, .userInitiatedRefresh])
+        XCTAssertFalse(coordinator.isWaitingForStoreKit)
+    }
+
+    @MainActor func testLateCancellationDuringDiagnosticPersistenceCannotBeOverwrittenByTimeoutCatch() async {
+        let provider = ManualCancellationLaunchEvidence()
+        let reporter = BlockingTimeoutLaunchReporter()
+        let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: AppServiceContextStore(),
+            bundleID: "com.lihao.BlindOracle", reporter: reporter,
+            timing: AppServiceLaunchTiming(manualRefreshTimeout: 0.01, retryDelays: []))
+        await coordinator.resolve()
+        let manual = Task { await coordinator.retryFromUser() }
+        await reporter.waitForTimeoutReport()
+        await provider.cancelRefresh()
+        for _ in 0..<30 { await Task.yield() }
+        await reporter.release()
+        await manual.value
+        await coordinator.setApplicationActive(false)
+        await coordinator.setApplicationActive(true)
+        await coordinator.networkDidChange()
+        let requests = await provider.requests
+        XCTAssertEqual(requests, [.current, .userInitiatedRefresh], "The late user-cancel veto must survive await report")
+    }
+
+    @MainActor func testLateWrongApplicationDuringPersistenceVetoesAllAutomaticRecovery() async {
+        let provider = DelayedAppTransactionEvidence()
+        let reporter = BlockingTimeoutLaunchReporter()
+        let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: AppServiceContextStore(),
+            bundleID: "com.lihao.BlindOracle", reporter: reporter,
+            timing: AppServiceLaunchTiming(automaticRequestTimeout: 0.01, automaticTotalTimeout: 0.02, retryDelays: []))
+        let work = Task { await coordinator.resolve() }
+        await reporter.waitForTimeoutReport()
+        await provider.complete(evidence: .verified(environment: .sandbox, bundleID: "wrong.application", jws: "untrusted-late-proof"))
+        for _ in 0..<30 { await Task.yield() }
+        await reporter.release()
+        await work.value
+        await coordinator.setApplicationActive(false)
+        await coordinator.setApplicationActive(true)
+        await coordinator.networkDidChange()
+        let requests = await provider.requests
+        XCTAssertEqual(requests, [.current])
+        XCTAssertEqual(coordinator.state, .recoveryRequired)
+    }
+
+    func testHTTPSReadinessAcceptsServerErrorsAsConnectivityWithoutUsingBusinessEnvironment() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [LaunchReadinessURLProtocol.self]
+        let readiness = HTTPSAppLaunchNetworkReadiness(configuration: configuration)
+        XCTAssertTrue(configuration.waitsForConnectivity)
+        try await readiness.check()
     }
 
     func testAppleLoginUsesCapturedRouteAndOnlyAutomaticSandboxSendsVerifiedAppTransactionJWS() async throws {
@@ -370,6 +566,98 @@ private actor CapturingLaunchReporter: AppLaunchDiagnosticReporting {
     }
 }
 
+private actor ControlledLaunchReadiness: AppLaunchNetworkReadinessProviding {
+    private var continuation: CheckedContinuation<Void, Error>?
+    private var startWaiter: CheckedContinuation<Void, Never>?
+    private var started = false
+    func check() async throws {
+        started = true; startWaiter?.resume(); startWaiter = nil
+        try await withCheckedThrowingContinuation { continuation = $0 }
+    }
+    func waitUntilStarted() async {
+        if started { return }
+        await withCheckedContinuation { startWaiter = $0 }
+    }
+    func complete(_ result: Result<Void, Error>) { continuation?.resume(with: result); continuation = nil }
+}
+
+private actor BlockingTimeoutLaunchReporter: AppLaunchDiagnosticReporting {
+    private var waiting = false
+    private var startedWaiter: CheckedContinuation<Void, Never>?
+    private var continuation: CheckedContinuation<Void, Never>?
+    func report(_ event: AppLaunchDiagnosticEvent) async {
+        guard event.diagnosticCode == "env_timeout" else { return }
+        waiting = true; startedWaiter?.resume(); startedWaiter = nil
+        await withCheckedContinuation { continuation = $0 }
+    }
+    func flush() async { }
+    func waitForTimeoutReport() async {
+        if waiting { return }
+        await withCheckedContinuation { startedWaiter = $0 }
+    }
+    func release() { continuation?.resume(); continuation = nil }
+}
+
+private actor ScriptedLaunchReadiness: AppLaunchNetworkReadinessProviding {
+    private var results: [Result<Void, Error>]
+    private(set) var calls = 0
+    init(_ results: [Result<Void, Error>]) { self.results = results }
+    func check() async throws {
+        calls += 1
+        if !results.isEmpty { try results.removeFirst().get() }
+    }
+}
+
+private actor ManualCancellationLaunchEvidence: AppTransactionEvidenceProviding {
+    private var continuation: CheckedContinuation<AppTransactionRouteEvidence, Error>?
+    private var refreshWaiter: CheckedContinuation<Void, Never>?
+    private var refreshing = false
+    private(set) var requests: [AppTransactionEvidenceRequest] = []
+    func evidence(for request: AppTransactionEvidenceRequest) async throws -> AppTransactionRouteEvidence {
+        requests.append(request)
+        guard request == .userInitiatedRefresh else { throw StoreKitError.notEntitled }
+        refreshing = true; refreshWaiter?.resume(); refreshWaiter = nil
+        return try await withCheckedThrowingContinuation { continuation = $0 }
+    }
+    func waitForRefresh() async {
+        if refreshing { return }
+        await withCheckedContinuation { refreshWaiter = $0 }
+    }
+    func cancelRefresh() { continuation?.resume(throwing: StoreKitError.userCancelled); continuation = nil }
+}
+
+private actor LateThenFreshLaunchEvidence: AppTransactionEvidenceProviding {
+    private var continuation: CheckedContinuation<AppTransactionRouteEvidence, Never>?
+    private(set) var requests: [AppTransactionEvidenceRequest] = []
+    private var concurrent = 0
+    private(set) var maximumConcurrent = 0
+    func evidence(for request: AppTransactionEvidenceRequest) async throws -> AppTransactionRouteEvidence {
+        requests.append(request); concurrent += 1; maximumConcurrent = max(maximumConcurrent, concurrent)
+        defer { concurrent -= 1 }
+        if requests.count == 1 { return await withCheckedContinuation { continuation = $0 } }
+        return .verified(environment: .production, bundleID: "com.lihao.BlindOracle", jws: "fresh-production-proof")
+    }
+    func completeFirst() {
+        continuation?.resume(returning: .verified(environment: .sandbox, bundleID: "com.lihao.BlindOracle", jws: "late-sandbox-proof"))
+        continuation = nil
+    }
+}
+
+private final class LaunchReadinessURLProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        XCTAssertEqual(request.url, HTTPSAppLaunchNetworkReadiness.endpoint)
+        XCTAssertEqual(request.httpMethod, "HEAD")
+        XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
+        let response = HTTPURLResponse(url: HTTPSAppLaunchNetworkReadiness.endpoint, statusCode: 503,
+            httpVersion: "HTTP/1.1", headerFields: [:])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() { }
+}
+
 private actor ScriptedAppTransactionEvidence: AppTransactionEvidenceProviding {
     private var results: [Result<AppTransactionRouteEvidence, Error>]
     private(set) var requests: [AppTransactionEvidenceRequest] = []
@@ -397,8 +685,8 @@ private actor DelayedAppTransactionEvidence: AppTransactionEvidenceProviding {
         guard !started else { return }
         await withCheckedContinuation { self.startContinuation = $0 }
     }
-    func complete() {
-        continuation?.resume(returning: .verified(environment: .production, bundleID: "com.lihao.BlindOracle", jws: "fixture-delayed-proof"))
+    func complete(evidence: AppTransactionRouteEvidence = .verified(environment: .production, bundleID: "com.lihao.BlindOracle", jws: "fixture-delayed-proof")) {
+        continuation?.resume(returning: evidence)
         continuation = nil
     }
 }
