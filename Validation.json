@@ -13,6 +13,7 @@
   "local_plugin_count": 10,
   "release_is_signed": true,
   "notes": [
+    "Usage row alignment update 3.0.30 / Build 56: Available allowance and Replenish allowance now share a regular 15-point font and a 44-point minimum label-row height. Gauge spacing is 8 points and card section spacing is 12 points. The existing usage-to-purchase UI regression passed and the rendered usage screenshot was visually inspected. Signed Release archive completed without compiler warnings. Earlier functional and purchase evidence retains its original version; the broader unit suite was not rerun for this style-only change.",
     "Account presentation update 3.0.29 / Build 55: simplified sign-in with a single-line Chinese title, bottom legal links and fixed progress/error slots; identity-only Data/account pages link to separate quiet usage. Purchase details show approved server Token quantity and StoreKit displayPrice before the fixed payment button; missing quantity, loading and unresolved purchases disable payment. 31 targeted unit tests passed, including bilingual rendered purchase screenshots; final screenshot and two UI regressions passed after fixing the purchase-footer accessibility identifier. Earlier account UI evidence and the small-screen login result are recorded separately below. Signed Release archive and distribution IPA passed candidate validation; runtime TestFlight availability is not inferred from export.",
     "Account safety and compact test marker 3.0.28 / Build 54: removed the full-width sandbox banner and placed a small Test badge beside the app title; Apple-verified routing and purchase notices remain intact. Account settings separates a full-width sign-out button from the quiet delete entry by at least 112 points. Permanent deletion requires an exact account-specific phrase, with a copy button and manual input/paste; warnings explain local records and purchased allowance cannot be recovered. After confirmed server deletion, a durable cleanup gate clears profiles, chats, readings, drafts, recovery copies, task snapshots and account purchase memory, and rejects late callbacks. Server failure does not erase local records; ordinary sign-out retains them; interrupted cleanup blocks access and sign-in until retried. Privacy text was updated to describe actual deletion and retained pseudonymous accounting records. All 673 non-live unit tests passed, including eight new deletion/late-callback regressions. Eight UI scenarios passed under the default route; three were repeated under the sandbox fixture, including badge position and the sandbox deletion notice. Original screenshots were visually reviewed. Signed Release archive completed with zero compiler warnings; exported distribution IPA passed signature, entitlement, privacy and credential checks. No real account was deleted and no live purchase, physical-device test or App Review submission occurred. TestFlight upload is recorded separately. Pre-existing string-catalog changes and untracked design explorations were preserved and excluded.",
     "Gateway failure descriptions 3.0.27 / Build 53: preserve validated server error codes across ordinary, streaming and task admission requests; describe daily limits, concurrency, retry protection, upstream failure, login and allowance failures using local Chinese/English strings. Arbitrary remote messages and invalid status/code pairs are not displayed. Error streams are capped at 8KB and cancelled. All 665 non-live unit tests passed, including seven new gateway tests. Signed Release archive: zero compiler warnings; exported IPA passed distribution, entitlement, privacy and credential checks. No new UI test was run because this changes descriptions in the existing notice view. Earlier UI evidence retains its actual version. Pre-existing string-catalog changes were preserved and not included. Backend per-account budgets and incident admin are independently tested/deployed under backend commit d0df54d.",
@@ -76,8 +77,8 @@
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "3.0.29",
-  "build": "55",
+  "version": "3.0.30",
+  "build": "56",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",
@@ -2165,5 +2166,19 @@
       "Design/IconExplorations/2026-11-02-xiazi-40/",
       "Design/IconExplorations/2026-11-02-xiazi-young-ink-3/"
     ]
+  },
+  "usage_row_alignment_3_0_30": {
+    "version": "3.0.30",
+    "build": "56",
+    "date": "2026-11-07",
+    "ui_result": "build/usage-row-alignment-3.0.30-56-ui.xcresult",
+    "ui_tests_passed": 1,
+    "screenshot": "build/usage-row-alignment-3.0.30-56-attachments/5ACCFE1E-1C83-4839-8422-BC0395347831.png",
+    "screenshot_visually_inspected": true,
+    "release_archive_log": "build/usage-row-alignment-3.0.30-56-archive.log",
+    "release_warning_count": 0,
+    "candidate_verification": "build/testflight-archive-3.0.30-56/candidate-verification.json",
+    "testflight_upload_verification": "build/testflight-archive-3.0.30-56/upload-verification.json",
+    "broader_unit_suite_rerun": false
   }
 }

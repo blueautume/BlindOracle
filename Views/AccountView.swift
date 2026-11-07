@@ -98,7 +98,7 @@ struct AccountUsageView: View {
                 VStack(alignment: .leading, spacing: 28) {
                     if account.user != nil {
                         PaperCard {
-                            VStack(alignment: .leading, spacing: 24) {
+                            VStack(alignment: .leading, spacing: 12) {
                                 AccountAllowanceGauge()
                                 Rectangle().fill(InkTheme.line.opacity(0.6)).frame(height: 0.5)
                                 Button { topUpPresented = true } label: {
@@ -109,7 +109,7 @@ struct AccountUsageView: View {
                                             .font(.system(size: 12, weight: .medium))
                                             .foregroundStyle(InkTheme.secondary)
                                     }
-                                    .font(.system(size: 16, design: .serif))
+                                    .font(.system(size: 15))
                                     .foregroundStyle(InkTheme.ink)
                                     .frame(minHeight: 44)
                                     .contentShape(Rectangle())
@@ -170,7 +170,7 @@ struct AccountAllowanceGauge: View {
     private var percent: Int? { account.wallet?.quota?.displayedPercent }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text(L10n.text("可用额度", "Available allowance"))
                     .foregroundStyle(InkTheme.ink)
@@ -180,7 +180,8 @@ struct AccountAllowanceGauge: View {
                     .foregroundStyle(InkTheme.secondary)
                     .accessibilityIdentifier("remainingQuotaPercentage")
             }
-            .font(.system(size: 14))
+            .font(.system(size: 15))
+            .frame(minHeight: 44)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("usageRemaining")
             ProgressView(value: Double(percent ?? 0), total: 100)
