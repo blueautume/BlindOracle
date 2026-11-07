@@ -378,13 +378,14 @@ enum ReadingContinuationPolicy {
         case .liuyao:
             guard original.castingDate == candidate.castingDate, oldPerson.currentTimeZoneID == newPerson.currentTimeZoneID,
                   original.manualLines == candidate.manualLines else { return false }
+            let sameStyle = (original.castingStyle?.lowercased() ?? "coins")
+                == (candidate.castingStyle?.lowercased() ?? "coins")
             if original.manualLines.isEmpty {
-                return original.seed == candidate.seed
-                    && (original.castingStyle?.lowercased() ?? "coins") == (candidate.castingStyle?.lowercased() ?? "coins")
+                return original.seed == candidate.seed && sameStyle
             }
             let oldInteracted = original.interactionResponses?.contains { $0.requestID == OracleMethod.liuyao.rawValue } == true
             let newInteracted = candidate.interactionResponses?.contains { $0.requestID == OracleMethod.liuyao.rawValue } == true
-            return oldInteracted == newInteracted && (!oldInteracted || (original.castingStyle == "yarrow") == (candidate.castingStyle == "yarrow"))
+            return oldInteracted == newInteracted && sameStyle
         }
     }
 

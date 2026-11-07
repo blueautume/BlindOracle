@@ -11,6 +11,13 @@ import AuthenticationServices
         if arguments.contains("--ui-testing-local"), arguments.contains("--ui-testing-reset-language") {
             UserDefaults.standard.removeObject(forKey: AppLanguage.preferenceKey)
         }
+        // A unit-test host shares the simulator's app domain with UI tests.
+        // Begin it with defaults rather than a preceding UI run's choices.
+        if AppServiceBootstrapPolicy.isUnitTestHost
+            || (arguments.contains("--ui-testing-local") && arguments.contains("--ui-testing-reset")) {
+            UserDefaults.standard.removeObject(forKey: CastingMethodPreferences.meihuaKey)
+            UserDefaults.standard.removeObject(forKey: CastingMethodPreferences.liuyaoKey)
+        }
         #endif
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()

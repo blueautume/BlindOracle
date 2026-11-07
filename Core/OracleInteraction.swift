@@ -1,5 +1,58 @@
 import Foundation
 
+enum MeihuaCastingMode: String, Codable, CaseIterable, Sendable {
+    case time, twoNumbers, threeNumbers
+
+    var title: String {
+        switch self {
+        case .time: L10n.text("时间起卦", "Time casting")
+        case .twoNumbers: L10n.text("双数起卦", "Two-number casting")
+        case .threeNumbers: L10n.text("三数起卦", "Three-number casting")
+        }
+    }
+    var summary: String {
+        switch self {
+        case .time: L10n.text("按起卦地点与当前时刻起卦，无需报数。", "Cast from the current time and casting place. No numbers are needed.")
+        case .twoNumbers: L10n.text("留下两个数，并结合起卦地的真太阳时辰定动爻。", "Choose two numbers. The casting place’s apparent-solar hour also determines the changing line.")
+        case .threeNumbers: L10n.text("留下三个数，分别确定上下卦与动爻，无需地点。", "Choose three numbers for the upper trigram, lower trigram and changing line. No location is needed.")
+        }
+    }
+    var numberCount: Int? {
+        switch self { case .time: nil; case .twoNumbers: 2; case .threeNumbers: 3 }
+    }
+}
+
+enum LiuyaoCastingMode: String, Codable, CaseIterable, Sendable {
+    case coins, yarrow, manual
+
+    var title: String {
+        switch self {
+        case .coins: L10n.text("铜钱模拟", "Coin simulation")
+        case .yarrow: L10n.text("蓍草模拟", "Yarrow simulation")
+        case .manual: L10n.text("实体铜钱录入", "Enter physical coin tosses")
+        }
+    }
+    var summary: String {
+        switch self {
+        case .coins: L10n.text("每次点击模拟投下三枚铜钱，六次成卦。", "Tap to simulate tossing three coins. Six tosses form a hexagram.")
+        case .yarrow: L10n.text("每次点击模拟蓍草三变，六次成卦，无需准备蓍草。", "Each tap simulates three yarrow changes. Six taps form a hexagram. No stalks are needed.")
+        case .manual: L10n.text("亲自投掷三枚实体铜钱六次，依次录入结果，可随时纠正。", "Toss three physical coins six times and enter each result. You can correct any entered line.")
+        }
+    }
+}
+
+enum CastingMethodPreferences {
+    static let meihuaKey = "oracle.casting.meihua"
+    static let liuyaoKey = "oracle.casting.liuyao"
+
+    static func meihua(in defaults: UserDefaults = .standard) -> MeihuaCastingMode {
+        defaults.string(forKey: meihuaKey).flatMap(MeihuaCastingMode.init(rawValue:)) ?? .time
+    }
+    static func liuyao(in defaults: UserDefaults = .standard) -> LiuyaoCastingMode {
+        defaults.string(forKey: liuyaoKey).flatMap(LiuyaoCastingMode.init(rawValue:)) ?? .coins
+    }
+}
+
 /// UI operations are a fixed, local catalog. A model can request these operations,
 /// but cannot supply executable UI, card identities, coin outcomes or random seeds.
 enum OracleInteractionKind: String, Codable, Sendable {
@@ -19,14 +72,23 @@ struct OracleInteractionRequest: Codable, Identifiable, Equatable, Sendable {
     var kind: OracleInteractionKind
     var prompt: String
     var tarotClarification: TarotClarificationRequest?
+    var numberCount: Int? = nil
+    var liuyaoCastingMode: LiuyaoCastingMode? = nil
+    var requiredNumberCount: Int { numberCount == 2 ? 2 : 3 }
     var id: String {
         guard kind == .tarot, let tarotClarification else { return method.rawValue }
         return "\(method.rawValue):\(tarotClarification.id.uuidString)"
     }
-    var title: String { kind == .tarot && tarotClarification != nil ? L10n.text("抽取澄清牌", "Draw a Clarifying Card") : kind.title }
+    var title: String {
+        if kind == .tarot, tarotClarification != nil { return L10n.text("抽取澄清牌", "Draw a Clarifying Card") }
+        if kind == .numbers { return requiredNumberCount == 2 ? L10n.text("随心留数", "Choose Two Numbers") : kind.title }
+        if kind == .coins, liuyaoCastingMode == .manual { return L10n.text("录入实体投掷", "Enter physical tosses") }
+        if kind == .coins, liuyaoCastingMode == .yarrow { return L10n.text("蓍草成卦", "Cast with yarrow stalks") }
+        return kind.title
+    }
     var displayPrompt: String {
-        let defaultChinese = Self.defaultPrompt(for: kind, clarifying: tarotClarification != nil, language: .simplifiedChinese)
-        let defaultEnglish = Self.defaultPrompt(for: kind, clarifying: tarotClarification != nil, language: .english)
+        let defaultChinese = Self.defaultPrompt(for: kind, clarifying: tarotClarification != nil, numberCount: requiredNumberCount, liuyaoMode: liuyaoCastingMode, language: .simplifiedChinese)
+        let defaultEnglish = Self.defaultPrompt(for: kind, clarifying: tarotClarification != nil, numberCount: requiredNumberCount, liuyaoMode: liuyaoCastingMode, language: .english)
         if prompt.isEmpty || prompt == defaultChinese || prompt == defaultEnglish ||
             (AppLanguage.current.isEnglish && prompt.range(of: #"^\s*\p{Han}"#, options: .regularExpression) != nil) {
             return AppLanguage.current.isEnglish ? defaultEnglish : defaultChinese
@@ -39,17 +101,25 @@ struct OracleInteractionRequest: Codable, Identifiable, Equatable, Sendable {
     }
     var tarotPositionTitles: [String] { tarotPositions.map(TarotDeck.localizedTitle(for:)) }
 
-    init(method: OracleMethod, kind: OracleInteractionKind, prompt: String = "", tarotClarification: TarotClarificationRequest? = nil) {
+    init(method: OracleMethod, kind: OracleInteractionKind, prompt: String = "", tarotClarification: TarotClarificationRequest? = nil,
+         numberCount: Int? = nil, liuyaoCastingMode: LiuyaoCastingMode? = nil) {
         self.method = method; self.kind = kind
         self.tarotClarification = tarotClarification
+        self.numberCount = numberCount; self.liuyaoCastingMode = liuyaoCastingMode
         let supplied = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.prompt = supplied.isEmpty ? Self.defaultPrompt(for: kind, clarifying: tarotClarification != nil, language: .current) : String(supplied.prefix(180))
+        self.prompt = supplied.isEmpty ? Self.defaultPrompt(for: kind, clarifying: tarotClarification != nil, numberCount: numberCount == 2 ? 2 : 3, liuyaoMode: liuyaoCastingMode, language: .current) : String(supplied.prefix(180))
     }
 
-    private static func defaultPrompt(for kind: OracleInteractionKind, clarifying: Bool, language: AppLanguage) -> String {
+    private static func defaultPrompt(for kind: OracleInteractionKind, clarifying: Bool, numberCount: Int, liuyaoMode: LiuyaoCastingMode?, language: AppLanguage) -> String {
         switch kind {
-        case .numbers: L10n.text("凭着此刻的心意，留下三个数。", "Enter the first three numbers that come to mind.", language: language)
-        case .coins: L10n.text("心中留一问，依次留下六爻。", "Keep your question in mind as you cast each of the six lines.", language: language)
+        case .numbers:
+            numberCount == 2
+                ? L10n.text("凭着此刻的心意，留下两个数。", "Enter the first two numbers that come to mind.", language: language)
+                : L10n.text("凭着此刻的心意，留下三个数。", "Enter the first three numbers that come to mind.", language: language)
+        case .coins:
+            liuyaoMode == .manual
+                ? L10n.text("投下手中的三枚铜钱，依次录入六次结果。", "Toss your three physical coins and enter each of the six results.", language: language)
+                : L10n.text("心中留一问，依次留下六爻。", "Keep your question in mind as you cast each of the six lines.", language: language)
         case .tarot:
             clarifying
                 ? L10n.text("围绕这个方向，从余下的牌中选出一张澄清牌。", "Keep the focus in mind and choose one card from the remaining deck.", language: language)
@@ -81,8 +151,8 @@ enum NumberInteractionDraft {
         return value
     }
 
-    static func values(in texts: [String]) -> [Int]? {
-        guard texts.count == count else { return nil }
+    static func values(in texts: [String], count: Int = 3) -> [Int]? {
+        guard [2, 3].contains(count), texts.count == count else { return nil }
         var values: [Int] = []
         for text in texts {
             guard let value = value(in: text) else { return nil }
@@ -91,7 +161,7 @@ enum NumberInteractionDraft {
         return values
     }
 
-    static func texts(for response: OracleInteractionResponse) -> [String] {
+    static func texts(for response: OracleInteractionResponse, count: Int = 3) -> [String] {
         if let texts = response.numberTexts, texts.count == count { return texts }
         return (0..<count).map { response.numbers.indices.contains($0) ? String(response.numbers[$0]) : "" }
     }
@@ -173,7 +243,9 @@ struct OracleInteractionSession: Codable, Identifiable, Sendable {
             input.numbers = response.numbers
             input.profile.unknownFields.remove(.numbers)
             input.profile.declaredUnknownFields?.remove(.numbers)
-        case .coins: input.manualLines = response.lines
+        case .coins:
+            input.manualLines = response.lines
+            if let mode = request.liuyaoCastingMode { input.castingStyle = mode.rawValue }
         case .tarot:
             if let clarification = request.tarotClarification {
                 guard let draw = response.tarotDraws.first else { return false }
@@ -204,13 +276,27 @@ enum OracleInteractionPolicy {
         var seen = Set<OracleMethod>()
         var requests = (plan.interactions ?? []).filter {
             $0.tarotClarification == nil && plan.methods.contains($0.method) && kind(for: $0.method) == $0.kind && seen.insert($0.method).inserted
-        }.map { OracleInteractionRequest(method: $0.method, kind: $0.kind, prompt: $0.prompt) }
+        }.map {
+            OracleInteractionRequest(method: $0.method, kind: $0.kind,
+                prompt: $0.method == .liuyao && plan.liuyaoCastingMode != nil ? "" : $0.prompt,
+                liuyaoCastingMode: $0.method == .liuyao ? plan.liuyaoCastingMode : nil)
+        }
         // These methods require actual user interaction. Older/malformed plans
         // cannot bypass it by omitting a request from the model's response.
         for method in plan.methods where method == .tarot || method == .liuyao {
             if seen.insert(method).inserted, let kind = kind(for: method) {
-                requests.append(OracleInteractionRequest(method: method, kind: kind))
+                requests.append(OracleInteractionRequest(method: method, kind: kind,
+                    liuyaoCastingMode: method == .liuyao ? plan.liuyaoCastingMode : nil))
             }
+        }
+        if plan.methods.contains(.meihua), let mode = plan.meihuaCastingMode {
+            requests.removeAll { $0.method == .meihua }
+            if let count = mode.numberCount,
+               numbers.count != count || !numbers.allSatisfy({ (1...999).contains($0) }) {
+                // Keep the established short number step before six casts.
+                requests.insert(OracleInteractionRequest(method: .meihua, kind: .numbers, numberCount: count), at: 0)
+            }
+            return requests
         }
         if plan.methods.contains(.meihua), plan.requiredFields.contains(.numbers), seen.insert(.meihua).inserted {
             requests.append(OracleInteractionRequest(method: .meihua, kind: .numbers))
@@ -230,17 +316,18 @@ enum OracleInteractionPolicy {
         if let clarification = request.tarotClarification, request.kind != .tarot || !clarification.isValid { return false }
         switch request.kind {
         case .numbers:
+            let count = request.requiredNumberCount
             guard response.lines.isEmpty, response.tarotDraws.isEmpty, response.revealedCount == 0,
-                  response.numbers.count <= 3, response.numbers.allSatisfy({ (1...999).contains($0) }) else { return false }
+                  response.numbers.count <= count, response.numbers.allSatisfy({ (1...999).contains($0) }) else { return false }
             if let texts = response.numberTexts {
-                guard texts.count == NumberInteractionDraft.count,
+                guard texts.count == count,
                       texts.allSatisfy({ $0.count <= NumberInteractionDraft.maximumTextLength }) else { return false }
-                let values = NumberInteractionDraft.values(in: texts)
+                let values = NumberInteractionDraft.values(in: texts, count: count)
                 // Invalid or incomplete edits are resumable, but never carry a
                 // stale previously-generated triple into a calculation.
                 return response.numbers == (values ?? []) && (!complete || values != nil)
             }
-            return !complete || response.numbers.count == 3
+            return !complete || response.numbers.count == count
         case .coins:
             return response.numberTexts == nil && response.numbers.isEmpty && response.tarotDraws.isEmpty && response.revealedCount == 0
                 && (complete ? response.lines.count == 6 : response.lines.count <= 6)

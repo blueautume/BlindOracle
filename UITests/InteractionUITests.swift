@@ -300,6 +300,7 @@ final class InteractionUITests: XCTestCase {
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-location-fixture",
                                "--ui-testing-reset-language", "-oracle.appLanguage", "zh-Hans"]
         app.launch()
+        selectCastingMode(method: "meihua", mode: "threeNumbers", in: app)
         send("只用梅花和六爻报数，看看这次出行如何安排", in: app)
         XCTAssertTrue(app.buttons["confirmIntake"].waitForExistence(timeout: 15))
         XCTAssertEqual(app.scrollViews.matching(identifier: "intakeFormScroll").count, 1)
@@ -343,8 +344,10 @@ final class InteractionUITests: XCTestCase {
 
     @MainActor func testYarrowInteractionUsesThreeChangesAndCompletesSixLines() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-reset-language",
+                               "-oracle.appLanguage", "zh-Hans"]
         app.launch()
+        selectCastingMode(method: "liuyao", mode: "yarrow", in: app)
         send("用蓍草看看明天这件事如何推进", in: app)
         confirmIntake(in: app)
         let cast = app.buttons["castCoins"]
@@ -366,6 +369,86 @@ final class InteractionUITests: XCTestCase {
         let castingStyle = app.descendants(matching: .any).matching(identifier: "resultRow-liuyao-0").firstMatch
         XCTAssertTrue(castingStyle.waitForExistence(timeout: 10))
         XCTAssertTrue(castingStyle.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "蓍草")).firstMatch.exists)
+    }
+
+    @MainActor func testManualLiuyaoRequiresSixResultsAndRestoresAnEditedIncompleteDraft() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-reset-language",
+                               "-oracle.appLanguage", "zh-Hans"]
+        app.launch()
+        selectCastingMode(method: "liuyao", mode: "manual", in: app)
+        send("只用六爻看看这次出行如何安排", in: app)
+        confirmIntake(in: app)
+        let progress = app.staticTexts["manualLineProgress"]
+        XCTAssertTrue(progress.waitForExistence(timeout: 10))
+        XCTAssertTrue(progress.label.contains("0 / 6"))
+        XCTAssertFalse(app.buttons["castCoins"].exists)
+        XCTAssertFalse(app.buttons["generateNumbers"].exists)
+        XCTAssertFalse(app.buttons["manualLine-1-6"].isEnabled)
+        let confirm = app.buttons["confirmInteraction"]
+        XCTAssertFalse(confirm.isEnabled)
+        let interactionScroll = app.scrollViews["interactionScroll"]
+        let navigation = app.navigationBars.containing(.button, identifier: "deferInteraction").firstMatch
+        @MainActor func revealManualOption(_ option: XCUIElement, scrollingUp: Bool) {
+            XCTAssertTrue(interactionScroll.waitForExistence(timeout: 10))
+            XCTAssertTrue(navigation.exists)
+            XCTAssertTrue(option.waitForExistence(timeout: 5))
+            @MainActor func fitsAboveFooter() -> Bool {
+                let frame = option.frame
+                let top = max(interactionScroll.frame.minY, navigation.frame.maxY) + 8
+                let bottom = min(interactionScroll.frame.maxY, confirm.frame.minY) - 8
+                return frame.height > 0 && frame.minY >= top && frame.maxY <= bottom && option.isHittable
+            }
+            for _ in 0..<12 {
+                if fitsAboveFooter() { break }
+                if scrollingUp { interactionScroll.swipeUp() }
+                else { interactionScroll.swipeDown() }
+            }
+            XCTAssertTrue(fitsAboveFooter(),
+                          "Manual option must be fully above the fixed confirmation footer before tapping. "
+                          + "Option: \(option.frame), navigation: \(navigation.frame), confirm: \(confirm.frame).\n\(app.debugDescription)")
+        }
+        for (index, value) in [6, 7, 8, 9, 7].enumerated() {
+            let option = app.buttons["manualLine-\(index)-\(value)"]
+            revealManualOption(option, scrollingUp: true)
+            option.tap()
+            XCTAssertTrue(option.isSelected, "Failed to select \(option.identifier).\n\(app.debugDescription)")
+            XCTAssertFalse(confirm.isEnabled)
+        }
+        let correction = app.buttons["manualLine-0-9"]
+        revealManualOption(correction, scrollingUp: false)
+        correction.tap()
+        XCTAssertTrue(correction.isSelected)
+        XCTAssertTrue(progress.label.contains("5 / 6"))
+        XCTAssertFalse(confirm.isEnabled)
+        capture("manual-liuyao-five-lines-with-correction", in: app)
+        app.buttons["deferInteraction"].tap()
+
+        app.terminate()
+        app.launchArguments.removeAll { $0 == "--ui-testing-reset" }
+        app.launch()
+        let resume = app.buttons["interactionCard"]
+        XCTAssertTrue(resume.waitForExistence(timeout: 15)); resume.tap()
+        XCTAssertTrue(progress.waitForExistence(timeout: 10))
+        XCTAssertTrue(progress.label.contains("5 / 6"))
+        XCTAssertTrue(app.buttons["manualLine-0-9"].isSelected)
+        XCTAssertFalse(app.buttons["manualLine-0-6"].isSelected)
+        XCTAssertFalse(confirm.isEnabled)
+        XCTAssertFalse(app.buttons["castCoins"].exists)
+        let finalLine = app.buttons["manualLine-5-8"]
+        revealManualOption(finalLine, scrollingUp: true)
+        finalLine.tap()
+        waitUntilEnabled(confirm)
+        capture("manual-liuyao-six-entered-lines", in: app)
+        confirm.tap()
+        openResults(in: app)
+        let method = app.descendants(matching: .any).matching(identifier: "resultRow-liuyao-0").firstMatch
+        XCTAssertTrue(method.waitForExistence(timeout: 10))
+        XCTAssertTrue(method.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "实体铜钱投掷录入")).firstMatch.exists)
+        let values = app.descendants(matching: .any).matching(identifier: "resultRow-liuyao-1").firstMatch
+        XCTAssertTrue(values.staticTexts["9 7 8 9 7 8"].exists)
+        capture("manual-liuyao-exact-entered-results", in: app)
     }
 
     @MainActor private func send(_ question: String, in app: XCUIApplication) {

@@ -1,6 +1,42 @@
 import XCTest
 
 final class MeihuaNumbersUITests: XCTestCase {
+    @MainActor func testTwoNumberPreferenceCollectsExactlyTwoNumbersBeforeCalculating() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-location-fixture",
+                               "--ui-testing-reset-language", "-oracle.appLanguage", "zh-Hans"]
+        app.launch()
+        selectCastingMode(method: "meihua", mode: "twoNumbers", in: app)
+        let question = app.textFields["questionInput"]
+        question.tap(); question.typeText("只用梅花看看这次出行如何安排")
+        app.buttons["sendQuestion"].tap()
+        let intake = app.buttons["confirmIntake"]
+        XCTAssertTrue(intake.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["castingLocationButton"].exists)
+        XCTAssertFalse(app.textFields["intakeNumber-0"].exists)
+        waitUntilEnabled(intake); intake.tap()
+
+        let first = app.textFields["interactionNumber-0"]
+        let second = app.textFields["interactionNumber-1"]
+        XCTAssertTrue(first.waitForExistence(timeout: 15))
+        XCTAssertTrue(second.exists)
+        XCTAssertFalse(app.textFields["interactionNumber-2"].exists)
+        let confirm = app.buttons["confirmInteraction"]
+        XCTAssertFalse(confirm.isEnabled)
+        first.tap(); first.typeText("17")
+        XCTAssertFalse(confirm.isEnabled)
+        second.tap(); second.typeText("29")
+        dismissNumberKeyboard(in: app)
+        waitUntilEnabled(confirm)
+        capture("two-number-meihua-ready", in: app)
+        confirm.tap()
+        let ready = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "这次推演已完成")).firstMatch
+        XCTAssertTrue(ready.waitForExistence(timeout: 30))
+        XCTAssertFalse(first.exists)
+        XCTAssertFalse(app.buttons["castCoins"].exists)
+    }
+
     @MainActor func testChineseRandomNumbersCanBeEditedAndResumeWithoutReplacingTheDraft() throws {
         try verifyNumberEntry(language: "zh-Hans")
     }
@@ -16,6 +52,7 @@ final class MeihuaNumbersUITests: XCTestCase {
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-location-fixture",
                                "--ui-testing-reset-language", "-oracle.appLanguage", language]
         app.launch()
+        selectCastingMode(method: "meihua", mode: "threeNumbers", in: app, language: language)
         let question = app.textFields["questionInput"]
         XCTAssertTrue(question.waitForExistence(timeout: 15)); question.tap()
         question.typeText(english ? "Use only Meihua with three numbers to explore this trip." : "只用梅花报数，看看这次出行如何安排")

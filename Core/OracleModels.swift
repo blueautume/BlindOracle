@@ -234,6 +234,9 @@ struct OraclePlan: Codable, Sendable {
     var draftNumbers: [Int]? = nil
     /// The casting place belongs to the question, independently of its people.
     var castingProfile: OracleProfile? = nil
+    /// Local choices frozen when starting a question; nil preserves legacy plans.
+    var meihuaCastingMode: MeihuaCastingMode? = nil
+    var liuyaoCastingMode: LiuyaoCastingMode? = nil
     /// A pending supplement refers to a saved reading, never to a new random cast.
     var baseRunID: UUID? = nil
     var followUpQuestion: String? = nil

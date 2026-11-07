@@ -5,20 +5,23 @@ struct LiuyaoPlugin: OraclePlugin {
         NativeCalendar.descriptor(.liuyao, summary: L10n.text("三枚铜钱、大衍蓍草等价概率法或手动六爻起卦，按京房八宫纳甲排盘并查询本地周易卦爻辞。", "Cast with three coins, an equivalent yarrow-stalk simulation or six manually entered lines. The chart uses Jing Fang's Eight Palaces and Na Jia system and includes I Ching passages."),
             optional: [.currentLocation], questions: [L10n.text("具体事情", "Specific situations"), L10n.text("进退选择", "Decisions"), L10n.text("协作关系", "Working relationships"), L10n.text("近期变化", "Near-term changes")],
             output: L10n.text("六个爻值、本卦/变卦、八宫、世应、逐爻纳甲/六亲/六神、月破日冲/旬空、本卦卦辞、全部动爻爻辞及变卦卦辞。", "Six line values, original and resulting hexagrams, Eight Palaces, host and guest lines, line correspondences, clashes, void branches and relevant I Ching passages."),
-            limitations: [L10n.text("castingStyle=nil/coins为铜钱法，6/7/8/9概率1/8、3/8、3/8、1/8；castingStyle=yarrow为大衍三变等价抽样，概率1/16、5/16、7/16、3/16。", "For lines 6, 7, 8 and 9, the coin method uses probabilities of 1/8, 3/8, 3/8 and 1/8. Yarrow simulation uses 1/16, 5/16, 7/16 and 3/16."), L10n.text("蓍草模拟按经典三变归奇的概率类抽样，不伪造逐根蓍草分堆。手动6爻优先于模拟。", "Yarrow simulation samples the traditional three-step outcome classes. Manual line values take precedence."), L10n.text("六爻值按初爻到上爻排列；只接受6、7、8、9。", "Lines are entered from bottom to top. The valid values are 6, 7, 8 and 9."), L10n.text("本版不自动选择用神，不做伏神、进退神与应期的完整断课。", "The method does not select a focus line or provide a full reading of hidden lines, advancing and retreating signs, or timing.")], source: L10n.text("BlindOracle Swift铜钱/大衍概率与京房纳甲；kentang2017/ichingshifa MIT卦爻辞录文；LunarSwift MIT历法", "BlindOracle Swift coin and yarrow probabilities and Jing Fang Na Jia · kentang2017/ichingshifa (MIT) · LunarSwift (MIT)"), license: L10n.text("原创Swift；LunarSwift MIT；卦爻辞上游MIT样式许可见ThirdParty-Iching.txt", "Original Swift implementation · LunarSwift (MIT). See ThirdParty-Iching.txt for the I Ching source license."))
+            limitations: [L10n.text("铜钱法的6/7/8/9概率为1/8、3/8、3/8、1/8；蓍草模拟按大衍三变等价抽样，概率为1/16、5/16、7/16、3/16。实体录入采用用户实际结果，不自动生成。", "For lines 6, 7, 8 and 9, the coin method uses probabilities of 1/8, 3/8, 3/8 and 1/8. Yarrow simulation uses 1/16, 5/16, 7/16 and 3/16. Manual entry uses your physical toss results and never generates them."), L10n.text("蓍草模拟按经典三变归奇的概率类抽样，不伪造逐根蓍草分堆。手动6爻优先于模拟。", "Yarrow simulation samples the traditional three-step outcome classes. Manual line values take precedence."), L10n.text("六爻值按初爻到上爻排列；只接受6、7、8、9。", "Lines are entered from bottom to top. The valid values are 6, 7, 8 and 9."), L10n.text("本版不自动选择用神，不做伏神、进退神与应期的完整断课。", "The method does not select a focus line or provide a full reading of hidden lines, advancing and retreating signs, or timing.")], source: L10n.text("BlindOracle Swift铜钱/大衍概率与京房纳甲；kentang2017/ichingshifa MIT卦爻辞录文；LunarSwift MIT历法", "BlindOracle Swift coin and yarrow probabilities and Jing Fang Na Jia · kentang2017/ichingshifa (MIT) · LunarSwift (MIT)"), license: L10n.text("原创Swift；LunarSwift MIT；卦爻辞上游MIT样式许可见ThirdParty-Iching.txt", "Original Swift implementation · LunarSwift (MIT). See ThirdParty-Iching.txt for the I Ching source license."))
     }
     func calculate(_ input: OracleInput) async throws -> OracleResult {
         guard let solar = NativeCalendar.castingSolar(input) else { return NativeCalendar.unavailable(.liuyao, L10n.text("需要有效起卦时间与时区，当前支持1900–2100年。", "A valid casting time and time zone in 1900–2100 are required.")) }
         let lunar = solar.lunar
         let values: [Int]
         let style: String
+        let physicalEntry = input.castingStyle?.lowercased() == "manual"
         var yarrowTrace: [String] = []
         if !input.manualLines.isEmpty {
             guard input.manualLines.count == 6, input.manualLines.allSatisfy({ (6...9).contains($0) }) else {
                 return NativeCalendar.unavailable(.liuyao, L10n.text("手动爻值必须是6个6/7/8/9，自初爻至上爻。", "Enter six values from bottom to top. Each value must be 6, 7, 8 or 9."))
             }
             values = input.manualLines
-            if input.interactionResponses?.contains(where: { $0.requestID == OracleMethod.liuyao.rawValue }) == true {
+            if physicalEntry {
+                style = L10n.text("用户实体铜钱投掷录入 · 初爻至上爻", "User-entered physical coin tosses · bottom to top")
+            } else if input.interactionResponses?.contains(where: { $0.requestID == OracleMethod.liuyao.rawValue }) == true {
                 style = input.castingStyle == "yarrow" ? L10n.text("用户逐爻归奇 · 本地大衍蓍草三变概率模拟", "User cast each line · on-device yarrow-stalk simulation") : L10n.text("用户逐次投掷 · 本地三枚铜钱模拟", "User tossed each line · on-device three-coin simulation")
             } else { style = L10n.text("用户手动爻值", "User-entered line values") }
         } else {
@@ -36,6 +39,8 @@ struct LiuyaoPlugin: OraclePlugin {
                 }
                 values = generated
                 style = L10n.text("本地大衍蓍草三变概率等价模拟 · 已保存种子，可复现", "On-device three-step yarrow simulation · reproducible from the saved seed")
+            case "manual":
+                return NativeCalendar.unavailable(.liuyao, L10n.text("请先录入六次实体铜钱投掷结果；实体录入不会自动生成爻值。", "Enter all six physical coin toss results first. Manual entry never generates line values."))
             default:
                 return NativeCalendar.unavailable(.liuyao, L10n.text("起卦方式只支持coins或yarrow；未以其他方式代算。", "Choose coins or yarrow for a simulated cast."))
             }
@@ -95,8 +100,12 @@ struct LiuyaoPlugin: OraclePlugin {
         rows += classical.rows
         evidence += classical.evidence
         return OracleResult(method: .liuyao, status: .partial, headline: "\(NativeHexagrams.displayName(original)) → \(NativeHexagrams.displayName(changed))", rows: rows, evidence: evidence,
-            limitations: [L10n.text("已完成京房八宫基础纳甲排盘与典籍取文；未完成用神取值、伏神、完整生克制化与应期，不作为完整断课。", "Includes the basic Jing Fang Na Jia chart and classical texts. Focus-line selection, hidden lines, full element interactions and timing are outside this reading's scope."), L10n.text("随机种子只用于复现数字起卦，不代表观测到现实信息。", "The random seed allows the digital cast to be reproduced. It is not an observation of real conditions.")] + classical.limitations + NativeCalendar.timezoneLimit(input.profile.currentTimeZoneID, date: input.castingDate),
-            provenance: L10n.text("BlindOracle Swift · 铜钱/大衍概率 / 京房八宫纳甲 / 周易64卦384爻辞本地MIT录文", "BlindOracle Swift · coin and yarrow probabilities / Jing Fang Eight Palaces and Na Jia / local I Ching collection of 64 hexagrams and 384 lines (MIT)"))
+            limitations: [L10n.text("已完成京房八宫基础纳甲排盘与典籍取文；未完成用神取值、伏神、完整生克制化与应期，不作为完整断课。", "Includes the basic Jing Fang Na Jia chart and classical texts. Focus-line selection, hidden lines, full element interactions and timing are outside this reading's scope.")]
+                + (physicalEntry ? [] : [L10n.text("随机种子只用于复现数字起卦，不代表观测到现实信息。", "The random seed allows the digital cast to be reproduced. It is not an observation of real conditions.")])
+                + classical.limitations + NativeCalendar.timezoneLimit(input.profile.currentTimeZoneID, date: input.castingDate),
+            provenance: physicalEntry
+                ? L10n.text("BlindOracle Swift · 用户实体铜钱录入 / 京房八宫纳甲 / 周易64卦384爻辞本地MIT录文", "BlindOracle Swift · user-entered physical coin tosses / Jing Fang Eight Palaces and Na Jia / local I Ching collection of 64 hexagrams and 384 lines (MIT)")
+                : L10n.text("BlindOracle Swift · 铜钱/大衍概率 / 京房八宫纳甲 / 周易64卦384爻辞本地MIT录文", "BlindOracle Swift · coin and yarrow probabilities / Jing Fang Eight Palaces and Na Jia / local I Ching collection of 64 hexagrams and 384 lines (MIT)"))
     }
     static func coinLine<R: RandomNumberGenerator>(using rng: inout R) -> Int {
         (0..<3).reduce(0) { sum, _ in sum + Int.random(in: 2...3, using: &rng) }

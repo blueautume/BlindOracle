@@ -1,6 +1,34 @@
 import XCTest
 
 extension XCTestCase {
+    @MainActor func selectCastingMode(method: String, mode: String, in app: XCUIApplication,
+                                     language: String = "zh-Hans", file: StaticString = #filePath, line: UInt = #line) {
+        let data = app.tabBars.buttons[language == "en" ? "Data" : "数据"]
+        XCTAssertTrue(data.waitForExistence(timeout: 10), file: file, line: line); data.tap()
+        let row = app.buttons["localMethod-\(method)"]
+        if !row.exists {
+            let directory = app.buttons["localMethodsDirectory"]
+            if !directory.exists {
+                let back = app.navigationBars.buttons.element(boundBy: 0)
+                XCTAssertTrue(back.exists, file: file, line: line); back.tap()
+            } else {
+                for _ in 0..<6 where !directory.isHittable { app.swipeUp() }
+                XCTAssertTrue(directory.isHittable, file: file, line: line); directory.tap()
+            }
+        }
+        XCTAssertTrue(row.waitForExistence(timeout: 10), file: file, line: line)
+        for _ in 0..<8 where !row.isHittable { app.swipeUp() }
+        XCTAssertTrue(row.isHittable, file: file, line: line); row.tap()
+        let choice = app.buttons["\(method)Mode-\(mode)"]
+        XCTAssertTrue(choice.waitForExistence(timeout: 10), file: file, line: line)
+        for _ in 0..<6 where !choice.isHittable { app.swipeUp() }
+        XCTAssertTrue(choice.isHittable, file: file, line: line); choice.tap()
+        XCTAssertTrue(choice.isSelected, file: file, line: line)
+        let chat = app.tabBars.buttons[language == "en" ? "Chat" : "对话"]
+        XCTAssertTrue(chat.exists, file: file, line: line); chat.tap()
+        XCTAssertTrue(app.textFields["questionInput"].waitForExistence(timeout: 10), file: file, line: line)
+    }
+
     @MainActor func assertReadingConfirmationInNavigationBar(in app: XCUIApplication, language: String,
                                                              file: StaticString = #filePath, line: UInt = #line) {
         let navigation = app.navigationBars[language == "en" ? "Reading details" : "问事资料"]

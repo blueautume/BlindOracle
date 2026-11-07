@@ -245,6 +245,15 @@ struct GroupIntakeView: View {
                     .joined(separator: L10n.text("、", ", "))
                 Text(L10n.text("本次方法：\(methods)", "Methods: \(methods)"))
                     .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                let castingModes = [
+                    plan.methods.contains(.meihua) ? plan.meihuaCastingMode.map { L10n.text("梅花 · ", "Meihua · ") + $0.title } : nil,
+                    plan.methods.contains(.liuyao) ? plan.liuyaoCastingMode.map { L10n.text("六爻 · ", "Liuyao · ") + $0.title } : nil
+                ].compactMap { $0 }
+                if !castingModes.isEmpty {
+                    Text(castingModes.joined(separator: L10n.text("；", "; ")))
+                        .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                        .accessibilityIdentifier("castingModeSummary")
+                }
             }
         }
     }

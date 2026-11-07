@@ -40,6 +40,136 @@ final class OracleInteractionTests: XCTestCase {
         return try JSONSerialization.data(withJSONObject: object)
     }
 
+    func testCastingPreferencesUseSafeDefaultsAndDecodeSavedChoices() throws {
+        let suite = "casting-preferences-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(CastingMethodPreferences.meihua(in: defaults), .time)
+        XCTAssertEqual(CastingMethodPreferences.liuyao(in: defaults), .coins)
+        defaults.set("unknown", forKey: CastingMethodPreferences.meihuaKey)
+        defaults.set("unknown", forKey: CastingMethodPreferences.liuyaoKey)
+        XCTAssertEqual(CastingMethodPreferences.meihua(in: defaults), .time)
+        XCTAssertEqual(CastingMethodPreferences.liuyao(in: defaults), .coins)
+        for mode in MeihuaCastingMode.allCases {
+            defaults.set(mode.rawValue, forKey: CastingMethodPreferences.meihuaKey)
+            XCTAssertEqual(CastingMethodPreferences.meihua(in: defaults), mode)
+        }
+        for mode in LiuyaoCastingMode.allCases {
+            defaults.set(mode.rawValue, forKey: CastingMethodPreferences.liuyaoKey)
+            XCTAssertEqual(CastingMethodPreferences.liuyao(in: defaults), mode)
+        }
+    }
+
+    func testFrozenTimeModeIgnoresAIRequestedNumbersAndStillNeedsCastingPlace() {
+        var selected = plan(methods: [.meihua], interactions: [.init(method: .meihua, kind: .numbers)])
+        selected.requiredFields = [.numbers]
+        selected.meihuaCastingMode = .time
+        for numbers in [[], [8], [8, 8], [8, 8, 6], [0, 8, 6]] {
+            XCTAssertTrue(OracleInteractionPolicy.requests(for: selected, numbers: numbers).isEmpty)
+            XCTAssertTrue(ReadingPreparationPolicy.requiresCastingLocation(plan: selected, method: .meihua, numbers: numbers))
+        }
+    }
+
+    func testFrozenNumberModesRequireTheirExactCountAndReplaceAIRequests() throws {
+        for mode in [MeihuaCastingMode.twoNumbers, .threeNumbers] {
+            var selected = plan(methods: [.meihua], interactions: [
+                .init(method: .meihua, kind: .numbers, prompt: "模型指定的其他取数方式", numberCount: mode == .twoNumbers ? 3 : 2)
+            ])
+            selected.meihuaCastingMode = mode
+            let count = try XCTUnwrap(mode.numberCount)
+            let request = try XCTUnwrap(OracleInteractionPolicy.requests(for: selected).first)
+            XCTAssertEqual(request.requiredNumberCount, count)
+            XCTAssertEqual(request.prompt, OracleInteractionRequest(method: .meihua, kind: .numbers, numberCount: count).prompt)
+            let valid = Array(repeating: 8, count: count)
+            XCTAssertTrue(OracleInteractionPolicy.requests(for: selected, numbers: valid).isEmpty)
+            for invalid in [Array(valid.dropLast()), valid + [6], Array(repeating: 0, count: count)] {
+                XCTAssertEqual(OracleInteractionPolicy.requests(for: selected, numbers: invalid).first?.requiredNumberCount, count)
+            }
+            XCTAssertEqual(ReadingPreparationPolicy.requiresCastingLocation(plan: selected, method: .meihua, numbers: []), mode == .twoNumbers)
+            XCTAssertEqual(ReadingPreparationPolicy.requiresCastingLocation(plan: selected, method: .meihua, numbers: valid), mode == .twoNumbers)
+        }
+    }
+
+    func testCastingPreferencesDoNotAddUnselectedMethodsAndFrozenLiuyaoModeOverridesAI() throws {
+        var unrelated = plan(methods: [.bazi])
+        unrelated.meihuaCastingMode = .twoNumbers
+        unrelated.liuyaoCastingMode = .manual
+        XCTAssertTrue(OracleInteractionPolicy.requests(for: unrelated).isEmpty)
+        var selected = plan(methods: [.liuyao], interactions: [.init(method: .liuyao, kind: .coins, liuyaoCastingMode: .manual)])
+        selected.liuyaoCastingMode = .yarrow
+        let request = try XCTUnwrap(OracleInteractionPolicy.requests(for: selected).first)
+        XCTAssertEqual(request.liuyaoCastingMode, .yarrow)
+        XCTAssertEqual(request.kind, .coins)
+        selected.liuyaoCastingMode = nil
+        XCTAssertNil(OracleInteractionPolicy.requests(for: selected).first?.liuyaoCastingMode)
+    }
+
+    func testLegacyRequestsAndPlansDecodeWithoutNewCastingFields() throws {
+        let request = OracleInteractionRequest(method: .meihua, kind: .numbers)
+        let restored = try JSONDecoder().decode(OracleInteractionRequest.self,
+            from: removing(["numberCount", "liuyaoCastingMode"], from: request))
+        XCTAssertNil(restored.numberCount)
+        XCTAssertNil(restored.liuyaoCastingMode)
+        XCTAssertEqual(restored.requiredNumberCount, 3)
+        var old = plan(methods: [.meihua], interactions: [restored])
+        old.meihuaCastingMode = .twoNumbers
+        old.liuyaoCastingMode = .manual
+        let restoredPlan = try JSONDecoder().decode(OraclePlan.self,
+            from: removing(["meihuaCastingMode", "liuyaoCastingMode"], from: old))
+        XCTAssertNil(restoredPlan.meihuaCastingMode)
+        XCTAssertNil(restoredPlan.liuyaoCastingMode)
+        XCTAssertEqual(OracleInteractionPolicy.requests(for: restoredPlan).first?.requiredNumberCount, 3)
+    }
+
+    func testTwoNumberDraftRestoresIncompleteEditsAndCompletesOnlyAnExactPair() throws {
+        let request = OracleInteractionRequest(method: .meihua, kind: .numbers, numberCount: 2)
+        var pending = session([request])
+        let partial = OracleInteractionResponse(requestID: request.id, numberTexts: ["008", ""])
+        XCTAssertTrue(pending.saveProgress(partial))
+        XCTAssertFalse(pending.complete(partial))
+        var restored = try JSONDecoder().decode(OracleInteractionSession.self, from: JSONEncoder().encode(pending))
+        XCTAssertEqual(restored.currentRequest?.requiredNumberCount, 2)
+        XCTAssertEqual(NumberInteractionDraft.texts(for: try XCTUnwrap(restored.draft), count: 2), ["008", ""])
+        XCTAssertNil(NumberInteractionDraft.values(in: ["008", ""], count: 2))
+        XCTAssertEqual(NumberInteractionDraft.values(in: ["008", " 9 "], count: 2), [8, 9])
+        XCTAssertFalse(restored.complete(.init(requestID: request.id, numbers: [8, 9, 6])))
+        XCTAssertFalse(restored.saveProgress(.init(requestID: request.id, numberTexts: ["8", "9", ""])))
+        XCTAssertFalse(restored.complete(.init(requestID: request.id, numbers: [8, 6], numberTexts: ["8", "9"])))
+        let corrected = OracleInteractionResponse(requestID: request.id, numbers: [8, 9], numberTexts: ["008", " 9 "])
+        XCTAssertTrue(restored.complete(corrected))
+        XCTAssertEqual(restored.input.numbers, [8, 9])
+        XCTAssertEqual(restored.input.interactionResponses, [corrected])
+        XCTAssertNil(restored.currentRequest)
+    }
+
+    func testPhysicalCoinDraftCanBeCorrectedAfterRestoringAndKeepsItsSource() async throws {
+        let request = OracleInteractionRequest(method: .liuyao, kind: .coins, liuyaoCastingMode: .manual)
+        var pending = session([request])
+        let partial = OracleInteractionResponse(requestID: request.id, lines: [6, 7, 8])
+        XCTAssertTrue(pending.saveProgress(partial))
+        XCTAssertFalse(pending.complete(partial))
+        var restored = try JSONDecoder().decode(OracleInteractionSession.self, from: JSONEncoder().encode(pending))
+        XCTAssertEqual(restored.currentRequest?.liuyaoCastingMode, .manual)
+        var corrected = try XCTUnwrap(restored.draft)
+        corrected.lines[1] = 9
+        corrected.lines += [9, 7, 6]
+        XCTAssertTrue(restored.complete(corrected))
+        XCTAssertEqual(restored.input.manualLines, [6, 9, 8, 9, 7, 6])
+        XCTAssertEqual(restored.input.castingStyle, "manual")
+        let result = try await LiuyaoPlugin().calculate(restored.input)
+        XCTAssertEqual(result.rows.first?.value, L10n.text("用户实体铜钱投掷录入 · 初爻至上爻", "User-entered physical coin tosses · bottom to top"))
+        XCTAssertEqual(result.rows.dropFirst().first?.value, "6 9 8 9 7 6")
+    }
+
+    func testPhysicalCoinModeNeverGeneratesMissingLines() async throws {
+        var input = OracleInput(question: "实体投掷", profile: OracleProfile(), seed: 42, castingStyle: "manual")
+        let empty = try await LiuyaoPlugin().calculate(input)
+        XCTAssertEqual(empty.status, .unavailable)
+        input.manualLines = [6, 7, 8]
+        let partial = try await LiuyaoPlugin().calculate(input)
+        XCTAssertEqual(partial.status, .unavailable)
+    }
+
     func testRequestsRejectUnselectedOrMismatchedOperationsAndDeduplicate() {
         let requests = [
             OracleInteractionRequest(method: .bazi, kind: .numbers),

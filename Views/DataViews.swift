@@ -198,12 +198,19 @@ private struct PluginDirectoryView: View {
 
 private struct PluginDocumentView: View {
     let descriptor: OraclePluginDescriptor
+    @AppStorage(CastingMethodPreferences.meihuaKey) private var meihuaModeRaw = MeihuaCastingMode.time.rawValue
+    @AppStorage(CastingMethodPreferences.liuyaoKey) private var liuyaoModeRaw = LiuyaoCastingMode.coins.rawValue
+
+    private var selectedMeihuaMode: MeihuaCastingMode { MeihuaCastingMode(rawValue: meihuaModeRaw) ?? .time }
+    private var selectedLiuyaoMode: LiuyaoCastingMode { LiuyaoCastingMode(rawValue: liuyaoModeRaw) ?? .coins }
+
     var body: some View {
         ZStack {
             PaperBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(descriptor.summary).font(.subheadline).foregroundStyle(InkTheme.ink)
+                    castingModeCard
                     documentSection(L10n.text("所需资料", "Required details"), descriptor.requiredFields.map(\.title).joined(separator: L10n.text("、", ", ")))
                     if !descriptor.optionalFields.isEmpty { documentSection(L10n.text("可补充资料", "Optional details"), descriptor.optionalFields.map(\.title).joined(separator: L10n.text("、", ", "))) }
                     documentSection(L10n.text("适用主题", "Suggested topics"), descriptor.supportedQuestions.joined(separator: "\n"))
@@ -217,6 +224,69 @@ private struct PluginDocumentView: View {
             }
         }.navigationTitle(descriptor.method.title).navigationBarTitleDisplayMode(.inline)
     }
+
+    @ViewBuilder
+    private var castingModeCard: some View {
+        if descriptor.method == .meihua || descriptor.method == .liuyao {
+            PaperCard(bottomPadding: 6) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(L10n.text("起卦方式", "Casting method"))
+                        .font(.system(size: 16, weight: .medium, design: .serif))
+                        .foregroundStyle(InkTheme.ink)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(L10n.text("保存在本机，用于之后的新问事。", "Saved on this device for future readings."))
+                        .font(.footnote)
+                        .foregroundStyle(InkTheme.secondary)
+                        .padding(.top, 6)
+                        .padding(.bottom, 8)
+                    if descriptor.method == .meihua {
+                        ForEach(Array(MeihuaCastingMode.allCases.enumerated()), id: \.offset) { index, mode in
+                            if index > 0 { Divider().overlay(InkTheme.line.opacity(0.6)) }
+                            castingModeRow(title: mode.title, summary: mode.summary,
+                                           selected: selectedMeihuaMode == mode,
+                                           identifier: "meihuaMode-" + mode.rawValue) {
+                                meihuaModeRaw = mode.rawValue
+                            }
+                        }
+                    } else {
+                        ForEach(Array(LiuyaoCastingMode.allCases.enumerated()), id: \.offset) { index, mode in
+                            if index > 0 { Divider().overlay(InkTheme.line.opacity(0.6)) }
+                            castingModeRow(title: mode.title, summary: mode.summary,
+                                           selected: selectedLiuyaoMode == mode,
+                                           identifier: "liuyaoMode-" + mode.rawValue) {
+                                liuyaoModeRaw = mode.rawValue
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func castingModeRow(title: String, summary: String, selected: Bool, identifier: String,
+                                action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(alignment: .center, spacing: 14) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(title).font(.system(size: 15, design: .serif)).foregroundStyle(InkTheme.ink)
+                    Text(summary).font(.system(size: 12)).foregroundStyle(InkTheme.secondary).lineSpacing(4)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20, weight: .light))
+                    .foregroundStyle(selected ? InkTheme.sage : InkTheme.line)
+                    .accessibilityHidden(true)
+            }
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
     private func documentSection(_ title: String, _ text: String) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(title).font(.footnote.weight(.medium)).foregroundStyle(InkTheme.secondary)

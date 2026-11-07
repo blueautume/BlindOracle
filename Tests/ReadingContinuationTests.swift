@@ -479,6 +479,33 @@ final class ReadingContinuationTests: XCTestCase {
         }
     }
 
+    func testPhysicalAndSimulatedCoinResultsCannotReuseEachOthersProvenance() async throws {
+        var simulated = reading()
+        simulated.input.castingStyle = "coins"
+        simulated.input.interactionResponses = [.init(requestID: "liuyao", lines: simulated.input.manualLines)]
+        simulated.results = [try await LiuyaoPlugin().calculate(simulated.input)]
+
+        var physicalInput = simulated.input
+        physicalInput.castingStyle = "manual"
+        XCTAssertTrue(ReadingContinuationPolicy.reusableResults(from: simulated, for: physicalInput, methods: [.liuyao]).isEmpty)
+
+        var physical = simulated
+        physical.input = physicalInput
+        physical.results = [try await LiuyaoPlugin().calculate(physicalInput)]
+        XCTAssertNotEqual(physical.results.first?.rows.first?.value, simulated.results.first?.rows.first?.value)
+        XCTAssertTrue(ReadingContinuationPolicy.reusableResults(from: physical, for: simulated.input, methods: [.liuyao]).isEmpty)
+
+        // The old nil style means coins; capitalization does not change a method.
+        for style in [nil, "COINS"] as [String?] {
+            var candidate = simulated.input
+            candidate.castingStyle = style
+            XCTAssertEqual(ReadingContinuationPolicy.reusableResults(from: simulated, for: candidate, methods: [.liuyao]).map(\.id), simulated.results.map(\.id))
+        }
+        var legacy = simulated
+        legacy.input.castingStyle = nil
+        XCTAssertEqual(ReadingContinuationPolicy.reusableResults(from: legacy, for: simulated.input, methods: [.liuyao]).map(\.id), simulated.results.map(\.id))
+    }
+
     func testReuseIsPerParticipantAndCannotTransferChartsToANewUUID() {
         var original = completeReading()
         let first = original.input.profile

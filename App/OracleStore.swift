@@ -88,6 +88,7 @@ struct CastingLocationDraft: Equatable, Sendable {
     private let quotaEndService: AIQuotaTaskService?
     var client: DeepSeekClient { aiClient ?? deepSeekClient }
     private let vault: LocalVault
+    private let castingDefaults: UserDefaults
     private var task: Task<Void, Never>?
     private var operationID: UUID?
     @Published private(set) var quotaTaskID: UUID?
@@ -127,12 +128,13 @@ struct CastingLocationDraft: Equatable, Sendable {
     #endif
 
     init(vault: LocalVault = .shared, bootstrapCredential: Bool = true, aiClient: DeepSeekClient? = nil,
-         quotaEndService: AIQuotaTaskService? = nil) {
+         quotaEndService: AIQuotaTaskService? = nil, castingDefaults: UserDefaults = .standard) {
         DeepSeekConfiguration.migrateDefault()
         #if DEBUG
         usesTestAgent = aiClient == nil && (!bootstrapCredential || ProcessInfo.processInfo.arguments.contains("--ui-testing-local"))
         #endif
         self.vault = vault
+        self.castingDefaults = castingDefaults
         quotaEndIntents = vault.load([String: String].self, from: ServiceEnvironment.current.endIntentsFilename, fallback: [:])
         self.aiClient = aiClient
         self.quotaEndService = quotaEndService
@@ -639,7 +641,9 @@ struct CastingLocationDraft: Equatable, Sendable {
         if pendingInteraction?.currentRequest?.tarotClarification != nil { return L10n.text("等待你选择并翻开一张补牌", "Waiting for you to choose and reveal a clarifying card") }
         return switch pendingInteraction?.currentRequest?.kind {
         case .tarot: L10n.text("等待你选牌并翻开", "Waiting for you to choose and reveal the cards")
-        case .numbers: L10n.text("等待你留下三个数字", "Waiting for your three numbers")
+        case .numbers: pendingInteraction?.currentRequest?.requiredNumberCount == 2
+            ? L10n.text("等待你留下两个数字", "Waiting for your two numbers")
+            : L10n.text("等待你留下三个数字", "Waiting for your three numbers")
         case .coins: L10n.text("等待你依次留下六爻", "Waiting for you to cast the six lines")
         case nil: L10n.text("等待你确认选择", "Waiting for your confirmation")
         }
@@ -695,6 +699,45 @@ struct CastingLocationDraft: Equatable, Sendable {
         // Supplements keep the original casting snapshot and physical instant.
         let source = plan.baseRunID.flatMap { id in runs.first(where: { $0.id == id })?.input.profile } ?? OracleProfile(id: intakeSessionID)
         return CastingLocationDraft(profile: source).profile
+    }
+
+    /// The local method page owns these choices. Model output cannot replace
+    /// them; an existing question keeps the settings it was started with.
+    private func captureCastingPreferences(in plan: inout OraclePlan, inheriting previous: OraclePlan? = nil,
+                                           base: OracleRun? = nil) {
+        if plan.methods.contains(.meihua) {
+            if let base, base.plan.methods.contains(.meihua) || base.results.contains(where: { $0.method == .meihua }) {
+                let unknown = base.input.profile.unknownFields.union(base.input.profile.declaredUnknownFields ?? [])
+                let count = unknown.contains(.numbers) ? 0 : base.input.numbers.count
+                plan.meihuaCastingMode = base.plan.meihuaCastingMode
+                    ?? (count >= 3 ? .threeNumbers : count == 2 ? .twoNumbers : .time)
+            } else if let previous, previous.methods.contains(.meihua) {
+                plan.meihuaCastingMode = previous.meihuaCastingMode
+            } else {
+                plan.meihuaCastingMode = CastingMethodPreferences.meihua(in: castingDefaults)
+            }
+            if let mode = plan.meihuaCastingMode {
+                plan.interactions?.removeAll { $0.method == .meihua }
+                plan.requiredFields.removeAll { $0 == .numbers }
+                if mode == .time { plan.draftNumbers = nil }
+                else { plan.requiredFields.append(.numbers) }
+            }
+        } else { plan.meihuaCastingMode = nil }
+        if plan.methods.contains(.liuyao) {
+            if let base, base.plan.methods.contains(.liuyao) || base.results.contains(where: { $0.method == .liuyao }) {
+                plan.liuyaoCastingMode = base.plan.liuyaoCastingMode
+                    ?? LiuyaoCastingMode(rawValue: base.input.castingStyle?.lowercased() ?? "")
+            } else if let previous, previous.methods.contains(.liuyao) {
+                plan.liuyaoCastingMode = previous.liuyaoCastingMode
+            } else {
+                plan.liuyaoCastingMode = CastingMethodPreferences.liuyao(in: castingDefaults)
+            }
+            if plan.liuyaoCastingMode != nil { plan.interactions?.removeAll { $0.method == .liuyao } }
+        } else { plan.liuyaoCastingMode = nil }
+    }
+
+    private func castingNumbers(for plan: OraclePlan, supplied: [Int]) -> [Int] {
+        plan.methods.contains(.meihua) && plan.meihuaCastingMode == .time ? [] : supplied
     }
 
     private func prepareConversation(_ proposed: OraclePlan, clarification: String? = nil, pendingAnswer: String? = nil, appendMessage: Bool = true) {
@@ -784,11 +827,21 @@ struct CastingLocationDraft: Equatable, Sendable {
         input.participants = participants; input.relationship = plan.relationship
         if let updated = participants.first(where: { $0.id == base.input.profile.id }) { input.profile = updated }
         input.profile = CastingLocationDraft.applying(plan.castingProfile ?? base.input.profile, to: input.profile)
-        input.numbers = numbers
+        input.numbers = castingNumbers(for: plan, supplied: numbers)
+        if plan.methods.contains(.meihua), !base.plan.methods.contains(.meihua),
+           !base.results.contains(where: { $0.method == .meihua }) {
+            input.interactionResponses?.removeAll { $0.requestID == OracleMethod.meihua.rawValue }
+        }
+        if let style = plan.liuyaoCastingMode { input.castingStyle = style.rawValue }
+        if plan.methods.contains(.liuyao), !base.plan.methods.contains(.liuyao),
+           !base.results.contains(where: { $0.method == .liuyao }) {
+            input.manualLines = []
+            input.interactionResponses?.removeAll { $0.requestID == OracleMethod.liuyao.rawValue }
+        }
         if numbers == base.input.numbers {
             if base.input.profile.unknownFields.contains(.numbers) { input.profile.unknownFields.insert(.numbers) }
             else { input.profile.unknownFields.remove(.numbers) }
-        } else if numbers.count == 3, numbers.allSatisfy({ (1...999).contains($0) }) { input.profile.unknownFields.remove(.numbers) }
+        } else if [2, 3].contains(input.numbers.count), input.numbers.allSatisfy({ (1...999).contains($0) }) { input.profile.unknownFields.remove(.numbers) }
         return input
     }
 
@@ -820,6 +873,7 @@ struct CastingLocationDraft: Equatable, Sendable {
             plan.question = questionUpdatingMethods(base.input.question, from: base.plan.methods, to: plan.methods)
         }
         plan.requiredFields = Array(Set(proposed.requiredFields + registry.descriptors.filter { methods.contains($0.method) }.flatMap(\.requiredFields)))
+        captureCastingPreferences(in: &plan, base: base)
         retainConfirmedTwoNumberMode(in: &plan, base: base, numbers: base.input.numbers)
         let originals = base.input.readingParticipants
         let selectedIDs = (proposed.participantIDs ?? []).isEmpty ? originals.map(\.id) : proposed.participantIDs ?? []
@@ -833,11 +887,13 @@ struct CastingLocationDraft: Equatable, Sendable {
         }
         plan.participantIDs = people.map(\.id); plan.participantNames = people.map(\.participantLabel)
         if people.count > 1 { plan.subject = "多人" }
-        plan.draftParticipants = people; plan.draftNumbers = base.input.numbers
-        let input = supplementInput(base: base, plan: plan, participants: people, numbers: base.input.numbers)
+        let hadMeihua = base.plan.methods.contains(.meihua) || base.results.contains(where: { $0.method == .meihua })
+        let numbers = castingNumbers(for: plan, supplied: hadMeihua ? base.input.numbers : [])
+        plan.draftParticipants = people; plan.draftNumbers = numbers
+        let input = supplementInput(base: base, plan: plan, participants: people, numbers: numbers)
         let reused = reusableResults(input: input, plan: plan)
         let report = ReadingPreparationPolicy.evaluate(plan: plan, participants: people, descriptors: registry.descriptors,
-                                                       castingProfile: plan.castingProfile, numbers: base.input.numbers)
+                                                       castingProfile: plan.castingProfile, numbers: numbers)
         let needsCalculation = report.assessments.contains { assessment in
             !reused.contains { $0.method == assessment.method && (!assessment.method.usesPersonalProfile || $0.participantID == assessment.participantID) }
         }
@@ -1148,8 +1204,11 @@ struct CastingLocationDraft: Equatable, Sendable {
             let parts = text.components(separatedBy: CharacterSet.decimalDigits.inverted).filter { !$0.isEmpty }
             let numbers = parts.compactMap(Int.init)
             guard text.range(of: #"[-−.．/:年月日]"#, options: .regularExpression) == nil,
-                  numbers.count == 3, numbers.allSatisfy({ (1...999).contains($0) }) else {
-                messages.append(ChatMessage(role: .assistant, content: L10n.text("请留下三个1到999的整数，例如“12，23，6”。我会照你给出的数字继续。", "Enter three whole numbers from 1 to 999, such as 12, 23, and 6. I’ll use those numbers for the reading."))); persist(); return
+                  numbers.count == request.requiredNumberCount, numbers.allSatisfy({ (1...999).contains($0) }) else {
+                let prompt = request.requiredNumberCount == 2
+                    ? L10n.text("请留下两个1到999的整数，例如“12，23”。我会照你给出的数字继续。", "Enter two whole numbers from 1 to 999, such as 12 and 23. I’ll use those numbers for the reading.")
+                    : L10n.text("请留下三个1到999的整数，例如“12，23，6”。我会照你给出的数字继续。", "Enter three whole numbers from 1 to 999, such as 12, 23, and 6. I’ll use those numbers for the reading.")
+                messages.append(ChatMessage(role: .assistant, content: prompt)); persist(); return
             }
             completeInteraction(.init(requestID: request.id, numbers: numbers), sessionID: session.id)
             return
@@ -1305,6 +1364,7 @@ struct CastingLocationDraft: Equatable, Sendable {
                 plan.mandatoryMethods = original.plan.mandatoryMethods
                 plan.collectionDeclined = original.plan.collectionDeclined
                 enforceRequestedMethods(&plan, text: text)
+                captureCastingPreferences(in: &plan)
                 prepareConversation(plan); return
             }
             let methodChange = ReadingContinuationPolicy.bareMethodChange(in: text)
@@ -1464,6 +1524,7 @@ struct CastingLocationDraft: Equatable, Sendable {
                         quotaTaskID = UUID()
                     }
                     plan.quotaTaskID = quotaTaskID
+                    captureCastingPreferences(in: &plan)
                     prepareConversation(plan)
                     if replacedTask != nil, persist(), !usesTestAgent { Task { await self.flushQuotaEnds() } }
                 default:
@@ -1480,6 +1541,7 @@ struct CastingLocationDraft: Equatable, Sendable {
                 fresh.reviewedParticipants = nil; fresh.omittedMethods = nil; fresh.preparationNotes = nil
                 fresh.tarotClarification = nil
                 enforceRequestedMethods(&fresh, text: text, keepsPendingScope: keepsPendingScope)
+                captureCastingPreferences(in: &fresh)
                 prepareConversation(fresh)
                 return
             }
@@ -1595,6 +1657,7 @@ struct CastingLocationDraft: Equatable, Sendable {
                 plan.castingProfile = previous.castingProfile
                 if plan.methods.contains(.meihua) { plan.draftNumbers = previous.draftNumbers }
                 plan.action = "intake"
+                captureCastingPreferences(in: &plan, inheriting: previous)
                 prepareConversation(plan)
                 return
             }
@@ -1612,6 +1675,7 @@ struct CastingLocationDraft: Equatable, Sendable {
                 plan.castingProfile = previous.castingProfile
                 plan.subject = previous.subject; plan.relationship = plan.relationship ?? previous.relationship
                 plan.action = "intake"
+                captureCastingPreferences(in: &plan, inheriting: previous)
                 prepareConversation(plan)
                 return
             }
@@ -1670,6 +1734,7 @@ struct CastingLocationDraft: Equatable, Sendable {
             }
             let requirements = registry.descriptors.filter { plan.methods.contains($0.method) }.flatMap(\.requiredFields)
             plan.requiredFields = Array(Set(plan.requiredFields + requirements))
+            captureCastingPreferences(in: &plan)
             prepareConversation(plan)
         }
     }
@@ -1797,9 +1862,9 @@ struct CastingLocationDraft: Equatable, Sendable {
         var seen = Set<UUID>()
         let participants = submittedProfiles.filter { seen.insert($0.id).inserted }
             .map(ProfileDirectory.assigningDefaultBirthTimeZone(to:))
-        plan.draftParticipants = participants; plan.draftNumbers = submittedNumbers
+        let numbers = castingNumbers(for: plan, supplied: submittedNumbers)
+        plan.draftParticipants = participants; plan.draftNumbers = numbers
         pendingPlan = plan
-        let numbers = submittedNumbers
         var issues: [String] = []
         if plan.subject == "多人", plan.methods.contains(where: \.usesPersonalProfile), participants.count < 2 {
             issues.append(L10n.text("请至少添加两位参与人。每位的资料都可以留空。", "Add at least two participants. You can leave their details blank."))
@@ -1840,8 +1905,9 @@ struct CastingLocationDraft: Equatable, Sendable {
         plan.draftParticipants = nil; plan.draftNumbers = nil
         if save { for person in participants { saveProfile(person) } }
         messages.append(ChatMessage(role: .user, content: L10n.text("已核对问事资料，开始推演。", "I’ve reviewed the details. Start the reading.")))
-        let style = ["蓍草", "大衍"].contains { plan.question.contains($0) }
+        let legacyStyle = ["蓍草", "大衍"].contains { plan.question.contains($0) }
             || EnglishConversation.matches(plan.question, #"\byarrow(?: stalks?)?\b"#) ? "yarrow" : "coins"
+        let style = plan.liuyaoCastingMode?.rawValue ?? legacyStyle
         var input: OracleInput
         if let baseID = plan.baseRunID, let base = runs.first(where: { $0.id == baseID }) {
             input = supplementInput(base: base, plan: plan, participants: participants, numbers: numbers)

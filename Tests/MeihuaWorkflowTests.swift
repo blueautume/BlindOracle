@@ -25,6 +25,17 @@ final class MeihuaWorkflowTests: XCTestCase {
         return LocalVault(directory: directory)
     }
 
+    private func castingDefaults(meihua: MeihuaCastingMode? = nil,
+                                 liuyao: LiuyaoCastingMode? = nil) throws -> UserDefaults {
+        let name = "meihua-casting-preferences-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defaults.removePersistentDomain(forName: name)
+        if let meihua { defaults.set(meihua.rawValue, forKey: "oracle.casting.meihua") }
+        if let liuyao { defaults.set(liuyao.rawValue, forKey: "oracle.casting.liuyao") }
+        addTeardownBlock { UserDefaults(suiteName: name)?.removePersistentDomain(forName: name) }
+        return defaults
+    }
+
     @MainActor private func store(pending: OraclePlan, vault: LocalVault? = nil) throws -> OracleStore {
         let value = OracleStore(vault: try vault ?? self.vault(), bootstrapCredential: false)
         value.messages = [ChatMessage(role: .user, content: pending.question),
@@ -43,6 +54,118 @@ final class MeihuaWorkflowTests: XCTestCase {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         return try encoder.encode(run)
+    }
+
+    @MainActor func testNewMeihuaReadingDefaultsToTimeEvenWhenTheQuestionMentionsNumbers() async throws {
+        let defaults = try castingDefaults()
+        let sut = OracleStore(vault: try vault(), bootstrapCredential: false, castingDefaults: defaults)
+        sut.send("只用梅花报数，看看这次出行如何安排")
+        try await waitUntilIdle(sut)
+        let pending = try XCTUnwrap(sut.pendingPlan)
+        XCTAssertEqual(pending.meihuaCastingMode, .time)
+        XCTAssertFalse(OracleInteractionPolicy.requests(for: pending).contains { $0.kind == .numbers })
+        XCTAssertTrue(ReadingPreparationPolicy.requiresCastingLocation(plan: pending, method: .meihua, numbers: []))
+
+        XCTAssertTrue(sut.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: site()))
+        try await waitUntilIdle(sut)
+        let run = try XCTUnwrap(sut.runs.first)
+        XCTAssertEqual(run.plan.meihuaCastingMode, .time)
+        XCTAssertTrue(run.input.numbers.isEmpty)
+        XCTAssertNil(sut.pendingInteraction)
+        let result = try XCTUnwrap(run.results.first { $0.method == .meihua })
+        XCTAssertTrue([.complete, .partial].contains(result.status))
+        XCTAssertFalse(result.rows.contains { $0.label == L10n.text("所留数字", "Your numbers") })
+    }
+
+    @MainActor func testNewNumberModesFreezeTheirCountBeforePreferencesChange() async throws {
+        for (mode, numbers) in [(MeihuaCastingMode.twoNumbers, [17, 29]), (.threeNumbers, [17, 29, 5])] {
+            let defaults = try castingDefaults(meihua: mode)
+            let sut = OracleStore(vault: try vault(), bootstrapCredential: false, castingDefaults: defaults)
+            sut.send("只用梅花看看这次出行如何安排")
+            try await waitUntilIdle(sut)
+            let pending = try XCTUnwrap(sut.pendingPlan)
+            XCTAssertEqual(pending.meihuaCastingMode, mode)
+            defaults.set(MeihuaCastingMode.time.rawValue, forKey: "oracle.casting.meihua")
+            XCTAssertTrue(sut.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: site()))
+            let session = try XCTUnwrap(sut.pendingInteraction)
+            let request = try XCTUnwrap(session.currentRequest)
+            XCTAssertEqual(request.requiredNumberCount, numbers.count)
+            XCTAssertEqual(session.plan.meihuaCastingMode, mode)
+            sut.completeInteraction(.init(requestID: request.id, numbers: Array(numbers.dropLast())), sessionID: session.id)
+            XCTAssertEqual(sut.pendingInteraction?.id, session.id)
+            XCTAssertTrue(sut.runs.isEmpty)
+
+            if mode == .twoNumbers { sut.send("17，29") }
+            else { sut.completeInteraction(.init(requestID: request.id, numbers: numbers), sessionID: session.id) }
+            try await waitUntilIdle(sut)
+            let run = try XCTUnwrap(sut.runs.first)
+            XCTAssertEqual(run.plan.meihuaCastingMode, mode)
+            XCTAssertEqual(run.input.numbers, numbers)
+            XCTAssertEqual(run.input.seed, session.input.seed)
+            XCTAssertEqual(run.input.castingDate, session.input.castingDate)
+            XCTAssertTrue(run.results.contains { $0.method == .meihua && [.complete, .partial].contains($0.status) })
+            XCTAssertNil(sut.pendingInteraction)
+        }
+    }
+
+    @MainActor func testPendingModeSnapshotSurvivesRestartAfterPreferencesChange() async throws {
+        let vault = try vault()
+        let defaults = try castingDefaults(meihua: .twoNumbers)
+        let sut = OracleStore(vault: vault, bootstrapCredential: false, castingDefaults: defaults)
+        sut.send("只用梅花看看这次出行如何安排")
+        try await waitUntilIdle(sut)
+        XCTAssertEqual(sut.pendingPlan?.meihuaCastingMode, .twoNumbers)
+        defaults.set(MeihuaCastingMode.threeNumbers.rawValue, forKey: "oracle.casting.meihua")
+
+        let restarted = OracleStore(vault: vault, bootstrapCredential: false, castingDefaults: defaults)
+        XCTAssertEqual(restarted.pendingPlan?.meihuaCastingMode, .twoNumbers)
+        XCTAssertTrue(restarted.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: site()))
+        XCTAssertEqual(restarted.pendingInteraction?.currentRequest?.requiredNumberCount, 2)
+        restarted.cancelPendingReading()
+    }
+
+    @MainActor func testNewLiuyaoModeUsesThePreferenceInsteadOfQuestionKeywords() async throws {
+        for (mode, question) in [(LiuyaoCastingMode.coins, "只用六爻蓍草看看这次出行如何安排"),
+                                 (.yarrow, "只用六爻铜钱看看这次出行如何安排"),
+                                 (.manual, "只用六爻蓍草看看这次出行如何安排")] {
+            let defaults = try castingDefaults(liuyao: mode)
+            let sut = OracleStore(vault: try vault(), bootstrapCredential: false, castingDefaults: defaults)
+            sut.send(question)
+            try await waitUntilIdle(sut)
+            XCTAssertEqual(sut.pendingPlan?.liuyaoCastingMode, mode)
+            defaults.set(LiuyaoCastingMode.coins.rawValue, forKey: "oracle.casting.liuyao")
+            XCTAssertTrue(sut.confirmGroupIntake(profiles: [], numbers: [], save: false))
+            let session = try XCTUnwrap(sut.pendingInteraction)
+            XCTAssertEqual(session.plan.liuyaoCastingMode, mode)
+            XCTAssertEqual(session.currentRequest?.liuyaoCastingMode, mode)
+            XCTAssertTrue(session.input.manualLines.isEmpty)
+            sut.cancelPendingReading()
+        }
+    }
+
+    @MainActor func testAddingAnotherMethodKeepsTheOriginalNumberModeAfterPreferenceChanges() async throws {
+        let defaults = try castingDefaults(meihua: .twoNumbers)
+        let sut = OracleStore(vault: try vault(), bootstrapCredential: false, castingDefaults: defaults)
+        sut.send("只用梅花看看这次出行如何安排")
+        try await waitUntilIdle(sut)
+        XCTAssertTrue(sut.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: site()))
+        let session = try XCTUnwrap(sut.pendingInteraction)
+        sut.completeInteraction(.init(requestID: "meihua", numbers: [17, 29]), sessionID: session.id)
+        try await waitUntilIdle(sut)
+        let original = try XCTUnwrap(sut.runs.first)
+        let originalData = try snapshot(original)
+        defaults.set(MeihuaCastingMode.threeNumbers.rawValue, forKey: "oracle.casting.meihua")
+
+        sut.send("加上小六壬看看")
+        try await waitUntilIdle(sut)
+        XCTAssertEqual(sut.runs.count, 2)
+        let supplemented = try XCTUnwrap(sut.runs.last)
+        XCTAssertEqual(supplemented.plan.meihuaCastingMode, .twoNumbers)
+        XCTAssertEqual(supplemented.input.numbers, [17, 29])
+        XCTAssertEqual(supplemented.input.castingDate, original.input.castingDate)
+        XCTAssertEqual(supplemented.results.first { $0.method == .meihua }?.id, original.results.first?.id)
+        XCTAssertEqual(try snapshot(try XCTUnwrap(sut.runs.first)), originalData)
+        XCTAssertNil(sut.pendingInteraction)
     }
 
     func testLegacyNumberRequirementPreparesTheInteractionWithoutInventingValuesOrGPS() {

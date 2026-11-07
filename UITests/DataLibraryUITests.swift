@@ -1,6 +1,57 @@
 import XCTest
 
 final class DataLibraryUITests: XCTestCase {
+    @MainActor func testCastingModeDefaultsAppearOnlyInTheirMethodDetails() {
+        let app = castingPreferencesApp()
+        app.launch()
+        openMethod("meihua", in: app)
+        XCTAssertTrue(app.buttons["meihuaMode-time"].isSelected)
+        XCTAssertFalse(app.buttons["meihuaMode-twoNumbers"].isSelected)
+        XCTAssertFalse(app.buttons["meihuaMode-threeNumbers"].isSelected)
+        XCTAssertFalse(app.buttons["liuyaoMode-coins"].exists)
+        capture("meihua-default-time-mode", in: app)
+
+        returnToMethodDirectory(in: app)
+        openMethod("liuyao", in: app)
+        XCTAssertTrue(app.buttons["liuyaoMode-coins"].isSelected)
+        XCTAssertFalse(app.buttons["liuyaoMode-yarrow"].isSelected)
+        XCTAssertFalse(app.buttons["liuyaoMode-manual"].isSelected)
+        XCTAssertFalse(app.buttons["meihuaMode-time"].exists)
+        capture("liuyao-default-coins-mode", in: app)
+
+        returnToMethodDirectory(in: app)
+        openMethod("xingming", in: app)
+        XCTAssertTrue(app.staticTexts["所需资料"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "meihuaMode-")).count, 0)
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "liuyaoMode-")).count, 0)
+        capture("casting-preferences-absent-from-name-method", in: app)
+    }
+
+    @MainActor func testCastingModeChoicesPersistAcrossApplicationRestart() {
+        let app = castingPreferencesApp()
+        app.launch()
+        openMethod("meihua", in: app)
+        tapMode("meihuaMode-twoNumbers", in: app)
+        XCTAssertTrue(app.buttons["meihuaMode-twoNumbers"].isSelected)
+        returnToMethodDirectory(in: app)
+        openMethod("liuyao", in: app)
+        tapMode("liuyaoMode-manual", in: app)
+        XCTAssertTrue(app.buttons["liuyaoMode-manual"].isSelected)
+        capture("casting-mode-selections-before-restart", in: app)
+
+        app.terminate()
+        app.launchArguments.removeAll { $0 == "--ui-testing-reset" }
+        app.launch()
+        openMethod("meihua", in: app)
+        XCTAssertTrue(app.buttons["meihuaMode-twoNumbers"].isSelected)
+        XCTAssertFalse(app.buttons["meihuaMode-time"].isSelected)
+        returnToMethodDirectory(in: app)
+        openMethod("liuyao", in: app)
+        XCTAssertTrue(app.buttons["liuyaoMode-manual"].isSelected)
+        XCTAssertFalse(app.buttons["liuyaoMode-coins"].isSelected)
+        capture("casting-mode-selections-after-restart", in: app)
+    }
+
     @MainActor func testArchivedConflictDetailsRemainStaticBodyTextWithoutPreferenceChoices() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-reading-library",
@@ -152,6 +203,42 @@ final class DataLibraryUITests: XCTestCase {
         let tab = identified.waitForExistence(timeout: 2) ? identified : app.buttons["数据"].firstMatch
         XCTAssertTrue(tab.waitForExistence(timeout: 10)); tab.tap()
         XCTAssertTrue(app.buttons["addProfile"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor private func castingPreferencesApp() -> XCUIApplication {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-reset-language",
+                               "-oracle.appLanguage", "zh-Hans"]
+        return app
+    }
+
+    @MainActor private func openMethod(_ method: String, in app: XCUIApplication) {
+        let row = app.buttons["localMethod-\(method)"]
+        if !row.exists {
+            openDataTab(in: app)
+            let directory = app.buttons["localMethodsDirectory"]
+            XCTAssertTrue(directory.waitForExistence(timeout: 10))
+            for _ in 0..<6 where !directory.isHittable { app.swipeUp() }
+            XCTAssertTrue(directory.isHittable); directory.tap()
+        }
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        for _ in 0..<8 where !row.isHittable { app.swipeUp() }
+        XCTAssertTrue(row.isHittable); row.tap()
+        XCTAssertTrue(app.staticTexts["所需资料"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor private func returnToMethodDirectory(in app: XCUIApplication) {
+        let back = app.navigationBars.buttons.element(boundBy: 0)
+        XCTAssertTrue(back.exists); back.tap()
+        XCTAssertTrue(app.buttons["localMethod-bazi"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor private func tapMode(_ identifier: String, in app: XCUIApplication) {
+        let option = app.buttons[identifier]
+        XCTAssertTrue(option.waitForExistence(timeout: 10))
+        for _ in 0..<6 where !option.isHittable { app.swipeUp() }
+        XCTAssertTrue(option.isHittable); option.tap()
     }
 
     @MainActor private func openChatTab(in app: XCUIApplication) {

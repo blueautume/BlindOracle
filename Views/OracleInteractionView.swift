@@ -20,13 +20,20 @@ struct OracleInteractionView: View {
     @State private var numberTurns = 0
     @FocusState private var focusedNumber: Int?
 
-    private var isYarrow: Bool { session.input.castingStyle?.lowercased() == "yarrow" }
+    private var liuyaoMode: LiuyaoCastingMode {
+        session.currentRequest?.liuyaoCastingMode
+            ?? session.input.castingStyle.flatMap(LiuyaoCastingMode.init(rawValue:)) ?? .coins
+    }
+    private var isYarrow: Bool { liuyaoMode == .yarrow }
+    private var isManual: Bool { liuyaoMode == .manual }
+    private var requiredNumberCount: Int { session.currentRequest?.requiredNumberCount ?? 3 }
     private var clarificationNumber: Int { (session.input.tarotClarificationRounds?.count ?? 0) + 1 }
     private var navigationTitle: String {
         guard let request = session.currentRequest else { return L10n.text("留一份心意", "Reading steps") }
         if request.tarotClarification != nil { return L10n.text("第\(clarificationNumber)次补牌", "Clarifier \(clarificationNumber)") }
         if request.kind == .numbers { return L10n.text("随心留数", "Numbers") }
         if request.kind == .coins, isYarrow { return L10n.text("蓍草成卦", "Cast with yarrow stalks") }
+        if request.kind == .coins, isManual { return L10n.text("录入实体投掷", "Enter physical tosses") }
         return request.title
     }
 
@@ -42,14 +49,15 @@ struct OracleInteractionView: View {
         let savedDraft = session.draft.flatMap { session.isValid($0, complete: false) ? $0 : nil }
         var restored = savedDraft ?? OracleInteractionResponse(requestID: requestID)
         if session.currentRequest?.kind == .numbers, savedDraft == nil {
-            let previous = session.input.numbers.count <= 3 ? session.input.numbers : []
-            let texts = (0..<3).map { index -> String in
+            let count = session.currentRequest?.requiredNumberCount ?? 3
+            let previous = session.input.numbers.count <= count ? session.input.numbers : []
+            let texts = (0..<count).map { index -> String in
                 guard previous.indices.contains(index) else { return "" }
                 let text = String(previous[index])
                 return text.count <= NumberInteractionDraft.maximumTextLength ? text : ""
             }
             restored.numberTexts = texts
-            restored.numbers = NumberInteractionDraft.values(in: texts) ?? []
+            restored.numbers = NumberInteractionDraft.values(in: texts, count: count) ?? []
         }
         _response = State(initialValue: restored)
         _hasShuffled = State(initialValue: !restored.tarotDraws.isEmpty)
@@ -65,7 +73,8 @@ struct OracleInteractionView: View {
                             heading(request)
                             switch request.kind {
                             case .numbers: numberSelection
-                            case .coins: coinCasting
+                            case .coins:
+                                if isManual { manualLineEntry } else { coinCasting }
                             case .tarot: tarotReading(request)
                             }
                         }
@@ -75,6 +84,7 @@ struct OracleInteractionView: View {
                         .frame(maxWidth: .infinity)
                     }
                     .scrollDismissesKeyboard(.interactively)
+                    .accessibilityIdentifier("interactionScroll")
                     .safeAreaInset(edge: .bottom, spacing: 0) { footer(for: request) }
                 }
             }
@@ -147,19 +157,21 @@ struct OracleInteractionView: View {
 
     private func defaultPrompt(for kind: OracleInteractionKind) -> String {
         switch kind {
-        case .numbers: L10n.text("把这三个数，留给此刻。", "Choose three numbers for this moment.")
-        case .coins: isYarrow ? L10n.text("心中留一问，三变定一爻。", "Keep your question in mind. Three changes form each line.") : L10n.text("心中留一问，六掷成一卦。", "Keep your question in mind. Six tosses form a hexagram.")
+        case .numbers: requiredNumberCount == 2 ? L10n.text("把这两个数，留给此刻。", "Choose two numbers for this moment.") : L10n.text("把这三个数，留给此刻。", "Choose three numbers for this moment.")
+        case .coins:
+            isManual ? L10n.text("投下手中的铜钱，依次记下六爻。", "Toss your physical coins and enter six lines in order.")
+                : isYarrow ? L10n.text("心中留一问，三变定一爻。", "Keep your question in mind. Three changes form each line.") : L10n.text("心中留一问，六掷成一卦。", "Keep your question in mind. Six tosses form a hexagram.")
         case .tarot: L10n.text("静下心来，选出你的三张牌。", "Take a breath and choose three cards.")
         }
     }
 
     private var numberSelection: some View {
         VStack(spacing: 24) {
-            Text(L10n.text("可以随机留数，也可以点数字亲自输入或修改。", "Generate three numbers, or tap each one to enter or change it."))
+            Text(L10n.text("可以随机留数，也可以点数字亲自输入或修改。", "Generate numbers, or tap each one to enter or change it."))
                 .font(.system(size: 14, design: .serif)).lineSpacing(5).foregroundStyle(InkTheme.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 12) {
-                ForEach(0..<3, id: \.self) { index in
+                ForEach(0..<requiredNumberCount, id: \.self) { index in
                     numberCard(at: index)
                         .rotation3DEffect(.degrees(reduceMotion ? 0 : Double(numberTurns) * 360), axis: (x: 0, y: 1, z: 0))
                         .animation(reduceMotion ? nil : .easeInOut(duration: 0.42), value: numberTurns)
@@ -175,7 +187,7 @@ struct OracleInteractionView: View {
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(InkTheme.cinnabar.opacity(0.3), lineWidth: 0.8))
             .accessibilityIdentifier("generateNumbers")
             VStack(spacing: 7) {
-                Text(L10n.text("三个整数 · 每个 1–999", "Three whole numbers · 1–999 each"))
+                Text(requiredNumberCount == 2 ? L10n.text("两个整数 · 每个 1–999", "Two whole numbers · 1–999 each") : L10n.text("三个整数 · 每个 1–999", "Three whole numbers · 1–999 each"))
                     .font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.secondary)
                 if numberTexts.contains(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && NumberInteractionDraft.value(in: $0) == nil }) {
                     Text(L10n.text("请把每个数改为1到999的整数。", "Each number must be a whole number from 1 to 999."))
@@ -186,7 +198,7 @@ struct OracleInteractionView: View {
         }
     }
 
-    private var numberTexts: [String] { NumberInteractionDraft.texts(for: response) }
+    private var numberTexts: [String] { NumberInteractionDraft.texts(for: response, count: requiredNumberCount) }
 
     private func numberCard(at index: Int) -> some View {
         let text = numberTexts[index]
@@ -216,14 +228,14 @@ struct OracleInteractionView: View {
             texts[index] = String(value.prefix(NumberInteractionDraft.maximumTextLength))
             updateResponse {
                 $0.numberTexts = texts
-                $0.numbers = NumberInteractionDraft.values(in: texts) ?? []
+                $0.numbers = NumberInteractionDraft.values(in: texts, count: requiredNumberCount) ?? []
             }
         })
     }
 
     private func generateNumbers() {
         focusedNumber = nil
-        let values = (0..<3).map { _ in Int.random(in: 1...999) }
+        let values = (0..<requiredNumberCount).map { _ in Int.random(in: 1...999) }
         updateResponse { $0.numbers = values; $0.numberTexts = values.map(String.init) }
         numberTurns += 1
     }
@@ -234,6 +246,71 @@ struct OracleInteractionView: View {
         guard updated != response else { return }
         response = updated
         onProgress(updated)
+    }
+
+    private var manualLineEntry: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            PaperCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    SectionEyebrow(text: L10n.text("手中投掷，逐次记下", "Toss your coins, then record each result"))
+                    Text(L10n.text("准备三枚铜钱，约定字面计3、背面计2。每次投掷后把三枚的数相加，按初爻到上爻依次录入六次。", "Use three physical coins. Count the inscribed side as 3 and the reverse as 2. Add all three after each toss and enter six results, from the bottom line to the top."))
+                        .font(.system(size: 14, design: .serif)).lineSpacing(5).foregroundStyle(InkTheme.secondary)
+                    Text(L10n.text("6＝三背 · 7＝一字两背 · 8＝两字一背 · 9＝三字", "6 = three reverses · 7 = one inscribed side · 8 = two inscribed sides · 9 = three inscribed sides"))
+                        .font(.system(size: 12)).lineSpacing(4).foregroundStyle(InkTheme.secondary)
+                    Text(L10n.text("已录入 \(response.lines.count) / 6，可点选已填结果进行纠正。", "Entered \(response.lines.count) / 6. Tap any entered result to correct it."))
+                        .font(.system(size: 12)).foregroundStyle(InkTheme.cinnabar)
+                        .accessibilityIdentifier("manualLineProgress")
+                }
+            }
+            PaperCard {
+                VStack(alignment: .leading, spacing: 20) {
+                    ForEach(0..<6, id: \.self) { index in
+                        manualLineRow(at: index)
+                        if index < 5 { Divider().overlay(InkTheme.line.opacity(0.6)) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func manualLineRow(at index: Int) -> some View {
+        let entered = response.lines.indices.contains(index)
+        let available = index <= response.lines.count
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(L10n.text(["初爻 · 第一次", "二爻 · 第二次", "三爻 · 第三次", "四爻 · 第四次", "五爻 · 第五次", "上爻 · 第六次"][index], "Line \(index + 1) · Toss \(index + 1)"))
+                    .font(.system(size: 13, design: .serif)).foregroundStyle(InkTheme.ink)
+                Spacer()
+                Text(entered ? lineName(response.lines[index]) : available ? L10n.text("请录入", "Enter result") : L10n.text("待前一爻", "Enter the previous line first"))
+                    .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+            }
+            HStack(spacing: 10) {
+                ForEach(6...9, id: \.self) { value in
+                    let selected = entered && response.lines[index] == value
+                    Button {
+                        guard available else { return }
+                        updateResponse {
+                            if $0.lines.indices.contains(index) { $0.lines[index] = value }
+                            else if index == $0.lines.count { $0.lines.append(value) }
+                        }
+                    } label: {
+                        VStack(spacing: 5) {
+                            Text(String(value)).font(.system(size: 20, weight: .medium, design: .serif))
+                            Text(lineName(value)).font(.system(size: 10))
+                        }
+                        .foregroundStyle(selected ? InkTheme.cinnabar : InkTheme.ink)
+                        .frame(maxWidth: .infinity).padding(.vertical, 10)
+                        .background(selected ? InkTheme.cinnabar.opacity(0.08) : Color.white.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(selected ? InkTheme.cinnabar : InkTheme.line, lineWidth: selected ? 1.2 : 0.7))
+                    }
+                    .buttonStyle(.plain).disabled(!available)
+                    .opacity(available ? 1 : 0.4)
+                    .accessibilityLabel(L10n.text("第\(index + 1)爻，\(value)，\(lineName(value))", "Line \(index + 1), \(value), \(lineName(value))"))
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityIdentifier("manualLine-\(index)-\(value)")
+                }
+            }
+        }
     }
 
     private var coinCasting: some View {
@@ -358,7 +435,7 @@ struct OracleInteractionView: View {
     }
 
     private func tossCoins() {
-        guard response.lines.count < 6, !tossing else { return }
+        guard !isManual, response.lines.count < 6, !tossing else { return }
         tossing = true
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.48)) { coinTurns += 1 }
         let value = isYarrow ? yarrowCasts[response.lines.count].value : coinFaces[response.lines.count].reduce(0, +)

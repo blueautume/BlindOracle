@@ -85,8 +85,8 @@ enum ReadingPreparationPolicy {
             let targets: [OracleProfile?] = method.usesPersonalProfile ? (people.isEmpty ? [nil] : people.map(Optional.some)) : [nil]
             for person in targets {
                 let interaction = method == .tarot || method == .liuyao
-                    || (plan.interactions ?? []).contains { $0.method == method }
-                    || (method == .meihua && awaitsNumberInteraction(plan: plan, numbers: numbers ?? plan.draftNumbers ?? []))
+                    || OracleInteractionPolicy.requests(for: plan, numbers: numbers ?? plan.draftNumbers ?? [])
+                        .contains { $0.method == method }
                 var assessment = ReadingMethodAssessment(method: method, participantID: person?.id,
                     participantName: person?.participantLabel,
                     blocking: [], optionalGaps: [], limitations: [], requiresUserInteraction: interaction)
@@ -183,10 +183,12 @@ enum ReadingPreparationPolicy {
         method == .qimen || method == .xiaoliuren || (method == .meihua && numbers.count < 3)
     }
 
-    /// Preparation can advance to a requested three-number interaction without
-    /// inventing numbers or demanding the location used only by time modes.
-    /// The interaction's completion boundary still validates all three values.
+    /// Two-number and time casting need a place before confirmation. Three
+    /// numbers determine the cast independently of the casting place.
     static func requiresCastingLocation(plan: OraclePlan, method: OracleMethod, numbers: [Int]) -> Bool {
+        if method == .meihua, let mode = plan.meihuaCastingMode {
+            return mode != .threeNumbers
+        }
         if method == .meihua, awaitsNumberInteraction(plan: plan, numbers: numbers) { return false }
         return requiresCastingLocation(method: method, numbers: numbers)
     }

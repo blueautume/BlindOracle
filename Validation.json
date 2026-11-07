@@ -13,6 +13,7 @@
   "local_plugin_count": 10,
   "release_is_signed": true,
   "notes": [
+    "Casting preferences update 3.0.31 / Build 57 on feature/casting-method-preferences: method-detail pages persist Meihua time/two-number/three-number choices (default time) and Liuyao coin/yarrow/physical-entry choices (default coins). New plans freeze the local choice, while resumed drafts and supplements retain their original basis and source. Dynamic number slots, six physical results, correction, recovery, source-aware reuse and legacy JSON are covered. Final non-live suite passed 689 tests; eight distinct UI regressions passed across the initial six and final two runs, including bilingual three-number editing, two-number entry, defaults, persistence, yarrow, combined casting and physical-entry recovery. Final unsigned Release build passed with no warnings. Name analysis was not changed; no branch merge or TestFlight upload was performed for this update. Earlier evidence retains its actual version.",
     "Usage row alignment update 3.0.30 / Build 56: Available allowance and Replenish allowance now share a regular 15-point font and a 44-point minimum label-row height. Gauge spacing is 8 points and card section spacing is 12 points. The existing usage-to-purchase UI regression passed and the rendered usage screenshot was visually inspected. Signed Release archive completed without compiler warnings. Earlier functional and purchase evidence retains its original version; the broader unit suite was not rerun for this style-only change.",
     "Account presentation update 3.0.29 / Build 55: simplified sign-in with a single-line Chinese title, bottom legal links and fixed progress/error slots; identity-only Data/account pages link to separate quiet usage. Purchase details show approved server Token quantity and StoreKit displayPrice before the fixed payment button; missing quantity, loading and unresolved purchases disable payment. 31 targeted unit tests passed, including bilingual rendered purchase screenshots; final screenshot and two UI regressions passed after fixing the purchase-footer accessibility identifier. Earlier account UI evidence and the small-screen login result are recorded separately below. Signed Release archive and distribution IPA passed candidate validation; runtime TestFlight availability is not inferred from export.",
     "Account safety and compact test marker 3.0.28 / Build 54: removed the full-width sandbox banner and placed a small Test badge beside the app title; Apple-verified routing and purchase notices remain intact. Account settings separates a full-width sign-out button from the quiet delete entry by at least 112 points. Permanent deletion requires an exact account-specific phrase, with a copy button and manual input/paste; warnings explain local records and purchased allowance cannot be recovered. After confirmed server deletion, a durable cleanup gate clears profiles, chats, readings, drafts, recovery copies, task snapshots and account purchase memory, and rejects late callbacks. Server failure does not erase local records; ordinary sign-out retains them; interrupted cleanup blocks access and sign-in until retried. Privacy text was updated to describe actual deletion and retained pseudonymous accounting records. All 673 non-live unit tests passed, including eight new deletion/late-callback regressions. Eight UI scenarios passed under the default route; three were repeated under the sandbox fixture, including badge position and the sandbox deletion notice. Original screenshots were visually reviewed. Signed Release archive completed with zero compiler warnings; exported distribution IPA passed signature, entitlement, privacy and credential checks. No real account was deleted and no live purchase, physical-device test or App Review submission occurred. TestFlight upload is recorded separately. Pre-existing string-catalog changes and untracked design explorations were preserved and excluded.",
@@ -77,8 +78,8 @@
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "3.0.30",
-  "build": "56",
+  "version": "3.0.31",
+  "build": "57",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",
@@ -2180,5 +2181,46 @@
     "candidate_verification": "build/testflight-archive-3.0.30-56/candidate-verification.json",
     "testflight_upload_verification": "build/testflight-archive-3.0.30-56/upload-verification.json",
     "broader_unit_suite_rerun": false
+  },
+  "casting_preferences_3_0_31": {
+    "version": "3.0.31",
+    "build": "57",
+    "date": "2026-11-07",
+    "branch_at_validation": "feature/casting-method-preferences",
+    "defaults": {
+      "meihua": "time",
+      "liuyao": "coins"
+    },
+    "preference_keys": [
+      "oracle.casting.meihua",
+      "oracle.casting.liuyao"
+    ],
+    "final_unit_result": "build/casting-preferences-3.0.31-57-unit-final.xcresult",
+    "final_unit_tests_passed": 689,
+    "excluded_unit_suites": [
+      "LiveIntegrationTests",
+      "StoreKitLocalPurchaseTests",
+      "AppStoreIapReviewScreenshotTests"
+    ],
+    "initial_ui_result": "build/casting-preferences-3.0.31-57-ui.xcresult",
+    "initial_ui_passed_tests": 6,
+    "initial_ui_failed_tests": 2,
+    "ui_recheck_result": "build/casting-preferences-3.0.31-57-final.xcresult",
+    "ui_recheck_passed_tests": 2,
+    "distinct_ui_tests_passed": 8,
+    "resolved_ui_issues": [
+      "Preserved number entry before six casts when both methods are selected.",
+      "Made the physical-entry UI test scroll each control fully above the fixed footer before tapping."
+    ],
+    "intermediate_unit_run_note": "The combined recheck also recorded unit failures caused by a preceding UI run leaving a two-number preference in the simulator app domain. Unit-test-host initialization now clears the two preference keys; final complete unit rerun passed all 689 tests. Real app launches do not clear these settings.",
+    "release_log": "build/casting-preferences-3.0.31-57-release-verified.log",
+    "release_build_signed": false,
+    "release_warning_count": 0,
+    "meihua_settings_screenshot": "build/casting-preferences-3.0.31-57-ui-attachments/5A219FDF-C189-4208-A6B6-7BF278DAE71C.png",
+    "liuyao_settings_screenshot": "build/casting-preferences-3.0.31-57-ui-attachments/17EB5999-F018-4F7C-B9BE-2EB99D4CFEFD.png",
+    "manual_entry_screenshot": "build/casting-preferences-3.0.31-57-final-attachments/68304CDD-1433-4757-94F0-CD854B089A37.png",
+    "name_analysis_changed": false,
+    "testflight_upload_performed": false,
+    "main_merged": false
   }
 }

@@ -143,12 +143,14 @@ final class ReadingContinuationStoreTests: XCTestCase {
         return draws
     }
 
-    @MainActor private func restoredStore(run: OracleRun, vault: LocalVault) throws -> OracleStore {
+    @MainActor private func restoredStore(run: OracleRun, vault: LocalVault,
+                                         castingDefaults: UserDefaults? = nil) throws -> OracleStore {
         let messages = [ChatMessage(role: .user, content: run.input.question),
                         ChatMessage(role: .assistant, content: run.synthesis!.text, kind: .reading, runID: run.id)]
         let conversation = OracleConversation(messages: messages)
         try vault.save([run], as: "readings")
         try vault.save(OracleConversationArchive(activeConversationID: conversation.id, conversations: [conversation]), as: ConversationHistory.filename)
+        if let castingDefaults { return OracleStore(vault: vault, bootstrapCredential: false, castingDefaults: castingDefaults) }
         return OracleStore(vault: vault, bootstrapCredential: false)
     }
 
@@ -627,6 +629,31 @@ final class ReadingContinuationStoreTests: XCTestCase {
         XCTAssertEqual(store.runs.map(\.id), [original.id])
     }
 
+    @MainActor func testLegacyUnspecifiedLineSourceIsNotRelabeledAsPhysicalCoinsWhenPreferencesChange() async throws {
+        var original = try await fixture(.liuyao)
+        original.input.interactionResponses = nil
+        original.input.castingStyle = nil
+        var result = try await LiuyaoPlugin().calculate(original.input)
+        result.generatedAt = original.results[0].generatedAt
+        original.results = [result]
+        let originalData = try snapshot(original)
+        let suite = "casting-legacy-source-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(LiuyaoCastingMode.manual.rawValue, forKey: CastingMethodPreferences.liuyaoKey)
+        let store = try restoredStore(run: original, vault: temporaryVault(), castingDefaults: defaults)
+
+        store.send("加上小六壬看看")
+        try await waitUntilIdle(store)
+        let supplemented = try XCTUnwrap(store.runs.last)
+        XCTAssertEqual(store.runs.count, 2)
+        XCTAssertNil(supplemented.plan.liuyaoCastingMode)
+        XCTAssertNil(supplemented.input.castingStyle)
+        XCTAssertEqual(supplemented.results.first { $0.method == .liuyao }?.id, result.id)
+        XCTAssertTrue(supplemented.reusedResultIDs?.contains(result.id) == true)
+        XCTAssertEqual(try snapshot(store.runs[0]), originalData)
+    }
+
     @MainActor func testAddingAnImmediateMethodCopiesExistingResultsAndRepeatedRequestsReuseTheMergedRun() async throws {
         for method in [OracleMethod.liuyao, .tarot] {
             let original = try await fixture(method)
@@ -1038,7 +1065,12 @@ final class ReadingContinuationStoreTests: XCTestCase {
     @MainActor func testSupplementalMeihuaNumbersUseTheFormAndKeepTheExistingSixLines() async throws {
         let original = try await fixture(.liuyao)
         let originalData = try snapshot(original)
-        let store = try restoredStore(run: original, vault: temporaryVault())
+        let name = "supplement-casting-preferences-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defaults.removePersistentDomain(forName: name)
+        defaults.set(MeihuaCastingMode.threeNumbers.rawValue, forKey: "oracle.casting.meihua")
+        addTeardownBlock { UserDefaults(suiteName: name)?.removePersistentDomain(forName: name) }
+        let store = try restoredStore(run: original, vault: temporaryVault(), castingDefaults: defaults)
         let question = "补算梅花，我要报数"
         store.send(question)
         try await waitUntilIdle(store)
@@ -1047,12 +1079,14 @@ final class ReadingContinuationStoreTests: XCTestCase {
         XCTAssertEqual(pending.baseRunID, original.id)
         XCTAssertEqual(pending.followUpQuestion, question)
         XCTAssertEqual(Set(pending.methods), [.liuyao, .meihua])
+        XCTAssertEqual(pending.meihuaCastingMode, .threeNumbers)
         XCTAssertTrue(OracleInteractionPolicy.requests(for: pending).contains { $0.method == .meihua && $0.kind == .numbers })
         XCTAssertTrue(store.showIntake)
         XCTAssertNil(store.pendingInteraction)
         XCTAssertEqual(store.runs.map(\.id), [original.id])
 
         let numbers = [13, 27, 41]
+        defaults.set(MeihuaCastingMode.time.rawValue, forKey: "oracle.casting.meihua")
         XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: numbers, save: false))
         try await waitUntilIdle(store)
 
@@ -1060,6 +1094,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         let supplemented = try XCTUnwrap(store.runs.last)
         let meihua = try XCTUnwrap(supplemented.results.first { $0.method == .meihua })
         XCTAssertEqual(supplemented.plan.baseRunID, original.id)
+        XCTAssertEqual(supplemented.plan.meihuaCastingMode, .threeNumbers)
         XCTAssertEqual(supplemented.input.numbers, numbers)
         XCTAssertEqual(supplemented.input.seed, original.input.seed)
         XCTAssertEqual(supplemented.input.castingDate, original.input.castingDate)
