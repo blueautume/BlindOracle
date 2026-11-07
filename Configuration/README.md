@@ -6,6 +6,8 @@
 
 `ServiceEnvironment.current` 是唯一环境入口，3.0.20 起默认发布包先验证 `AppTransaction.shared`，再冻结为 Production/Sandbox。未验证、未知环境或取凭据失败不默认放行任一环境、不创建账号/AI对象。3.0.21 起恢复按钮明确为「重新验证 App Store」，仅用户点击后调用会弹系统认证的 `AppTransaction.refresh()`；启动与自动恢复仍只读 shared。刷新后同样要求 Apple verified、匹配 Bundle ID 和支持的环境；取消或失败保留恢复页与原账号数据。自动 Sandbox Apple 登录携带 JWS 供服务器再次独立验签和绑定。
 
+3.0.32 的有限重试与超时不改变上述信任边界。启动故障诊断固定发送到正式 API 的 `diagnostics/app-launch/`，不调用 `ServiceEnvironment.current`、不带登录头或安装凭据，仅报告固定字段；该接口不能用来冻结服务环境或取得账号权限。恢复页提供诊断复制，离线队列限量保留 7 天，服务器记录由维护任务按 30 天清理。
+
 开发签名 owner 包保留显式开关：
 
 ```sh

@@ -13,6 +13,7 @@
   "local_plugin_count": 10,
   "release_is_signed": true,
   "notes": [
+    "Launch verification diagnostics 3.0.32 / 58: 701 non-live unit tests, ten existing account UI tests and one focused recovery/copy/retry UI test passed; the recovery screenshot was inspected. Backend PostgreSQL full 249 tests passed without skips, both services deployed, server HTTPS-origin anonymous ingestion/idempotency/rejection and readonly management display verified; synthetic event removed. External-computer TLS connection still ends before HTTP and is recorded separately. No claim that the affected physical tester has recovered; App Store Connect acknowledged Upload succeeded and Uploaded package is processing; tester download availability and physical-tester recovery are not asserted. Upload evidence: build/launch-verification-3.0.32-58-upload.log.",
     "Casting preferences update 3.0.31 / Build 57 on feature/casting-method-preferences: method-detail pages persist Meihua time/two-number/three-number choices (default time) and Liuyao coin/yarrow/physical-entry choices (default coins). New plans freeze the local choice, while resumed drafts and supplements retain their original basis and source. Dynamic number slots, six physical results, correction, recovery, source-aware reuse and legacy JSON are covered. Final non-live suite passed 689 tests; eight distinct UI regressions passed across the initial six and final two runs, including bilingual three-number editing, two-number entry, defaults, persistence, yarrow, combined casting and physical-entry recovery. Final unsigned Release build passed with no warnings. Name analysis was not changed; no branch merge or TestFlight upload was performed for this update. Earlier evidence retains its actual version.",
     "Usage row alignment update 3.0.30 / Build 56: Available allowance and Replenish allowance now share a regular 15-point font and a 44-point minimum label-row height. Gauge spacing is 8 points and card section spacing is 12 points. The existing usage-to-purchase UI regression passed and the rendered usage screenshot was visually inspected. Signed Release archive completed without compiler warnings. Earlier functional and purchase evidence retains its original version; the broader unit suite was not rerun for this style-only change.",
     "Account presentation update 3.0.29 / Build 55: simplified sign-in with a single-line Chinese title, bottom legal links and fixed progress/error slots; identity-only Data/account pages link to separate quiet usage. Purchase details show approved server Token quantity and StoreKit displayPrice before the fixed payment button; missing quantity, loading and unresolved purchases disable payment. 31 targeted unit tests passed, including bilingual rendered purchase screenshots; final screenshot and two UI regressions passed after fixing the purchase-footer accessibility identifier. Earlier account UI evidence and the small-screen login result are recorded separately below. Signed Release archive and distribution IPA passed candidate validation; runtime TestFlight availability is not inferred from export.",
@@ -78,8 +79,8 @@
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "3.0.31",
-  "build": "57",
+  "version": "3.0.32",
+  "build": "58",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",
@@ -2222,5 +2223,53 @@
     "name_analysis_changed": false,
     "testflight_upload_performed": false,
     "main_merged": false
+  },
+  "launch_verification_diagnostics_3_0_32": {
+    "version": "3.0.32",
+    "build": 58,
+    "implementation": "Bounded shared retries, user-only refresh and one recovery read, owned timeout race with late-result isolation, distinct cancellation diagnostics, safe copy and anonymous reporting before account/environment initialization.",
+    "verification": {
+      "non_live_unit_tests": 701,
+      "unit_result": "build/launch-verification-3.0.32-58-unit-final.xcresult",
+      "account_ui_tests_passed": 10,
+      "account_ui_result": "build/launch-verification-3.0.32-58-ui.xcresult",
+      "recovery_ui_tests_passed": 1,
+      "recovery_ui_result": "build/launch-verification-3.0.32-58-recovery-ui.xcresult",
+      "recovery_screenshot_reviewed": true,
+      "script_tests": 34,
+      "script_tests_skipped": 1,
+      "backend_postgresql_tests_passed": 249,
+      "backend_postgresql_skipped": 0
+    },
+    "diagnostics": {
+      "endpoint": "https://wellecho.cn/xiazi-api/v1/diagnostics/app-launch/",
+      "account_credentials_sent": false,
+      "persistent_device_id": false,
+      "offline_queue_limit": 40,
+      "offline_queue_days": 7,
+      "server_retention_days": 30,
+      "client_occurred_at_and_server_received_at_separate": true,
+      "normal_successful_launches_reported": false
+    },
+    "deployment": {
+      "backend_source_commit": "ee78268",
+      "both_backends_deployed": true,
+      "server_https_origin_ingestion_verified": true,
+      "idempotency_conflict_and_sensitive_field_rejection_verified": true,
+      "readonly_admin_list_and_detail_verified": true,
+      "synthetic_probe_removed": true,
+      "external_computer_https_probe": "TLS EOF / SSL_ERROR_SYSCALL before HTTP response; not claimed to pass",
+      "evidence": "../OracleBackend/artifacts/launch-diagnostics-origin-verification.json"
+    },
+    "release": {
+      "archive": "build/testflight-archive-3.0.32-58/BlindOracle.xcarchive",
+      "candidate_verification": "build/testflight-archive-3.0.32-58/candidate-verification.json",
+      "passed": true,
+      "upload": "acknowledged_processing",
+      "app_review_submitted": false,
+      "physical_tester_recovery_verified": false,
+      "upload_log": "build/launch-verification-3.0.32-58-upload.log",
+      "testflight_download_ready_verified": false
+    }
   }
 }

@@ -100,12 +100,12 @@ final class ServiceEnvironmentTests: XCTestCase {
 
     @MainActor func testFailedEnvironmentResolutionShowsRecoveryWithoutFreezingOrReadingAccountStateAndCanRetry() async {
         let storage = AppServiceContextStore()
-        let provider = ScriptedAppTransactionEvidence([.failure(URLError(.notConnectedToInternet)), .success(.verified(environment: .sandbox, bundleID: "com.lihao.BlindOracle", jws: "fixture-retry-proof"))])
+        let provider = ScriptedAppTransactionEvidence([.failure(StoreKitError.notEntitled), .success(.verified(environment: .sandbox, bundleID: "com.lihao.BlindOracle", jws: "fixture-retry-proof"))])
         let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: storage, bundleID: "com.lihao.BlindOracle")
         XCTAssertEqual(coordinator.state, .resolving); XCTAssertNil(storage.snapshot())
         await coordinator.resolve()
         XCTAssertEqual(coordinator.state, .recoveryRequired); XCTAssertNil(storage.snapshot())
-        XCTAssertEqual(coordinator.failure?.kind, .network)
+        XCTAssertEqual(coordinator.failure?.kind, .unavailable)
         let firstRequests = await provider.requests
         XCTAssertEqual(firstRequests, [.current], "Launch must never trigger App Store authentication.")
         await coordinator.retryFromUser()
@@ -146,7 +146,7 @@ final class ServiceEnvironmentTests: XCTestCase {
     }
 
     @MainActor func testRepeatedAutomaticResolutionNeverCallsRefreshAfterFailure() async {
-        let provider = ScriptedAppTransactionEvidence([.failure(StoreKitError.unknown), .failure(StoreKitError.unknown)])
+        let provider = ScriptedAppTransactionEvidence([.failure(StoreKitError.notEntitled), .failure(StoreKitError.notEntitled)])
         let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: AppServiceContextStore(), bundleID: "com.lihao.BlindOracle")
         await coordinator.resolve()
         await coordinator.resolve()
@@ -158,31 +158,29 @@ final class ServiceEnvironmentTests: XCTestCase {
 
     @MainActor func testUserCancellingRefreshKeepsRecoveryAndDoesNotSelectEitherRoute() async {
         let storage = AppServiceContextStore()
-        let provider = ScriptedAppTransactionEvidence([.failure(StoreKitError.unknown), .failure(StoreKitError.userCancelled)])
+        let provider = ScriptedAppTransactionEvidence([.failure(StoreKitError.notEntitled), .failure(StoreKitError.userCancelled)])
         let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: storage, bundleID: "com.lihao.BlindOracle")
         await coordinator.resolve()
         await coordinator.retryFromUser()
         XCTAssertEqual(coordinator.state, .recoveryRequired)
-        XCTAssertEqual(coordinator.failure?.kind, .cancelled)
-        XCTAssertEqual(coordinator.failure?.diagnosticCode, "env_cancelled")
+        XCTAssertEqual(coordinator.failure?.kind, .userCancelled)
+        XCTAssertEqual(coordinator.failure?.diagnosticCode, "env_user_cancelled")
         XCTAssertNil(storage.snapshot())
         let requests = await provider.requests
         XCTAssertEqual(requests, [.current, .userInitiatedRefresh])
     }
 
-    @MainActor func testOfflineRefreshPreservesRecoveryAndLaterVerifiedRefreshClearsFailure() async {
+    @MainActor func testTransientRefreshCanRecoverWithOneSharedReadWithoutAnotherPrompt() async {
         let storage = AppServiceContextStore()
-        let provider = ScriptedAppTransactionEvidence([.failure(StoreKitError.unknown),
+        let provider = ScriptedAppTransactionEvidence([.failure(StoreKitError.notEntitled),
             .failure(StoreKitError.networkError(URLError(.notConnectedToInternet))),
             .success(.verified(environment: .sandbox, bundleID: "com.lihao.BlindOracle", jws: "fixture-refreshed-proof"))])
         let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: storage, bundleID: "com.lihao.BlindOracle")
         await coordinator.resolve()
         await coordinator.retryFromUser()
-        XCTAssertEqual(coordinator.state, .recoveryRequired)
-        XCTAssertEqual(coordinator.failure?.kind, .network)
-        XCTAssertNil(storage.snapshot())
-        await coordinator.retryFromUser()
-        guard case .ready(let context) = coordinator.state else { return XCTFail("Verified user refresh must recover launch") }
+        guard case .ready(let context) = coordinator.state else { return XCTFail("A verified recovery read must recover launch") }
+        let requests = await provider.requests
+        XCTAssertEqual(requests, [.current, .userInitiatedRefresh, .recoveryRead])
         XCTAssertEqual(context.environment, .sandbox)
         XCTAssertEqual(context.appleLoginProof, "fixture-refreshed-proof")
         XCTAssertNil(coordinator.failure)
@@ -200,7 +198,7 @@ final class ServiceEnvironmentTests: XCTestCase {
         let kinds: [AppServiceLaunchFailure.Kind] = [.unverified, .unverified, .unverified, .wrongApplication, .unsupportedEnvironment, .missingProof]
         for (result, kind) in zip(results, kinds) {
             let storage = AppServiceContextStore()
-            let provider = ScriptedAppTransactionEvidence([.failure(StoreKitError.unknown), result])
+            let provider = ScriptedAppTransactionEvidence([.failure(StoreKitError.notEntitled), result])
             let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: storage, bundleID: "com.lihao.BlindOracle")
             await coordinator.resolve()
             await coordinator.retryFromUser()
@@ -240,12 +238,97 @@ final class ServiceEnvironmentTests: XCTestCase {
         XCTAssertEqual(AppServiceLaunchFailure(error: opaque).diagnosticCode, "env_internal")
         XCTAssertEqual(AppServiceLaunchFailure(error: StoreKitError.systemError(opaque)).kind, .unavailable)
         XCTAssertEqual(AppServiceLaunchFailure(error: StoreKitError.systemError(opaque)).diagnosticCode, "env_store_unavailable")
-        XCTAssertEqual(AppServiceLaunchFailure(error: CancellationError()).kind, .cancelled)
-        XCTAssertEqual(AppServiceLaunchFailure(error: URLError(.cancelled)).kind, .cancelled)
+        XCTAssertEqual(AppServiceLaunchFailure(error: CancellationError()).kind, .taskCancelled)
+        XCTAssertEqual(AppServiceLaunchFailure(error: URLError(.cancelled)).kind, .requestCancelled)
         XCTAssertEqual(AppServiceLaunchFailure(error: StoreKitError.systemError(URLError(.timedOut))).kind, .network)
         let verification = AppTransactionVerificationFailureReason(VerificationResult<AppTransaction>.VerificationError.invalidDeviceVerification)
         XCTAssertEqual(verification, .invalidDeviceVerification)
         XCTAssertEqual(AppServiceLaunchFailure(error: AppTransactionEvidenceError.unverified(verification)).diagnosticCode, "env_v_device")
+    }
+
+    @MainActor func testAutomaticTransientRecoveryUsesOnlyThreeSharedReadsAndReportsRecovery() async {
+        let reporter = CapturingLaunchReporter()
+        let provider = ScriptedAppTransactionEvidence([.failure(URLError(.notConnectedToInternet)),
+            .failure(URLError(.cancelled)), .success(.verified(environment: .sandbox, bundleID: "com.lihao.BlindOracle", jws: "private-proof"))])
+        let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: AppServiceContextStore(),
+            bundleID: "com.lihao.BlindOracle", reporter: reporter,
+            timing: AppServiceLaunchTiming(retryDelays: [0, 0]))
+        await coordinator.resolve()
+        guard case .ready(let context) = coordinator.state else { return XCTFail("Transient reads should recover") }
+        XCTAssertEqual(context.environment, .sandbox)
+        let requests = await provider.requests
+        XCTAssertEqual(requests, [.current, .current, .current])
+        await reporter.waitForEvents(3)
+        let events = await reporter.events
+        XCTAssertEqual(events.map(\.outcome), [.retrying, .retrying, .recovered])
+        XCTAssertEqual(events.map(\.diagnosticCode), ["env_network", "env_request_cancelled", "env_recovered"])
+        XCTAssertEqual(Set(events.map(\.attemptID)).count, 1, "All retries from one launch action share its attempt reference")
+        XCTAssertFalse(coordinator.diagnosticText.contains("private-proof"))
+    }
+
+    @MainActor func testAutomaticNetworkFailureStopsAfterThreeAttemptsWithoutSelectingARoute() async {
+        let provider = ScriptedAppTransactionEvidence(Array(repeating: .failure(URLError(.timedOut)), count: 4))
+        let storage = AppServiceContextStore()
+        let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: storage,
+            bundleID: "com.lihao.BlindOracle", timing: AppServiceLaunchTiming(retryDelays: [0, 0]))
+        await coordinator.resolve()
+        let requests = await provider.requests
+        XCTAssertEqual(requests, [.current, .current, .current])
+        XCTAssertEqual(coordinator.state, .recoveryRequired); XCTAssertNil(storage.snapshot())
+        XCTAssertEqual(coordinator.failure?.diagnosticCode, "env_network")
+    }
+
+    func testOnlyTransientRetrievalErrorsAreRetryable() {
+        XCTAssertTrue(AppServiceLaunchFailure.isTransient(URLError(.networkConnectionLost)))
+        XCTAssertTrue(AppServiceLaunchFailure.isTransient(StoreKitError.unknown))
+        XCTAssertFalse(AppServiceLaunchFailure.isTransient(StoreKitError.notEntitled))
+        XCTAssertFalse(AppServiceLaunchFailure.isTransient(StoreKitError.notAvailableInStorefront))
+        XCTAssertFalse(AppServiceLaunchFailure.isTransient(StoreKitError.userCancelled))
+        XCTAssertFalse(AppServiceLaunchFailure.isTransient(CancellationError()))
+        XCTAssertFalse(AppServiceLaunchFailure.isTransient(URLError(.serverCertificateUntrusted)))
+        XCTAssertFalse(AppServiceLaunchFailure.isTransient(AppServiceBootstrapError.wrongApplication))
+        XCTAssertFalse(AppServiceLaunchFailure.isTransient(AppTransactionEvidenceError.unverified(.invalidSignature)))
+        let wrapped = NSError(domain: "ASDErrorDomain", code: 500, userInfo: [NSUnderlyingErrorKey: URLError(.timedOut)])
+        XCTAssertTrue(AppServiceLaunchFailure.isTransient(StoreKitError.systemError(wrapped)))
+    }
+
+    @MainActor func testCancelledViewCallerDoesNotCancelOwnedVerification() async {
+        let provider = DelayedAppTransactionEvidence()
+        let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: AppServiceContextStore(), bundleID: "com.lihao.BlindOracle")
+        let caller = Task { await coordinator.resolve() }
+        await provider.waitUntilStarted()
+        caller.cancel()
+        await provider.complete()
+        await caller.value
+        guard case .ready = coordinator.state else { return XCTFail("View cancellation must not cancel app verification") }
+        XCTAssertNil(coordinator.failure)
+    }
+
+    @MainActor func testTimeoutReturnsBeforeUncooperativeStoreKitAndDiscardsLateVerifiedEvidence() async {
+        let provider = DelayedAppTransactionEvidence()
+        let storage = AppServiceContextStore()
+        let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: storage, bundleID: "com.lihao.BlindOracle",
+            timing: AppServiceLaunchTiming(automaticRequestTimeout: 0.01, automaticTotalTimeout: 0.02, retryDelays: []))
+        await coordinator.resolve()
+        XCTAssertEqual(coordinator.state, .recoveryRequired)
+        XCTAssertEqual(coordinator.failure?.kind, .timedOut)
+        XCTAssertNil(storage.snapshot())
+        await provider.complete()
+        for _ in 0..<10 { await Task.yield() }
+        XCTAssertEqual(coordinator.state, .recoveryRequired)
+        XCTAssertNil(storage.snapshot(), "A late result from the timed-out request must never freeze routing")
+    }
+
+    @MainActor func testTaskCancellationCanResumeOnForegroundWithoutPretendingUserCancelled() async {
+        let provider = ScriptedAppTransactionEvidence([.failure(CancellationError()),
+            .success(.verified(environment: .production, bundleID: "com.lihao.BlindOracle", jws: "proof"))])
+        let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: AppServiceContextStore(), bundleID: "com.lihao.BlindOracle")
+        await coordinator.resolve()
+        XCTAssertEqual(coordinator.failure?.diagnosticCode, "env_task_cancelled")
+        let first = await provider.requests
+        XCTAssertEqual(first, [.current])
+        await coordinator.resumeDiagnostics()
+        guard case .ready = coordinator.state else { return XCTFail("Foreground may resume a cancelled task") }
     }
 
     func testAppleLoginUsesCapturedRouteAndOnlyAutomaticSandboxSendsVerifiedAppTransactionJWS() async throws {
@@ -272,6 +355,18 @@ final class ServiceEnvironmentTests: XCTestCase {
     private func fixtureSession(_ tag: String) throws -> AccountSession {
         try AccountSession(response: AccountTokenResponse(accessToken: "fixture-access-" + tag, refreshToken: "fixture-refresh-" + tag, expiresIn: 3600,
             user: AccountUser(id: UUID().uuidString, displayName: tag, email: nil, createdAt: "2026-11-06T00:00:00Z")), appleUserID: "fixture-apple-" + tag)
+    }
+}
+
+private actor CapturingLaunchReporter: AppLaunchDiagnosticReporting {
+    private(set) var events: [AppLaunchDiagnosticEvent] = []
+    func report(_ event: AppLaunchDiagnosticEvent) async { events.append(event) }
+    func flush() async { }
+    func waitForEvents(_ count: Int) async {
+        for _ in 0..<1000 {
+            if events.count >= count { return }
+            await Task.yield()
+        }
     }
 }
 

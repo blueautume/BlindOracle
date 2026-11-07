@@ -28,12 +28,12 @@ import AuthenticationServices
     }
     var body: some Scene {
         WindowGroup {
-            Group {
+            ZStack {
                 switch bootstrap.state {
                 case .resolving:
                     AppServiceLaunchSurface(isRecovering: false) { }
                 case .recoveryRequired:
-                    AppServiceLaunchSurface(isRecovering: true, failure: bootstrap.failure) {
+                    AppServiceLaunchSurface(isRecovering: true, failure: bootstrap.failure, diagnosticText: bootstrap.diagnosticText) {
                         Task { await bootstrap.retryFromUser() }
                     }
                 case .ready(let context):
@@ -47,6 +47,9 @@ import AuthenticationServices
             }
             .preferredColorScheme(.light).tint(InkTheme.cinnabar)
             .task { await bootstrap.resolve() }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                Task { await bootstrap.resumeDiagnostics() }
+            }
         }
     }
 }
@@ -54,13 +57,21 @@ import AuthenticationServices
 private struct AppServiceLaunchSurface: View {
     let isRecovering: Bool
     var failure: AppServiceLaunchFailure? = nil
+    var diagnosticText: String = ""
     let retry: () -> Void
+    @State private var diagnosticsCopied = false
     private var recoveryMessage: String {
         switch failure?.kind {
         case .network:
             return L10n.text("暂时无法连接 App Store，请检查网络后重新验证。", "Couldn’t connect to the App Store. Check your connection and try verifying again.")
-        case .cancelled:
-            return L10n.text("验证已取消，重新验证后即可继续。", "Verification was cancelled. Verify again to continue.")
+        case .userCancelled:
+            return L10n.text("商店账号验证已取消，你可以重新验证。", "App Store authentication was cancelled. You can verify again.")
+        case .requestCancelled:
+            return L10n.text("商店验证请求被中断，请重新验证。", "The App Store verification request was interrupted. Please try again.")
+        case .taskCancelled:
+            return L10n.text("应用准备过程已中断，请重新验证。", "App preparation was interrupted. Please verify again.")
+        case .timedOut:
+            return L10n.text("商店验证等待超时，请检查网络后重新验证。", "App Store verification timed out. Check your connection and try again.")
         case .unverified:
             return L10n.text("App Store 凭据暂未通过验证，请重新验证后继续。", "Your App Store credentials couldn’t be verified. Verify again to continue.")
         default:
@@ -85,6 +96,19 @@ private struct AppServiceLaunchSurface: View {
                         Text(L10n.text("验证代码：", "Verification code: ") + failure.diagnosticCode)
                             .font(.caption2).foregroundStyle(InkTheme.secondary).textSelection(.enabled)
                             .accessibilityIdentifier("serviceEnvironmentFailureCode")
+                    }
+                    if !diagnosticText.isEmpty {
+                        Button {
+                            UIPasteboard.general.string = diagnosticText
+                            diagnosticsCopied = true
+                        } label: {
+                            Label(L10n.text(diagnosticsCopied ? "诊断信息已复制" : "复制诊断信息", diagnosticsCopied ? "Diagnostics copied" : "Copy diagnostics"),
+                                  systemImage: diagnosticsCopied ? "checkmark" : "doc.on.doc")
+                                .font(.footnote)
+                        }
+                        .accessibilityIdentifier("copyServiceEnvironmentDiagnostics")
+                        Text(L10n.text("可将诊断信息发给开发者协助排查。", "Share the diagnostics with the developer for help."))
+                            .font(.caption2).foregroundStyle(InkTheme.secondary).multilineTextAlignment(.center)
                     }
                 } else {
                     ProgressView().controlSize(.small).tint(InkTheme.secondary)
