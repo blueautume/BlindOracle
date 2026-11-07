@@ -2,17 +2,18 @@
   "date": "2026-11-07",
   "xcode": "27.2 (27B52)",
   "minimum_iOS": "17.0",
-  "release_arm64_bundle_bytes": 19424198,
+  "release_arm64_bundle_bytes": 19441334,
   "release_contains_development_key_resource": false,
   "source_credential_matches": null,
   "release_credential_matches": 0,
-  "unit_tests_passed": 658,
+  "unit_tests_passed": 665,
   "ui_tests_passed": 7,
   "live_api_tests_passed": 0,
   "default_live_test_skipped_intentionally": 3,
   "local_plugin_count": 10,
   "release_is_signed": true,
   "notes": [
+    "Gateway failure descriptions 3.0.27 / Build 53: preserve validated server error codes across ordinary, streaming and task admission requests; describe daily limits, concurrency, retry protection, upstream failure, login and allowance failures using local Chinese/English strings. Arbitrary remote messages and invalid status/code pairs are not displayed. Error streams are capped at 8KB and cancelled. All 665 non-live unit tests passed, including seven new gateway tests. Signed Release archive: zero compiler warnings; exported IPA passed distribution, entitlement, privacy and credential checks. No new UI test was run because this changes descriptions in the existing notice view. Earlier UI evidence retains its actual version. Pre-existing string-catalog changes were preserved and not included. Backend per-account budgets and incident admin are independently tested/deployed under backend commit d0df54d.",
     "Confirmation toolbar and Meihua number interaction 3.0.26 / Build 52: the reading form has one top-right Confirm and continue button, no Finish later or bottom duplicate, and visible validation feedback. Requested Meihua numbers are collected in a separate interactive step with random generation and editable cards; empty/invalid drafts persist and cannot calculate. Existing two- and three-number supplements keep their snapshot. All 658 non-live unit tests and seven distinct Chinese/English UI regressions passed; the English workflow passed once more after shortening its navigation title. Original screenshots were visually reviewed. The final signed Release archive has zero compiler warnings and the distribution IPA passed signature, entitlement, privacy and credential checks. No physical device, live supplier, actual GPS or purchase was tested. Upload is recorded separately.",
     "General reading execution routing 3.0.25 / Build 51: topic references, execution intent and saved-result coverage are independent. Changed targets and explicit recasts require fresh confirmation; explanations and same-scope additions reuse the appropriate snapshot. Current-message evidence and valid context are required; ambiguous or unsupported work clarifies. Hypothetical, reported and temporary data cannot silently become permanent profiles. All 647 non-live unit tests (66 new) and four Chinese/English UI tests passed. The signed Release archive has zero compiler warnings, and the exported distribution IPA passed signature, entitlement, privacy and credential checks. Planner responses and location were fixtures; no live supplier NLU or physical device verification was performed. TestFlight upload is recorded separately after this development checkpoint.",
     "Automatic casting location 3.0.24 / Build 50: new time-based reading forms automatically request When In Use location and apply the actual system coordinates and resolved regional timezone. A new reading never borrows the saved self location; valid drafts and historical supplements preserve their place. Manual choice, clearing, submission, dismissal and no-location methods cancel pending work. Denial/timeout remain retryable with manual fallback, and only authorized coordinate lookup/geocoding has a 30-second deadline. The final 581 non-live unit tests, four Chinese/English UI tests and signed Release archive passed; the distribution IPA passed strict signature, Apple entitlement, privacy and credential checks. Original UI attachments were visually reviewed. No physical GPS or real permission dialog was exercised; test fixtures/stubs are not device verification. TestFlight upload is recorded separately after this development checkpoint.",
@@ -67,14 +68,14 @@
     "Earlier offline tarot deck, keyboard, broader interaction, and history regression evidence remains at the retained paths. No reasoning_content is decoded, displayed, or persisted.",
     "Changing the requested method while supplying data preserves the original question, applies the new method, and requires a new summary confirmation. A clock correction alone cannot change methods; ambiguous questions or negative replies cannot act as confirmation."
   ],
-  "unit_test_result": "build/meihua-numbers-3.0.26-52-unit-final.xcresult",
+  "unit_test_result": "build/gateway-limits-3.0.27-53-unit-final.xcresult",
   "final_ui_result": "build/meihua-numbers-3.0.26-52-ui.xcresult",
   "live_api_result": "build-conversation/live-verified.xcresult",
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "3.0.26",
-  "build": "52",
+  "version": "3.0.27",
+  "build": "53",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",
@@ -2080,5 +2081,56 @@
       }
     ],
     "upload_state_at_development_checkpoint": "Not yet uploaded; subsequent upload tracked in build/testflight-archive-3.0.26-52/upload-verification.json"
+  },
+  "gateway_failure_descriptions_3_0_27": {
+    "version": "3.0.27",
+    "build": "53",
+    "timestamp_utc": "2026-11-07T08:52:33.332734+00:00",
+    "branch": "codex/true-solar-time-methods",
+    "source_base_commit": "84dd728",
+    "backend_source_commit": "d0df54d",
+    "unit_tests": {
+      "tests": 665,
+      "passed": 665,
+      "failures": 0,
+      "new_tests": 7,
+      "result": "build/gateway-limits-3.0.27-53-unit-final.xcresult"
+    },
+    "ui_tests_rerun": false,
+    "scope": "Safe local gateway error descriptions; the existing error notice UI is unchanged. Real URLProtocol tests cover ordinary/streaming/admission/SSE errors, malformed or malicious bodies, the 8KB error-body cap, and healthy responses.",
+    "signed_release_archive": {
+      "passed": true,
+      "compiler_warnings": 0,
+      "path": "build/testflight-archive-3.0.27-53/BlindOracle.xcarchive",
+      "bundle_bytes": 19441334
+    },
+    "candidate_verification": "build/testflight-archive-3.0.27-53/candidate-verification.json",
+    "distribution_ipa_sha256": "458d47e6f3dce7d5881f587dd0dd5e36cd356adfd4d087b8b788c0d991ee0f8d",
+    "coverage": [
+      "per-account daily service limit",
+      "shared operator limit",
+      "own generation in progress",
+      "retry cooling and stage repair limits",
+      "upstream unavailable/interrupted/truncated",
+      "session expiry and allowance exhaustion",
+      "ignore arbitrary server messages and invalid status/code pairs",
+      "failed streaming response read bounded and cancelled without touching healthy streams"
+    ],
+    "unit_exclusions": [
+      "LiveIntegrationTests",
+      "StoreKitLocalPurchaseTests",
+      "AppStoreIapReviewScreenshotTests"
+    ],
+    "physical_device_verified": false,
+    "preexisting_changes_preserved": [
+      "Resources/Localizable.xcstrings"
+    ],
+    "initial_unit_result": {
+      "path": "build/gateway-limits-3.0.27-53-unit.xcresult",
+      "tests": 665,
+      "assertion_failures": 5,
+      "resolution": "Test-only trailing slash comparison corrected; production source unchanged. Final full run passed."
+    },
+    "upload_state_at_development_checkpoint": "Not uploaded yet; subsequent upload recorded separately."
   }
 }

@@ -2,7 +2,7 @@
 
 一个以水墨宣纸为视觉语言的原生 SwiftUI iOS 应用。只有「对话」「数据」两个标签。十种方法在设备本地执行，固定的联网 Agent 负责选择适用插件、提出资料与交互需求、整合解读和回答追问。
 
-当前版本：**3.0.26（Build 52）**。
+当前版本：**3.0.27（Build 53）**。
 
 每批修改提交前同时递增补丁版本和 Build，运行一次 `python3 Scripts/version.py` 即可同步版本配置。单一版本源为 `Configuration/Version.json`，工程生成脚本也从这里读取；构建和测试不会自动加版本。`python3 Scripts/version.py --check` 检查工作区同步状态，提交钩子用 `--check-staged` 检查暂存区相对 HEAD 的递增。首次克隆后使用 `git config core.hooksPath .githooks` 启用密钥及版本检查。
 
@@ -46,6 +46,8 @@ StoreKit 2 从服务端 `products/` 获取已配置商品，再用 Apple 的 `Pr
 2. 选择 iOS 17 或更高版本的模拟器运行。真机需在 Signing & Capabilities 选择自己的开发团队；本项目的 bundle identifier 保持为 `com.lihao.BlindOracle`。
 3. Debug 与 Release 均不再打包 AI 服务方密钥。使用原生 Apple 登录取得 wellecho.cn 的账号会话，ThisDeviceOnly Keychain 仅保存账号会话；历史本地秘密配置文件保留，但工程构建不再读取。部署配置见[账号与服务配置](Configuration/README.md)。
 4. 所有 AI 调用（规划、解读、追问、摘要、地址辅助与诊断）都经 `https://wellecho.cn/xiazi-api/v1/ai/chat/completions/`，由服务器认证、控制供应商参数并记录用量。客户端保持 OpenAI 兼容 JSON/SSE 解析，已过期的自有 access token 通过单次并发刷新恢复。应用启动后必须先完成 Apple 登录，已有会话通过服务器验证后自动恢复；未登录时仅可查看登录页与协议政策。网络失败保留数据，不提供替代解读。
+
+服务器会区分账号每日服务上限、已有生成任务、短期重试限制及模型连接异常，客户端据错误码显示本地中英文说明。失败保留已填写资料与可重试任务，不把账号额度、并发与供应商错误统一显示为“繁忙”。
 
 没有 XcodeGen、CocoaPods 或 npm 安装步骤。全部运行依赖已随源码或资源提供；`iztro` 在构建前已打成 JavaScriptCore 可执行的本地 bundle，应用运行时不带 Node/Python。
 

@@ -63,11 +63,14 @@ enum DeepSeekError: LocalizedError, Sendable {
     case malformedJSON
     case truncated
     case http(Int)
+    case gateway(status: Int, code: String)
     case provider(String)
     case missingResponseModel
     case unexpectedModel(requested: String, actual: String)
     var errorDescription: String? {
         switch self {
+        case .gateway(let status, let code):
+            AIGatewayFailure.message(status: status, code: code) ?? DeepSeekError.http(status).errorDescription
         case .malformedJSON:
             L10n.text("收到的回答不完整，请重试；已填写的资料仍保留。", "The reply was incomplete. Try again. Your details are saved.")
         case .truncated:
@@ -76,6 +79,8 @@ enum DeepSeekError: LocalizedError, Sendable {
             L10n.text("这次请求已提交，服务未重复生成。若回答未完成，可稍后重试。", "This request was already submitted and was not generated again. If the reply is incomplete, try again later.")
         case .http(402):
             L10n.text("请先在数据页补充额度，再继续新的问事。", "Replenish your allowance in Data before starting a new reading.")
+        case .http(401):
+            L10n.text("登录状态已过期，请重新登录后再试。", "Your sign-in has expired. Sign in again and retry.")
         case .http(429):
             L10n.text("解读服务暂时繁忙，请稍后再试。", "The reading service is busy. Try again in a moment.")
         case .signInRequired:
@@ -592,7 +597,7 @@ actor DeepSeekClient {
             maxTokens: DeepSeekConfiguration.outputTokenBudget, purpose: "diagnostic", requestID: UUID().uuidString)
         try Task.checkCancellation()
         guard let http = response as? HTTPURLResponse else { throw DeepSeekError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode) }
+        guard (200..<300).contains(http.statusCode) else { throw AIGatewayFailure.error(status: http.statusCode, body: data) }
         let result = try decoder.decode(CompletionEnvelope.self, from: data)
         let report = Self.report(result, requestedModel: requestedModel,
             host: http.url?.host ?? endpoint.host ?? "", started: started)
@@ -641,7 +646,7 @@ actor DeepSeekClient {
             let stage = AIQuotaTaskScope.stage ?? AIQuotaStage(taskID: UUID(uuidString: requestID) ?? UUID(), stageID: purpose)
             let prepared: PreparedAIStage
             do { prepared = try await quotaTasks.prepare(stage: stage, body: proposedBody, purpose: purpose) }
-            catch AccountAPIError.server(let status, _) { throw DeepSeekError.http(status) }
+            catch AccountAPIError.server(let status, let code) { throw AIGatewayFailure.error(status: status, code: code) }
             request.httpBody = prepared.body
             request.setValue(prepared.taskID.uuidString.lowercased(), forHTTPHeaderField: "X-Task-ID")
             request.setValue(prepared.stageID, forHTTPHeaderField: "X-Stage-ID")
@@ -793,7 +798,7 @@ actor DeepSeekClient {
         try Task.checkCancellation()
         guard let http = response as? HTTPURLResponse else { throw DeepSeekError.invalidResponse }
         // A gateway attempt may already have reached the provider. Only an explicit user retry starts another one.
-        guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode) }
+        guard (200..<300).contains(http.statusCode) else { throw AIGatewayFailure.error(status: http.statusCode, body: data) }
         let result = try decoder.decode(CompletionEnvelope.self, from: data)
         let report = Self.report(result, requestedModel: requestedModel,
             host: http.url?.host ?? endpoint.host ?? "", started: started)
@@ -819,7 +824,16 @@ actor DeepSeekClient {
         let (bytes, response) = try await gatewayBytes(messages, jsonMode: jsonMode,
             maxTokens: maxTokens, purpose: purpose, requestID: UUID().uuidString, sessionGeneration: expectedSession)
         guard let http = response as? HTTPURLResponse else { throw DeepSeekError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else { throw DeepSeekError.http(http.statusCode) }
+        guard (200..<300).contains(http.statusCode) else {
+            defer { bytes.task.cancel() }
+            var body = Data()
+            for try await byte in bytes {
+                try Task.checkCancellation()
+                body.append(byte)
+                if body.count == AIGatewayFailure.maximumBodyBytes { break }
+            }
+            throw AIGatewayFailure.error(status: http.statusCode, body: body)
+        }
         let host = http.url?.host ?? endpoint.host ?? ""
         var full = ""
         var framer = DeepSeekSSEFramer()
@@ -1150,7 +1164,9 @@ struct DeepSeekSSEChunk: Sendable {
         }
         guard let data = event.data(using: .utf8) else { throw DeepSeekError.invalidResponse }
         let envelope = try JSONDecoder().decode(Envelope.self, from: data)
-        if envelope.error != nil { throw DeepSeekError.provider(L10n.text("解读服务暂时无法完成回答，请稍后重试。", "The service couldn’t finish this reply. Try again in a moment.")) }
+        if let failure = envelope.error {
+            throw AIGatewayFailure.error(status: 502, code: failure.code ?? "")
+        }
         return DeepSeekSSEChunk(content: (envelope.choices ?? []).compactMap { $0.delta?.content }.joined(),
                                 finishReason: envelope.choices?.compactMap(\.finish_reason).last, isDone: false,
                                 model: envelope.model, usage: envelope.usage)
@@ -1164,7 +1180,14 @@ struct DeepSeekSSEChunk: Sendable {
         struct Choice: Decodable { var delta: Delta?; var finish_reason: String? }
         // reasoning_content is deliberately absent from this model.
         struct Delta: Decodable { var content: String? }
-        struct ProviderError: Decodable { var message: String? }
+        struct ProviderError: Decodable {
+            var code: String?
+            private enum CodingKeys: String, CodingKey { case code }
+            init(from decoder: Decoder) throws {
+                let values = try decoder.container(keyedBy: CodingKeys.self)
+                code = try? values.decode(String.self, forKey: .code)
+            }
+        }
     }
 }
 
