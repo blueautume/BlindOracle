@@ -65,6 +65,13 @@ final class OracleInteractionTests: XCTestCase {
         let requested = plan(methods: [.meihua], interactions: [.init(method: .meihua, kind: .numbers)])
         XCTAssertEqual(OracleInteractionPolicy.requests(for: requested).map(\.kind), [.numbers])
         XCTAssertTrue(OracleInteractionPolicy.requests(for: requested, numbers: [8, 8, 6]).isEmpty)
+        for values in [[8, 8], [0, 8, 6], [8, 8, 1000], [8]] {
+            XCTAssertEqual(OracleInteractionPolicy.requests(for: requested, numbers: values).map(\.kind), [.numbers])
+        }
+        let timeOrLegacy = plan(methods: [.meihua])
+        XCTAssertTrue(OracleInteractionPolicy.requests(for: timeOrLegacy).isEmpty)
+        XCTAssertTrue(OracleInteractionPolicy.requests(for: timeOrLegacy, numbers: [8, 8]).isEmpty)
+        XCTAssertEqual(OracleInteractionPolicy.requests(for: timeOrLegacy, numbers: [0, 8, 6]).map(\.kind), [.numbers])
     }
 
     func testLegacyRequiredNumberFieldCreatesNumberInteraction() throws {
@@ -85,6 +92,60 @@ final class OracleInteractionTests: XCTestCase {
         XCTAssertFalse(OracleInteractionPolicy.isValid(.init(requestID: "liuyao", numbers: [1, 2, 3]), for: request, complete: true))
         XCTAssertFalse(OracleInteractionPolicy.isValid(.init(requestID: request.id, numbers: [1, 2, 3], lines: [7]), for: request, complete: true))
         XCTAssertTrue(OracleInteractionPolicy.isValid(.init(requestID: request.id, numbers: [1, 999, 3]), for: request, complete: true))
+    }
+
+    func testEditableNumberDraftKeepsBlankSlotsAndInvalidValuesWithoutStartingTheReading() throws {
+        let request = OracleInteractionRequest(method: .meihua, kind: .numbers)
+        for texts in [["8", "", "6"], ["0", "8", "6"], ["8", "1000", "6"], ["x", "8", "6"]] {
+            var pending = session([request])
+            let draft = OracleInteractionResponse(requestID: request.id, numberTexts: texts)
+            XCTAssertTrue(pending.saveProgress(draft), texts.joined(separator: ","))
+            XCTAssertFalse(pending.complete(draft))
+            XCTAssertTrue(pending.input.numbers.isEmpty)
+            XCTAssertEqual(pending.currentIndex, 0)
+            let restored = try JSONDecoder().decode(OracleInteractionSession.self, from: JSONEncoder().encode(pending))
+            XCTAssertEqual(restored.draft?.numberTexts, texts)
+            XCTAssertEqual(restored.draft?.numbers, [])
+            XCTAssertEqual(restored.seed, pending.seed)
+        }
+    }
+
+    func testEditedNumberTextsMustAgreeWithTheCompletedNumbers() throws {
+        let request = OracleInteractionRequest(method: .meihua, kind: .numbers)
+        var pending = session([request])
+        let stale = OracleInteractionResponse(requestID: request.id, numbers: [8, 8, 6], numberTexts: ["8", "", "6"])
+        XCTAssertFalse(pending.saveProgress(stale))
+        XCTAssertFalse(pending.complete(stale))
+        let mismatched = OracleInteractionResponse(requestID: request.id, numbers: [8, 8, 5], numberTexts: ["8", "8", "6"])
+        XCTAssertFalse(pending.complete(mismatched))
+        let corrected = OracleInteractionResponse(requestID: request.id, numbers: [8, 8, 6], numberTexts: ["008", " 8 ", "6"])
+        XCTAssertTrue(pending.saveProgress(corrected))
+        var restored = try JSONDecoder().decode(OracleInteractionSession.self, from: JSONEncoder().encode(pending))
+        XCTAssertTrue(restored.complete(corrected))
+        XCTAssertEqual(restored.input.numbers, [8, 8, 6])
+        XCTAssertEqual(restored.input.interactionResponses, [corrected])
+        XCTAssertFalse(restored.complete(corrected))
+    }
+
+    func testNumberTextDraftsAreBoundedAndCannotBeMixedIntoOtherSteps() {
+        let request = OracleInteractionRequest(method: .meihua, kind: .numbers)
+        for texts in [["8", "6"], ["8", "6", "1", "2"], [String(repeating: "8", count: 17), "8", "6"]] {
+            XCTAssertFalse(OracleInteractionPolicy.isValid(.init(requestID: request.id, numberTexts: texts), for: request, complete: false))
+        }
+        let coins = OracleInteractionRequest(method: .liuyao, kind: .coins)
+        XCTAssertFalse(OracleInteractionPolicy.isValid(.init(requestID: coins.id, lines: [7, 7, 7, 7, 7, 7], numberTexts: ["", "", ""]), for: coins, complete: true))
+        let tarot = OracleInteractionRequest(method: .tarot, kind: .tarot)
+        XCTAssertFalse(OracleInteractionPolicy.isValid(.init(requestID: tarot.id, tarotDraws: draws(), revealedCount: 3, numberTexts: ["", "", ""]), for: tarot, complete: true))
+    }
+
+    func testOldNumberResponsesRemainDecodableAndKeepTheirExactSelection() throws {
+        let old = OracleInteractionResponse(requestID: "meihua", numbers: [8, 8, 6])
+        let restored = try JSONDecoder().decode(OracleInteractionResponse.self, from: removing(["numberTexts"], from: old))
+        XCTAssertNil(restored.numberTexts)
+        XCTAssertEqual(NumberInteractionDraft.texts(for: restored), ["8", "8", "6"])
+        XCTAssertTrue(OracleInteractionPolicy.isValid(restored, for: .init(method: .meihua, kind: .numbers), complete: true))
+        XCTAssertEqual(NumberInteractionDraft.texts(for: .init(requestID: "meihua", numbers: [8])), ["8", "", ""])
+        XCTAssertNil(NumberInteractionDraft.values(in: ["", "", ""]))
     }
 
     func testPartialCoinsCanBeSavedButCannotAdvanceOrChangeInput() throws {
@@ -155,8 +216,10 @@ final class OracleInteractionTests: XCTestCase {
     func testInteractiveNumbersOverrideEarlierUnknownFlag() async throws {
         var pending = session([.init(method: .meihua, kind: .numbers)])
         pending.input.profile.unknownFields.insert(.numbers)
+        pending.input.profile.declaredUnknownFields = [.numbers]
         XCTAssertTrue(pending.complete(.init(requestID: "meihua", numbers: [8, 8, 6])))
         XCTAssertFalse(pending.input.profile.unknownFields.contains(.numbers))
+        XCTAssertFalse(pending.input.profile.declaredUnknownFields?.contains(.numbers) == true)
         let result = try await MeihuaPlugin().calculate(pending.input)
         XCTAssertEqual(result.rows.first { $0.label == "本卦" }?.value, "坤为地")
         XCTAssertEqual(result.rows.first { $0.label == "动爻" }?.value, "第6爻（自下而上）")

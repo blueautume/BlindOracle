@@ -238,9 +238,9 @@ final class SolarCastingIntakeTests: XCTestCase {
         XCTAssertEqual(input.readingParticipants.map(\.currentLongitude), people.map(\.currentLongitude))
     }
 
-    @MainActor func testMeihuaTwoNumbersNeedLocationAndSkipLegacyThirdNumberInteraction() async throws {
+    @MainActor func testLegacyMeihuaTwoNumberModeNeedsLocationWithoutANewNumberRequest() async throws {
         let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
-        store.pendingPlan = plan(.meihua, numbersRequested: true)
+        store.pendingPlan = plan(.meihua)
         XCTAssertFalse(store.confirmGroupIntake(profiles: [], numbers: [12, 23], save: false))
         XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [12, 23], save: false, castingProfile: place()))
         XCTAssertNil(store.pendingInteraction)
@@ -271,22 +271,30 @@ final class SolarCastingIntakeTests: XCTestCase {
         XCTAssertTrue(run.results.contains { $0.method == .meihua && [.complete, .partial].contains($0.status) })
     }
 
-    @MainActor func testMeihuaTimeModeCanRemainEmptyOnlyWithoutExplicitNumberRequest() async throws {
+    @MainActor func testMeihuaTimeModeIsSeparateFromThePendingNumberInteraction() async throws {
         let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
         store.pendingPlan = plan(.meihua, numbersRequested: true)
-        XCTAssertFalse(store.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: place()))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: place()))
+        XCTAssertEqual(store.pendingInteraction?.currentRequest?.kind, .numbers)
+        XCTAssertTrue(store.runs.isEmpty)
+        store.cancelPendingReading()
         store.pendingPlan = plan(.meihua)
         XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: place()))
         try await waitUntilIdle(store)
         XCTAssertEqual(store.runs.last?.input.numbers, [])
     }
 
-    @MainActor func testSingleDiscontinuousOrOutOfRangeNumbersCannotStart() throws {
+    @MainActor func testSingleDiscontinuousOrOutOfRangeNumbersCannotStartCalculationBeforeCorrection() throws {
         for numbers in [[12], [0, 23], [12, 0, 6], [12, 23, 1000], [-1, 2]] {
             let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
             store.pendingPlan = plan(.meihua, numbersRequested: true)
-            XCTAssertFalse(store.confirmGroupIntake(profiles: [], numbers: numbers, save: false, castingProfile: place()), "\(numbers)")
+            XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: numbers, save: false, castingProfile: place()), "\(numbers)")
+            let session = try XCTUnwrap(store.pendingInteraction)
+            XCTAssertEqual(session.currentRequest?.kind, .numbers)
+            store.completeInteraction(.init(requestID: "meihua", numbers: numbers), sessionID: session.id)
+            XCTAssertEqual(store.pendingInteraction?.id, session.id)
             XCTAssertTrue(store.runs.isEmpty)
+            store.cancelPendingReading()
         }
     }
 

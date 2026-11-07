@@ -800,6 +800,7 @@ struct CastingLocationDraft: Equatable, Sendable {
             plan.question = questionUpdatingMethods(base.input.question, from: base.plan.methods, to: plan.methods)
         }
         plan.requiredFields = Array(Set(proposed.requiredFields + registry.descriptors.filter { methods.contains($0.method) }.flatMap(\.requiredFields)))
+        retainConfirmedTwoNumberMode(in: &plan, base: base, numbers: base.input.numbers)
         let originals = base.input.readingParticipants
         let selectedIDs = (proposed.participantIDs ?? []).isEmpty ? originals.map(\.id) : proposed.participantIDs ?? []
         var people = selectedIDs.compactMap { id -> OracleProfile? in
@@ -852,6 +853,19 @@ struct CastingLocationDraft: Equatable, Sendable {
             phase = .awaitingInteraction; operationID = nil; task = nil
             presentRequestedInteraction()
         } else { startReading(input: input, plan: plan) }
+    }
+
+    /// A completed historical two-number cast is not an unfinished three-number
+    /// draft. Supplements keep its confirmed mode and snapshot; a fresh reading
+    /// has no base and must complete its newly requested interaction instead.
+    private func retainConfirmedTwoNumberMode(in plan: inout OraclePlan, base: OracleRun, numbers: [Int]) {
+        let unknown = base.input.profile.unknownFields.union(base.input.profile.declaredUnknownFields ?? [])
+        guard plan.baseRunID == base.id, numbers == base.input.numbers,
+              numbers.count == 2, numbers.allSatisfy({ (1...999).contains($0) }),
+              !unknown.contains(.numbers),
+              base.results.contains(where: { $0.method == .meihua && [.complete, .partial].contains($0.status) }) else { return }
+        plan.requiredFields.removeAll { $0 == .numbers }
+        plan.interactions?.removeAll { $0.method == .meihua && $0.kind == .numbers }
     }
 
     private func methodsMentioned(in text: String, positiveRequestsOnly: Bool = false) -> [OracleMethod] {
@@ -1755,6 +1769,9 @@ struct CastingLocationDraft: Equatable, Sendable {
         guard var plan = pendingPlan, !isBusy,
               sessionID == nil || sessionID == intakeSessionID else { return false }
         if discardMissingSupplement() { persist(); return false }
+        if let baseID = plan.baseRunID, let base = runs.first(where: { $0.id == baseID }) {
+            retainConfirmedTwoNumberMode(in: &plan, base: base, numbers: submittedNumbers)
+        }
         initializeCastingProfile(in: &plan)
         if let castingProfile { plan.castingProfile = CastingLocationDraft(profile: castingProfile).profile }
         var seen = Set<UUID>()
@@ -1780,9 +1797,10 @@ struct CastingLocationDraft: Equatable, Sendable {
             }
             if issues.isEmpty { issues.append(L10n.text("现有资料还不足以按这次要求推演，请补充标明的必要信息。", "Add the required details marked on the form to start this reading.")) }
         }
-        let requiresNumbers = OracleInteractionPolicy.requests(for: plan).contains { $0.kind == .numbers }
-        if (requiresNumbers && numbers.isEmpty) || (!numbers.isEmpty && (![2, 3].contains(numbers.count) || !numbers.allSatisfy({ (1...999).contains($0) }))) {
-            issues.append(L10n.text("请在同一张资料表中填写两个或三个1到999的整数；第三数可留空。", "Enter two or three whole numbers from 1 to 999 on this form; the third is optional."))
+        let awaitsNumbers = ReadingPreparationPolicy.awaitsNumberInteraction(plan: plan, numbers: numbers)
+        if !awaitsNumbers, !numbers.isEmpty,
+           (![2, 3].contains(numbers.count) || !numbers.allSatisfy({ (1...999).contains($0) })) {
+            issues.append(L10n.text("所留数字尚未有效，请在留数环节重新确认。", "Review the numbers in the number-selection step before continuing."))
         }
         if !issues.isEmpty {
             var seenIssues = Set<String>()
@@ -1812,7 +1830,7 @@ struct CastingLocationDraft: Equatable, Sendable {
                                 subject: plan.subject, castingStyle: style, participants: participants, relationship: plan.relationship)
             if let casting = plan.castingProfile { input.profile = CastingLocationDraft.applying(casting, to: input.profile) }
         }
-        if !numbers.isEmpty {
+        if !awaitsNumbers, !numbers.isEmpty {
             input.profile.unknownFields.remove(.numbers)
             input.profile.declaredUnknownFields?.remove(.numbers)
         }

@@ -12,12 +12,12 @@ struct GroupIntakeView: View {
     let plan: OraclePlan
     let onDraftChange: (([OracleProfile], [Int], OracleProfile) -> Void)?
     let onConfirm: ([OracleProfile], [Int], OracleProfile, Bool) -> Bool
+    private let draftNumbers: [Int]
     @EnvironmentObject private var store: OracleStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @State private var drafts: [UUID: ProfileFormDraft]
     @State private var selectedIDs: [UUID]
-    @State private var numberTexts: [String]
     @State private var casting: CastingLocationDraft
     @StateObject private var castingLocation = LocationService()
     @State private var locationState = CastingLocationRequestState()
@@ -25,6 +25,7 @@ struct GroupIntakeView: View {
     @State private var choosingCastingLocation = false
     @State private var keepProfiles = true
     @State private var error: String?
+    @State private var validationAttempt = 0
     @State private var submitted = false
     @State private var savedDraft: DraftSnapshot?
 
@@ -40,6 +41,7 @@ struct GroupIntakeView: View {
          onDraftChange: (([OracleProfile], [Int], OracleProfile) -> Void)? = nil,
          onConfirm: @escaping ([OracleProfile], [Int], OracleProfile, Bool) -> Bool) {
         self.plan = plan; self.onDraftChange = onDraftChange; self.onConfirm = onConfirm
+        self.draftNumbers = numbers
         var values: [UUID: ProfileFormDraft] = [:]
         var ids: [UUID] = []
         for profile in profiles where values[profile.id] == nil {
@@ -47,7 +49,6 @@ struct GroupIntakeView: View {
         }
         _drafts = State(initialValue: values)
         _selectedIDs = State(initialValue: ids)
-        _numberTexts = State(initialValue: (0..<3).map { numbers.indices.contains($0) && numbers[$0] != 0 ? String(numbers[$0]) : "" })
         _casting = State(initialValue: CastingLocationDraft(profile: castingProfile ?? plan.castingProfile ?? OracleProfile()))
     }
 
@@ -66,17 +67,9 @@ struct GroupIntakeView: View {
         return ReadingPreparationPolicy.evaluate(plan: plan, participants: participants, descriptors: store.registry.descriptors,
                                                  castingProfile: casting.profile, numbers: draftNumbers)
     }
-    private var requestsNumbers: Bool {
-        plan.methods.contains(.meihua) && (plan.requiredFields.contains(.numbers) || (plan.interactions ?? []).contains { $0.kind == .numbers })
-    }
-    private var draftNumbers: [Int] {
-        let trimmed = numberTexts.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        guard let last = trimmed.lastIndex(where: { !$0.isEmpty }) else { return [] }
-        return trimmed[...last].map { Int($0) ?? 0 }
-    }
     private var needsCastingLocation: Bool {
         let methods = Set(plan.methods + (plan.mandatoryMethods ?? []) + report.assessments.map(\.method))
-        return methods.contains { ReadingPreparationPolicy.requiresCastingLocation(method: $0, numbers: draftNumbers) }
+        return methods.contains { ReadingPreparationPolicy.requiresCastingLocation(plan: plan, method: $0, numbers: draftNumbers) }
     }
     private var draftSnapshot: DraftSnapshot {
         DraftSnapshot(profiles: selectedProfiles, numbers: draftNumbers, castingProfile: casting.profile)
@@ -86,38 +79,41 @@ struct GroupIntakeView: View {
         NavigationStack {
             ZStack {
                 PaperBackground()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        questionCard
-                        if needsCastingLocation { castingLocationCard }
-                        if !store.profiles.isEmpty { savedPeople }
-                        selectedPeople
-                        Button(action: addPerson) {
-                            Label(L10n.text("新增一位人员", "Add a person"), systemImage: "person.badge.plus")
-                                .font(.system(size: 14, design: .serif)).frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(17).foregroundStyle(InkTheme.cinnabar)
-                                .background(.white.opacity(0.45), in: RoundedRectangle(cornerRadius: 13))
-                                .overlay(RoundedRectangle(cornerRadius: 13).stroke(InkTheme.line, lineWidth: 0.7))
-                        }.buttonStyle(.plain).accessibilityIdentifier("addParticipant")
-                        if plan.methods.contains(.meihua) { numbersCard }
-                        preparationCard
-                        if !selectedIDs.isEmpty {
-                            Toggle(L10n.text("把这些人员资料留在本机", "Save these profiles on this device"), isOn: $keepProfiles)
-                                .font(.system(size: 13, design: .serif)).tint(InkTheme.sage)
-                                .accessibilityIdentifier("saveParticipantProfiles")
+                ScrollViewReader { scroll in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 24) {
+                            if let displayedError = error ?? store.intakeError {
+                                Text(displayedError).font(.system(size: 12)).foregroundStyle(InkTheme.cinnabar)
+                                    .accessibilityIdentifier("intakeValidationError")
+                                    .id("intakeValidationError")
+                            }
+                            questionCard
+                            if needsCastingLocation { castingLocationCard }
+                            if !store.profiles.isEmpty { savedPeople }
+                            selectedPeople
+                            Button(action: addPerson) {
+                                Label(L10n.text("新增一位人员", "Add a person"), systemImage: "person.badge.plus")
+                                    .font(.system(size: 14, design: .serif)).frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(17).foregroundStyle(InkTheme.cinnabar)
+                                    .background(.white.opacity(0.45), in: RoundedRectangle(cornerRadius: 13))
+                                    .overlay(RoundedRectangle(cornerRadius: 13).stroke(InkTheme.line, lineWidth: 0.7))
+                            }.buttonStyle(.plain).accessibilityIdentifier("addParticipant")
+                            preparationCard
+                            if !selectedIDs.isEmpty {
+                                Toggle(L10n.text("把这些人员资料留在本机", "Save these profiles on this device"), isOn: $keepProfiles)
+                                    .font(.system(size: 13, design: .serif)).tint(InkTheme.sage)
+                                    .accessibilityIdentifier("saveParticipantProfiles")
+                            }
+                            Text(L10n.text("每人的资料分别保存、分别推演。确认后，抽牌或投掷会接着进行。", "Each person’s details are saved and used separately. After you confirm, you can draw cards or cast if needed."))
+                                .font(.system(size: 10)).lineSpacing(4).foregroundStyle(InkTheme.secondary)
+                        }.padding(24).frame(maxWidth: 760).frame(maxWidth: .infinity)
+                    }.scrollDismissesKeyboard(.interactively).accessibilityIdentifier("intakeFormScroll")
+                    .onChange(of: validationAttempt) { _, _ in
+                        if error != nil || store.intakeError != nil {
+                            withAnimation { scroll.scrollTo("intakeValidationError", anchor: .top) }
                         }
-                        if let displayedError = error ?? store.intakeError {
-                            Text(displayedError).font(.system(size: 12)).foregroundStyle(InkTheme.cinnabar)
-                                .accessibilityIdentifier("intakeValidationError")
-                        }
-                        Button { confirm() } label: {
-                            HStack { Text(L10n.text("确认资料并开始", "Confirm and begin")); Image(systemName: "arrow.right") }
-                        }.buttonStyle(InkPrimaryButton()).accessibilityIdentifier("confirmIntake")
-                            .disabled(store.isBusy || locationState.isWaiting)
-                        Text(L10n.text("每人的资料分别保存、分别推演。确认后，抽牌或投掷会接着进行。", "Each person’s details are saved and used separately. After you confirm, you can draw cards or cast if needed."))
-                            .font(.system(size: 10)).lineSpacing(4).foregroundStyle(InkTheme.secondary)
-                    }.padding(24).frame(maxWidth: 760).frame(maxWidth: .infinity)
-                }.scrollDismissesKeyboard(.interactively).accessibilityIdentifier("intakeFormScroll")
+                    }
+                }
             }
             .navigationTitle(L10n.text("问事资料", "Reading details")).navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -131,12 +127,10 @@ struct GroupIntakeView: View {
                         .accessibilityIdentifier("cancelPendingIntake")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(L10n.text("稍后填写", "Finish later")) {
-                        cancelCastingLocation()
-                        saveUnsubmittedDraft()
-                        dismiss()
-                    }.font(.system(size: 13)).foregroundStyle(InkTheme.secondary)
-                        .accessibilityIdentifier("cancelIntake")
+                    Button(L10n.text("确认并继续", "Confirm and continue"), action: confirm)
+                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(InkTheme.cinnabar)
+                        .accessibilityIdentifier("confirmIntake")
+                        .disabled(store.isBusy || locationState.isWaiting)
                 }
             }
             .toolbarBackground(InkTheme.paper, for: .navigationBar).toolbarBackground(.visible, for: .navigationBar)
@@ -369,24 +363,6 @@ struct GroupIntakeView: View {
         }.accessibilityElement(children: .contain).accessibilityIdentifier("selectedParticipants")
     }
 
-    private var numbersCard: some View {
-        PaperCard {
-            VStack(alignment: .leading, spacing: 13) {
-                SectionEyebrow(text: L10n.text("随心留数", "Choose your numbers"))
-                Text(requestsNumbers
-                     ? L10n.text("填写两个或三个1到999的整数。两数结合起卦时辰，三数以第三数定动爻。", "Enter two or three whole numbers from 1 to 999. Two numbers use the casting hour; three use the third number for the moving line.")
-                     : L10n.text("留空按时间起卦；也可填两个或三个1到999的整数。两数需要起卦地点，三数无需地点。", "Leave these blank for time-based casting, or enter two or three whole numbers from 1 to 999. Two numbers need a casting location; three do not."))
-                    .font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.secondary)
-                HStack(spacing: 16) {
-                    ForEach(0..<3, id: \.self) { index in
-                        TextField(index == 2 ? L10n.text("第三数（可选）", "Third (optional)") : L10n.text("第\(index + 1)个数", "Number \(index + 1)"), text: $numberTexts[index]).keyboardType(.numberPad)
-                            .textFieldStyle(.roundedBorder).accessibilityIdentifier("intakeNumber-\(index)")
-                    }
-                }
-            }
-        }
-    }
-
     private var preparationCard: some View {
         let review = report
         let blocked = review.assessments.filter { (plan.mandatoryMethods ?? []).contains($0.method) && !$0.canExecute }
@@ -397,6 +373,11 @@ struct GroupIntakeView: View {
         return PaperCard {
             VStack(alignment: .leading, spacing: 13) {
                 SectionEyebrow(text: L10n.text("确认前核对", "Before you confirm"))
+                if OracleInteractionPolicy.requests(for: plan, numbers: draftNumbers).contains(where: { $0.kind == .numbers }) {
+                    Text(L10n.text("确认后进入随心留数，可随机生成或自行输入三个数。", "After confirming, generate three numbers or enter your own in the next step."))
+                        .foregroundStyle(InkTheme.secondary)
+                        .accessibilityIdentifier("pendingNumbersNotice")
+                }
                 if selectedIDs.count < minimumCount {
                     Text(minimumCount > 1 ? L10n.text("此次需要至少两位人员。", "This reading needs at least two people.") : L10n.text("请选择或新增一位人员。", "Choose or add a person."))
                         .foregroundStyle(InkTheme.cinnabar)
@@ -451,6 +432,7 @@ struct GroupIntakeView: View {
     }
 
     private func confirm() {
+        validationAttempt += 1
         var people: [OracleProfile] = []
         var errors: [String] = []
         let requiredCount = minimumCount
@@ -466,9 +448,6 @@ struct GroupIntakeView: View {
             catch { errors.append(title(draft.profile) + L10n.text("：", ": ") + error.localizedDescription) }
         }
         let numbers = draftNumbers
-        if (requestsNumbers && numbers.isEmpty) || (!numbers.isEmpty && (![2, 3].contains(numbers.count) || !numbers.allSatisfy { (1...999).contains($0) })) {
-            errors.append(L10n.text("请从第一个数开始连续填写两个或三个1到999的整数。", "Enter two or three consecutive whole numbers from 1 to 999, starting with the first field."))
-        }
         let review = ReadingPreparationPolicy.evaluate(plan: plan, participants: people, descriptors: store.registry.descriptors,
                                                        castingProfile: casting.profile, numbers: numbers)
         if !review.canProceed {

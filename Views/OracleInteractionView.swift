@@ -17,12 +17,15 @@ struct OracleInteractionView: View {
     @State private var coinTurns = 0
     @State private var flipping = false
     @State private var isCompleting = false
+    @State private var numberTurns = 0
+    @FocusState private var focusedNumber: Int?
 
     private var isYarrow: Bool { session.input.castingStyle?.lowercased() == "yarrow" }
     private var clarificationNumber: Int { (session.input.tarotClarificationRounds?.count ?? 0) + 1 }
     private var navigationTitle: String {
         guard let request = session.currentRequest else { return L10n.text("留一份心意", "Reading steps") }
         if request.tarotClarification != nil { return L10n.text("第\(clarificationNumber)次补牌", "Clarifier \(clarificationNumber)") }
+        if request.kind == .numbers { return L10n.text("随心留数", "Numbers") }
         if request.kind == .coins, isYarrow { return L10n.text("蓍草成卦", "Cast with yarrow stalks") }
         return request.title
     }
@@ -36,8 +39,18 @@ struct OracleInteractionView: View {
         self.onComplete = onComplete
         self.onCancel = onCancel
         let requestID = session.currentRequest?.id ?? ""
-        let restored = session.draft.flatMap { session.isValid($0, complete: false) ? $0 : nil }
-            ?? OracleInteractionResponse(requestID: requestID)
+        let savedDraft = session.draft.flatMap { session.isValid($0, complete: false) ? $0 : nil }
+        var restored = savedDraft ?? OracleInteractionResponse(requestID: requestID)
+        if session.currentRequest?.kind == .numbers, savedDraft == nil {
+            let previous = session.input.numbers.count <= 3 ? session.input.numbers : []
+            let texts = (0..<3).map { index -> String in
+                guard previous.indices.contains(index) else { return "" }
+                let text = String(previous[index])
+                return text.count <= NumberInteractionDraft.maximumTextLength ? text : ""
+            }
+            restored.numberTexts = texts
+            restored.numbers = NumberInteractionDraft.values(in: texts) ?? []
+        }
         _response = State(initialValue: restored)
         _hasShuffled = State(initialValue: !restored.tarotDraws.isEmpty)
     }
@@ -61,6 +74,7 @@ struct OracleInteractionView: View {
                         .padding(.vertical, 24)
                         .frame(maxWidth: .infinity)
                     }
+                    .scrollDismissesKeyboard(.interactively)
                     .safeAreaInset(edge: .bottom, spacing: 0) { footer(for: request) }
                 }
             }
@@ -81,16 +95,18 @@ struct OracleInteractionView: View {
                         .font(.system(size: 13)).foregroundStyle(InkTheme.secondary)
                         .accessibilityIdentifier("deferInteraction")
                 }
+                if session.currentRequest?.kind == .numbers {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button(L10n.text("完成输入", "Done")) { focusedNumber = nil }
+                            .accessibilityIdentifier("dismissNumberKeyboard")
+                    }
+                }
             }
             .toolbarBackground(InkTheme.paper, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
         }
         .tint(InkTheme.cinnabar)
-        .onAppear {
-            if session.currentRequest?.kind == .numbers, response.numbers.count != 3 {
-                updateResponse { $0.numbers = [1, 1, 1] }
-            }
-        }
         .sensoryFeedback(.selection, trigger: response.numbers)
         .sensoryFeedback(.impact(weight: .light), trigger: response.lines.count)
         .sensoryFeedback(.selection, trigger: response.tarotDraws.count)
@@ -138,35 +154,78 @@ struct OracleInteractionView: View {
     }
 
     private var numberSelection: some View {
-        PaperCard {
-            VStack(alignment: .leading, spacing: 20) {
-                Text(L10n.text("慢慢转动，留下三个想到的数。", "Turn the wheels and choose the first three numbers that come to mind."))
-                    .font(.system(size: 14, design: .serif)).foregroundStyle(InkTheme.secondary)
-                HStack(spacing: 8) {
-                    ForEach(0..<3, id: \.self) { index in
-                        VStack(spacing: 8) {
-                            Text(InkTheme.stepNumber(at: index)).font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.cinnabar)
-                            Picker(L10n.text("第\(index + 1)个数字", "Number \(index + 1)"), selection: numberBinding(at: index)) {
-                                ForEach(1...999, id: \.self) { value in Text("\(value)").tag(value) }
-                            }
-                            .pickerStyle(.wheel).frame(maxWidth: .infinity).frame(height: 170).clipped()
-                            .accessibilityIdentifier("interactionNumber-\(index)")
-                        }
-                    }
+        VStack(spacing: 24) {
+            Text(L10n.text("可以随机留数，也可以点数字亲自输入或修改。", "Generate three numbers, or tap each one to enter or change it."))
+                .font(.system(size: 14, design: .serif)).lineSpacing(5).foregroundStyle(InkTheme.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 12) {
+                ForEach(0..<3, id: \.self) { index in
+                    numberCard(at: index)
+                        .rotation3DEffect(.degrees(reduceMotion ? 0 : Double(numberTurns) * 360), axis: (x: 0, y: 1, z: 0))
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.42), value: numberTurns)
                 }
-                Text(L10n.text("没有对错，停在你愿意留下的位置就好。", "Any numbers you choose are fine."))
-                    .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
             }
+            Button(action: generateNumbers) {
+                Label(L10n.text("随机生成", "Generate numbers"), systemImage: "dice")
+                    .font(.system(size: 16, weight: .medium, design: .serif))
+                    .frame(maxWidth: .infinity).padding(.vertical, 15)
+            }
+            .buttonStyle(.plain).foregroundStyle(InkTheme.cinnabar)
+            .background(InkTheme.cinnabar.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(InkTheme.cinnabar.opacity(0.3), lineWidth: 0.8))
+            .accessibilityIdentifier("generateNumbers")
+            VStack(spacing: 7) {
+                Text(L10n.text("三个整数 · 每个 1–999", "Three whole numbers · 1–999 each"))
+                    .font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.secondary)
+                if numberTexts.contains(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && NumberInteractionDraft.value(in: $0) == nil }) {
+                    Text(L10n.text("请把每个数改为1到999的整数。", "Each number must be a whole number from 1 to 999."))
+                        .font(.system(size: 12)).foregroundStyle(InkTheme.cinnabar)
+                        .accessibilityIdentifier("numberSelectionError")
+                }
+            }.frame(maxWidth: .infinity)
         }
     }
 
-    private func numberBinding(at index: Int) -> Binding<Int> {
-        Binding(get: { response.numbers.indices.contains(index) ? response.numbers[index] : 1 }, set: { value in
+    private var numberTexts: [String] { NumberInteractionDraft.texts(for: response) }
+
+    private func numberCard(at index: Int) -> some View {
+        let text = numberTexts[index]
+        let invalid = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && NumberInteractionDraft.value(in: text) == nil
+        return VStack(spacing: 12) {
+            Text(InkTheme.stepNumber(at: index)).font(.system(size: 13, design: .serif)).foregroundStyle(InkTheme.cinnabar)
+                .accessibilityHidden(true)
+            TextField("—", text: numberBinding(at: index))
+                .font(.system(size: 36, weight: .medium, design: .serif)).monospacedDigit()
+                .multilineTextAlignment(.center).minimumScaleFactor(0.4)
+                .keyboardType(.numberPad).autocorrectionDisabled().textInputAutocapitalization(.never)
+                .focused($focusedNumber, equals: index)
+                .frame(maxWidth: .infinity).frame(minHeight: 65)
+                .foregroundStyle(invalid ? InkTheme.cinnabar : InkTheme.ink)
+                .accessibilityLabel(L10n.text("第\(index + 1)个数字", "Number \(index + 1)"))
+                .accessibilityIdentifier("interactionNumber-\(index)")
+        }
+        .padding(.horizontal, 8).padding(.vertical, 20).frame(maxWidth: .infinity)
+        .background(.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(invalid || focusedNumber == index ? InkTheme.cinnabar : InkTheme.line, lineWidth: focusedNumber == index ? 1.2 : 0.7))
+        .shadow(color: InkTheme.ink.opacity(0.04), radius: 10, y: 4)
+    }
+
+    private func numberBinding(at index: Int) -> Binding<String> {
+        Binding(get: { numberTexts[index] }, set: { value in
+            var texts = numberTexts
+            texts[index] = String(value.prefix(NumberInteractionDraft.maximumTextLength))
             updateResponse {
-                if $0.numbers.count != 3 { $0.numbers = [1, 1, 1] }
-                $0.numbers[index] = value
+                $0.numberTexts = texts
+                $0.numbers = NumberInteractionDraft.values(in: texts) ?? []
             }
         })
+    }
+
+    private func generateNumbers() {
+        focusedNumber = nil
+        let values = (0..<3).map { _ in Int.random(in: 1...999) }
+        updateResponse { $0.numbers = values; $0.numberTexts = values.map(String.init) }
+        numberTurns += 1
     }
 
     private func updateResponse(_ update: (inout OracleInteractionResponse) -> Void) {
@@ -514,6 +573,7 @@ struct OracleInteractionView: View {
         return VStack(spacing: 8) {
             Button {
                 guard ready, !isCompleting else { return }
+                focusedNumber = nil
                 isCompleting = true
                 onComplete(response)
             } label: {

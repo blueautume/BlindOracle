@@ -14,6 +14,7 @@ final class FormIntakeUITests: XCTestCase {
 
         XCTAssertTrue(app.scrollViews["intakeFormScroll"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.navigationBars["Reading details"].exists)
+        assertReadingConfirmationInNavigationBar(in: app, language: "en")
         let savedName = element("legacyProfileName", in: app)
         reveal(savedName, in: app)
         let nameContents = ([savedName] + savedName.descendants(matching: .any).allElementsBoundByIndex)
@@ -86,8 +87,9 @@ final class FormIntakeUITests: XCTestCase {
         XCTAssertFalse(app.buttons["shuffleTarot"].exists)
         let confirm = app.buttons["confirmIntake"]
         XCTAssertEqual(app.buttons.matching(identifier: "confirmIntake").count, 1)
-        reveal(confirm, in: app)
-        XCTAssertEqual(confirm.label, "确认资料并开始")
+        assertReadingConfirmationInNavigationBar(in: app, language: "zh-Hans")
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: confirm)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed)
         capture("new-question-unified-form", in: app)
         confirm.tap()
 
@@ -113,23 +115,18 @@ final class FormIntakeUITests: XCTestCase {
         XCTAssertFalse(app.buttons["profileBirthTimeZone"].exists)
         XCTAssertFalse(app.buttons["editParticipant"].exists)
         let confirm = app.buttons["confirmIntake"]
-        reveal(confirm, in: app)
+        assertReadingConfirmationInNavigationBar(in: app, language: "zh-Hans")
         confirm.tap()
 
         let error = app.staticTexts["intakeValidationError"]
         XCTAssertTrue(error.waitForExistence(timeout: 5))
+        XCTAssertTrue(error.isHittable, "A failed toolbar confirmation must show its validation feedback")
         XCTAssertTrue(error.label.contains("出生日期"))
         XCTAssertTrue(form.exists)
         XCTAssertEqual(app.scrollViews.matching(identifier: "intakeFormScroll").count, 1)
         XCTAssertFalse(app.buttons["castCoins"].exists)
         XCTAssertFalse(app.buttons["shuffleTarot"].exists)
         capture("strict-method-all-missing-fields", in: app)
-        let fallback = app.buttons["confirmIntakeWithLocalFallback"]
-        reveal(fallback, in: app)
-        fallback.tap()
-        let summary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "这次推演已完成")).firstMatch
-        XCTAssertTrue(summary.waitForExistence(timeout: 30))
-        XCTAssertTrue(form.waitForNonExistence(timeout: 5))
     }
 
     @MainActor func testSwitchingThePendingMethodKeepsUnsubmittedPersonAcrossRelaunch() {
@@ -142,7 +139,7 @@ final class FormIntakeUITests: XCTestCase {
         reveal(name, in: app)
         name.tap(); name.typeText("陈平\n")
         XCTAssertEqual(name.value as? String, "陈平")
-        app.buttons["cancelIntake"].tap()
+        dismissReadingDetailsSheet(in: app)
         XCTAssertTrue(form.waitForNonExistence(timeout: 5))
 
         send("改用塔罗", in: app)
@@ -205,7 +202,8 @@ final class FormIntakeUITests: XCTestCase {
 
     @MainActor private func launchFreshApp() -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-location-fixture",
+                               "--ui-testing-reset-language", "-oracle.appLanguage", "zh-Hans"]
         app.launch()
         XCTAssertTrue(app.buttons["sendQuestion"].waitForExistence(timeout: 15))
         return app

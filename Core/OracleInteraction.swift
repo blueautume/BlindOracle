@@ -64,6 +64,37 @@ struct OracleInteractionResponse: Codable, Equatable, Sendable {
     var lines: [Int] = []
     var tarotDraws: [TarotDraw] = []
     var revealedCount: Int = 0
+    /// Editable number slots, including blanks or an unfinished invalid value.
+    /// Optional for saved responses written before the editable-number step.
+    var numberTexts: [String]? = nil
+}
+
+enum NumberInteractionDraft {
+    static let count = 3
+    static let maximumTextLength = 16
+
+    static func value(in text: String) -> Int? {
+        let digits = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !digits.isEmpty, text.count <= maximumTextLength,
+              digits.utf8.allSatisfy({ (48...57).contains($0) }),
+              let value = Int(digits), (1...999).contains(value) else { return nil }
+        return value
+    }
+
+    static func values(in texts: [String]) -> [Int]? {
+        guard texts.count == count else { return nil }
+        var values: [Int] = []
+        for text in texts {
+            guard let value = value(in: text) else { return nil }
+            values.append(value)
+        }
+        return values
+    }
+
+    static func texts(for response: OracleInteractionResponse) -> [String] {
+        if let texts = response.numberTexts, texts.count == count { return texts }
+        return (0..<count).map { response.numbers.indices.contains($0) ? String(response.numbers[$0]) : "" }
+    }
 }
 
 struct OracleInteractionSession: Codable, Identifiable, Sendable {
@@ -141,6 +172,7 @@ struct OracleInteractionSession: Codable, Identifiable, Sendable {
         case .numbers:
             input.numbers = response.numbers
             input.profile.unknownFields.remove(.numbers)
+            input.profile.declaredUnknownFields?.remove(.numbers)
         case .coins: input.manualLines = response.lines
         case .tarot:
             if let clarification = request.tarotClarification {
@@ -183,7 +215,13 @@ enum OracleInteractionPolicy {
         if plan.methods.contains(.meihua), plan.requiredFields.contains(.numbers), seen.insert(.meihua).inserted {
             requests.append(OracleInteractionRequest(method: .meihua, kind: .numbers))
         }
-        if !numbers.isEmpty { requests.removeAll { $0.kind == .numbers } }
+        let validNumbers = [2, 3].contains(numbers.count) && numbers.allSatisfy { (1...999).contains($0) }
+        if plan.methods.contains(.meihua), !numbers.isEmpty, !validNumbers, seen.insert(.meihua).inserted {
+            // Invalid saved values need the same editable step; the intake form
+            // is no longer a second place to enter or repair numbers.
+            requests.append(OracleInteractionRequest(method: .meihua, kind: .numbers))
+        }
+        if numbers.count == 3, validNumbers { requests.removeAll { $0.kind == .numbers } }
         return requests
     }
 
@@ -192,16 +230,24 @@ enum OracleInteractionPolicy {
         if let clarification = request.tarotClarification, request.kind != .tarot || !clarification.isValid { return false }
         switch request.kind {
         case .numbers:
-            return response.lines.isEmpty && response.tarotDraws.isEmpty && response.revealedCount == 0
-                && (complete ? response.numbers.count == 3 : response.numbers.count <= 3)
-                && response.numbers.allSatisfy { (1...999).contains($0) }
+            guard response.lines.isEmpty, response.tarotDraws.isEmpty, response.revealedCount == 0,
+                  response.numbers.count <= 3, response.numbers.allSatisfy({ (1...999).contains($0) }) else { return false }
+            if let texts = response.numberTexts {
+                guard texts.count == NumberInteractionDraft.count,
+                      texts.allSatisfy({ $0.count <= NumberInteractionDraft.maximumTextLength }) else { return false }
+                let values = NumberInteractionDraft.values(in: texts)
+                // Invalid or incomplete edits are resumable, but never carry a
+                // stale previously-generated triple into a calculation.
+                return response.numbers == (values ?? []) && (!complete || values != nil)
+            }
+            return !complete || response.numbers.count == 3
         case .coins:
-            return response.numbers.isEmpty && response.tarotDraws.isEmpty && response.revealedCount == 0
+            return response.numberTexts == nil && response.numbers.isEmpty && response.tarotDraws.isEmpty && response.revealedCount == 0
                 && (complete ? response.lines.count == 6 : response.lines.count <= 6)
                 && response.lines.allSatisfy { (6...9).contains($0) }
         case .tarot:
             let positions = request.tarotPositions
-            guard response.numbers.isEmpty, response.lines.isEmpty,
+            guard response.numberTexts == nil, response.numbers.isEmpty, response.lines.isEmpty,
                   response.tarotDraws.count <= positions.count,
                   (0...response.tarotDraws.count).contains(response.revealedCount),
                   Set(response.tarotDraws.map(\.cardID)).count == response.tarotDraws.count else { return false }

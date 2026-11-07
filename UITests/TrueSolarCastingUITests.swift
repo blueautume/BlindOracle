@@ -49,7 +49,7 @@ final class TrueSolarCastingUITests: XCTestCase {
         XCTAssertFalse(element("castingLocationRequired", in: app).exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "solar-casting-location-\(language)"; screenshot.lifetime = .keepAlways; add(screenshot)
-        app.buttons["cancelIntake"].tap()
+        dismissReadingDetailsSheet(in: app)
         app.terminate()
 
         app.launchArguments.removeAll { $0 == "--ui-testing-reset" }
@@ -87,7 +87,8 @@ final class TrueSolarCastingUITests: XCTestCase {
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "solar-casting-auto-location-\(language)"; screenshot.lifetime = .keepAlways; add(screenshot)
 
-        app.buttons["cancelIntake"].tap()
+        assertReadingConfirmationInNavigationBar(in: app, language: language)
+        dismissReadingDetailsSheet(in: app)
         app.terminate()
         app.launchArguments.removeAll {
             $0 == "--ui-testing-reset" || $0 == "--ui-testing-location-fixture"
@@ -137,6 +138,11 @@ final class TrueSolarCastingUITests: XCTestCase {
     }
 
     @MainActor private func reveal(_ element: XCUIElement, app: XCUIApplication) {
+        if element.identifier == "confirmIntake" {
+            XCTAssertTrue(app.navigationBars.buttons["confirmIntake"].exists)
+            XCTAssertTrue(element.isHittable)
+            return
+        }
         let scroll = app.scrollViews["intakeFormScroll"]
         for _ in 0..<10 {
             let navBottom = app.navigationBars.firstMatch.frame.maxY

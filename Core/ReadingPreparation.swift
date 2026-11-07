@@ -84,7 +84,9 @@ enum ReadingPreparationPolicy {
             let descriptor = descriptors.first { $0.method == method }
             let targets: [OracleProfile?] = method.usesPersonalProfile ? (people.isEmpty ? [nil] : people.map(Optional.some)) : [nil]
             for person in targets {
-                let interaction = method == .tarot || method == .liuyao || (plan.interactions ?? []).contains { $0.method == method }
+                let interaction = method == .tarot || method == .liuyao
+                    || (plan.interactions ?? []).contains { $0.method == method }
+                    || (method == .meihua && awaitsNumberInteraction(plan: plan, numbers: numbers ?? plan.draftNumbers ?? []))
                 var assessment = ReadingMethodAssessment(method: method, participantID: person?.id,
                     participantName: person?.participantLabel,
                     blocking: [], optionalGaps: [], limitations: [], requiresUserInteraction: interaction)
@@ -93,7 +95,7 @@ enum ReadingPreparationPolicy {
                     assessments.append(assessment); continue
                 }
                 guard method.usesPersonalProfile else {
-                    if requiresCastingLocation(method: method, numbers: numbers ?? plan.draftNumbers ?? []),
+                    if requiresCastingLocation(plan: plan, method: method, numbers: numbers ?? plan.draftNumbers ?? []),
                        let gap = castingLocationGap(castingProfile ?? plan.castingProfile) {
                         assessment.blocking.append(gap)
                     }
@@ -179,6 +181,18 @@ enum ReadingPreparationPolicy {
 
     static func requiresCastingLocation(method: OracleMethod, numbers: [Int]) -> Bool {
         method == .qimen || method == .xiaoliuren || (method == .meihua && numbers.count < 3)
+    }
+
+    /// Preparation can advance to a requested three-number interaction without
+    /// inventing numbers or demanding the location used only by time modes.
+    /// The interaction's completion boundary still validates all three values.
+    static func requiresCastingLocation(plan: OraclePlan, method: OracleMethod, numbers: [Int]) -> Bool {
+        if method == .meihua, awaitsNumberInteraction(plan: plan, numbers: numbers) { return false }
+        return requiresCastingLocation(method: method, numbers: numbers)
+    }
+
+    static func awaitsNumberInteraction(plan: OraclePlan, numbers: [Int]) -> Bool {
+        OracleInteractionPolicy.requests(for: plan, numbers: numbers).contains { $0.kind == .numbers }
     }
 
     private static func castingLocationGap(_ profile: OracleProfile?) -> PreparationGap? {

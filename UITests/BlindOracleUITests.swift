@@ -354,10 +354,7 @@ final class BlindOracleUITests: XCTestCase {
     }
 
     @MainActor private func cancelForm(in app: XCUIApplication) {
-        let cancel = app.buttons["cancelIntake"]
-        XCTAssertTrue(cancel.waitForExistence(timeout: 10))
-        cancel.tap()
-        XCTAssertTrue(app.scrollViews["intakeFormScroll"].waitForNonExistence(timeout: 5))
+        dismissReadingDetailsSheet(in: app)
     }
     @MainActor private func historyRow(in app: XCUIApplication, titled title: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "historyRow-", title)).firstMatch

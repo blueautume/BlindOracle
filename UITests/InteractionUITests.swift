@@ -209,7 +209,7 @@ final class InteractionUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(form.waitForExistence(timeout: 15))
         XCTAssertTrue(form.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "王安的事业")).firstMatch.exists)
-        app.buttons["cancelIntake"].tap()
+        dismissReadingDetailsSheet(in: app)
         XCTAssertTrue(form.waitForNonExistence(timeout: 5))
 
         app.buttons["historyButton"].tap()
@@ -297,21 +297,28 @@ final class InteractionUITests: XCTestCase {
 
     @MainActor func testSelectedNumbersReachMeihuaAfterSixCoinCasts() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-location-fixture",
+                               "--ui-testing-reset-language", "-oracle.appLanguage", "zh-Hans"]
         app.launch()
-        send("用梅花报数，看看这次出行如何安排", in: app)
-        let firstNumber = app.textFields["intakeNumber-0"]
-        XCTAssertTrue(firstNumber.waitForExistence(timeout: 15))
+        send("只用梅花和六爻报数，看看这次出行如何安排", in: app)
+        XCTAssertTrue(app.buttons["confirmIntake"].waitForExistence(timeout: 15))
         XCTAssertEqual(app.scrollViews.matching(identifier: "intakeFormScroll").count, 1)
-        let form = app.scrollViews["intakeFormScroll"]
-        for _ in 0..<10 where !firstNumber.isHittable { form.swipeUp() }
-        XCTAssertTrue(firstNumber.isHittable)
+        XCTAssertFalse(app.textFields["intakeNumber-0"].exists)
+        confirmIntake(in: app)
+        let firstNumber = app.textFields["interactionNumber-0"]
+        XCTAssertTrue(firstNumber.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["confirmInteraction"].isEnabled)
         for (index, value) in ["8", "8", "6"].enumerated() {
-            let field = app.textFields["intakeNumber-\(index)"]
+            let field = app.textFields["interactionNumber-\(index)"]
             field.tap(); field.typeText(value)
         }
-        capture("numbers-filled-in-unified-form", in: app)
-        confirmIntake(in: app)
+        let dismissKeyboard = app.buttons["dismissNumberKeyboard"]
+        XCTAssertTrue(dismissKeyboard.waitForExistence(timeout: 5)); dismissKeyboard.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
+        let confirmNumbers = app.buttons["confirmInteraction"]
+        waitUntilEnabled(confirmNumbers)
+        capture("three-numbers-filled-in-interaction", in: app)
+        confirmNumbers.tap()
         let cast = app.buttons["castCoins"]
         XCTAssertTrue(cast.waitForExistence(timeout: 10))
         XCTAssertEqual(app.buttons.matching(identifier: "castCoins").count, 1)

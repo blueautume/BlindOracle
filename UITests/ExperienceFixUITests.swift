@@ -81,7 +81,7 @@ final class ExperienceFixUITests: XCTestCase {
         XCTAssertFalse(form.staticTexts["可留空"].exists)
         capture("ziwei-chart-gender-required-and-explained", in: app)
 
-        app.buttons["cancelIntake"].tap()
+        dismissReadingDetailsSheet(in: app)
         XCTAssertTrue(form.waitForNonExistence(timeout: 5))
         send("改用八字", in: app)
         XCTAssertTrue(form.waitForExistence(timeout: 15))
