@@ -15,7 +15,9 @@ enum AccountAccessState: Equatable {
 @MainActor final class AccountStore: ObservableObject {
     @Published private(set) var accessState: AccountAccessState = .restoring
     @Published private(set) var canRetrySession = false
-    var canAccessMain: Bool { accessState == .authenticated && user != nil }
+    @Published private(set) var deletionCleanupRequired = false
+    @Published private(set) var deletionResetID: UUID?
+    var canAccessMain: Bool { accessState == .authenticated && user != nil && !deletionCleanupRequired }
     @Published private(set) var user: AccountUser?
     @Published private(set) var wallet: AccountWallet?
     @Published private(set) var usage: AccountUsageSummary?
@@ -24,17 +26,27 @@ enum AccountAccessState: Equatable {
     @Published var message: String?
     private let api: AccountAPI
     private let sessions: AccountSessionManager
+    private let localDataVault: LocalVault
+    private let configuredLocalDataErasure: @MainActor () async throws -> Void
+    private var pendingLocalDataErasure: (@MainActor () async throws -> Void)?
     private var generation = UUID()
     private var restored = false
     private var restoring = false
     #if DEBUG
     private var debugUIFixture = false
     #endif
-    init(api: AccountAPI = AccountAPI(), sessions: AccountSessionManager = .shared) {
+    init(api: AccountAPI = AccountAPI(), sessions: AccountSessionManager = .shared,
+         localDataVault: LocalVault = .shared, localDataErasure: (@MainActor () async throws -> Void)? = nil) {
         self.api = api; self.sessions = sessions
+        self.localDataVault = localDataVault
+        self.configuredLocalDataErasure = localDataErasure ?? { try localDataVault.eraseDataForDeletedAccount() }
+        if localDataVault.requiresAccountDeletionCleanup {
+            deletionCleanupRequired = true; accessState = .recoveryRequired
+            message = Self.deletionCleanupNotice
+        }
     }
-    static func makeAppStore() -> AccountStore {
-        let store = AccountStore()
+    static func makeAppStore(localDataErasure: (@MainActor () async throws -> Void)? = nil) -> AccountStore {
+        let store = AccountStore(localDataErasure: localDataErasure)
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-testing-local") {
             store.debugUIFixture = true; store.restored = true
@@ -61,6 +73,11 @@ enum AccountAccessState: Equatable {
         return store
     }
     func restore(force: Bool = false) async {
+        if deletionCleanupRequired || localDataVault.requiresAccountDeletionCleanup {
+            deletionCleanupRequired = true
+            await retryDeletionCleanup()
+            return
+        }
         #if DEBUG
         if debugUIFixture {
             if force, accessState == .recoveryRequired { accessState = .authenticated; canRetrySession = false; message = nil }
@@ -105,7 +122,7 @@ enum AccountAccessState: Equatable {
         }
     }
     func chooseSignIn() async {
-        guard !isBusy else { return }
+        guard !isBusy, !deletionCleanupRequired else { return }
         #if DEBUG
         if debugUIFixture {
             generation = UUID(); user = nil; wallet = nil; usage = nil
@@ -128,6 +145,11 @@ enum AccountAccessState: Equatable {
         }
     }
     func sessionChanged() async {
+        if deletionCleanupRequired || localDataVault.requiresAccountDeletionCleanup {
+            deletionCleanupRequired = true; user = nil; wallet = nil; usage = nil
+            accessState = .recoveryRequired; canRetrySession = false
+            return
+        }
         #if DEBUG
         if debugUIFixture { return }
         #endif
@@ -143,6 +165,7 @@ enum AccountAccessState: Equatable {
         if snapshot == nil { accessState = .signedOut; canRetrySession = false }
     }
     func beginAppleSignIn() async throws -> AppleSignInAttempt {
+        guard !deletionCleanupRequired, !localDataVault.requiresAccountDeletionCleanup else { throw AccountAPIError.storage }
         guard !isBusy else { throw AccountAPIError.staleSession }
         generation = UUID(); let expected = generation
         isBusy = true; message = nil; user = nil; wallet = nil; usage = nil; accessState = .signedOut
@@ -218,6 +241,7 @@ enum AccountAccessState: Equatable {
         return try await (person, balance, consumption)
     }
     func logout() async {
+        guard !deletionCleanupRequired else { return }
         #if DEBUG
         if debugUIFixture {
             generation = UUID(); user = nil; wallet = nil; usage = nil
@@ -255,11 +279,22 @@ enum AccountAccessState: Equatable {
             message = L10n.text("本机已退出；服务器会话暂未完成撤销，请联网后重新登录管理账号。", "Signed out on this device. The server session could not be revoked; reconnect and sign in to manage your account.")
         }
     }
-    func deleteAccount() async {
-        guard user != nil, !isBusy else { return }
+    @discardableResult func deleteAccount(clearLocalData: (@MainActor () async throws -> Void)? = nil) async -> Bool {
+        guard user != nil, !isBusy, !deletionCleanupRequired else { return false }
         let expected = generation
         isBusy = true; message = nil
         defer { if generation == expected { isBusy = false } }
+        #if DEBUG
+        if debugUIFixture {
+            // Only the synthetic UI-testing account uses this path. Never send
+            // a real deletion or touch the normal app's session credentials.
+            generation = UUID(); user = nil; wallet = nil; usage = nil
+            deletionResetID = UUID()
+            deletionCleanupRequired = true; canRetrySession = false; accessState = .recoveryRequired
+            pendingLocalDataErasure = clearLocalData ?? configuredLocalDataErasure
+            return await completeDeletionCleanup()
+        }
+        #endif
         let context = await sessions.context()
         do {
             guard context.session?.user.id == user?.id else { throw AccountAPIError.staleSession }
@@ -269,17 +304,31 @@ enum AccountAccessState: Equatable {
                 token = try await sessions.refreshAfterRejection(of: token, expectedGeneration: context.generation)
                 try await api.deleteUser(token: token)
             }
-            guard generation == expected else { return }
+            // The first synchronous work after DELETE succeeds is a durable
+            // lock. A termination during Keychain/session invalidation must
+            // not leave readable profiles for a later registration.
+            deletionCleanupRequired = true
+            pendingLocalDataErasure = clearLocalData ?? configuredLocalDataErasure
+            generation = UUID(); user = nil; wallet = nil; usage = nil; isLoading = false
+            deletionResetID = UUID(); accessState = .recoveryRequired; canRetrySession = false
+            do { try localDataVault.markAccountDeletionPending() }
+            catch { /* The defaults lock survives even when the protected marker cannot be written. */ }
+            guard await sessions.sessionGeneration() == context.generation else {
+                isBusy = false; message = Self.deletionCleanupNotice
+                return false
+            }
             var cleanupMessage: String?
             do { try await sessions.invalidate(expectedGeneration: context.generation) }
-            catch AccountAPIError.staleSession { await sessionChanged(); return }
+            catch AccountAPIError.staleSession {
+                isBusy = false; message = Self.deletionCleanupNotice
+                return false
+            }
             catch { cleanupMessage = friendly(error) }
-            generation = UUID(); user = nil; wallet = nil; usage = nil; isBusy = false; isLoading = false
-            accessState = .signedOut; canRetrySession = false
-            message = L10n.text("服务器账号已删除。本机记录仍保留；需重新登录后才能访问。", "Your server account was deleted. Local records remain and require signing in again to access.")
-            if let cleanupMessage { message! += "\n" + cleanupMessage }
+            let finished = await completeDeletionCleanup()
+            if finished, let cleanupMessage { message! += "\n" + cleanupMessage }
+            return finished
         } catch {
-            guard generation == expected else { return }
+            guard generation == expected else { return false }
             if (error as? AccountAPIError) == .unauthorized {
                 accessState = .signedOut; user = nil; wallet = nil; usage = nil; canRetrySession = false
                 try? await sessions.invalidate(expectedGeneration: context.generation)
@@ -288,6 +337,33 @@ enum AccountAccessState: Equatable {
             } else if (error as? AccountAPIError)?.status == 503 {
                 message = L10n.text("账号删除服务暂不可用，账号尚未删除。请稍后重试或通过隐私政策中的方式联系我们。", "Account deletion is temporarily unavailable. Your account has not been deleted. Try later or contact us using the Privacy Policy.")
             } else { message = friendly(error) }
+            return false
+        }
+    }
+    private static var deletionCleanupNotice: String {
+        L10n.text("账号已永久注销，本机资料尚未完成清理。请解锁设备后重试清理，完成前无法重新登录。", "Your account was permanently deleted, but local cleanup is incomplete. Unlock your device and retry cleanup before signing in again.")
+    }
+    func retryDeletionCleanup() async {
+        guard deletionCleanupRequired, !isBusy else { return }
+        isBusy = true
+        _ = await completeDeletionCleanup()
+    }
+    private func completeDeletionCleanup() async -> Bool {
+        defer { isBusy = false }
+        do {
+            try localDataVault.markAccountDeletionPending()
+            try await (pendingLocalDataErasure ?? configuredLocalDataErasure)()
+            // The default path also performs a real erasure. A custom handler
+            // cannot accidentally leave the durable lock and old files behind.
+            if localDataVault.requiresAccountDeletionCleanup { try localDataVault.eraseDataForDeletedAccount() }
+            pendingLocalDataErasure = nil; deletionCleanupRequired = false
+            accessState = .signedOut; canRetrySession = false
+            message = L10n.text("账号已永久注销，本机资料已清除。已购买的额度无法恢复。", "Your account was permanently deleted and local records were cleared. Purchased allowance cannot be restored.")
+            return true
+        } catch {
+            deletionCleanupRequired = true; accessState = .recoveryRequired; canRetrySession = false
+            message = Self.deletionCleanupNotice
+            return false
         }
     }
     func credentialRevoked(expectedSessionGeneration: UUID? = nil) async {

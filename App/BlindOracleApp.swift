@@ -91,23 +91,25 @@ private struct AppServiceLaunchSurface: View {
 /// No account/session/task service exists until the outer launcher freezes its route.
 private struct ResolvedBlindOracleRoot: View {
     let context: AppServiceContext
-    @StateObject private var store = OracleStore()
-    @StateObject private var account = AccountStore.makeAppStore()
+    @StateObject private var store: OracleStore
+    @StateObject private var account: AccountStore
     @StateObject private var purchases = AccountPurchaseStore()
     @State private var analysisBackgroundExecution = AnalysisBackgroundExecution()
     @State private var chatDraft = ""
     @State private var settingsPresented = false
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppLanguage.preferenceKey) private var preference: AppLanguagePreference = .system
+    init(context: AppServiceContext) {
+        self.context = context
+        let oracle = OracleStore()
+        _store = StateObject(wrappedValue: oracle)
+        _account = StateObject(wrappedValue: AccountStore.makeAppStore(localDataErasure: { [weak oracle] in
+            guard let oracle else { throw AccountAPIError.storage }
+            try await oracle.eraseLocalDataAfterAccountDeletion()
+        }))
+    }
     var body: some View {
         VStack(spacing: 0) {
-            if ServiceEnvironment.current.isSandbox {
-                Text(L10n.text("测试环境 · 购买不扣款", "Test environment · No purchase charges"))
-                    .font(.system(size: 12, weight: .medium)).foregroundStyle(InkTheme.cinnabar)
-                    .frame(maxWidth: .infinity).padding(.vertical, 6).background(InkTheme.paper)
-                    .accessibilityIdentifier("serviceEnvironmentNotice")
-                    .zIndex(1)
-            }
             Group {
                 switch account.accessState {
                 case .authenticated:
@@ -137,6 +139,11 @@ private struct ResolvedBlindOracleRoot: View {
         .onChange(of: account.canAccessMain) { _, allowed in
             if !allowed { settingsPresented = false }
             else { Task { await resumeBillingAndTasks() } }
+        }
+        .onChange(of: store.historyResetID) { _, _ in chatDraft = ""; settingsPresented = false }
+        .onChange(of: account.deletionResetID) { _, _ in
+            chatDraft = ""; settingsPresented = false
+            purchases.clearDeletedAccountData()
         }
         .onReceive(NotificationCenter.default.publisher(for: .accountBalanceChanged).receive(on: RunLoop.main)) { _ in
             if account.canAccessMain { Task { await account.refreshOverview() } }

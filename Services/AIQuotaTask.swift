@@ -40,11 +40,14 @@ actor AIQuotaTaskService {
     private let api: AccountAPI
     private let sessions: AccountSessionManager
     private let environment: ServiceEnvironment
+    private var deletionGeneration = UUID()
     init(directory: URL, api: AccountAPI = AccountAPI(), sessions: AccountSessionManager = .shared, environment: ServiceEnvironment = .current) {
         self.directory = directory; self.api = api; self.sessions = sessions; self.environment = environment
     }
     func prepare(stage: AIQuotaStage, body: Data, purpose: String) async throws -> PreparedAIStage {
+        let expectedDeletionGeneration = deletionGeneration
         let context = await sessions.context()
+        guard expectedDeletionGeneration == deletionGeneration else { throw CancellationError() }
         guard let user = context.session?.user else { throw AccountAPIError.unauthorized }
         let taskFile = url(stage.taskID, "task")
         var record = try load(TaskRecord.self, taskFile) ?? TaskRecord(ownerID: user.id, conversationID: stage.conversationID, serviceEnvironment: environment.rawValue, logicalTaskID: stage.taskID)
@@ -72,6 +75,7 @@ actor AIQuotaTaskService {
         }
         guard admission.taskID == serverID, !admission.admissionToken.isEmpty,
               await sessions.sessionGeneration() == context.generation else { throw AccountAPIError.staleSession }
+        guard expectedDeletionGeneration == deletionGeneration, !Task.isCancelled else { throw CancellationError() }
         guard let latest = try load(TaskRecord.self, taskFile), latest.endStatus == nil else { throw CancellationError() }
         record.admissionToken = admission.admissionToken
         try save(record, taskFile)
@@ -85,10 +89,12 @@ actor AIQuotaTaskService {
         record.needsRepair = needed; try save(record, file)
     }
     func end(_ taskID: UUID, status: String) async {
+        let expectedDeletionGeneration = deletionGeneration
         let file = url(taskID, "task")
         do {
             guard var record = try load(TaskRecord.self, file) else { return }
             let context = await sessions.context()
+            guard expectedDeletionGeneration == deletionGeneration else { return }
             guard matchesEnvironment(record), record.ownerID == context.session?.user.id, let admissionToken = record.admissionToken else { return }
             record.endStatus = status; try save(record, file)
             var access = try await sessions.accessToken(expectedGeneration: context.generation)
@@ -102,14 +108,17 @@ actor AIQuotaTaskService {
                     throw AccountAPIError.unauthorized
                 }
             }
+            guard expectedDeletionGeneration == deletionGeneration else { return }
             // Only discard raw snapshots after the app persisted its answer and the server acknowledged completion.
             try? FileManager.default.removeItem(at: file.deletingLastPathComponent())
             NotificationCenter.default.post(name: .accountBalanceChanged, object: nil)
         } catch { /* The on-device end marker is retried after the next authenticated launch. */ }
     }
     func flushPendingEnds() async {
+        let expectedDeletionGeneration = deletionGeneration
         let folders = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
         for folder in folders {
+            guard expectedDeletionGeneration == deletionGeneration else { return }
             guard let storedID = UUID(uuidString: folder.lastPathComponent),
                   let record = try? load(TaskRecord.self, folder.appendingPathComponent("task.json")), matchesEnvironment(record),
                   let id = record.logicalTaskID ?? (environment == .production ? storedID : nil), let status = record.endStatus else { continue }
@@ -117,9 +126,16 @@ actor AIQuotaTaskService {
         }
     }
     func containsTask(_ id: UUID) -> Bool { FileManager.default.fileExists(atPath: url(id, "task").path) }
+    func eraseDataForDeletedAccount() throws {
+        // Invalidate prepares suspended in URLSession before removing snapshots.
+        deletionGeneration = UUID()
+        if FileManager.default.fileExists(atPath: directory.path) { try FileManager.default.removeItem(at: directory) }
+    }
     func eraseConversation(_ conversationID: UUID?) async throws {
+        let expectedDeletionGeneration = deletionGeneration
         let folders = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
         for folder in folders {
+            guard expectedDeletionGeneration == deletionGeneration else { return }
             guard let storedID = UUID(uuidString: folder.lastPathComponent), var record = try load(TaskRecord.self, folder.appendingPathComponent("task.json")), matchesEnvironment(record),
                   let id = record.logicalTaskID ?? (environment == .production ? storedID : nil),
                   conversationID == nil || record.conversationID == conversationID else { continue }

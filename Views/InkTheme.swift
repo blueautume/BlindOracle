@@ -76,3 +76,18 @@ struct InkPill: View {
             .padding(.horizontal, 9).padding(.vertical, 5).background(color.opacity(0.09), in: Capsule())
     }
 }
+
+/// A small title marker; environment selection remains Apple-verified at launch.
+struct TestEnvironmentBadge: View {
+    var body: some View {
+        if ServiceEnvironment.current.isSandbox {
+            Text(L10n.text("测试", "Test"))
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(InkTheme.secondary)
+                .padding(.horizontal, 5).padding(.vertical, 3)
+                .background(InkTheme.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+                .fixedSize()
+                .accessibilityIdentifier("serviceEnvironmentBadge")
+        }
+    }
+}

@@ -135,14 +135,17 @@ struct ChatView: View {
                     .accessibilityHidden(showHistory)
                 }
                 ToolbarItem(placement: .principal) {
-                    Text(L10n.text("瞎子", "BlindOracle"))
-                        .font(.system(size: 20, weight: .medium, design: .serif))
-                        .tracking(AppLanguage.current.isEnglish ? 0.7 : 3)
-                        .foregroundStyle(InkTheme.ink)
-                        .contentShape(Rectangle())
-                        .onTapGesture { composing = false }
-                        .accessibilityIdentifier("chatTitle")
-                        .accessibilityHidden(showHistory)
+                    HStack(spacing: 6) {
+                        Text(L10n.text("瞎子", "BlindOracle"))
+                            .font(.system(size: 20, weight: .medium, design: .serif))
+                            .tracking(AppLanguage.current.isEnglish ? 0.7 : 3)
+                            .foregroundStyle(InkTheme.ink)
+                            .accessibilityIdentifier("chatTitle")
+                        TestEnvironmentBadge()
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { composing = false }
+                    .accessibilityHidden(showHistory)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {

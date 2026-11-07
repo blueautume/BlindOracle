@@ -6,9 +6,15 @@ final class LocalVault {
     let directory: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private let deletionDefaults: UserDefaults
+    private var deletionDefaultsKey: String { "oracle.pendingAccountDeletion." + directory.lastPathComponent }
+    private var deletionMarker: URL { directory.appendingPathExtension("account-deletion-pending") }
+    var requiresAccountDeletionCleanup: Bool {
+        deletionDefaults.bool(forKey: deletionDefaultsKey) || FileManager.default.fileExists(atPath: deletionMarker.path)
+    }
     private var unreadableFiles: Set<String> = []
     private var recoveryCopies: [String: URL] = [:]
-    init(directory: URL? = nil) {
+    init(directory: URL? = nil, deletionDefaults: UserDefaults = .standard) {
         let uiTesting: Bool
         #if DEBUG
         uiTesting = ProcessInfo.processInfo.arguments.contains("--ui-testing-local")
@@ -16,18 +22,24 @@ final class LocalVault {
         uiTesting = false
         #endif
         self.directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(uiTesting ? "BlindOracle-UITest" : "BlindOracle", isDirectory: true)
+        self.deletionDefaults = deletionDefaults
         #if DEBUG
         if uiTesting, ProcessInfo.processInfo.arguments.contains("--ui-testing-reset") { try? FileManager.default.removeItem(at: self.directory) }
         #endif
         encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        // A process interruption or protected file must never make deleted
+        // profiles/history visible on the next launch. Reads remain blocked
+        // until the entire app-owned directory has been removed successfully.
+        if requiresAccountDeletionCleanup { try? completeAccountDeletionCleanup() }
         try? FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)
         var directoryURL = self.directory
         var resourceValues = URLResourceValues(); resourceValues.isExcludedFromBackup = true
         try? directoryURL.setResourceValues(resourceValues)
     }
     func load<T: Decodable>(_ type: T.Type, from name: String, fallback: T) -> T {
+        guard !requiresAccountDeletionCleanup else { return fallback }
         let url = directory.appendingPathComponent(name + ".json")
         guard FileManager.default.fileExists(atPath: url.path) else { return fallback }
         do { return try decoder.decode(type, from: Data(contentsOf: url)) }
@@ -38,6 +50,7 @@ final class LocalVault {
         }
     }
     func save<T: Encodable>(_ value: T, as name: String) throws {
+        guard !requiresAccountDeletionCleanup else { throw AccountAPIError.storage }
         let url = directory.appendingPathComponent(name + ".json")
         let data = try encoder.encode(value)
         // A fallback returned by load must not destroy the only copy of data
@@ -53,9 +66,33 @@ final class LocalVault {
         unreadableFiles.remove(name)
     }
     func contains(_ name: String) -> Bool {
-        FileManager.default.fileExists(atPath: directory.appendingPathComponent(name + ".json").path)
+        !requiresAccountDeletionCleanup && FileManager.default.fileExists(atPath: directory.appendingPathComponent(name + ".json").path)
+    }
+    func markAccountDeletionPending() throws {
+        // The defaults lock is also retained if writing the protected marker
+        // fails. It contains no account identity or personal information.
+        deletionDefaults.set(true, forKey: deletionDefaultsKey)
+        deletionDefaults.synchronize()
+        #if os(iOS)
+        try Data().write(to: deletionMarker, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        #else
+        try Data().write(to: deletionMarker, options: .atomic)
+        #endif
+    }
+    func eraseDataForDeletedAccount() throws {
+        try markAccountDeletionPending()
+        try completeAccountDeletionCleanup()
+    }
+    private func completeAccountDeletionCleanup() throws {
+        if FileManager.default.fileExists(atPath: directory.path) { try FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        if FileManager.default.fileExists(atPath: deletionMarker.path) { try FileManager.default.removeItem(at: deletionMarker) }
+        unreadableFiles.removeAll(); recoveryCopies.removeAll()
+        deletionDefaults.removeObject(forKey: deletionDefaultsKey)
+        deletionDefaults.synchronize()
     }
     @discardableResult func preserveRecoveryCopy(_ name: String) -> Bool {
+        guard !requiresAccountDeletionCleanup else { return false }
         let source = directory.appendingPathComponent(name + ".json")
         unreadableFiles.insert(name)
         if let existing = recoveryCopies[name],

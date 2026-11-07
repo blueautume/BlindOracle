@@ -19,6 +19,25 @@ final class AccountUITests: XCTestCase {
         add(attachment)
     }
 
+    @MainActor private func reveal(_ element: XCUIElement, app: XCUIApplication) {
+        for _ in 0..<5 {
+            if element.isHittable { return }
+            app.swipeUp()
+        }
+        XCTAssertTrue(element.isHittable)
+    }
+
+    @MainActor private func openDeletion(in app: XCUIApplication) {
+        let data = app.tabBars.buttons["数据"]
+        XCTAssertTrue(data.waitForExistence(timeout: 10)); data.tap()
+        app.buttons["accountEntry"].tap()
+        let deletion = app.buttons["deleteAccount"]
+        XCTAssertTrue(deletion.waitForExistence(timeout: 5))
+        reveal(deletion, app: app)
+        deletion.tap()
+        XCTAssertTrue(app.buttons["cancelAccountDeletion"].waitForExistence(timeout: 5))
+    }
+
     @MainActor func testDataShowsAppleIdentityAndOnlyAllowancePercentageBeforeOpeningAccountDetails() {
         let app = launch(["--ui-testing-reset", "--ui-testing-reading-library"])
         let data = app.tabBars.buttons["数据"]
@@ -50,15 +69,71 @@ final class AccountUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["本机资料独立保存"].exists)
         XCTAssertTrue(app.buttons["deleteAccount"].exists)
         capture("account-details", app: app)
-        app.buttons["deleteAccount"].tap()
+        let logoutFrame = app.buttons["logoutAccount"].frame
+        let deletion = app.buttons["deleteAccount"]
+        XCTAssertGreaterThan(deletion.frame.minY - logoutFrame.maxY, 100)
+        reveal(deletion, app: app)
+        capture("account-separated-actions", app: app)
+        deletion.tap()
+        XCTAssertTrue(app.staticTexts["已购额度无法恢复"].waitForExistence(timeout: 5))
         #if BLINDORACLE_SANDBOX
-        XCTAssertTrue(app.alerts.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Apple 授权保留")).firstMatch.waitForExistence(timeout: 5))
+        reveal(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Apple 授权保留")).firstMatch, app: app)
         #else
-        XCTAssertTrue(app.alerts.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "撤销登录授权")).firstMatch.waitForExistence(timeout: 5))
+        reveal(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "撤销已知 Apple 登录授权")).firstMatch, app: app)
         #endif
-        app.alerts.buttons["取消"].tap()
+        app.buttons["cancelAccountDeletion"].tap()
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.buttons[profileID].waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testDeletionRequiresExactAccountConfirmationAndCancellationKeepsRecords() {
+        let app = launch(["--ui-testing-reset", "--ui-testing-reading-library"])
+        openDeletion(in: app)
+        let phrase = app.staticTexts["deletionConfirmationPhrase"]
+        XCTAssertTrue(phrase.label.hasPrefix("我确认永久注销测试账号"))
+        let confirmation = app.buttons["confirmPermanentDeletion"]
+        XCTAssertFalse(confirmation.isEnabled)
+        let input = app.textFields["deletionConfirmationInput"].exists
+            ? app.textFields["deletionConfirmationInput"] : app.textViews["deletionConfirmationInput"]
+        reveal(input, app: app)
+        input.tap(); input.typeText("取消")
+        XCTAssertFalse(confirmation.isEnabled)
+        input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 2))
+        input.typeText(phrase.label + "x")
+        XCTAssertFalse(confirmation.isEnabled, "A different account or extra character must not confirm deletion")
+        input.typeText(XCUIKeyboardKey.delete.rawValue)
+        XCTAssertTrue(confirmation.isEnabled)
+        app.swipeUp()
+        capture("account-deletion-typed-confirmation", app: app)
+        app.buttons["cancelAccountDeletion"].tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "profileRow-")).firstMatch.waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testDeletionConfirmationCanBeCopiedAndPastedBeforeSyntheticDeletion() {
+        let app = launch(["--ui-testing-reset", "--ui-testing-reading-library"])
+        openDeletion(in: app)
+        capture("account-deletion-consequences", app: app)
+        let copy = app.buttons["copyDeletionConfirmation"]
+        reveal(copy, app: app); copy.tap()
+        XCTAssertTrue(copy.label.contains("已复制"))
+        let input = app.textFields["deletionConfirmationInput"].exists
+            ? app.textFields["deletionConfirmationInput"] : app.textViews["deletionConfirmationInput"]
+        reveal(input, app: app)
+        input.tap(); input.press(forDuration: 1.2)
+        let pastePredicate = NSPredicate(format: "label IN %@", ["粘贴", "Paste"])
+        let menuPaste = app.menuItems.matching(pastePredicate).firstMatch
+        let paste = menuPaste.exists ? menuPaste : app.buttons.matching(pastePredicate).firstMatch
+        XCTAssertTrue(paste.waitForExistence(timeout: 5)); paste.tap()
+        let confirmation = app.buttons["confirmPermanentDeletion"]
+        XCTAssertTrue(confirmation.isEnabled)
+        app.swipeUp(); reveal(confirmation, app: app)
+        capture("account-deletion-pasted-confirmation", app: app)
+        // --ui-testing-local uses a synthetic server result; never deletes a real account.
+        confirmation.tap()
+        XCTAssertTrue(app.buttons["appleSignInButton"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.tabBars.firstMatch.exists)
+        capture("account-deletion-completed-gate", app: app)
     }
 
     @MainActor func testSignedOutLaunchCannotReachTabsDataOrSettingsButCanReadPrivacy() {
@@ -77,17 +152,36 @@ final class AccountUITests: XCTestCase {
         XCTAssertFalse(app.tabBars.firstMatch.exists)
         capture("login-gate-privacy", app: app)
     }
-    @MainActor func testBuildEnvironmentNoticeIsExplicitAndCannotBeChangedByPreferences() {
+    @MainActor func testCompactEnvironmentBadgeCannotBeChangedByPreferences() {
         let app = launch(["--ui-testing-auth-signed-out", "-BLINDORACLE_SANDBOX", "YES"])
         XCTAssertTrue(app.buttons["appleSignInButton"].waitForExistence(timeout: 10))
+        XCTAssertFalse(element("serviceEnvironmentNotice", in: app).exists)
+        XCTAssertFalse(app.staticTexts["测试环境 · 购买不扣款"].exists)
         #if BLINDORACLE_SANDBOX
-        XCTAssertTrue(element("serviceEnvironmentNotice", in: app).exists)
-        XCTAssertTrue(app.staticTexts["测试环境 · 购买不扣款"].exists)
+        XCTAssertTrue(element("serviceEnvironmentBadge", in: app).exists)
+        XCTAssertEqual(element("serviceEnvironmentBadge", in: app).label, "测试")
         XCTAssertTrue(app.staticTexts["请用你之前的 Apple 账号登录。沙盒测试账号仅用于系统购买。"].exists)
         #else
-        XCTAssertFalse(element("serviceEnvironmentNotice", in: app).exists, "Preferences must not switch a production build to sandbox")
+        XCTAssertFalse(element("serviceEnvironmentBadge", in: app).exists, "Preferences must not switch a production build to sandbox")
         #endif
         capture("build-environment-login", app: app)
+    }
+
+    @MainActor func testCompactEnvironmentBadgeSharesTheChatTitleRow() {
+        let app = launch()
+        let title = app.staticTexts["chatTitle"]
+        XCTAssertTrue(title.waitForExistence(timeout: 10))
+        XCTAssertFalse(element("serviceEnvironmentNotice", in: app).exists)
+        #if BLINDORACLE_SANDBOX
+        let badge = element("serviceEnvironmentBadge", in: app)
+        XCTAssertTrue(badge.exists)
+        XCTAssertEqual(badge.label, "测试")
+        XCTAssertGreaterThanOrEqual(badge.frame.minX, title.frame.maxX)
+        XCTAssertLessThan(abs(badge.frame.midY - title.frame.midY), 10)
+        #else
+        XCTAssertFalse(element("serviceEnvironmentBadge", in: app).exists)
+        #endif
+        capture("compact-chat-environment-badge", app: app)
     }
 
     @MainActor func testSavedSessionRestoresThroughDedicatedLaunchScreenWithoutShowingSignIn() {

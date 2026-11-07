@@ -14,6 +14,7 @@ struct AccountGateView: View {
                             HStack(spacing: 9) {
                                 RoundedRectangle(cornerRadius: 1).fill(InkTheme.cinnabar).frame(width: 3, height: 16)
                                 Text(L10n.text("瞎子", "BlindOracle")).font(.system(size: 20, weight: .medium, design: .serif))
+                                TestEnvironmentBadge()
                                 Spacer()
                             }.foregroundStyle(InkTheme.ink)
                             Spacer(minLength: 44)
@@ -76,7 +77,10 @@ struct AccountRestoringView: View {
             PaperBackground()
             VStack(spacing: 17) {
                 OracleMark(size: 80)
-                Text(L10n.text("瞎子", "BlindOracle")).font(.system(size: 28, weight: .medium, design: .serif)).foregroundStyle(InkTheme.ink)
+                HStack(spacing: 7) {
+                    Text(L10n.text("瞎子", "BlindOracle")).font(.system(size: 28, weight: .medium, design: .serif)).foregroundStyle(InkTheme.ink)
+                    TestEnvironmentBadge()
+                }
                 ProgressView().controlSize(.small).tint(InkTheme.secondary).padding(.top, 12)
                     .accessibilityLabel(L10n.text("正在恢复账号", "Restoring your account"))
             }.padding(.bottom, 30)
@@ -92,13 +96,21 @@ struct AccountRecoveryView: View {
             PaperBackground()
             VStack(spacing: 22) {
                 OracleMark(size: 72)
-                Text(L10n.text("稍等，连接有些慢。", "Let’s reconnect.")).font(.system(size: 25, weight: .medium, design: .serif)).foregroundStyle(InkTheme.ink)
-                Text(L10n.text("你的登录信息已保留。请检查网络，再试一次。", "Your saved session is still here. Check your connection and try again."))
+                Text(account.deletionCleanupRequired ? L10n.text("完成最后的清理", "Finish clearing your data") : L10n.text("稍等，连接有些慢。", "Let’s reconnect.")).font(.system(size: 25, weight: .medium, design: .serif)).foregroundStyle(InkTheme.ink)
+                Text(account.deletionCleanupRequired ? L10n.text("账号已经永久注销。请完成本机资料清理后再重新登录。", "Your account has been permanently deleted. Finish clearing local records before signing in again.") : L10n.text("你的登录信息已保留。请检查网络，再试一次。", "Your saved session is still here. Check your connection and try again."))
                     .font(.subheadline).foregroundStyle(InkTheme.secondary).lineSpacing(4).multilineTextAlignment(.center)
-                Button(L10n.text("重新连接", "Try again")) { Task { await account.restore(force: true) } }
+                Button(account.deletionCleanupRequired ? L10n.text("重试清理", "Retry cleanup") : L10n.text("重新连接", "Try again")) {
+                    Task {
+                        if account.deletionCleanupRequired { await account.retryDeletionCleanup() }
+                        else { await account.restore(force: true) }
+                    }
+                }
                     .buttonStyle(InkPrimaryButton()).accessibilityIdentifier("retrySession")
-                Button(L10n.text("重新使用 Apple 登录", "Sign in again with Apple")) { Task { await account.chooseSignIn() } }
-                    .font(.footnote).foregroundStyle(InkTheme.secondary).padding(.top, 3).accessibilityIdentifier("chooseSignIn")
+                    .disabled(account.isBusy)
+                if !account.deletionCleanupRequired {
+                    Button(L10n.text("重新使用 Apple 登录", "Sign in again with Apple")) { Task { await account.chooseSignIn() } }
+                        .font(.footnote).foregroundStyle(InkTheme.secondary).padding(.top, 3).accessibilityIdentifier("chooseSignIn")
+                }
                 if let message = account.message {
                     Text(message).font(.caption).foregroundStyle(InkTheme.secondary).multilineTextAlignment(.center).accessibilityIdentifier("accountMessage")
                 }

@@ -85,6 +85,47 @@ final class AllowanceAndPurchaseTests: XCTestCase {
         let count = await finished.count; XCTAssertEqual(count, 0)
         XCTAssertNil(store.message)
     }
+    @MainActor func testAccountDeletionClearsPurchaseMetadataAndLateVerificationCannotRepopulateOrFinish() async throws {
+        let buyer = UUID(); let client = api()
+        let manager = AccountSessionManager(api: client, vault: PurchaseVault(try session(buyer)))
+        let store = AccountPurchaseStore(api: client, sessions: manager)
+        let started = expectation(description: "Synthetic purchase verification started")
+        AllowanceURLProtocol.handler = { _ in
+            started.fulfill()
+            return .init(body: "{\"transaction_id\":\"12345\",\"status\":\"credited\",\"wallet\":" + self.wallet + "}", delay: 0.15)
+        }
+        let finished = PurchaseFinishCounter()
+        let flight = Task {
+            await store.deliver(VerifiedAccountPurchase(transactionID: "12345", appAccountToken: buyer,
+                environment: ServiceEnvironment.current.storeKitEnvironment)) { await finished.finish() }
+        }
+        await fulfillment(of: [started], timeout: 2)
+        XCTAssertTrue(store.hasUnresolvedPurchase)
+        store.clearDeletedAccountData()
+        await flight.value
+        let count = await finished.count
+        XCTAssertEqual(count, 0, "Local deletion must not finish an undelivered Apple purchase")
+        XCTAssertFalse(store.hasUnresolvedPurchase); XCTAssertNil(store.message); XCTAssertTrue(store.products.isEmpty)
+    }
+    func testAccountDeletionInvalidatesInFlightAdmissionAndNeverRecreatesRequestSnapshots() async throws {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let client = api(); let manager = AccountSessionManager(api: client, vault: PurchaseVault(try session()))
+        let stage = AIQuotaStage(taskID: UUID(), stageID: "plan:synthetic-deletion-race")
+        let service = AIQuotaTaskService(directory: folder, api: client, sessions: manager)
+        let started = expectation(description: "Synthetic task admission started")
+        AllowanceURLProtocol.handler = { _ in
+            started.fulfill()
+            return .init(body: "{\"task_id\":\"" + ServiceEnvironment.current.serverTaskID(for: stage.taskID).uuidString + "\",\"state\":\"open\",\"admission_token\":\"synthetic-admission\"}", delay: 0.15)
+        }
+        let flight = Task { try await service.prepare(stage: stage, body: Data("synthetic request snapshot".utf8), purpose: "plan") }
+        await fulfillment(of: [started], timeout: 2)
+        try await service.eraseDataForDeletedAccount()
+        do { _ = try await flight.value; XCTFail("A late admission cannot recreate deleted request snapshots") }
+        catch { XCTAssertTrue(error is CancellationError) }
+        let containsTask = await service.containsTask(stage.taskID)
+        XCTAssertFalse(containsTask)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path))
+    }
     func testTaskRetriesReuseOriginalBodyAcrossServiceRestartAndRepair() async throws {
         let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
         let client = api(); let manager = AccountSessionManager(api: client, vault: PurchaseVault(try session()))

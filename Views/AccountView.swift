@@ -1,18 +1,19 @@
 import SwiftUI
 import AuthenticationServices
+import UIKit
 
 struct AccountView: View {
     @EnvironmentObject private var account: AccountStore
+    @EnvironmentObject private var store: OracleStore
     @StateObject private var apple = AppleAccountSignInCoordinator()
     @State private var confirmLogout = false
     @State private var confirmDeletion = false
     var body: some View {
         ZStack {
             PaperBackground()
-            ScrollView {
+            GeometryReader { geometry in
+              ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text(L10n.text("账号设置", "Account settings"))
-                        .font(.system(size: 32, weight: .medium, design: .serif)).foregroundStyle(InkTheme.ink)
                     PaperCard {
                         VStack(alignment: .leading, spacing: 14) {
                             if let user = account.user {
@@ -55,43 +56,175 @@ struct AccountView: View {
                         Text(message).font(.subheadline).foregroundStyle(InkTheme.cinnabar).lineSpacing(4)
                             .accessibilityIdentifier("accountMessage")
                     }
-                    PaperCard {
-                        VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 10) {
                             Label(L10n.text("本机资料独立保存", "Local records stay on this device"), systemImage: "iphone")
                                 .font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.ink)
-                            Text(L10n.text("人员资料、聊天与推演记录属于当前设备，不随账号自动上传或同步。退出、切换或删除账号不会清除或隔离本机记录；登录后仍可查看当前设备上的记录。共享设备或删除账号前，请先在数据和历史中删除相应记录。", "Profiles, chats and readings belong to this device and are not automatically uploaded or synced with your account. Signing out, switching or deleting an account does not clear or separate local records; they remain accessible after signing in on this device. Remove relevant records in Data and History before sharing the device or deleting your account."))
+                            Text(L10n.text("人员资料、聊天与推演保存在当前设备，不随账号自动同步。退出或切换账号会保留本机记录；永久注销账号将清除本机记录。共享设备前，请先清理需要删除的资料。", "Profiles, chats and readings are stored on this device and are not automatically synced with your account. Signing out or switching accounts keeps local records; permanently deleting your account clears them. Remove relevant records before sharing this device."))
                                 .font(.footnote).foregroundStyle(InkTheme.secondary).lineSpacing(4)
                             Text(L10n.text("发起在线解读时，所需问题、上下文与资料将经过账号服务器转交 AI 服务。", "When you request an online reading, the required question, context and profile details pass through the account server to the AI service."))
                                 .font(.footnote).foregroundStyle(InkTheme.secondary).lineSpacing(4)
-                        }
-                    }
+                    }.padding(.horizontal, 4)
                     if account.user != nil {
-                        Button(L10n.text("退出登录", "Sign out")) { confirmLogout = true }
+                        Button { confirmLogout = true } label: {
+                            Text(L10n.text("退出登录", "Sign out"))
+                                .font(.system(size: 18, weight: .medium, design: .serif))
+                                .foregroundStyle(InkTheme.ink)
+                                .frame(maxWidth: .infinity).padding(.vertical, 20)
+                                .background(.white.opacity(0.45), in: RoundedRectangle(cornerRadius: 20))
+                                .overlay(RoundedRectangle(cornerRadius: 20).stroke(InkTheme.line.opacity(0.6), lineWidth: 0.7))
+                        }.buttonStyle(.plain)
                             .disabled(account.isBusy).accessibilityIdentifier("logoutAccount")
-                        Button(L10n.text("删除账号", "Delete account"), role: .destructive) { confirmDeletion = true }
+                        Spacer(minLength: 112)
+                        Button { account.message = nil; confirmDeletion = true } label: {
+                            Text(L10n.text("删除账号", "Delete account"))
+                                .font(.system(size: 14))
+                                .foregroundStyle(InkTheme.secondary)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }.buttonStyle(.plain)
                             .disabled(account.isBusy).accessibilityIdentifier("deleteAccount")
                     }
-                }.padding(22).frame(maxWidth: 760).frame(maxWidth: .infinity)
-            }.refreshable { await account.refreshOverview() }
+                }.padding(22).frame(maxWidth: 760, minHeight: max(0, geometry.size.height), alignment: .top)
+                    .frame(maxWidth: .infinity)
+              }.refreshable { await account.refreshOverview() }
+            }
         }
+        .navigationTitle(L10n.text("账号", "Account"))
         .navigationBarTitleDisplayMode(.inline).tint(InkTheme.cinnabar)
         .task { await account.restore(); if account.user != nil { await account.refreshOverview() } }
         .alert(L10n.text("退出登录？", "Sign out?"), isPresented: $confirmLogout) {
             Button(L10n.text("取消", "Cancel"), role: .cancel) { }
             Button(L10n.text("退出", "Sign out"), role: .destructive) { Task { await account.logout() } }
         } message: { Text(L10n.text("退出后需重新登录才能使用应用。本机资料与聊天仍会保留。", "You will need to sign in again to use the app. Local profiles and chats will remain.")) }
-        .alert(L10n.text("删除服务器账号？", "Delete your server account?"), isPresented: $confirmDeletion) {
-            Button(L10n.text("取消", "Cancel"), role: .cancel) { }
-            Button(L10n.text("删除账号", "Delete account"), role: .destructive) { Task { await account.deleteAccount() } }
-        } message: {
-            Text(ServiceEnvironment.current.isSandbox
-                 ? L10n.text("仅删除测试服务器账号；Apple 授权保留，以免影响正式版本。本机资料保留。请先在数据和历史清理需要删除的记录；删除后将回到测试环境登录页。", "This deletes only the test server account. Apple authorization is retained to protect the production app. Local records remain; remove them in Data and History first if needed. You will return to the test environment sign-in screen.")
-                 : L10n.text("将向服务器申请删除账号并撤销登录授权，此操作不能撤销。本机资料不会自动删除，请先返回数据和历史清理需要删除的记录；删除账号后将回到登录页。", "This requests permanent deletion of your server account and revocation of sign-in authorization. Local records are not automatically deleted. Go back and remove them in Data and History before deleting your account; deletion returns you to the sign-in screen."))
+        .sheet(isPresented: $confirmDeletion) {
+            if let user = account.user {
+                AccountDeletionConfirmationView(user: user)
+                    .environmentObject(account).environmentObject(store)
+            }
         }
     }
-    private var unavailableValue: some View { Text(L10n.text("尚未获取，请刷新或稍后重试。", "Not available yet. Refresh or try again later.")).font(.footnote).foregroundStyle(InkTheme.secondary) }
-    private func metric(_ label: String, _ value: String) -> some View {
-        HStack { Text(label).foregroundStyle(InkTheme.secondary); Spacer(); Text(value).foregroundStyle(InkTheme.ink).monospacedDigit() }.font(.subheadline)
+}
+
+private struct AccountDeletionConfirmationView: View {
+    let user: AccountUser
+    @EnvironmentObject private var account: AccountStore
+    @EnvironmentObject private var store: OracleStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmation = ""
+    @State private var copied = false
+    @FocusState private var inputFocused: Bool
+
+    private var accountLabel: String {
+        let suffix = String(user.id.replacingOccurrences(of: "-", with: "").prefix(8)).uppercased()
+        return "\(user.presentationName)（\(suffix)）"
+    }
+    private var confirmationPhrase: String {
+        L10n.text("我确认永久注销\(accountLabel)", "I confirm permanent deletion of \(accountLabel)")
+    }
+    private var canDelete: Bool {
+        confirmation == confirmationPhrase && account.user?.id == user.id && !account.isBusy
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                PaperBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Image(systemName: "person.crop.circle.badge.minus")
+                                .font(.system(size: 32, weight: .light)).foregroundStyle(InkTheme.cinnabar)
+                                .accessibilityHidden(true)
+                            Text(L10n.text("永久注销账号", "Permanently delete account"))
+                                .font(.system(size: 28, weight: .medium, design: .serif)).foregroundStyle(InkTheme.ink)
+                            Text(accountLabel).font(.subheadline).foregroundStyle(InkTheme.secondary)
+                        }
+                        PaperCard {
+                            VStack(alignment: .leading, spacing: 18) {
+                                consequence("person.crop.circle.badge.xmark", title: L10n.text("账号与资料将被清除", "Your account and records will be removed"),
+                                            detail: L10n.text("将清除账号身份资料，以及本机保存的全部人员资料、聊天、推演和未完成记录。此操作无法撤销。", "Your account identity information and all profiles, chats, readings and unfinished work saved on this device will be cleared. This cannot be undone."))
+                                Rectangle().fill(InkTheme.line.opacity(0.6)).frame(height: 0.5)
+                                consequence("creditcard", title: L10n.text("已购额度无法恢复", "Purchased allowance cannot be recovered"),
+                                            detail: L10n.text("剩余赠送及已购买的额度将无法使用、转移或恢复。重新注册也不能找回。注销账号不会自动申请退款。", "Remaining complimentary and purchased allowance will no longer be usable, transferable or recoverable, including after registering again. Deleting your account does not automatically request a refund."))
+                            }
+                        }.accessibilityIdentifier("deletionConsequences")
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(L10n.text("请在下方输入完整确认文字", "Enter the complete confirmation below"))
+                                .font(.system(size: 16, weight: .medium, design: .serif)).foregroundStyle(InkTheme.ink)
+                            Text(confirmationPhrase).font(.subheadline).foregroundStyle(InkTheme.ink)
+                                .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("deletionConfirmationPhrase")
+                            Button {
+                                UIPasteboard.general.setItems([["public.utf8-plain-text": confirmationPhrase]],
+                                    options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(300)])
+                                copied = true
+                            } label: {
+                                Label(copied ? L10n.text("已复制", "Copied") : L10n.text("复制确认文字", "Copy confirmation"),
+                                      systemImage: copied ? "checkmark" : "doc.on.doc")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .padding(.vertical, 10).padding(.horizontal, 12)
+                                    .background(InkTheme.wash, in: RoundedRectangle(cornerRadius: 10))
+                            }.buttonStyle(.plain).foregroundStyle(InkTheme.ink)
+                                .disabled(account.isBusy).accessibilityIdentifier("copyDeletionConfirmation")
+                            TextField(L10n.text("输入或粘贴确认文字", "Type or paste the confirmation"), text: $confirmation, axis: .vertical)
+                                .font(.system(size: 16)).foregroundStyle(InkTheme.ink)
+                                .lineLimit(2...4).padding(14)
+                                .background(.white.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(inputFocused ? InkTheme.cinnabar : InkTheme.line, lineWidth: 1))
+                                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                                .focused($inputFocused).disabled(account.isBusy)
+                                .accessibilityIdentifier("deletionConfirmationInput")
+                        }
+                        if let message = account.message {
+                            Text(message).font(.footnote).foregroundStyle(InkTheme.cinnabar).lineSpacing(4)
+                                .accessibilityIdentifier("deletionMessage")
+                        }
+                        Button(role: .destructive) {
+                            guard canDelete else { return }
+                            inputFocused = false
+                            Task {
+                                let deleted = await account.deleteAccount {
+                                    try await store.eraseLocalDataAfterAccountDeletion()
+                                }
+                                if deleted { dismiss() }
+                            }
+                        } label: {
+                            HStack(spacing: 10) {
+                                if account.isBusy { ProgressView().tint(.white) }
+                                Text(account.isBusy ? L10n.text("正在注销…", "Deleting…") : L10n.text("永久注销账号", "Permanently delete account"))
+                            }.font(.system(size: 16, weight: .medium, design: .serif))
+                                .frame(maxWidth: .infinity).padding(.vertical, 16)
+                                .foregroundStyle(canDelete || account.isBusy ? .white : InkTheme.secondary)
+                                .background(canDelete || account.isBusy ? InkTheme.cinnabar : InkTheme.line.opacity(0.4), in: RoundedRectangle(cornerRadius: 14))
+                        }.buttonStyle(.plain).disabled(!canDelete).accessibilityIdentifier("confirmPermanentDeletion")
+                        Text(ServiceEnvironment.current.isSandbox
+                             ? L10n.text("本次注销仅影响测试账号；Apple 授权保留，以免影响正式账号。去标识化的账务、用量及防重记录按隐私政策保留，既有备份随备份轮换处理。", "This deletes only the test account; the shared Apple authorization is retained to protect your production account. Pseudonymous accounting, usage and abuse-prevention records remain as described in the Privacy Policy, and existing backups follow backup rotation.")
+                             : L10n.text("注销会撤销已知 Apple 登录授权。去标识化的账务、用量及防重记录按隐私政策保留，既有备份随备份轮换处理。", "Known Sign in with Apple grants will be revoked. Pseudonymous accounting, usage and abuse-prevention records remain as described in the Privacy Policy, and existing backups follow backup rotation."))
+                            .font(.footnote).foregroundStyle(InkTheme.secondary).lineSpacing(4)
+                        NavigationLink(L10n.text("查看隐私政策", "Read the Privacy Policy")) { LegalDocumentView(document: .privacyPolicy) }
+                            .font(.footnote).foregroundStyle(InkTheme.secondary)
+                    }.padding(24).frame(maxWidth: 680).frame(maxWidth: .infinity)
+                }.scrollDismissesKeyboard(.interactively)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.text("取消", "Cancel")) { dismiss() }
+                        .disabled(account.isBusy).accessibilityIdentifier("cancelAccountDeletion")
+                }
+            }
+            .tint(InkTheme.cinnabar).interactiveDismissDisabled(account.isBusy)
+        }.accessibilityIdentifier("accountDeletionConfirmation")
+    }
+
+    private func consequence(_ icon: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon).font(.system(size: 17)).foregroundStyle(InkTheme.cinnabar)
+                .frame(width: 22).padding(.top, 2).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 7) {
+                Text(title).font(.system(size: 16, weight: .medium, design: .serif)).foregroundStyle(InkTheme.ink)
+                Text(detail).font(.footnote).foregroundStyle(InkTheme.secondary).lineSpacing(4)
+            }
+        }
     }
 }
 

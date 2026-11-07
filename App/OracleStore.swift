@@ -477,6 +477,26 @@ struct CastingLocationDraft: Equatable, Sendable {
         catch { notice = L10n.text("历史已清空，部分旧备份暂未移除，请稍后重试。", "History was cleared, but some older backups could not be removed. Try again later.") }
     }
 
+    /// Called only after the server has confirmed account deletion. Signing
+    /// out never calls this operation. Invalidate callbacks before the first
+    /// suspension so a late streamed answer cannot restore erased content.
+    func eraseLocalDataAfterAccountDeletion() async throws {
+        task?.cancel(); task = nil; operationID = nil
+        profiles = []; selfProfileID = nil; runs = []
+        conversations = []; messages = []; summary = ConversationSummary()
+        pendingPlan = nil; pendingInteraction = nil; analysisAttempt = nil; quotaTaskID = nil
+        quotaEndIntents = [:]; activeConversationID = UUID()
+        clearConversationPresentation(); phase = .idle
+        requiresTopUp = false; hasCredential = false; credentialIssue = nil; selectedTab = 0
+        historyResetID = UUID()
+        // Write the durable lock before touching files; on a protected-file
+        // failure, LocalVault refuses both old reads and stale callback writes.
+        try vault.markAccountDeletionPending()
+        if let quotaEndService { try await quotaEndService.eraseDataForDeletedAccount() }
+        else if !usesTestAgent { try await AIQuotaTaskService.shared.eraseDataForDeletedAccount() }
+        try vault.eraseDataForDeletedAccount()
+    }
+
     func cancelPendingReading() {
         guard pendingPlan != nil || pendingInteraction != nil else { return }
         if let id = quotaTaskID ?? pendingPlan?.quotaTaskID ?? pendingInteraction?.plan.quotaTaskID { quotaEndIntents[id.uuidString.lowercased()] = "cancelled" }

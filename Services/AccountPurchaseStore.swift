@@ -33,11 +33,22 @@ struct VerifiedAccountPurchase: Sendable {
     private var reconcileUserInitiated = false
     private var reconciliationTask: Task<Void, Never>?
     private var updates: Task<Void, Never>?
+    private var localDataGeneration = UUID()
     init(api: AccountAPI = AccountAPI(), sessions: AccountSessionManager = .shared, environment: ServiceEnvironment = .current,
          provider: AccountPurchaseProviding? = nil) {
         self.api = api; self.sessions = sessions; self.environment = environment; self.provider = provider ?? StoreKitPurchaseProvider()
     }
     deinit { updates?.cancel(); reconciliationTask?.cancel() }
+    func clearDeletedAccountData() {
+        localDataGeneration = UUID()
+        reconciliationTask?.cancel(); reconciliationTask = nil
+        products = []; allowedProductIDs = []; inFlightTransactions = []
+        unresolvedByAccount = [:]; pendingApprovalAccounts = []; uncertainPurchaseAccounts = []
+        needsReconciliation = false; reconcileUserInitiated = false
+        hasUnresolvedPurchase = false; message = nil
+        // Apple owns its unfinished transactions and purchase history. Never
+        // finish an undelivered purchase merely because an account was deleted.
+    }
     func startObserving() {
         guard updates == nil else { return }
         let events = provider.updates()
@@ -49,6 +60,7 @@ struct VerifiedAccountPurchase: Sendable {
         }
     }
     func resumeUnfinished(userInitiated: Bool = false) async {
+        let expectedLocalDataGeneration = localDataGeneration
         guard !isCheckingPurchases, !isPurchasing else {
             needsReconciliation = true
             reconcileUserInitiated = reconcileUserInitiated || userInitiated
@@ -57,6 +69,7 @@ struct VerifiedAccountPurchase: Sendable {
         isCheckingPurchases = true
         defer { isCheckingPurchases = false; scheduleReconciliationIfNeeded() }
         let context = await sessions.context()
+        guard expectedLocalDataGeneration == localDataGeneration else { return }
         guard let accountID = context.session.flatMap({ UUID(uuidString: $0.user.id) }) else {
             hasUnresolvedPurchase = false; return
         }
@@ -64,7 +77,7 @@ struct VerifiedAccountPurchase: Sendable {
         if userInitiated { message = nil }
         var eligibleCount = 0
         for await result in provider.unfinished() {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, expectedLocalDataGeneration == localDataGeneration else { return }
             guard await sessions.sessionGeneration() == context.generation else { needsReconciliation = true; return }
             if case .verified(let record, _) = result,
                record.appAccountToken == accountID, record.environment == environment.storeKitEnvironment {
@@ -72,6 +85,7 @@ struct VerifiedAccountPurchase: Sendable {
             }
             await handle(result)
         }
+        guard expectedLocalDataGeneration == localDataGeneration else { return }
         guard await sessions.sessionGeneration() == context.generation else { needsReconciliation = true; return }
         hasUnresolvedPurchase = hasUnresolved(for: accountID)
         if userInitiated, pendingApprovalAccounts.contains(accountID), eligibleCount == 0 {
@@ -85,6 +99,7 @@ struct VerifiedAccountPurchase: Sendable {
         }
     }
     func loadProducts() async {
+        let expectedLocalDataGeneration = localDataGeneration
         guard !isLoading else { return }
         isLoading = true; message = nil
         defer { isLoading = false }
@@ -95,7 +110,7 @@ struct VerifiedAccountPurchase: Sendable {
             }
             let ids = Set(catalog.products.map(\.productID).filter { !$0.isEmpty })
             let loaded = ids.isEmpty ? [] : try await provider.products(for: ids)
-            guard await sessions.sessionGeneration() == context.generation else { return }
+            guard expectedLocalDataGeneration == localDataGeneration, await sessions.sessionGeneration() == context.generation else { return }
             allowedProductIDs = ids
             let regionMismatch = loaded.contains { product in
                 guard let approved = catalog.products.first(where: { $0.productID == product.id }) else { return false }
@@ -111,18 +126,20 @@ struct VerifiedAccountPurchase: Sendable {
                     : L10n.text("补充额度功能正在准备中，请稍后再来。", "Top-ups are being prepared. Please check back later.")
             }
         } catch {
-            guard await sessions.sessionGeneration() == context.generation else { return }
+            guard expectedLocalDataGeneration == localDataGeneration, await sessions.sessionGeneration() == context.generation else { return }
             products = []; allowedProductIDs = []
             message = L10n.text("暂时无法获取购买选项，请稍后重试。", "Purchase options are unavailable. Please try again later.")
         }
     }
     func purchase(_ product: AccountPurchaseProduct) async {
+        let expectedLocalDataGeneration = localDataGeneration
         guard !isPurchasing, !isCheckingPurchases, allowedProductIDs.contains(product.id),
               products.contains(where: { $0.id == product.id }), product.isConsumable else { return }
         // Reserve before the first suspension, including the session lookup.
         isPurchasing = true
         defer { isPurchasing = false; scheduleReconciliationIfNeeded() }
         let context = await sessions.context()
+        guard expectedLocalDataGeneration == localDataGeneration else { return }
         guard let accountID = context.session.flatMap({ UUID(uuidString: $0.user.id) }) else {
             message = AccountAPIError.unauthorized.localizedDescription; return
         }
@@ -134,6 +151,7 @@ struct VerifiedAccountPurchase: Sendable {
         message = nil
         do {
             let result = try await provider.purchase(productID: product.id, accountToken: accountID)
+            guard expectedLocalDataGeneration == localDataGeneration else { return }
             if case .pending = result { pendingApprovalAccounts.insert(accountID) }
             if case .success(.unverified) = result { uncertainPurchaseAccounts.insert(accountID) }
             if case .success(.verified(let record, _)) = result,
@@ -156,7 +174,7 @@ struct VerifiedAccountPurchase: Sendable {
             case .cancelled: break
             }
         } catch {
-            if await sessions.sessionGeneration() == context.generation {
+            if expectedLocalDataGeneration == localDataGeneration, await sessions.sessionGeneration() == context.generation {
                 message = L10n.text("购买未完成，请稍后重试。", "The purchase did not complete. Please try again later.")
             }
         }
@@ -170,10 +188,12 @@ struct VerifiedAccountPurchase: Sendable {
     }
     /// Called only after StoreKit verification. The server independently checks the official transaction.
     func deliver(_ record: VerifiedAccountPurchase, finish: @escaping @Sendable () async -> Void) async {
+        let expectedLocalDataGeneration = localDataGeneration
         // StoreKit's unfinished sequence may include purchases from the other build; never deliver or finish those here.
         guard record.environment == environment.storeKitEnvironment else { return }
         guard !inFlightTransactions.contains(record.transactionID) else { return }
         let context = await sessions.context()
+        guard expectedLocalDataGeneration == localDataGeneration else { return }
         guard let userID = context.session.flatMap({ UUID(uuidString: $0.user.id) }), record.appAccountToken == userID else {
             // Keep unfinished purchases for their original account, including after signing out or switching users.
             return
@@ -190,19 +210,19 @@ struct VerifiedAccountPurchase: Sendable {
                 try await api.verifyApplePurchase(transactionID: record.transactionID, environment: record.environment, token: token)
             }
             guard confirmation.transactionID == record.transactionID, confirmation.isResolved else { throw AccountAPIError.invalidResponse }
-            guard await sessions.sessionGeneration() == context.generation else { return }
+            guard expectedLocalDataGeneration == localDataGeneration, await sessions.sessionGeneration() == context.generation else { return }
             await finish()
             // The original owner's finished record must be cleared even if
             // sign-out or account switching happened during StoreKit.finish().
             unresolvedByAccount[userID]?.remove(record.transactionID)
-            guard await sessions.sessionGeneration() == context.generation else { return }
+            guard expectedLocalDataGeneration == localDataGeneration, await sessions.sessionGeneration() == context.generation else { return }
             hasUnresolvedPurchase = hasUnresolved(for: userID)
             message = confirmation.status == "credited"
                 ? L10n.text("额度已补充。", "Your allowance has been replenished.")
                 : L10n.text("此购买已退款，未补充额度。", "This purchase was refunded; no allowance was added.")
             NotificationCenter.default.post(name: .accountBalanceChanged, object: nil)
         } catch {
-            guard await sessions.sessionGeneration() == context.generation else { return }
+            guard expectedLocalDataGeneration == localDataGeneration, await sessions.sessionGeneration() == context.generation else { return }
             // Never finish an unconfirmed purchase. StoreKit keeps it in unfinished for a later retry.
             message = L10n.text("购买暂未完成核实，请稍后点“核对购买”，或联系我们。请勿重复购买。", "Your purchase is awaiting verification. Use Check purchases later or contact us. Please do not buy again.")
         }

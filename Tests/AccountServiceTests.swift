@@ -14,13 +14,26 @@ final class AccountServiceTests: XCTestCase {
             user: AccountUser(id: id, displayName: "测试账号", email: nil, createdAt: "2026-11-06T00:00:00Z"))
         return try AccountSession(response: response, appleUserID: "fixture-apple-user", now: expired ? .distantPast : Date())
     }
+    private func temporaryLocalVault() throws -> LocalVault {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("account-delete-test-" + UUID().uuidString)
+        let vault = LocalVault(directory: directory)
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: directory)
+            try? FileManager.default.removeItem(at: directory.appendingPathExtension("account-deletion-pending"))
+            UserDefaults.standard.removeObject(forKey: "oracle.pendingAccountDeletion." + directory.lastPathComponent)
+        }
+        return vault
+    }
+    @MainActor private func accountStore(api: AccountAPI, sessions: AccountSessionManager) throws -> AccountStore {
+        AccountStore(api: api, sessions: sessions, localDataVault: try temporaryLocalVault())
+    }
     private var rotatedResponse: String {
         #"{"access_token":"fixture-rotated-access","refresh_token":"fixture-rotated-refresh","expires_in":3600,"user":{"id":"fixture-user","display_name":"测试账号","email":null,"created_at":"2026-11-06T00:00:00Z"}}"#
     }
     @MainActor func testLaunchWithoutSessionNeverUnlocksTheMainInterface() async throws {
         let noNetwork = expectation(description: "No authentication request without a saved session"); noNetwork.isInverted = true
         AuthURLProtocol.handler = { _ in noNetwork.fulfill(); return .init(body: "{}") }
-        let client = api(); let store = AccountStore(api: client, sessions: AccountSessionManager(api: client, vault: MemoryAccountVault(nil)))
+        let client = api(); let store = try accountStore(api: client, sessions: AccountSessionManager(api: client, vault: MemoryAccountVault(nil)))
         XCTAssertEqual(store.accessState, .restoring); XCTAssertFalse(store.canAccessMain)
         await store.restore()
         XCTAssertEqual(store.accessState, .signedOut); XCTAssertFalse(store.canAccessMain)
@@ -31,7 +44,7 @@ final class AccountServiceTests: XCTestCase {
         var saved = try session(); saved.appleUserID = nil
         let body = String(decoding: try JSONEncoder().encode(saved.user), as: UTF8.self)
         AuthURLProtocol.handler = { _ in requested.fulfill(); return .init(body: body, delay: 0.15) }
-        let client = api(); let store = AccountStore(api: client, sessions: AccountSessionManager(api: client, vault: MemoryAccountVault(saved)))
+        let client = api(); let store = try accountStore(api: client, sessions: AccountSessionManager(api: client, vault: MemoryAccountVault(saved)))
         var observed: [AccountAccessState] = []
         let observation = store.$accessState.sink { observed.append($0) }
         defer { observation.cancel() }
@@ -45,7 +58,7 @@ final class AccountServiceTests: XCTestCase {
     @MainActor func testTemporaryRestoreFailureKeepsSessionAndOffersRetry() async throws {
         var saved = try session(); saved.appleUserID = nil
         let vault = MemoryAccountVault(saved); let client = api()
-        let store = AccountStore(api: client, sessions: AccountSessionManager(api: client, vault: vault))
+        let store = try accountStore(api: client, sessions: AccountSessionManager(api: client, vault: vault))
         var observed: [AccountAccessState] = []
         let observation = store.$accessState.sink { observed.append($0) }
         defer { observation.cancel() }
@@ -66,7 +79,7 @@ final class AccountServiceTests: XCTestCase {
             request.url?.absoluteString.hasSuffix("/auth/refresh/") == true ? .init(body: self.rotatedResponse, delay: 0.05) : .init(body: userBody)
         }
         let client = api(); let vault = MemoryAccountVault(saved)
-        let store = AccountStore(api: client, sessions: AccountSessionManager(api: client, vault: vault))
+        let store = try accountStore(api: client, sessions: AccountSessionManager(api: client, vault: vault))
         var observed: [AccountAccessState] = []
         let observation = store.$accessState.sink { observed.append($0) }; defer { observation.cancel() }
         await store.restore()
@@ -76,7 +89,7 @@ final class AccountServiceTests: XCTestCase {
     @MainActor func testOfflineRestorationPreservesCredentialsAndUsesRecoveryScreen() async throws {
         var saved = try session(); saved.appleUserID = nil
         let vault = MemoryAccountVault(saved); let client = api()
-        let store = AccountStore(api: client, sessions: AccountSessionManager(api: client, vault: vault))
+        let store = try accountStore(api: client, sessions: AccountSessionManager(api: client, vault: vault))
         AuthURLProtocol.handler = { _ in throw URLError(.notConnectedToInternet) }
         await store.restore()
         XCTAssertEqual(store.accessState, .recoveryRequired); XCTAssertTrue(store.canRetrySession)
@@ -86,7 +99,7 @@ final class AccountServiceTests: XCTestCase {
         var saved = try session(); saved.appleUserID = nil
         let vault = MemoryAccountVault(saved); vault.shouldFailLoad = true
         let client = api(); let manager = AccountSessionManager(api: client, vault: vault)
-        let store = AccountStore(api: client, sessions: manager)
+        let store = try accountStore(api: client, sessions: manager)
         var observed: [AccountAccessState] = []
         let observation = store.$accessState.sink { observed.append($0) }; defer { observation.cancel() }
         await store.restore()
@@ -100,7 +113,7 @@ final class AccountServiceTests: XCTestCase {
     @MainActor func testChoosingSignInExplicitlyDiscardsUnrecoverableSavedSession() async throws {
         var saved = try session(); saved.appleUserID = nil
         let client = api(); let manager = AccountSessionManager(api: client, vault: MemoryAccountVault(saved))
-        let store = AccountStore(api: client, sessions: manager)
+        let store = try accountStore(api: client, sessions: manager)
         AuthURLProtocol.handler = { _ in .init(status: 503, body: "{}") }
         await store.restore(); XCTAssertEqual(store.accessState, .recoveryRequired)
         let logout = expectation(description: "Old session revocation attempted without blocking sign-in")
@@ -116,7 +129,7 @@ final class AccountServiceTests: XCTestCase {
             request.url?.absoluteString.hasSuffix("/auth/refresh/") == true ? .init(body: self.rotatedResponse) : .init(status: 401, body: "{}")
         }
         let client = api(); let manager = AccountSessionManager(api: client, vault: MemoryAccountVault(saved))
-        let store = AccountStore(api: client, sessions: manager)
+        let store = try accountStore(api: client, sessions: manager)
         await store.restore()
         XCTAssertEqual(store.accessState, .signedOut); XCTAssertFalse(store.canRetrySession); XCTAssertNil(store.user)
         let snapshot = await manager.snapshot(); XCTAssertNil(snapshot)
@@ -127,7 +140,7 @@ final class AccountServiceTests: XCTestCase {
         AuthURLProtocol.handler = { request in
             request.url?.absoluteString.hasSuffix("/me/") == true ? .init(body: body) : .init(status: 503, body: "{}")
         }
-        let client = api(); let store = AccountStore(api: client, sessions: AccountSessionManager(api: client, vault: MemoryAccountVault(saved)))
+        let client = api(); let store = try accountStore(api: client, sessions: AccountSessionManager(api: client, vault: MemoryAccountVault(saved)))
         await store.restore(); XCTAssertTrue(store.canAccessMain)
         await store.refreshOverview()
         XCTAssertTrue(store.canAccessMain); XCTAssertNil(store.wallet); XCTAssertNotNil(store.message)
@@ -137,7 +150,7 @@ final class AccountServiceTests: XCTestCase {
         let vault = MemoryAccountVault(saved); vault.shouldFailDelete = true
         AuthURLProtocol.handler = { _ in .init(status: 401, body: "{}") }
         let client = api(); let manager = AccountSessionManager(api: client, vault: vault)
-        let store = AccountStore(api: client, sessions: manager)
+        let store = try accountStore(api: client, sessions: manager)
         await store.restore()
         XCTAssertFalse(store.canAccessMain); XCTAssertEqual(store.accessState, .signedOut); XCTAssertFalse(store.canRetrySession)
         let snapshot = await manager.snapshot(); XCTAssertNil(snapshot)
@@ -149,7 +162,7 @@ final class AccountServiceTests: XCTestCase {
             AuthURLProtocol.handler = { request in request.httpMethod == "GET" ? .init(body: body) : .init(status: 204, body: "") }
             let vault = MemoryAccountVault(saved); vault.shouldFailDelete = true
             let client = api(); let manager = AccountSessionManager(api: client, vault: vault)
-            let store = AccountStore(api: client, sessions: manager)
+            let store = try accountStore(api: client, sessions: manager)
             await store.restore(); XCTAssertTrue(store.canAccessMain)
             if deleteAccount { await store.deleteAccount() } else { await store.logout() }
             XCTAssertFalse(store.canAccessMain); XCTAssertEqual(store.accessState, .signedOut)
@@ -163,7 +176,7 @@ final class AccountServiceTests: XCTestCase {
         AuthURLProtocol.handler = { _ in .init(body: body) }
         let vault = MemoryAccountVault(saved); vault.shouldFailDelete = true
         let client = api(); let manager = AccountSessionManager(api: client, vault: vault)
-        let store = AccountStore(api: client, sessions: manager)
+        let store = try accountStore(api: client, sessions: manager)
         await store.restore(); XCTAssertTrue(store.canAccessMain)
         saved.appleUserID = "fixture-apple-user"; try await manager.install(saved)
         await store.credentialRevoked()
@@ -180,7 +193,7 @@ final class AccountServiceTests: XCTestCase {
                 return .init(body: body)
             }
             let client = api(); let manager = AccountSessionManager(api: client, vault: MemoryAccountVault(saved))
-            let store = AccountStore(api: client, sessions: manager)
+            let store = try accountStore(api: client, sessions: manager)
             await store.restore(); XCTAssertTrue(store.canAccessMain)
             if gateway {
                 let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [AuthURLProtocol.self]
@@ -300,7 +313,7 @@ final class AccountServiceTests: XCTestCase {
             revoked.fulfill(); return .init(status: 204, body: "")
         }
         let client = api(); let manager = AccountSessionManager(api: client, vault: MemoryAccountVault(try session(expired: true)))
-        let store = AccountStore(api: client, sessions: manager)
+        let store = try accountStore(api: client, sessions: manager)
         await store.sessionChanged(); await store.logout()
         XCTAssertNil(store.user); XCTAssertNil(store.message)
         await fulfillment(of: [revoked], timeout: 2)
@@ -313,7 +326,7 @@ final class AccountServiceTests: XCTestCase {
         }
         let vault = MemoryAccountVault(try session())
         let client = api(); let manager = AccountSessionManager(api: client, vault: vault)
-        let store = AccountStore(api: client, sessions: manager)
+        let store = try accountStore(api: client, sessions: manager)
         await store.sessionChanged(); await store.deleteAccount()
         XCTAssertEqual(store.user?.id, "fixture-user")
         XCTAssertNotNil(try vault.load())
@@ -331,7 +344,7 @@ final class AccountServiceTests: XCTestCase {
         }
         let vault = MemoryAccountVault(nil); let client = api()
         let manager = AccountSessionManager(api: client, vault: vault)
-        let store = AccountStore(api: client, sessions: manager)
+        let store = try accountStore(api: client, sessions: manager)
         let attempt = try await store.beginAppleSignIn()
         await store.completeAppleSignIn(attempt: attempt, identityToken: "fixture-identity", authorizationCode: "fixture-code", fullName: nil, appleUserID: "fixture-apple-user")
         XCTAssertEqual(store.user?.id, "fixture-user")
@@ -349,12 +362,12 @@ final class AccountServiceTests: XCTestCase {
         }
         let client = api(); let vault = MemoryAccountVault(try session())
         let manager = AccountSessionManager(api: client, vault: vault)
-        let store = AccountStore(api: client, sessions: manager)
+        let store = try accountStore(api: client, sessions: manager)
         await store.sessionChanged()
         let deletion = Task { await store.deleteAccount() }
         await fulfillment(of: [started], timeout: 2)
         try await manager.install(session(id: "replacement-account"))
-        await deletion.value; await store.sessionChanged()
+        _ = await deletion.value; await store.sessionChanged()
         XCTAssertEqual(store.user?.id, "replacement-account")
         XCTAssertEqual(try vault.load()?.user.id, "replacement-account")
     }
@@ -372,7 +385,7 @@ final class AccountServiceTests: XCTestCase {
             return .init(body: #"{"id":"fixture-user","display_name":"测试账号","email":null,"created_at":"2026-11-06T00:00:00Z"}"#, delay: 0.15)
         }
         let client = api(); let manager = AccountSessionManager(api: client, vault: MemoryAccountVault(try session()))
-        let store = AccountStore(api: client, sessions: manager)
+        let store = try accountStore(api: client, sessions: manager)
         await store.sessionChanged()
         let flight = Task { await store.refreshOverview() }
         await fulfillment(of: [started], timeout: 2)
@@ -458,6 +471,145 @@ final class AccountServiceTests: XCTestCase {
         AuthURLProtocol.handler = { _ in .init(status: 404, body: #"{"error":{"code":"not_ready","message":"private-error-marker"}}"#) }
         do { _ = try await api().challenge(); XCTFail("Expected unavailable endpoint") }
         catch { XCTAssertFalse(error.localizedDescription.contains("private-error-marker")); XCTAssertFalse(error.localizedDescription.isEmpty) }
+    }
+    @MainActor func testConfirmedDeletionClearsProfilesReadingsDraftsRecoveryCopiesAndRestartsEmpty() async throws {
+        AuthURLProtocol.handler = { request in
+            XCTAssertEqual(request.httpMethod, "DELETE")
+            return .init(status: 204, body: "")
+        }
+        let local = try temporaryLocalVault()
+        let oracle = OracleStore(vault: local, bootstrapCredential: false)
+        var person = OracleProfile(); person.displayName = "合成隐私资料"
+        oracle.saveProfile(person)
+        oracle.messages = [ChatMessage(role: .user, content: "合成的私人问题")]
+        oracle.summary = ConversationSummary(text: "合成摘要")
+        let plan = OraclePlan(intent: "测试", subject: "本人", methods: [.bazi], requiredFields: [.birthDate], note: "测试", question: "合成问题")
+        oracle.pendingPlan = plan
+        oracle.runs = [OracleRun(input: OracleInput(question: "合成问题", profile: person), plan: plan)]
+        oracle.checkpoint()
+        try Data("synthetic private recovery copy".utf8).write(to: local.directory.appendingPathComponent("profiles.recovery-fixture.json"))
+        let snapshot = local.directory.appendingPathComponent(ServiceEnvironment.sandbox.taskDirectoryName, isDirectory: true)
+        try FileManager.default.createDirectory(at: snapshot, withIntermediateDirectories: true)
+        try Data("synthetic request snapshot".utf8).write(to: snapshot.appendingPathComponent("task.json"))
+        let client = api(); let sessions = AccountSessionManager(api: client, vault: MemoryAccountVault(try session()))
+        let account = AccountStore(api: client, sessions: sessions, localDataVault: local,
+            localDataErasure: { try await oracle.eraseLocalDataAfterAccountDeletion() })
+        await account.sessionChanged()
+        let reset = oracle.historyResetID
+        let deleted = await account.deleteAccount()
+        XCTAssertTrue(deleted); XCTAssertNil(account.user); XCTAssertFalse(account.deletionCleanupRequired)
+        XCTAssertEqual(account.accessState, .signedOut)
+        XCTAssertTrue(oracle.profiles.isEmpty); XCTAssertNil(oracle.selfProfileID); XCTAssertTrue(oracle.runs.isEmpty)
+        XCTAssertTrue(oracle.messages.isEmpty); XCTAssertTrue(oracle.conversations.isEmpty); XCTAssertEqual(oracle.summary.text, "")
+        XCTAssertNil(oracle.pendingPlan); XCTAssertNil(oracle.pendingInteraction); XCTAssertNil(oracle.quotaTaskID)
+        XCTAssertNotEqual(oracle.historyResetID, reset); XCTAssertEqual(oracle.phase, .idle)
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(at: local.directory, includingPropertiesForKeys: nil).isEmpty)
+        // A background checkpoint and a subsequent process launch both stay
+        // empty; the former transcript cannot reappear through migration.
+        oracle.checkpoint()
+        let reopened = OracleStore(vault: local, bootstrapCredential: false)
+        XCTAssertTrue(reopened.profiles.isEmpty); XCTAssertTrue(reopened.runs.isEmpty)
+        XCTAssertTrue(reopened.messages.isEmpty); XCTAssertTrue(reopened.conversations.isEmpty)
+    }
+    @MainActor func testServerRejectionAndOrdinaryLogoutNeverEraseLocalRecords() async throws {
+        for deleting in [false, true] {
+            let local = try temporaryLocalVault()
+            try local.save(["synthetic personal record"], as: "profiles")
+            AuthURLProtocol.handler = { request in
+                XCTAssertEqual(request.httpMethod, deleting ? "DELETE" : "POST")
+                return .init(status: deleting ? 503 : 204, body: deleting ? "{}" : "")
+            }
+            let client = api(); let sessions = AccountSessionManager(api: client, vault: MemoryAccountVault(try session()))
+            var eraseCount = 0
+            let account = AccountStore(api: client, sessions: sessions, localDataVault: local,
+                localDataErasure: { eraseCount += 1; try local.eraseDataForDeletedAccount() })
+            await account.sessionChanged()
+            if deleting { let deleted = await account.deleteAccount(); XCTAssertFalse(deleted) }
+            else { await account.logout() }
+            XCTAssertEqual(eraseCount, 0)
+            XCTAssertEqual(local.load([String].self, from: "profiles", fallback: []), ["synthetic personal record"])
+            XCTAssertFalse(local.requiresAccountDeletionCleanup)
+        }
+    }
+    @MainActor func testCleanupFailureLocksOldDataAndRetriesWithoutDeletingTheServerAccountAgain() async throws {
+        var deleteCalls = 0
+        AuthURLProtocol.handler = { request in
+            XCTAssertEqual(request.httpMethod, "DELETE")
+            deleteCalls += 1
+            return .init(status: 204, body: "")
+        }
+        let local = try temporaryLocalVault()
+        try local.save(["synthetic old profile"], as: "profiles")
+        let client = api(); let sessions = AccountSessionManager(api: client, vault: MemoryAccountVault(try session()))
+        var cleanupAttempts = 0
+        let account = AccountStore(api: client, sessions: sessions, localDataVault: local, localDataErasure: {
+            cleanupAttempts += 1
+            if cleanupAttempts == 1 { throw CocoaError(.fileWriteNoPermission) }
+            try local.eraseDataForDeletedAccount()
+        })
+        await account.sessionChanged()
+        let deleted = await account.deleteAccount()
+        XCTAssertFalse(deleted); XCTAssertNil(account.user); XCTAssertFalse(account.canAccessMain)
+        XCTAssertEqual(account.accessState, .recoveryRequired); XCTAssertTrue(account.deletionCleanupRequired)
+        XCTAssertTrue(local.requiresAccountDeletionCleanup)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: local.directory.appendingPathComponent("profiles.json").path))
+        XCTAssertEqual(local.load([String].self, from: "profiles", fallback: []), [])
+        XCTAssertThrowsError(try local.save(["stale asynchronous callback"], as: "profiles"))
+        do { _ = try await account.beginAppleSignIn(); XCTFail("Cleanup must finish before a new sign-in") }
+        catch { XCTAssertEqual(error as? AccountAPIError, .storage) }
+        await account.chooseSignIn()
+        XCTAssertEqual(account.accessState, .recoveryRequired)
+        await account.retryDeletionCleanup()
+        XCTAssertEqual(deleteCalls, 1); XCTAssertEqual(cleanupAttempts, 2)
+        XCTAssertFalse(account.deletionCleanupRequired); XCTAssertEqual(account.accessState, .signedOut)
+        XCTAssertFalse(local.requiresAccountDeletionCleanup)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: local.directory.appendingPathComponent("profiles.json").path))
+    }
+    func testInterruptedDeletionCompletesBeforeAnyOldLocalRecordCanBeLoaded() throws {
+        let local = try temporaryLocalVault()
+        try local.save(["synthetic old profile"], as: "profiles")
+        try Data("synthetic recovery copy".utf8).write(to: local.directory.appendingPathComponent("conversation.recovery-fixture.json"))
+        try local.markAccountDeletionPending()
+        let relaunched = LocalVault(directory: local.directory)
+        XCTAssertFalse(relaunched.requiresAccountDeletionCleanup)
+        XCTAssertEqual(relaunched.load([String].self, from: "profiles", fallback: []), [])
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(at: relaunched.directory, includingPropertiesForKeys: nil).isEmpty)
+    }
+    @MainActor func testLateSuccessfulDeletionPreservesReplacementSessionButLocksLocalDataUntilCleanup() async throws {
+        let started = expectation(description: "Original account deletion started")
+        AuthURLProtocol.handler = { request in
+            XCTAssertEqual(request.httpMethod, "DELETE"); started.fulfill()
+            return .init(status: 204, body: "", delay: 0.1)
+        }
+        let local = try temporaryLocalVault()
+        try local.save(["synthetic shared-device record"], as: "profiles")
+        let client = api(); let sessions = AccountSessionManager(api: client, vault: MemoryAccountVault(try session()))
+        var cleared = false
+        let account = AccountStore(api: client, sessions: sessions, localDataVault: local, localDataErasure: { cleared = true })
+        await account.sessionChanged()
+        let deletion = Task { await account.deleteAccount() }
+        await fulfillment(of: [started], timeout: 2)
+        try await sessions.install(session(id: "synthetic-replacement-account"))
+        let deleted = await deletion.value
+        await account.sessionChanged()
+        XCTAssertFalse(deleted); XCTAssertFalse(cleared)
+        XCTAssertNil(account.user); XCTAssertFalse(account.canAccessMain); XCTAssertTrue(account.deletionCleanupRequired)
+        let replacement = await sessions.snapshot()
+        XCTAssertEqual(replacement?.user.id, "synthetic-replacement-account")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: local.directory.appendingPathComponent("profiles.json").path))
+        XCTAssertEqual(local.load([String].self, from: "profiles", fallback: []), [])
+    }
+    @MainActor func testConfirmedDeletionStillClearsLocalRecordsWhenKeychainDeletionFails() async throws {
+        AuthURLProtocol.handler = { _ in .init(status: 204, body: "") }
+        let local = try temporaryLocalVault(); try local.save(["synthetic profile"], as: "profiles")
+        let sessionVault = MemoryAccountVault(try session()); sessionVault.shouldFailDelete = true
+        let client = api(); let sessions = AccountSessionManager(api: client, vault: sessionVault)
+        let account = AccountStore(api: client, sessions: sessions, localDataVault: local)
+        await account.sessionChanged()
+        let deleted = await account.deleteAccount()
+        XCTAssertTrue(deleted); XCTAssertEqual(account.accessState, .signedOut); XCTAssertFalse(account.canAccessMain)
+        XCTAssertFalse(local.contains("profiles")); XCTAssertFalse(local.requiresAccountDeletionCleanup)
+        let snapshot = await sessions.snapshot(); XCTAssertNil(snapshot)
     }
 }
 
