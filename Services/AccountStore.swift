@@ -167,6 +167,16 @@ enum AccountAccessState: Equatable {
     func beginAppleSignIn() async throws -> AppleSignInAttempt {
         guard !deletionCleanupRequired, !localDataVault.requiresAccountDeletionCleanup else { throw AccountAPIError.storage }
         guard !isBusy else { throw AccountAPIError.staleSession }
+        #if DEBUG
+        if debugUIFixture, ProcessInfo.processInfo.arguments.contains("--ui-testing-auth-progress") {
+            // Start only on the test's tap, regardless of simulator launch time.
+            // Never request an Apple challenge or open the system sign-in sheet.
+            isBusy = true; message = nil
+            try? await Task.sleep(nanoseconds: 12_000_000_000)
+            isBusy = false; message = "登录暂未完成。\n请检查网络后重试。"
+            throw AccountAPIError.unavailable
+        }
+        #endif
         generation = UUID(); let expected = generation
         isBusy = true; message = nil; user = nil; wallet = nil; usage = nil; accessState = .signedOut
         do {

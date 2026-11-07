@@ -21,7 +21,7 @@ struct AccountView: View {
 
                             } else {
                                 Text(L10n.text("用 Apple 登录", "Sign in with Apple")).font(.system(size: 20, design: .serif)).foregroundStyle(InkTheme.ink)
-                                Text(L10n.text("登录后使用应用并查看剩余额度。本机资料仍会保留。", "Sign in to use the app and view your remaining allowance. Local records remain on this device."))
+                                Text(L10n.text("登录后使用应用。本机资料仍会保留。", "Sign in to use the app. Local records remain on this device."))
                                     .font(.subheadline).foregroundStyle(InkTheme.secondary).lineSpacing(4)
                                 NativeAppleSignInButton { apple.start(account: account) }
                                     .frame(height: 48).disabled(account.isBusy || apple.isRunning)
@@ -34,23 +34,6 @@ struct AccountView: View {
                             }
                             if account.isBusy || apple.isRunning { ProgressView().tint(InkTheme.cinnabar) }
                         }.frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    if account.user != nil {
-                        PaperCard {
-                            VStack(alignment: .leading, spacing: 18) {
-                                AccountAllowanceGauge()
-                                NavigationLink { AccountTopUpView() } label: {
-                                    HStack {
-                                        Text(L10n.text("补充额度", "Replenish allowance"))
-                                        Spacer()
-                                        Image(systemName: "chevron.right").font(.caption)
-                                    }.font(.system(size: 16, design: .serif))
-                                }.accessibilityIdentifier("topUpEntry")
-                                Button { Task { await account.refreshOverview() } } label: {
-                                    HStack { if account.isLoading { ProgressView() }; Label(L10n.text("刷新", "Refresh"), systemImage: "arrow.clockwise") }
-                                }.disabled(account.isLoading || account.isBusy).accessibilityIdentifier("refreshAccount")
-                            }
-                        }
                     }
                     if let message = account.message {
                         Text(message).font(.subheadline).foregroundStyle(InkTheme.cinnabar).lineSpacing(4)
@@ -100,6 +83,112 @@ struct AccountView: View {
                 AccountDeletionConfirmationView(user: user)
                     .environmentObject(account).environmentObject(store)
             }
+        }
+    }
+}
+
+struct AccountUsageView: View {
+    @EnvironmentObject private var account: AccountStore
+    @State private var topUpPresented = false
+
+    var body: some View {
+        ZStack {
+            PaperBackground()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 28) {
+                    if account.user != nil {
+                        PaperCard {
+                            VStack(alignment: .leading, spacing: 24) {
+                                AccountAllowanceGauge()
+                                Rectangle().fill(InkTheme.line.opacity(0.6)).frame(height: 0.5)
+                                Button { topUpPresented = true } label: {
+                                    HStack {
+                                        Text(L10n.text("补充额度", "Replenish allowance"))
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundStyle(InkTheme.secondary)
+                                    }
+                                    .font(.system(size: 16, design: .serif))
+                                    .foregroundStyle(InkTheme.ink)
+                                    .frame(minHeight: 44)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("topUpEntry")
+                            }
+                        }
+                        Button { Task { await account.refreshOverview() } } label: {
+                            HStack(spacing: 8) {
+                                if account.isLoading { ProgressView().controlSize(.small) }
+                                Label(L10n.text("刷新", "Refresh"), systemImage: "arrow.clockwise")
+                            }
+                            .font(.system(size: 13))
+                            .foregroundStyle(InkTheme.secondary)
+                            .frame(minHeight: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(account.isLoading || account.isBusy)
+                        .accessibilityIdentifier("refreshAccount")
+                    } else {
+                        NavigationLink { AccountView() } label: {
+                            Text(L10n.text("登录后查看使用情况", "Sign in to view usage"))
+                                .font(.system(size: 16, design: .serif))
+                                .foregroundStyle(InkTheme.ink)
+                                .frame(minHeight: 44)
+                        }
+                    }
+                    if let message = account.message {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(InkTheme.secondary)
+                            .lineSpacing(4)
+                            .accessibilityIdentifier("usageMessage")
+                    }
+                }
+                .padding(22)
+                .frame(maxWidth: 760)
+                .frame(maxWidth: .infinity)
+            }
+            .refreshable { await account.refreshOverview() }
+        }
+        .navigationTitle(L10n.text("使用情况", "Usage"))
+        .navigationBarTitleDisplayMode(.inline)
+        .tint(InkTheme.ink)
+        .task { await account.refreshOverview() }
+        .sheet(isPresented: $topUpPresented) {
+            NavigationStack { AccountTopUpView() }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .accessibilityIdentifier("accountUsageView")
+    }
+}
+
+struct AccountAllowanceGauge: View {
+    @EnvironmentObject private var account: AccountStore
+    private var percent: Int? { account.wallet?.quota?.displayedPercent }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(L10n.text("可用额度", "Available allowance"))
+                    .foregroundStyle(InkTheme.ink)
+                Spacer()
+                Text(percent.map { L10n.text("剩余 \($0)%", "\($0)% remaining") } ?? "—")
+                    .monospacedDigit()
+                    .foregroundStyle(InkTheme.secondary)
+                    .accessibilityIdentifier("remainingQuotaPercentage")
+            }
+            .font(.system(size: 14))
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("usageRemaining")
+            ProgressView(value: Double(percent ?? 0), total: 100)
+                .tint(InkTheme.sage)
+                .scaleEffect(x: 1, y: 0.65)
+                .frame(height: 4)
+                .accessibilityLabel(L10n.text("剩余额度", "Remaining allowance"))
+                .accessibilityIdentifier("remainingQuotaProgress")
         }
     }
 }
@@ -263,15 +352,10 @@ struct AccountIdentityHeader: View {
 struct AccountSummaryContent: View {
     @EnvironmentObject private var account: AccountStore
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 8) {
-                if let user = account.user { AccountIdentityHeader(user: user) }
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(InkTheme.secondary.opacity(0.65)).accessibilityHidden(true)
-            }
-            Rectangle().fill(InkTheme.line.opacity(0.6)).frame(height: 0.5)
-            AccountAllowanceGauge()
-
+        HStack(spacing: 8) {
+            if let user = account.user { AccountIdentityHeader(user: user) }
+            Image(systemName: "chevron.right").font(.system(size: 12, weight: .medium))
+                .foregroundStyle(InkTheme.secondary.opacity(0.65)).accessibilityHidden(true)
         }.accessibilityIdentifier("accountSummary")
     }
 

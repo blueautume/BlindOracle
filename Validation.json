@@ -13,6 +13,7 @@
   "local_plugin_count": 10,
   "release_is_signed": true,
   "notes": [
+    "Account presentation update 3.0.29 / Build 55: simplified sign-in with a single-line Chinese title, bottom legal links and fixed progress/error slots; identity-only Data/account pages link to separate quiet usage. Purchase details show approved server Token quantity and StoreKit displayPrice before the fixed payment button; missing quantity, loading and unresolved purchases disable payment. 31 targeted unit tests passed, including bilingual rendered purchase screenshots; final screenshot and two UI regressions passed after fixing the purchase-footer accessibility identifier. Earlier account UI evidence and the small-screen login result are recorded separately below. Signed Release archive and distribution IPA passed candidate validation; runtime TestFlight availability is not inferred from export.",
     "Account safety and compact test marker 3.0.28 / Build 54: removed the full-width sandbox banner and placed a small Test badge beside the app title; Apple-verified routing and purchase notices remain intact. Account settings separates a full-width sign-out button from the quiet delete entry by at least 112 points. Permanent deletion requires an exact account-specific phrase, with a copy button and manual input/paste; warnings explain local records and purchased allowance cannot be recovered. After confirmed server deletion, a durable cleanup gate clears profiles, chats, readings, drafts, recovery copies, task snapshots and account purchase memory, and rejects late callbacks. Server failure does not erase local records; ordinary sign-out retains them; interrupted cleanup blocks access and sign-in until retried. Privacy text was updated to describe actual deletion and retained pseudonymous accounting records. All 673 non-live unit tests passed, including eight new deletion/late-callback regressions. Eight UI scenarios passed under the default route; three were repeated under the sandbox fixture, including badge position and the sandbox deletion notice. Original screenshots were visually reviewed. Signed Release archive completed with zero compiler warnings; exported distribution IPA passed signature, entitlement, privacy and credential checks. No real account was deleted and no live purchase, physical-device test or App Review submission occurred. TestFlight upload is recorded separately. Pre-existing string-catalog changes and untracked design explorations were preserved and excluded.",
     "Gateway failure descriptions 3.0.27 / Build 53: preserve validated server error codes across ordinary, streaming and task admission requests; describe daily limits, concurrency, retry protection, upstream failure, login and allowance failures using local Chinese/English strings. Arbitrary remote messages and invalid status/code pairs are not displayed. Error streams are capped at 8KB and cancelled. All 665 non-live unit tests passed, including seven new gateway tests. Signed Release archive: zero compiler warnings; exported IPA passed distribution, entitlement, privacy and credential checks. No new UI test was run because this changes descriptions in the existing notice view. Earlier UI evidence retains its actual version. Pre-existing string-catalog changes were preserved and not included. Backend per-account budgets and incident admin are independently tested/deployed under backend commit d0df54d.",
     "Confirmation toolbar and Meihua number interaction 3.0.26 / Build 52: the reading form has one top-right Confirm and continue button, no Finish later or bottom duplicate, and visible validation feedback. Requested Meihua numbers are collected in a separate interactive step with random generation and editable cards; empty/invalid drafts persist and cannot calculate. Existing two- and three-number supplements keep their snapshot. All 658 non-live unit tests and seven distinct Chinese/English UI regressions passed; the English workflow passed once more after shortening its navigation title. Original screenshots were visually reviewed. The final signed Release archive has zero compiler warnings and the distribution IPA passed signature, entitlement, privacy and credential checks. No physical device, live supplier, actual GPS or purchase was tested. Upload is recorded separately.",
@@ -75,8 +76,8 @@
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "3.0.28",
-  "build": "54",
+  "version": "3.0.29",
+  "build": "55",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",
@@ -2133,5 +2134,36 @@
       "resolution": "Test-only trailing slash comparison corrected; production source unchanged. Final full run passed."
     },
     "upload_state_at_development_checkpoint": "Not uploaded yet; subsequent upload recorded separately."
+  },
+  "account_presentation_3_0_29": {
+    "version": "3.0.29",
+    "build": "55",
+    "date": "2026-11-07",
+    "unit_result": "build/account-layout-3.0.29-55-unit.xcresult",
+    "unit_tests_passed": 31,
+    "initial_account_ui_result": "build/account-layout-3.0.29-55-ui.xcresult",
+    "initial_account_ui_passed": 9,
+    "initial_account_ui_failed": 1,
+    "resolved_initial_failure": "Purchase button was visible but its accessibility identifier was overridden by the outer page identifier. Scoped the page identifier to the scroll content; final purchase navigation regression passed.",
+    "final_result": "build/account-layout-3.0.29-55-final.xcresult",
+    "final_rendered_purchase_test_passed": 1,
+    "final_ui_tests_passed": 2,
+    "small_screen_result": "build/account-layout-3.0.29-55-small.xcresult",
+    "small_screen": "iPhone SE (3rd generation), iOS 27.2",
+    "small_screen_ui_tests_passed": 1,
+    "release_archive_log": "build/account-layout-3.0.29-55-archive-final.log",
+    "release_warning_count": 0,
+    "archive": "build/testflight-archive-3.0.29-55/BlindOracle.xcarchive",
+    "export": "build/testflight-archive-3.0.29-55/Export-final",
+    "candidate_verification": "build/testflight-archive-3.0.29-55/candidate-verification-final.json",
+    "testflight_upload_verification": "build/testflight-archive-3.0.29-55/upload-verification.json",
+    "purchase_review_uses_isolated_fixture": true,
+    "real_financial_purchase_performed": false,
+    "physical_device_runtime_validation_performed": false,
+    "previous_user_changes_preserved": [
+      "Resources/Localizable.xcstrings",
+      "Design/IconExplorations/2026-11-02-xiazi-40/",
+      "Design/IconExplorations/2026-11-02-xiazi-young-ink-3/"
+    ]
   }
 }

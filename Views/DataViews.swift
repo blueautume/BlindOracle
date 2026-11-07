@@ -33,6 +33,28 @@ struct DataLibraryView: View {
                     }
 
                     Section {
+                        NavigationLink { AccountUsageView() } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "chart.bar")
+                                    .font(.system(size: 21, weight: .light))
+                                    .frame(width: 30)
+                                    .foregroundStyle(InkTheme.secondary)
+                                Text(L10n.text("使用情况", "Usage"))
+                                    .font(.system(size: 16, design: .serif))
+                                    .foregroundStyle(InkTheme.ink)
+                                Spacer(minLength: 0)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("usageEntry")
+                        .listRowInsets(EdgeInsets(top: 12, leading: 18, bottom: 12, trailing: 18))
+                        .listRowBackground(Color.white.opacity(0.35))
+                        .listRowSeparator(.hidden)
+                    }
+
+                    Section {
                         if store.profiles.isEmpty {
                             Text(L10n.text("还没有留存的人员资料。点右上方的加号，先记下一个姓名。", "No profiles yet. Tap + above to add a name."))
                                 .font(.system(size: 13, design: .serif)).lineSpacing(5).foregroundStyle(InkTheme.secondary)

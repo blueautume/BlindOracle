@@ -7,6 +7,7 @@ struct AccountPurchaseProduct: Identifiable, Sendable {
     let price: Decimal
     let currency: String
     let isConsumable: Bool
+    var allowanceTokens: Int? = nil
 }
 
 enum AccountPurchaseEvent: Sendable {

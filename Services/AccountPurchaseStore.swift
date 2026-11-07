@@ -116,9 +116,13 @@ struct VerifiedAccountPurchase: Sendable {
                 guard let approved = catalog.products.first(where: { $0.productID == product.id }) else { return false }
                 return product.currency != approved.currency || product.price * 1000 != approved.priceMilliunits
             }
-            products = loaded.filter { product in
-                guard product.isConsumable, let approved = catalog.products.first(where: { $0.productID == product.id }) else { return false }
-                return approved.currency == "CNY" && product.currency == approved.currency && product.price * 1000 == approved.priceMilliunits
+            products = loaded.compactMap { product -> AccountPurchaseProduct? in
+                guard product.isConsumable, let approved = catalog.products.first(where: { $0.productID == product.id }),
+                      approved.currency == "CNY", product.currency == approved.currency,
+                      product.price * 1000 == approved.priceMilliunits else { return nil }
+                var offer = product
+                offer.allowanceTokens = approved.credits.flatMap { $0 > 0 ? $0 : nil }
+                return offer
             }.sorted { $0.price < $1.price }
             if products.isEmpty {
                 message = regionMismatch && environment.isSandbox

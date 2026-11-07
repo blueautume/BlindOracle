@@ -4,6 +4,10 @@ import SwiftUI
 struct AccountGateView: View {
     @EnvironmentObject private var account: AccountStore
     @StateObject private var apple = AppleAccountSignInCoordinator()
+    @ScaledMetric(relativeTo: .footnote) private var progressHeight = 24
+    @ScaledMetric(relativeTo: .footnote) private var messageHeight = 72
+    private var isSigningIn: Bool { account.isBusy || apple.isRunning }
+
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
@@ -14,52 +18,55 @@ struct AccountGateView: View {
                             HStack(spacing: 9) {
                                 RoundedRectangle(cornerRadius: 1).fill(InkTheme.cinnabar).frame(width: 3, height: 16)
                                 Text(L10n.text("瞎子", "BlindOracle")).font(.system(size: 20, weight: .medium, design: .serif))
-                                TestEnvironmentBadge()
                                 Spacer()
                             }.foregroundStyle(InkTheme.ink)
                             Spacer(minLength: 44)
                             VStack(spacing: 28) {
                                 OracleMark(size: 112)
-                                VStack(spacing: 15) {
-                                    Text(L10n.text("慢听一问，\n静观其变。", "A little clarity,\none question at a time."))
-                                        .font(.system(size: 32, weight: .medium, design: .serif))
-                                        .foregroundStyle(InkTheme.ink).lineSpacing(8)
-                                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-                                    Text(L10n.text("从一问开始，梳理此刻的心事。", "Make space for what’s on your mind."))
-                                        .font(.system(size: 14)).foregroundStyle(InkTheme.secondary).multilineTextAlignment(.center)
-                                }
+                                Text(L10n.text("慢听一问，静观其变。", "A little clarity,\none question at a time."))
+                                    .font(.system(.largeTitle, design: .serif).weight(.medium))
+                                    .foregroundStyle(InkTheme.ink).lineSpacing(8)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(AppLanguage.current.isEnglish ? 2 : 1)
+                                    .minimumScaleFactor(0.45)
+                                    .frame(maxWidth: .infinity)
                             }
                             Spacer(minLength: 52)
-                            VStack(spacing: 18) {
+                            VStack(spacing: 12) {
                                 NativeAppleSignInButton { apple.start(account: account) }
-                                    .frame(height: 54).disabled(account.isBusy || apple.isRunning)
+                                    .frame(height: 54).disabled(isSigningIn)
                                     .accessibilityIdentifier("appleSignInButton")
-                                if account.isBusy || apple.isRunning {
-                                    HStack(spacing: 8) {
-                                        ProgressView().controlSize(.small)
-                                        Text(L10n.text("正在完成登录…", "Signing you in…")).font(.footnote).foregroundStyle(InkTheme.secondary)
-                                    }.accessibilityIdentifier("signInProgress")
+                                HStack(spacing: 8) {
+                                    ProgressView().controlSize(.small)
+                                    Text(L10n.text("正在完成登录…", "Signing you in…")).font(.footnote).foregroundStyle(InkTheme.secondary)
                                 }
-                                if let message = account.message {
-                                    Text(message).font(.footnote).foregroundStyle(InkTheme.cinnabar)
-                                        .multilineTextAlignment(.center).lineSpacing(4).accessibilityIdentifier("accountMessage")
+                                .frame(height: progressHeight)
+                                .opacity(isSigningIn ? 1 : 0)
+                                .accessibilityHidden(!isSigningIn)
+                                .accessibilityIdentifier("signInProgress")
+                                ScrollView {
+                                    Text(account.message ?? "").font(.footnote).foregroundStyle(InkTheme.cinnabar)
+                                        .multilineTextAlignment(.center).lineSpacing(4)
+                                        .frame(maxWidth: .infinity)
+                                        .accessibilityIdentifier("accountMessage")
                                 }
-                                if ServiceEnvironment.current.isSandbox {
-                                    Text(L10n.text("请用你之前的 Apple 账号登录。沙盒测试账号仅用于系统购买。", "Sign in with your usual Apple Account. Your Sandbox tester is only for the system purchase sheet."))
-                                        .font(.footnote).foregroundStyle(InkTheme.secondary).multilineTextAlignment(.center).lineSpacing(4)
-                                }
-                                VStack(spacing: 7) {
-                                    Text(L10n.text("登录即表示你已阅读并同意", "By signing in, you agree to our")).foregroundStyle(InkTheme.secondary)
-                                    HStack(spacing: 12) {
-                                        NavigationLink(L10n.text("用户协议", "User Agreement")) { LegalDocumentView(document: .userAgreement) }.accessibilityIdentifier("gateUserAgreement")
-                                        Text("·").foregroundStyle(InkTheme.line)
-                                        NavigationLink(L10n.text("隐私政策", "Privacy Policy")) { LegalDocumentView(document: .privacyPolicy) }.accessibilityIdentifier("gatePrivacyPolicy")
-                                    }.foregroundStyle(InkTheme.ink)
-                                }.font(.system(size: 12))
-                                Text(L10n.text("本机资料与记录会保留，登录不会自动上传。", "Your local records stay on this device."))
-                                    .font(.system(size: 11)).foregroundStyle(InkTheme.secondary.opacity(0.85))
-                                    .multilineTextAlignment(.center).padding(.top, 12)
+                                .frame(height: messageHeight)
+                                .scrollBounceBehavior(.basedOnSize)
+                                .opacity(account.message == nil ? 0 : 1)
+                                .accessibilityHidden(account.message == nil)
+                                .allowsHitTesting(account.message != nil)
                             }
+                            Spacer(minLength: 32)
+                            VStack(spacing: 7) {
+                                Text(L10n.text("登录即表示你已阅读并同意", "By signing in, you agree to our"))
+                                    .foregroundStyle(InkTheme.secondary).multilineTextAlignment(.center)
+                                HStack(spacing: 12) {
+                                    NavigationLink(L10n.text("用户协议", "User Agreement")) { LegalDocumentView(document: .userAgreement) }.accessibilityIdentifier("gateUserAgreement")
+                                    Text("·").foregroundStyle(InkTheme.line)
+                                    NavigationLink(L10n.text("隐私政策", "Privacy Policy")) { LegalDocumentView(document: .privacyPolicy) }.accessibilityIdentifier("gatePrivacyPolicy")
+                                }.foregroundStyle(InkTheme.ink)
+                            }
+                            .font(.caption)
                         }
                         .frame(maxWidth: 430).frame(minHeight: max(0, geometry.size.height - 48))
                         .padding(.horizontal, 28).padding(.vertical, 24).frame(maxWidth: .infinity)

@@ -29,7 +29,7 @@ import CryptoKit
 
     private func capture(language: AppLanguage, locale: String) async throws {
         IapReviewScreenshotURLProtocol.install(routes: [
-            "/products/": "{\"products\":[{\"product_id\":\"\(productID)\",\"name\":\"补充额度\",\"currency\":\"CNY\",\"price_milliunits\":6000}]}",
+            "/products/": "{\"products\":[{\"product_id\":\"\(productID)\",\"name\":\"补充额度\",\"credits\":1000000,\"currency\":\"CNY\",\"price_milliunits\":6000}]}",
             "/me/": "{\"id\":\"\(exampleID)\",\"display_name\":\"示例账号 / Example account\",\"email\":null,\"created_at\":\"2026-11-07T00:00:00Z\"}",
             "/wallet/": #"{"quota":{"remaining_percent":100,"is_unlimited":false,"can_start":true}}"#,
             "/usage/summary/": #"{"request_count":0,"input_tokens":0,"output_tokens":0,"total_tokens":0,"confirmed_cost_cny":"0","unknown_count":0}"#,
@@ -57,6 +57,7 @@ import CryptoKit
         XCTAssertEqual(product.currency, "CNY")
         XCTAssertEqual(product.price, Decimal(6))
         XCTAssertTrue(product.isConsumable)
+        XCTAssertEqual(product.allowanceTokens, 1_000_000)
         XCTAssertEqual(account.wallet?.quota?.displayedPercent, 100)
         XCTAssertNil(account.message)
         XCTAssertNil(purchases.message)
@@ -106,10 +107,11 @@ import CryptoKit
         let text = try recognizedText(in: cgImage, locale: locale)
         let compactText = text.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "％", with: "%")
         let titleVisible = compactText.contains(language.isEnglish ? "Replenishallowance" : "补充额度")
-        let allowanceVisible = compactText.contains("100%")
+        let allowanceVisible = compactText.contains("1,000,000Token")
         let priceVisible = compactText.contains("6.00")
         XCTAssertTrue(titleVisible, "The actual view title must be visible")
-        XCTAssertTrue(allowanceVisible, "The sample allowance must be rendered")
+        XCTAssertTrue(allowanceVisible, "The package Token amount must be rendered before payment")
+        XCTAssertFalse(compactText.contains("100%"), "The purchase page does not show remaining allowance")
         XCTAssertTrue(priceVisible, "The offered fixture price must be visible")
         XCTAssertEqual(provider.purchaseCount, 0)
         XCTAssertTrue(IapReviewScreenshotURLProtocol.unexpectedRequests.isEmpty)
@@ -140,7 +142,7 @@ import CryptoKit
             "fixture_price": "6.00",
             "display_price": product.displayPrice,
             "price_source": "isolated AccountPurchaseProviding fixture; not a live StoreKit price lookup",
-            "account_data": "explicit synthetic example account; 100% example allowance; no private identity",
+            "account_data": "explicit synthetic example account; no private identity or remaining allowance shown",
             "pixel_width": cgImage.width,
             "pixel_height": cgImage.height,
             "png_bit_depth": Int(png[24]),

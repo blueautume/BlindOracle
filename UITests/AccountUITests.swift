@@ -38,7 +38,7 @@ final class AccountUITests: XCTestCase {
         XCTAssertTrue(app.buttons["cancelAccountDeletion"].waitForExistence(timeout: 5))
     }
 
-    @MainActor func testDataShowsAppleIdentityAndOnlyAllowancePercentageBeforeOpeningAccountDetails() {
+    @MainActor func testDataShowsAppleIdentityWithoutUsageBeforeOpeningAccountDetails() {
         let app = launch(["--ui-testing-reset", "--ui-testing-reading-library"])
         let data = app.tabBars.buttons["数据"]
         XCTAssertTrue(data.waitForExistence(timeout: 15)); data.tap()
@@ -52,10 +52,12 @@ final class AccountUITests: XCTestCase {
         XCTAssertTrue(summaryLabel.contains("测试账号"), summaryLabel)
         XCTAssertTrue(summaryLabel.contains("tester@example.com"), summaryLabel)
         XCTAssertTrue(summaryLabel.contains("Apple"), summaryLabel)
-        XCTAssertTrue(summaryLabel.contains("100%"), summaryLabel)
-        for hidden in ["token", "积分", "请求数", "累计", "1400", "1600"] {
+        for hidden in ["%", "剩余", "token", "积分", "请求数", "累计", "1400", "1600"] {
             XCTAssertFalse(summaryLabel.lowercased().contains(hidden.lowercased()), summaryLabel)
         }
+        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "%", "剩余")).firstMatch.exists)
+        XCTAssertFalse(element("remainingQuotaPercentage", in: app).exists)
+        XCTAssertTrue(app.buttons["usageEntry"].exists)
         XCTAssertFalse(app.staticTexts["账号、余额与用量"].exists)
         XCTAssertFalse(app.buttons["账号、余额与用量"].exists)
         capture("data-apple-account-summary", app: app)
@@ -68,6 +70,10 @@ final class AccountUITests: XCTestCase {
         XCTAssertTrue(app.buttons["logoutAccount"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["本机资料独立保存"].exists)
         XCTAssertTrue(app.buttons["deleteAccount"].exists)
+        XCTAssertFalse(element("remainingQuotaPercentage", in: app).exists)
+        XCTAssertFalse(app.staticTexts["可用额度"].exists)
+        XCTAssertFalse(app.buttons["topUpEntry"].exists)
+        XCTAssertFalse(app.buttons["purchaseAllowance"].exists)
         capture("account-details", app: app)
         let logoutFrame = app.buttons["logoutAccount"].frame
         let deletion = app.buttons["deleteAccount"]
@@ -84,6 +90,40 @@ final class AccountUITests: XCTestCase {
         app.buttons["cancelAccountDeletion"].tap()
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.buttons[profileID].waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testUsageContainsQuietAllowanceAndOpensPurchaseDetails() {
+        let app = launch(["--ui-testing-reset", "--ui-testing-reading-library"])
+        let data = app.tabBars.buttons["数据"]
+        XCTAssertTrue(data.waitForExistence(timeout: 15)); data.tap()
+        XCTAssertFalse(element("remainingQuotaPercentage", in: app).exists)
+        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "100%")).firstMatch.exists)
+
+        let usageEntry = app.buttons["usageEntry"]
+        XCTAssertTrue(usageEntry.waitForExistence(timeout: 5)); usageEntry.tap()
+        XCTAssertTrue(element("accountUsageView", in: app).waitForExistence(timeout: 5))
+        let percentage = app.staticTexts["remainingQuotaPercentage"]
+        XCTAssertTrue(percentage.waitForExistence(timeout: 5))
+        XCTAssertEqual(percentage.label, "剩余 100%")
+        XCTAssertTrue(element("remainingQuotaProgress", in: app).exists)
+        for hidden in ["Token", "积分", "请求数", "累计"] {
+            XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] %@", hidden)).firstMatch.exists)
+        }
+        XCTAssertFalse(app.buttons["purchaseAllowance"].exists)
+        capture("usage-quiet-allowance", app: app)
+
+        let topUp = app.buttons["topUpEntry"]
+        XCTAssertTrue(topUp.exists); topUp.tap()
+        XCTAssertTrue(element("topUpPurchasePage", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["purchaseAllowance"].exists)
+        let close = app.buttons["closeTopUp"]
+        XCTAssertTrue(close.exists)
+        capture("usage-purchase-details", app: app)
+        // Review the local purchase page without invoking StoreKit's payment sheet.
+        close.tap()
+        XCTAssertTrue(element("topUpPurchasePage", in: app).waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["topUpEntry"].exists)
+        XCTAssertEqual(app.staticTexts["remainingQuotaPercentage"].label, "剩余 100%")
     }
 
     @MainActor func testDeletionRequiresExactAccountConfirmationAndCancellationKeepsRecords() {
@@ -145,26 +185,59 @@ final class AccountUITests: XCTestCase {
         XCTAssertFalse(app.textFields["questionInput"].exists)
         XCTAssertFalse(app.buttons["settingsButton"].exists)
         XCTAssertFalse(app.buttons["accountEntry"].exists)
-        XCTAssertTrue(app.buttons["gateUserAgreement"].exists)
+        let title = app.staticTexts["慢听一问，静观其变。"]
+        XCTAssertTrue(title.exists)
+        XCTAssertLessThan(title.frame.height, 60, "The Chinese title stays on one line")
+        XCTAssertFalse(app.staticTexts["从一问开始，梳理此刻的心事。"].exists)
+        XCTAssertFalse(app.staticTexts["请用你之前的 Apple 账号登录。沙盒测试账号仅用于系统购买。"].exists)
+        XCTAssertFalse(app.staticTexts["本机资料与记录会保留，登录不会自动上传。"].exists)
+        XCTAssertFalse(element("signInProgress", in: app).exists)
+        let agreement = app.buttons["gateUserAgreement"]
+        let privacy = app.buttons["gatePrivacyPolicy"]
+        XCTAssertTrue(agreement.exists)
+        XCTAssertTrue(privacy.exists)
+        XCTAssertGreaterThan(agreement.frame.minY, app.buttons["appleSignInButton"].frame.maxY)
         capture("apple-sign-in-page", app: app)
-        app.buttons["gatePrivacyPolicy"].tap()
+        reveal(privacy, app: app); privacy.tap()
         XCTAssertTrue(app.staticTexts["隐私政策"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertFalse(app.tabBars.firstMatch.exists)
         capture("login-gate-privacy", app: app)
     }
-    @MainActor func testCompactEnvironmentBadgeCannotBeChangedByPreferences() {
+    @MainActor func testLoginHidesEnvironmentHintsEvenWhenPreferencesRequestSandbox() {
         let app = launch(["--ui-testing-auth-signed-out", "-BLINDORACLE_SANDBOX", "YES"])
         XCTAssertTrue(app.buttons["appleSignInButton"].waitForExistence(timeout: 10))
         XCTAssertFalse(element("serviceEnvironmentNotice", in: app).exists)
         XCTAssertFalse(app.staticTexts["测试环境 · 购买不扣款"].exists)
-        #if BLINDORACLE_SANDBOX
-        XCTAssertTrue(element("serviceEnvironmentBadge", in: app).exists)
-        XCTAssertEqual(element("serviceEnvironmentBadge", in: app).label, "测试")
-        XCTAssertTrue(app.staticTexts["请用你之前的 Apple 账号登录。沙盒测试账号仅用于系统购买。"].exists)
-        #else
-        XCTAssertFalse(element("serviceEnvironmentBadge", in: app).exists, "Preferences must not switch a production build to sandbox")
-        #endif
+        XCTAssertFalse(element("serviceEnvironmentBadge", in: app).exists)
+        XCTAssertFalse(app.staticTexts["请用你之前的 Apple 账号登录。沙盒测试账号仅用于系统购买。"].exists)
         capture("build-environment-login", app: app)
+    }
+
+    @MainActor func testSignInProgressAndErrorKeepLoginLayoutStable() {
+        // This fixture changes local account state only; it never starts Apple sign-in.
+        let app = launch(["--ui-testing-auth-signed-out", "--ui-testing-auth-progress"])
+        let signIn = app.buttons["appleSignInButton"]
+        XCTAssertTrue(signIn.waitForExistence(timeout: 10))
+        let title = app.staticTexts["慢听一问，静观其变。"]
+        XCTAssertTrue(title.exists)
+        let initialButtonY = signIn.frame.minY
+        let initialTitleY = title.frame.minY
+        let progress = element("signInProgress", in: app)
+        XCTAssertFalse(progress.exists)
+        signIn.tap()
+        XCTAssertTrue(progress.waitForExistence(timeout: 5))
+        XCTAssertFalse(signIn.isEnabled)
+        XCTAssertEqual(signIn.frame.minY, initialButtonY, accuracy: 1)
+        XCTAssertEqual(title.frame.minY, initialTitleY, accuracy: 1)
+        capture("login-progress-stable-layout", app: app)
+
+        let error = app.staticTexts["accountMessage"]
+        XCTAssertTrue(error.waitForExistence(timeout: 15))
+        XCTAssertTrue(progress.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(signIn.isEnabled)
+        XCTAssertEqual(signIn.frame.minY, initialButtonY, accuracy: 1)
+        XCTAssertEqual(title.frame.minY, initialTitleY, accuracy: 1)
+        capture("login-error-stable-layout", app: app)
     }
 
     @MainActor func testCompactEnvironmentBadgeSharesTheChatTitleRow() {

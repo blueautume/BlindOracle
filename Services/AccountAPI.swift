@@ -124,7 +124,8 @@ struct AccountProductCatalog: Decodable, Sendable {
         var name: String
         var currency: String
         var priceMilliunits: Decimal
-        enum CodingKeys: String, CodingKey { case productID = "product_id", name, currency, priceMilliunits = "price_milliunits" }
+        var credits: Int?
+        enum CodingKeys: String, CodingKey { case productID = "product_id", name, currency, credits, priceMilliunits = "price_milliunits" }
     }
     var products: [Item]
 }

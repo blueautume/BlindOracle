@@ -48,6 +48,27 @@ import XCTest
         "{\"transaction_id\":\"\(id)\",\"status\":\"\(status)\",\"wallet\":{\"quota\":{\"remaining_percent\":100,\"is_unlimited\":false,\"can_start\":true}}}"
     }
 
+    func testDisplayedTokenAmountComesFromApprovedCatalogAndDoesNotInventLegacyAmounts() async throws {
+        let productID = productID
+        for amount in ["1000000", "0", "-1", "null"] {
+            RecoveryURLProtocol.handler = { _ in
+                "{\"products\":[{\"product_id\":\"\(productID)\",\"name\":\"补充额度\",\"credits\":\(amount),\"currency\":\"CNY\",\"price_milliunits\":6000}]}"
+            }
+            let purchases = store()
+            await purchases.loadProducts()
+            let product = try XCTUnwrap(purchases.products.first)
+            XCTAssertEqual(product.allowanceTokens, amount == "1000000" ? 1_000_000 : nil)
+            XCTAssertEqual(product.displayPrice, "¥6.00", "The price still comes from StoreKit.")
+        }
+        RecoveryURLProtocol.handler = { _ in
+            "{\"products\":[{\"product_id\":\"\(productID)\",\"name\":\"补充额度\",\"currency\":\"CNY\",\"price_milliunits\":6000}]}"
+        }
+        let legacy = store()
+        await legacy.loadProducts()
+        XCTAssertNil(try XCTUnwrap(legacy.products.first).allowanceTokens)
+        XCTAssertEqual(provider.purchaseCount, 0, "Reviewing a package must not open payment.")
+    }
+
     func testCancelDoesNotVerifyOrFinishAndAllowsAnotherAttempt() async throws {
         let store = store(); await store.loadProducts()
         provider.result = .cancelled
