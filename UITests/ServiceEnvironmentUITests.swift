@@ -1,6 +1,50 @@
 import XCTest
 
 final class ServiceEnvironmentUITests: XCTestCase {
+    @MainActor func testCancelledRefreshContinuesToSignInOnlyAfterVerifiedRead() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset-language", "-oracle.appLanguage", "zh-Hans",
+                               "--ui-testing-auth-signed-out", "--ui-testing-service-cancel-recovery"]
+        app.launch()
+
+        let retry = app.buttons["重新验证 App Store"]
+        XCTAssertTrue(retry.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["appleSignInButton"].exists)
+        retry.tap()
+
+        // The local SDK fixture returns userCancelled from the only refresh,
+        // then verified evidence from its single shared recovery read.
+        XCTAssertTrue(app.buttons["appleSignInButton"].waitForExistence(timeout: 10))
+        XCTAssertFalse(retry.exists)
+        XCTAssertFalse(app.tabBars.firstMatch.exists, "Store verification must not also sign in the application account.")
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "cancelled-refresh-verified-read-account-gate"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor func testCancelledRefreshUnverifiedReadKeepsAccountBehindVerification() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset-language", "-oracle.appLanguage", "zh-Hans",
+                               "--ui-testing-auth-signed-out", "--ui-testing-service-cancel-recovery-failure"]
+        app.launch()
+
+        let retry = app.buttons["重新验证 App Store"]
+        XCTAssertTrue(retry.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["验证代码：env_store_unavailable"].exists)
+        retry.tap()
+
+        XCTAssertTrue(app.staticTexts["验证代码：env_unverified"].waitForExistence(timeout: 10))
+        XCTAssertTrue(retry.isEnabled)
+        XCTAssertTrue(app.buttons["复制诊断信息"].exists)
+        XCTAssertFalse(app.buttons["appleSignInButton"].exists)
+        XCTAssertFalse(app.tabBars.firstMatch.exists)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "cancelled-refresh-unverified-read-blocked"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     @MainActor func testNetworkReadinessAutomaticallyContinuesVerification() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset-language", "-oracle.appLanguage", "zh-Hans",

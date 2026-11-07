@@ -298,6 +298,23 @@ private struct AppLaunchFailureUIFixture: AppTransactionEvidenceProviding {
         throw URLError(.notConnectedToInternet)
     }
 }
+private actor AppLaunchCancelledRefreshUIFixture: AppTransactionEvidenceProviding {
+    let recoveryFails: Bool
+    private var didRefresh = false
+    init(recoveryFails: Bool) { self.recoveryFails = recoveryFails }
+    func evidence(for request: AppTransactionEvidenceRequest) async throws -> AppTransactionRouteEvidence {
+        switch request {
+        case .current: throw StoreKitError.notEntitled
+        case .userInitiatedRefresh:
+            didRefresh = true
+            throw StoreKitError.userCancelled
+        case .recoveryRead:
+            guard didRefresh else { throw StoreKitError.notEntitled }
+            if recoveryFails { return .unverified }
+            return .verified(environment: .production, bundleID: "com.lihao.BlindOracle", jws: "debug-cancel-recovery-proof")
+        }
+    }
+}
 #endif
 
 @MainActor final class AppServiceLaunchCoordinator: ObservableObject {
@@ -331,6 +348,11 @@ private struct AppLaunchFailureUIFixture: AppTransactionEvidenceProviding {
     private var pendingRecoverySignal = false
     private var pendingSDKRequest: AppTransactionEvidenceRequest?
     private var lateTerminalVeto = false
+    private enum CancelledRefreshRecovery: Equatable { case none, pending, consumed }
+    private var cancelledRefreshRecovery: CancelledRefreshRecovery = .none
+    #if DEBUG
+    private let usesCancelledRefreshUIFixture: Bool
+    #endif
     private var deliveryGeneration = 0
     private var deliveryEnableTask: Task<Void, Never>?
 
@@ -342,11 +364,15 @@ private struct AppLaunchFailureUIFixture: AppTransactionEvidenceProviding {
         #if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
         let networkFixture = arguments.contains("--ui-testing-local") && arguments.contains("--ui-testing-service-network-recovery")
-        let fixture = arguments.contains("--ui-testing-local") && (arguments.contains("--ui-testing-service-environment-failure") || networkFixture)
+        let cancelFixture = arguments.contains("--ui-testing-local") && (arguments.contains("--ui-testing-service-cancel-recovery")
+            || arguments.contains("--ui-testing-service-cancel-recovery-failure"))
+        usesCancelledRefreshUIFixture = cancelFixture
+        let fixture = arguments.contains("--ui-testing-local") && (arguments.contains("--ui-testing-service-environment-failure") || networkFixture || cancelFixture)
         if fixture {
-            self.provider = AppLaunchFailureUIFixture(); self.contextStore = AppServiceContextStore()
+            self.provider = cancelFixture ? AppLaunchCancelledRefreshUIFixture(recoveryFails: arguments.contains("--ui-testing-service-cancel-recovery-failure")) : AppLaunchFailureUIFixture()
+            self.contextStore = AppServiceContextStore()
             self.timing = AppServiceLaunchTiming(automaticRequestTimeout: 0.1, automaticTotalTimeout: 0.2,
-                                                manualRefreshTimeout: 0.1, recoveryReadTimeout: 0.1, retryDelays: [])
+                                                manualRefreshTimeout: 1, recoveryReadTimeout: 1, retryDelays: [])
         } else { self.provider = provider; self.contextStore = contextStore; self.timing = timing }
         let live = !fixture && provider is StoreKitAppTransactionEvidence && !AppServiceBootstrapPolicy.isUnitTestHost
             && !arguments.contains("--ui-testing-local")
@@ -371,11 +397,16 @@ private struct AppLaunchFailureUIFixture: AppTransactionEvidenceProviding {
             }
         }
     }
-    func resolve() async { await resolve(for: .current) }
+    func resolve() async {
+        guard cancelledRefreshRecovery == .none else { await performPendingCancellationRead(); return }
+        await resolve(for: .current)
+    }
     /// The only path that invokes AppTransaction.refresh().
     func retryFromUser() async {
+        guard flight == nil else { return }
         guard !sdk.isRunning else { isWaitingForStoreKit = true; return }
         recoveryRuns = 0
+        cancelledRefreshRecovery = .none
         await resolve(for: .userInitiatedRefresh)
     }
     func setApplicationActive(_ active: Bool) async {
@@ -403,10 +434,20 @@ private struct AppLaunchFailureUIFixture: AppTransactionEvidenceProviding {
         scheduleDeliveryWhenIdle()
     }
     private func recoverFromSignal() async {
+        if cancelledRefreshRecovery == .pending { await performPendingCancellationRead(); return }
+        guard cancelledRefreshRecovery == .none else { pendingRecoverySignal = false; return }
         guard pendingRecoverySignal, applicationActive, flight == nil, !sdk.isRunning,
               automaticRecoveryAllowed, recoveryRuns < 2 else { return }
         pendingRecoverySignal = false; recoveryRuns += 1
         await resolve(for: .recoveryRead)
+    }
+    /// The cancellation allowance is consumed before starting a new flight.
+    /// Foreground/path events and a late SDK result cannot replenish it.
+    private func performPendingCancellationRead() async {
+        guard cancelledRefreshRecovery == .pending, applicationActive, flight == nil, !sdk.isRunning else { return }
+        cancelledRefreshRecovery = .consumed
+        automaticRecoveryAllowed = false; pendingRecoverySignal = false
+        await resolve(for: .recoveryRead, cancellationReadOnly: true)
     }
     private func activeTime() -> TimeInterval {
         accumulatedActive + (activeSince.map { ProcessInfo.processInfo.systemUptime - $0 } ?? 0)
@@ -432,7 +473,7 @@ private struct AppLaunchFailureUIFixture: AppTransactionEvidenceProviding {
             await self.reporter.setDeliveryAllowed(true)
         }
     }
-    private func resolve(for request: AppTransactionEvidenceRequest) async {
+    private func resolve(for request: AppTransactionEvidenceRequest, cancellationReadOnly: Bool = false) async {
         guard flight == nil else { return }
         guard !sdk.isRunning else { isWaitingForStoreKit = true; return }
         if let selected = contextStore.snapshot() {
@@ -444,11 +485,13 @@ private struct AppLaunchFailureUIFixture: AppTransactionEvidenceProviding {
             guard let self else { return }
             await self.pauseDelivery()
             await self.waitUntilActive()
-            await self.perform(request: request, id: id)
+            await self.perform(request: request, id: id, cancellationReadOnly: cancellationReadOnly)
             if self.flightID == id {
                 self.flight = nil; self.flightID = nil
                 self.isWaitingForStoreKit = self.sdk.isRunning
-                if self.pendingRecoverySignal, self.automaticRecoveryAllowed, !self.sdk.isRunning {
+                if self.cancelledRefreshRecovery == .pending, !self.sdk.isRunning {
+                    Task { [weak self] in await self?.performPendingCancellationRead() }
+                } else if self.pendingRecoverySignal, self.automaticRecoveryAllowed, !self.sdk.isRunning {
                     Task { [weak self] in await self?.recoverFromSignal() }
                 }
                 self.scheduleDeliveryWhenIdle()
@@ -457,23 +500,26 @@ private struct AppLaunchFailureUIFixture: AppTransactionEvidenceProviding {
         flight = running
         await running.value
     }
-    private func perform(request initialRequest: AppTransactionEvidenceRequest, id: UUID) async {
+    private func perform(request initialRequest: AppTransactionEvidenceRequest, id: UUID, cancellationReadOnly: Bool) async {
         let wallStarted = ProcessInfo.processInfo.systemUptime
-        isWaitingForNetwork = true
         var probeFailed = false
-        do { try await readiness.check() }
-        catch {
-            probeFailed = true; hasFailed = true
-            await emit(attemptID: id, request: initialRequest, outcome: .retrying, attempt: 1, started: wallStarted,
-                 code: "env_network", chain: AppLaunchDiagnosticError.chain(for: error))
+        if !cancellationReadOnly {
+            isWaitingForNetwork = true
+            do { try await readiness.check() }
+            catch {
+                probeFailed = true; hasFailed = true
+                await emit(attemptID: id, request: initialRequest, outcome: .retrying, attempt: 1, started: wallStarted,
+                     code: "env_network", chain: AppLaunchDiagnosticError.chain(for: error))
+            }
+            isWaitingForNetwork = false
         }
-        isWaitingForNetwork = false
         await waitUntilActive()
         guard flightID == id else { return }
         let started = activeTime() // Network permission waiting consumes no verification budget.
         var request = probeFailed ? AppTransactionEvidenceRequest.current : initialRequest
-        let automatic = initialRequest != .userInitiatedRefresh
-        let limit = probeFailed ? 1 : automatic ? min(3, timing.retryDelays.count + 1) : 2
+        var cancellationRead = cancellationReadOnly
+        let automatic = initialRequest != .userInitiatedRefresh && !cancellationReadOnly
+        let limit = cancellationReadOnly || probeFailed ? 1 : automatic ? min(3, timing.retryDelays.count + 1) : 2
         for attempt in 1...max(1, limit) {
             await waitUntilActive()
             guard flightID == id, !sdk.isRunning else { return }
@@ -491,7 +537,12 @@ private struct AppLaunchFailureUIFixture: AppTransactionEvidenceProviding {
             guard flightID == id else { return }
             do {
                 let evidence = try result.get()
-                let context = try AppServiceBootstrapPolicy.resolve(evidence, expectedBundleID: bundleID)
+                var context = try AppServiceBootstrapPolicy.resolve(evidence, expectedBundleID: bundleID)
+                #if DEBUG
+                if usesCancelledRefreshUIFixture {
+                    context = AppServiceContext(environment: context.environment, appTransactionJWS: context.appTransactionJWS, source: .debugFixture)
+                }
+                #endif
                 failure = nil; state = .ready(try contextStore.freeze(context)); automaticRecoveryAllowed = false
                 if hasFailed {
                     await emit(attemptID: id, request: request, outcome: .recovered, attempt: attempt, started: wallStarted,
@@ -505,15 +556,19 @@ private struct AppLaunchFailureUIFixture: AppTransactionEvidenceProviding {
                 let delay = automatic && attempt <= timing.retryDelays.count ? max(0, timing.retryDelays[attempt - 1]) : 0
                 let transient = AppServiceLaunchFailure.isTransient(error)
                 let manualRecovery = request == .userInitiatedRefresh && Self.permitsInternalRecoveryRead(error)
+                let cancelledRefresh = request == .userInitiatedRefresh && Self.isTypedUserCancellation(error)
+                if cancelledRefresh, cancelledRefreshRecovery == .none { cancelledRefreshRecovery = .pending }
                 let withinBudget = !automatic || activeTime() - started + delay + 0.001 < timing.automaticTotalTimeout
-                let retry = attempt < limit && withinBudget && !sdk.isRunning && !lateTerminalVeto && (transient || manualRecovery)
+                let retry = !cancellationRead && attempt < limit && withinBudget && !sdk.isRunning && !lateTerminalVeto
+                    && (transient || manualRecovery || cancelledRefresh)
                 let outcome: AppLaunchDiagnosticEvent.Outcome = retry ? .retrying
                     : failure.kind == .timedOut ? .timedOut : failure.kind == .taskCancelled ? .taskCancelled : .failed
                 await emit(attemptID: id, request: request, outcome: outcome, attempt: attempt, started: wallStarted,
                      code: failure.diagnosticCode, chain: chain)
                 if !retry || lateTerminalVeto {
                     self.failure = failure; state = .recoveryRequired; isWaitingForStoreKit = sdk.isRunning
-                    automaticRecoveryAllowed = !lateTerminalVeto && (transient || manualRecovery || failure.kind == .taskCancelled)
+                    automaticRecoveryAllowed = cancelledRefreshRecovery == .none && !lateTerminalVeto
+                        && (transient || manualRecovery || failure.kind == .taskCancelled)
                     if !automaticRecoveryAllowed { pendingRecoverySignal = false }
                     return
                 }
@@ -527,6 +582,10 @@ private struct AppLaunchFailureUIFixture: AppTransactionEvidenceProviding {
                     // The closing authentication prompt's foreground hint is
                     // consumed by this one recovery read, not another run.
                     pendingRecoverySignal = false
+                    if cancelledRefresh {
+                        cancelledRefreshRecovery = .consumed
+                        cancellationRead = true
+                    }
                     request = .recoveryRead
                 }
             }
@@ -539,14 +598,28 @@ private struct AppLaunchFailureUIFixture: AppTransactionEvidenceProviding {
         let cocoa = underlying as NSError
         return cocoa.domain == "SKInternalErrorDomain" && cocoa.code == 21
     }
+    private static func isTypedUserCancellation(_ error: Error) -> Bool {
+        guard let store = error as? StoreKitError, case .userCancelled = store else { return false }
+        return true
+    }
     private func underlyingDidFinish(_ result: Result<AppTransactionRouteEvidence, Error>) {
         isWaitingForStoreKit = false
         let allowsInternalRead = pendingSDKRequest == .userInitiatedRefresh
         pendingSDKRequest = nil
+        if cancelledRefreshRecovery == .consumed {
+            automaticRecoveryAllowed = false; pendingRecoverySignal = false
+            scheduleDeliveryWhenIdle(); return
+        }
         do {
             _ = try AppServiceBootstrapPolicy.resolve(try result.get(), expectedBundleID: bundleID)
         } catch {
             let failure = AppServiceLaunchFailure(error: error)
+            if allowsInternalRead, Self.isTypedUserCancellation(error) {
+                cancelledRefreshRecovery = .pending
+                lateTerminalVeto = true; automaticRecoveryAllowed = false; pendingRecoverySignal = false
+                Task { [weak self] in await self?.performPendingCancellationRead() }
+                return
+            }
             if !AppServiceLaunchFailure.isTransient(error) && !(allowsInternalRead && Self.permitsInternalRecoveryRead(error)) {
                 // Keep the already reported timeout and copy text consistent.
                 // Late terminal errors only decide whether another read is safe.

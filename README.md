@@ -2,7 +2,7 @@
 
 一个以水墨宣纸为视觉语言的原生 SwiftUI iOS 应用。只有「对话」「数据」两个标签。十种方法在设备本地执行，固定的联网 Agent 负责选择适用插件、提出资料与交互需求、整合解读和回答追问。
 
-当前版本：**3.0.33（Build 59）**。
+当前版本：**3.0.34（Build 60）**。
 
 每批修改提交前同时递增补丁版本和 Build，运行一次 `python3 Scripts/version.py` 即可同步版本配置。单一版本源为 `Configuration/Version.json`，工程生成脚本也从这里读取；构建和测试不会自动加版本。`python3 Scripts/version.py --check` 检查工作区同步状态，提交钩子用 `--check-staged` 检查暂存区相对 HEAD 的递增。首次克隆后使用 `git config core.hooksPath .githooks` 启用密钥及版本检查。
 
@@ -13,6 +13,8 @@
 3.0.32 起，启动凭据读取针对暂态错误有限重试并设等待上限；手动认证的暂态失败可补读一次。取消来源和超时分别诊断，恢复页可复制脱敏诊断；故障与恢复事件经独立入口上报管理台「启动验证诊断」，离线限量补报。详见 [启动验证恢复与诊断](Documentation/LaunchVerificationDiagnostics.md)。此优化不默认放行未知环境，不改变现有账号或测试额度规则。
 
 3.0.33 将联网等待与商店验证分开安排，前台或网络恢复后可受控继续验证；底层商店请求真正结束前不发起下一次请求。诊断先保存，待验证结束且应用稳定活跃后补报，避免与联网提示及商店认证并行。详见 [联网恢复与验证时序](Documentation/LaunchVerificationTiming.md)。
+
+3.0.34 在手动商店认证返回取消后，仅补读一次凭据，继续要求完整验证通过才进入账号流程；补读失败或超时就停止，不自动再次触发认证。
 
 「数据」页直接展示账号姓名、Apple 身份与剩余额度百分比，点整张卡片进入账号设置；邮箱仅在 Apple 提供时显示。尚未取得的额度显示占位而非虚构零值。设置页也提供简洁的账号设置入口。原生 Apple 授权前先取得服务器挑战，将 raw nonce 的 SHA-256 设置为 Apple request nonce，使用 challenge ID 绑定 state；服务器验证 Apple identity token 并交换授权码。账号会话独立保存在 ThisDeviceOnly Keychain，刷新采用 single-flight，退出、账号变更和迟到回调不能恢复旧账号状态。
 
