@@ -4,7 +4,7 @@
 
 客户端正式环境使用 `https://wellecho.cn/xiazi-api/v1/`，独立测试环境使用 `https://wellecho.cn/xiazi-sandbox-api/v1/`。Apple 登录挑战、授权码交换、会话刷新、账号、余额和用量均走选定环境的账号 API；全部 AI 请求也通过该环境的 `ai/chat/completions/` 网关。客户端只持有自有账号 access/refresh token，不向服务器领取或保存 AI 供应商 key。
 
-`ServiceEnvironment.current` 是唯一环境入口，3.0.20 起默认发布包先验证 `AppTransaction.shared`，再冻结为 Production/Sandbox。未验证、未知环境或取凭据失败不默认放行任一环境、不创建账号/AI对象。3.0.21 起恢复按钮明确为「重新验证 App Store」，仅用户点击后调用会弹系统认证的 `AppTransaction.refresh()`；启动与自动恢复仍只读 shared。刷新后同样要求 Apple verified、匹配 Bundle ID 和支持的环境；取消或失败保留恢复页与原账号数据。自动 Sandbox Apple 登录携带 JWS 供服务器再次独立验签和绑定。
+`ServiceEnvironment.current` 是唯一环境入口，3.0.20 起默认发布包先验证 `AppTransaction.shared`，再冻结为 Production/Sandbox。未验证、未知环境或取凭据失败不默认放行任一环境、不创建账号/AI对象。3.0.21 起恢复按钮明确为「重新验证 App Store」，仅用户点击后调用会弹系统认证的 `AppTransaction.refresh()`；启动与自动恢复仍只读 shared。刷新后同样要求 Apple verified、匹配 Bundle ID 和支持的环境；取消或失败保留恢复页与原账号数据。自动 Sandbox Apple 登录携带 JWS 供服务器再次独立验签。下载凭据不等同登录身份：同一凭据可以关联多个分别验证的 Apple 身份，账号与购买归属保持独立；服务器按凭据汇总测试资源限制，并把凭据保存在任务和请求中，切换会话或注销账号不会清空已消耗的当日测试预算。
 
 3.0.32 的有限重试与超时不改变上述信任边界。启动故障诊断固定发送到正式 API 的 `diagnostics/app-launch/`，不调用 `ServiceEnvironment.current`、不带登录头或安装凭据，仅报告固定字段；该接口不能用来冻结服务环境或取得账号权限。恢复页提供诊断复制，离线队列限量保留 7 天，服务器记录由维护任务按 30 天清理。
 

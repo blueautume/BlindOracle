@@ -25,6 +25,8 @@ enum AIGatewayFailure {
             return L10n.text("今日服务使用已达上限，请明天再试。账户剩余额度会保留。", "You’ve reached today’s service limit. Try again tomorrow. Your remaining allowance is preserved.")
         case .globalDailyLimit:
             return L10n.text("今日解读服务已达临时上限，请明天再试。账户剩余额度会保留。", "The reading service has reached its temporary daily limit. Try again tomorrow. Your remaining allowance is preserved.")
+        case .sandboxDailyLimit:
+            return L10n.text("测试服务今日已达使用上限，请明日重试。剩余额度会保留。", "The test service has reached its daily limit. Try again tomorrow. Your remaining allowance is preserved.")
         case .busy:
             return L10n.text("当前使用人数较多，请稍后再试。账户剩余额度会保留。", "The service is handling many requests. Try again shortly. Your remaining allowance is preserved.")
         case .running:
@@ -66,7 +68,7 @@ enum AIGatewayFailure {
     }
 
     private enum Kind {
-        case dailyLimit, globalDailyLimit, busy, running, connectionRetries, stageRetries, taskSteps
+        case dailyLimit, globalDailyLimit, sandboxDailyLimit, busy, running, connectionRetries, stageRetries, taskSteps
         case upstreamUnavailable, interrupted, signIn, allowance, refund, account
         case request, context, update, conflict, closed
     }
@@ -76,9 +78,10 @@ enum AIGatewayFailure {
         switch (status, code) {
         case (429, "daily_budget"), (429, "daily_limit"), (429, "task_service_limit"): return .dailyLimit
         case (429, "global_daily_budget"): return .globalDailyLimit
-        case (429, "service_busy"), (429, "throttled"): return .busy
+        case (429, "sandbox_installation_daily_budget"), (429, "sandbox_installation_daily_limit"): return .sandboxDailyLimit
+        case (429, "service_busy"), (429, "throttled"), (429, "sandbox_installation_busy"): return .busy
         case (429, "generation_in_progress"), (409, "stage_running"), (409, "task_running"): return .running
-        case (429, "service_retry_limit"): return .connectionRetries
+        case (429, "service_retry_limit"), (429, "sandbox_installation_retry_limit"): return .connectionRetries
         case (429, "stage_retry_limit"), (429, "stage_repair_limit"): return .stageRetries
         case (429, "task_stage_limit"): return .taskSteps
         case (429, "upstream_rejected"), (502, "upstream_rejected"), (502, "upstream_unavailable"),

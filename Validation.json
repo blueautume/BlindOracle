@@ -1,18 +1,19 @@
 {
-  "date": "2026-11-08",
+  "date": "2026-11-09",
   "xcode": "27.2 (27B52)",
   "minimum_iOS": "17.0",
-  "release_arm64_bundle_bytes": 19904836,
+  "release_arm64_bundle_bytes": 19905400,
   "release_contains_development_key_resource": false,
   "source_credential_matches": null,
   "release_credential_matches": 0,
-  "unit_tests_passed": 739,
-  "ui_tests_passed": 2,
+  "unit_tests_passed": 748,
+  "ui_tests_passed": 6,
   "live_api_tests_passed": 0,
   "default_live_test_skipped_intentionally": 3,
   "local_plugin_count": 10,
   "release_is_signed": true,
   "notes": [
+    "Sandbox sign-in identity compatibility 3.0.301 / Build 64: all 748 non-live unit tests passed, with live integration and native StoreKit suites excluded. Four UI tests passed on iPad Air 11-inch (M3), iPadOS 27.2, and two new login error UI tests passed on iPhone iOS 27.2. The first run exposed a test URL fixture mismatch and old iPhone-only TabBar locators; corrected tests passed in final bundles. Release runtime authentication state handling is unchanged. Server commit 8e5848d passed all 292 isolated PostgreSQL tests with zero skips and was deployed to Sandbox and Production with account/session/task and financial hashes unchanged. Signed distribution and upload evidence is recorded separately after completion; no physical Apple sign-in or purchase is claimed for this candidate. Signed Release archive and actual App Store distribution IPA passed audit with zero compiler warnings and internalOnly=false. Apple confirmed Upload succeeded at 2026-11-09 03:56:00 +08:00; authenticated App Store Connect then showed 3.0.301 / 64 Ready to Submit without Internal badge. No review build was selected/saved, no App Review submission or public release performed. Archive attribution remains the recorded pre-archive worktree snapshot; this final Validation note was added afterward.",
     "First release numbering 3.0.300 / Build 63: user-requested first release version. Only four version metadata files changed from 92c9954; runtime code remains the tested CNY/USD implementation from 3.0.36 / 62. Signed archive and exported App Store distribution IPA passed version, bundle ID, AppleVerified routing, entitlement/profile/privacy, credential and test-asset checks with zero compiler warnings. Actual export and upload options have testFlightInternalTestingOnly=false and manageAppVersionAndBuildNumber=false. Apple acknowledged Upload succeeded at 2026-11-08 20:46:08 +08:00; App Store Connect completed processing and shows build 63 Ready to Submit without the Internal label. Existing review build 60 was left untouched; no build selector was opened, no review build selected/saved, and no App Review submission or public release performed. The 739 non-live unit, two UI and seven native StoreKit test results retain their actual 3.0.36 / 62 version; this metadata-only batch did not rerun them. Evidence: build/release-3.0.300-63/asc-verification.json, candidate-verification.json and upload.log.",
     "Regional IAP 3.0.36 / 62: Apple storefront CHN selects approved CNY pricing and USA selects USD; other/unknown regions cannot start a new purchase. The shared SKU defaults to CNY 6.00 / USD 0.99 for 1,000,000 allowance, while StoreKit owns displayPrice and the server owns current/history price approvals. Loading, updates and payment recheck region and reject stale prices; already-paid transactions recover under their original Apple-signed region. Final 739 non-live unit tests and two account UI tests passed. Four Chinese/English x CNY/USD view captures passed OCR and were visually inspected. Seven distinct native StoreKit tests passed across the six-test run and the warmed Ask-to-Buy run; an initial cold Ask-to-Buy stall was interrupted and retained in storekit-initial-interrupted.log, not attributed to a proven root cause. An existing pre-adaptation launch test race was reproduced and fixed by waiting for native completion and the separate recovery task, without changing production launch behavior or relaxing the exact request assertion. Signed-out catalog loading avoids Apple queries. Unsigned arm64 Release build passed with zero compiler warnings, AppleVerified routing, unchanged bundle ID and no credentials or StoreKit test assets. Backend main 391d69c has local 270-test evidence: 253 passed and 17 conditional skips, with no local PostgreSQL. No live purchase, physical-device validation, deployment, App Store Connect change or store upload is asserted. Evidence: build/regional-3.0.36-62/.",
     "Baseline checkpoint 3.0.35 / 61: preserved the existing localization catalog cleanup and two icon exploration source directories before merging to main. Version consistency and staged secret checks only; earlier functional evidence retains its actual version. No new archive, store upload or deployment for this checkpoint.",
@@ -78,14 +79,14 @@
     "Earlier offline tarot deck, keyboard, broader interaction, and history regression evidence remains at the retained paths. No reasoning_content is decoded, displayed, or persisted.",
     "Changing the requested method while supplying data preserves the original question, applies the new method, and requires a new summary confirmation. A clock correction alone cannot change methods; ambiguous questions or negative replies cannot act as confirmation."
   ],
-  "unit_test_result": "build/regional-3.0.36-62/verified-regression.xcresult",
-  "final_ui_result": "build/regional-3.0.36-62/verified-regression.xcresult",
+  "unit_test_result": "build/sandbox-signin-3.0.301-64/unit-final.xcresult",
+  "final_ui_result": "build/sandbox-signin-3.0.301-64/ipad-ui-final.xcresult",
   "live_api_result": "build-conversation/live-verified.xcresult",
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "3.0.300",
-  "build": "63",
+  "version": "3.0.301",
+  "build": "64",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",
@@ -105,7 +106,7 @@
   "tarot_live_api_result": "build-interactions/chat-progress-live.xcresult",
   "multi_person_live_api_tests_passed": 1,
   "multi_person_live_api_requests": 4,
-  "release_bundle_kind": "signed arm64 Release app installed in place on physical iPhone; no archive or store upload in this batch",
+  "release_bundle_kind": "Signed Release archive and exported App Store distribution IPA; uploaded normally, ASC Ready to Submit. No physical install in this batch.",
   "build_warning_cleanup": {
     "debug_clean_build_warning_count": 0,
     "release_archive_warning_count": 0,
@@ -173,11 +174,7 @@
   },
   "reading_deletion_tests_passed": 8,
   "reading_deletion_ui_tests_passed": 2,
-  "unit_test_evidence_version": {
-    "version": "3.0.20",
-    "build": "46",
-    "scope": "493 core non-live unit tests; native StoreKit 5 and owner Sandbox 78 are separately recorded."
-  },
+  "unit_test_evidence_version": "3.0.301 / Build 64",
   "reading_deletion": {
     "right_side_trash_in_recent_and_all_lists": true,
     "cancel_and_confirm_verified": true,
@@ -243,7 +240,7 @@
       "build": "6"
     }
   },
-  "additional_ui_result": "build-saved-profile/flows-ui.xcresult",
+  "additional_ui_result": "build/sandbox-signin-3.0.301-64/iphone-ui-final.xcresult",
   "form_confirmation_required": true,
   "saved_profile_reuse": {
     "unit_regression_tests_passed": 12,
@@ -1301,7 +1298,7 @@
     "executable_sha256": "655ebae7dae20cbae1616d7db57d70d1ddfa681b422821b2b651c187cf2bdfd5",
     "evidence_directory": "/Users/lihao/code/Xcode/赛博算命/BlindOracle/build/device-3.0.18-44"
   },
-  "full_non_live_unit_tests_passed": 493,
+  "full_non_live_unit_tests_passed": 748,
   "isolated_sandbox_3_0_19": {
     "version": "3.0.19",
     "build": 45,
@@ -2464,5 +2461,57 @@
     "functional_tests_retained_from": "3.0.36 / 62",
     "new_functional_tests_run": false,
     "evidence_directory": "build/release-3.0.300-63/"
+  },
+  "sandbox_signin_identity_3_0_301": {
+    "version": "3.0.301",
+    "build": 64,
+    "implementation": "Independent verified Sign in with Apple identities may share a signed Sandbox download proof; no user/wallet/order rebinding. Shared installation limits coexist with per-account and global rules. Login errors use local approved status/code messages.",
+    "verification": {
+      "non_live_unit_tests": 748,
+      "iPad_Air_M3_iPadOS_27_2_UI_tests": 4,
+      "iPhone_iOS_27_2_UI_tests": 2,
+      "ui_visual_check": "English credentials message fully visible on review-model iPad; fixture-only rendering, not a live Apple sign-in.",
+      "unit_result": "build/sandbox-signin-3.0.301-64/unit-final.xcresult",
+      "ipad_result": "build/sandbox-signin-3.0.301-64/ipad-ui-final.xcresult",
+      "iphone_result": "build/sandbox-signin-3.0.301-64/iphone-ui-final.xcresult",
+      "backend_PostgreSQL_tests": 292,
+      "backend_PostgreSQL_skipped": 0,
+      "backend_SQLite_passed": 273,
+      "backend_SQLite_conditionally_skipped": 19
+    },
+    "backend_deployment": {
+      "source_commit": "8e5848ddea3b9c031fabe1eee3f628115012c00f",
+      "release": "20261109-034150-sandbox-identity-8e5848d",
+      "instances": [
+        "Sandbox",
+        "Production"
+      ],
+      "old_accounts_sessions_tasks_and_financial_data_preserved": true,
+      "existing_config_and_runtimes_preserved": true,
+      "database_backups_local_hash_matches": true,
+      "health_and_timers_active": true
+    },
+    "physical_Apple_signin_tested": false,
+    "physical_purchase_tested": false,
+    "release_evidence": "build/release-3.0.301-64/candidate-verification.json",
+    "asc_evidence": "build/release-3.0.301-64/asc-verification.json",
+    "release": {
+      "archive_zero_compiler_warnings": true,
+      "distribution": "app-store-connect",
+      "internal_testing_only": false,
+      "signed_candidate_audit_passed": true,
+      "ipa_sha256": "a1c16beb9db29bb28d9e7b141465b5b4843aa9351d3f973c1d9f82dc24d1aecd",
+      "upload_succeeded": true,
+      "upload_completed_at": "2026-11-09T03:56:00+08:00",
+      "processing_complete": true,
+      "asc_status": "Ready to Submit",
+      "app_review_distribution_eligible": true,
+      "review_build_selected": false,
+      "app_review_submitted": false,
+      "public_release_performed": false,
+      "physical_download_confirmed": false,
+      "report": "build/release-3.0.301-64/release-validation.json",
+      "source_attribution": "Pre-archive worktree based on 362b038 plus recorded file hashes; final Validation notes added after archive. Release commit recorded separately."
+    }
   }
 }

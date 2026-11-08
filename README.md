@@ -2,7 +2,7 @@
 
 一个以水墨宣纸为视觉语言的原生 SwiftUI iOS 应用。只有「对话」「数据」两个标签。十种方法在设备本地执行，固定的联网 Agent 负责选择适用插件、提出资料与交互需求、整合解读和回答追问。
 
-当前版本：**3.0.300（Build 63）**。
+当前版本：**3.0.301（Build 64）**。
 
 每批修改提交前同时递增补丁版本和 Build，运行一次 `python3 Scripts/version.py` 即可同步版本配置。单一版本源为 `Configuration/Version.json`，工程生成脚本也从这里读取；构建和测试不会自动加版本。`python3 Scripts/version.py --check` 检查工作区同步状态，提交钩子用 `--check-staged` 检查暂存区相对 HEAD 的递增。首次克隆后使用 `git config core.hooksPath .githooks` 启用密钥及版本检查。
 
@@ -28,7 +28,7 @@
 
 沙盒只在「瞎子」标题右侧显示小型「测试」标识，不再占用全局横条；购买前仍保留不真实扣款的提示。
 
-默认发布工程采用 Apple 签名环境自动识别：仅通过验证的 AppTransaction Production/Sandbox 决定全部账号、AI、钱包、Keychain 和任务的环境；进程内不能切换。Sandbox 连接 `https://wellecho.cn/xiazi-sandbox-api/v1/`，正式账本只接受 Production。自动 Sandbox 登录附带 AppTransaction JWS，由服务器独立验签后与已验证 Apple 登录身份绑定；不能用客户端环境字段、偏好或发布版启动参数开通测试权限。
+默认发布工程采用 Apple 签名环境自动识别：仅通过验证的 AppTransaction Production/Sandbox 决定全部账号、AI、钱包、Keychain 和任务的环境；进程内不能切换。Sandbox 连接 `https://wellecho.cn/xiazi-sandbox-api/v1/`，正式账本只接受 Production。自动 Sandbox 登录附带 AppTransaction JWS，由服务器独立验签。3.0.301 起，同一下载凭据允许不同的已验证 Apple 登录身份使用，各身份仍有独立账号、钱包和订单；测试调用同时受该安装凭据的共享每日成本、请求数、并发与失败次数限制。不能用客户端环境字段、偏好或发布版启动参数开通测试权限。
 
 3.0.22 起，首次 AI 发送前独立说明问题、人员资料目录、相关上下文与地点数据经 wellecho.cn 交由 DeepSeek 处理，并提供同意、拒绝及撤回入口。拒绝保留输入草稿，仍可查看账号与本机资料；中央请求入口在账号刷新、任务准入及网络发送前校验许可。第三方可能按适用条款留存内容、使用去标识化数据优化服务或训练，具体 API 账户安排尚未核实。正式包包含 `PrivacyInfo.xcprivacy`，按实际 UserDefaults 用途声明 CA92.1，并列出与审核资料一致的数据类型。
 

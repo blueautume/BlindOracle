@@ -472,6 +472,150 @@ final class AccountServiceTests: XCTestCase {
         do { _ = try await api().challenge(); XCTFail("Expected unavailable endpoint") }
         catch { XCTAssertFalse(error.localizedDescription.contains("private-error-marker")); XCTAssertFalse(error.localizedDescription.isEmpty) }
     }
+
+    private var loginFailureDescriptions: [(status: Int, codes: [String], chinese: String, english: String)] {
+        [
+            (403, ["sandbox_proof_already_bound"],
+             "测试登录暂时受限。请稍后重试；若仍无法登录，请联系支持。",
+             "Test sign-in is currently restricted. Try again later or contact support if the issue continues."),
+            (403, ["sandbox_app_transaction_required", "sandbox_app_transaction_invalid"],
+             "App Store 凭据需要重新验证。请重新打开 App 后再尝试登录；若仍失败，请联系支持。",
+             "Your App Store credentials need to be verified again. Reopen the app and try signing in again, or contact support if it continues."),
+            (403, ["sandbox_account_not_allowed", "sandbox_review_access_disabled"],
+             "测试登录暂未开放。请稍后重试或联系支持。",
+             "Test sign-in is not available yet. Try again later or contact support."),
+            (403, ["account_disabled"], "此账号已停用，请联系支持。", "This account has been disabled. Please contact support."),
+            (503, ["apple_unavailable", "apple_exchange_unavailable", "apple_credentials_missing", "apple_credentials_invalid",
+                   "apple_encryption_unavailable", "quota_setup_unavailable", "sandbox_not_configured",
+                   "sandbox_proof_not_configured", "sandbox_proof_unavailable"],
+             "登录服务暂时不可用，请稍后重试。", "The sign-in service is temporarily unavailable. Please try again later.")
+        ]
+    }
+
+    func testKnownLoginFailuresGiveDistinctLocalActionsInBothLanguages() {
+        for language in [AppLanguage.simplifiedChinese, .english] {
+            AppLanguage.$override.withValue(language) {
+                for group in loginFailureDescriptions {
+                    for code in group.codes {
+                        let message = AccountAPIError.server(status: group.status, code: code).localizedDescription
+                        XCTAssertEqual(message, language.isEnglish ? group.english : group.chinese, code)
+                        XCTAssertFalse(message.contains(code), "A diagnostic code is never public copy")
+                        XCTAssertFalse(message.contains("The account service is temporarily unavailable."), code)
+                        XCTAssertFalse(message.contains("原账号"), "A reviewer must not be told to switch to an account they do not own")
+                        XCTAssertFalse(message.lowercased().contains("original account"))
+                    }
+                }
+            }
+        }
+    }
+
+    func testKnownLoginCodesWithWrongHTTPStatusUseTheSafeFallback() {
+        for language in [AppLanguage.simplifiedChinese, .english] {
+            AppLanguage.$override.withValue(language) {
+                for group in loginFailureDescriptions {
+                    let wrongStatus = group.status == 403 ? 503 : 403
+                    for code in group.codes {
+                        let message = AccountAPIError.server(status: wrongStatus, code: code).localizedDescription
+                        XCTAssertEqual(message, language.isEnglish
+                            ? "The account service is temporarily unavailable. Try again later."
+                            : "账号服务暂时不可用，请稍后重试。", "Status and code must agree: \(wrongStatus)/\(code)")
+                    }
+                }
+            }
+        }
+    }
+
+    func testUnknownMalformedAndInjectedLoginCodesNeverBecomeDisplayText() {
+        let arbitrary = ["", "sandbox_proof_already_bound ", "SANDBOX_PROOF_ALREADY_BOUND", "sandbox_app_transaction_invalid.extra",
+                         "private-account-detail", "https://private.invalid/?token=secret", "<script>private-error</script>",
+                         String(repeating: "private-error", count: 1000)]
+        for language in [AppLanguage.simplifiedChinese, .english] {
+            AppLanguage.$override.withValue(language) {
+                for status in [400, 403, 404, 500, 502, 503] {
+                    for code in arbitrary {
+                        XCTAssertEqual(AccountAPIError.server(status: status, code: code).localizedDescription, language.isEnglish
+                            ? "The account service is temporarily unavailable. Try again later."
+                            : "账号服务暂时不可用，请稍后重试。")
+                    }
+                }
+                XCTAssertEqual(AccountAPIError.server(status: 429, code: "private-error").localizedDescription, language.isEnglish
+                    ? "Too many attempts. Please try again shortly." : "操作较频繁，请稍后再试。")
+            }
+        }
+    }
+
+    func testLoginErrorTransportRetainsApprovedCodeWithoutUsingRemoteMessage() async throws {
+        for group in loginFailureDescriptions {
+            for code in group.codes {
+                let data = try JSONSerialization.data(withJSONObject: ["error": ["code": code, "message": "private-server-message-token-jws"]])
+                let body = String(decoding: data, as: UTF8.self)
+                AuthURLProtocol.handler = { _ in .init(status: group.status, body: body) }
+                do { _ = try await api().challenge(); XCTFail("Expected rejected request") }
+                catch {
+                    XCTAssertEqual(error as? AccountAPIError, .server(status: group.status, code: code))
+                    AppLanguage.$override.withValue(.english) {
+                        XCTAssertEqual(error.localizedDescription, group.english)
+                        XCTAssertFalse(error.localizedDescription.contains("private-server-message"))
+                    }
+                }
+            }
+        }
+    }
+
+    @MainActor func testRejectedAppleExchangeStaysSignedOutWithActionableBusinessError() async throws {
+        try await AppLanguage.$override.withValue(.english) {
+            for (status, code) in [(403, "sandbox_proof_already_bound"), (403, "sandbox_app_transaction_required"),
+                                   (403, "sandbox_app_transaction_invalid"), (503, "apple_exchange_unavailable")] {
+                AuthURLProtocol.handler = { request in
+                    // URL.path normalizes away a trailing slash; the actual
+                    // request URL retains the API's slash-terminated route.
+                    if request.url?.absoluteString.hasSuffix("/auth/apple/challenge/") == true {
+                        return .init(body: #"{"challenge_id":"fixture-challenge","nonce":"abc","expires_in":300}"#)
+                    }
+                    XCTAssertTrue(request.url?.absoluteString.hasSuffix("/auth/apple/") == true)
+                    return .init(status: status, body: "{\"error\":{\"code\":\"\(code)\",\"message\":\"private-remote-detail\"}}")
+                }
+                let client = api(); let manager = AccountSessionManager(api: client, vault: MemoryAccountVault(nil))
+                let store = try accountStore(api: client, sessions: manager)
+                let attempt = try await store.beginAppleSignIn()
+                await store.completeAppleSignIn(attempt: attempt, identityToken: "synthetic-identity", authorizationCode: "synthetic-code",
+                                               fullName: nil, appleUserID: "synthetic-apple-user")
+                XCTAssertEqual(store.accessState, .signedOut)
+                XCTAssertFalse(store.canAccessMain); XCTAssertFalse(store.isBusy); XCTAssertNil(store.user)
+                let saved = await manager.snapshot(); XCTAssertNil(saved)
+                XCTAssertEqual(store.message, AccountAPIError.server(status: status, code: code).localizedDescription)
+                XCTAssertFalse(store.message?.contains("private-remote-detail") == true)
+            }
+        }
+    }
+
+    @MainActor func testTemporaryChallengeFailureStopsBeforeAppleExchangeAndKeepsItsServiceDescription() async throws {
+        try await AppLanguage.$override.withValue(.english) {
+            AuthURLProtocol.handler = { request in
+                XCTAssertTrue(request.url?.absoluteString.hasSuffix("/auth/apple/challenge/") == true)
+                return .init(status: 503, body: #"{"error":{"code":"apple_unavailable","message":"private-remote-detail"}}"#)
+            }
+            let client = api(); let manager = AccountSessionManager(api: client, vault: MemoryAccountVault(nil))
+            let store = try accountStore(api: client, sessions: manager)
+            do { _ = try await store.beginAppleSignIn(); XCTFail("A failed challenge must not start Apple sign-in") }
+            catch { XCTAssertEqual(error as? AccountAPIError, .server(status: 503, code: "apple_unavailable")) }
+            XCTAssertEqual(store.accessState, .signedOut); XCTAssertFalse(store.isBusy)
+            XCTAssertEqual(store.message, "The sign-in service is temporarily unavailable. Please try again later.")
+        }
+    }
+
+    func testClientNetworkFailureRemainsDifferentFromServiceAndAdmissionFailures() async {
+        AuthURLProtocol.handler = { _ in throw URLError(.cannotConnectToHost) }
+        do { _ = try await api().challenge(); XCTFail("Expected client network failure") }
+        catch {
+            XCTAssertEqual(error as? AccountAPIError, .unavailable)
+            AppLanguage.$override.withValue(.english) {
+                XCTAssertEqual(error.localizedDescription, "The account service is unavailable. Check your connection and try again.")
+                XCTAssertNotEqual(error.localizedDescription, AccountAPIError.server(status: 503, code: "apple_unavailable").localizedDescription)
+                XCTAssertNotEqual(error.localizedDescription, AccountAPIError.server(status: 403, code: "sandbox_proof_already_bound").localizedDescription)
+            }
+        }
+    }
     @MainActor func testConfirmedDeletionClearsProfilesReadingsDraftsRecoveryCopiesAndRestartsEmpty() async throws {
         AuthURLProtocol.handler = { request in
             XCTAssertEqual(request.httpMethod, "DELETE")

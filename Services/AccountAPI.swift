@@ -200,9 +200,28 @@ enum AccountAPIError: Error, LocalizedError, Equatable {
         case .staleSession: L10n.text("账号状态已变化，请重试。", "Your account changed. Please try again.")
         case .invalidResponse: L10n.text("账号服务返回的信息不完整，请稍后重试。", "The account service returned an incomplete response. Try again later.")
         case .unavailable: L10n.text("账号服务暂时无法连接，请检查网络后重试。", "The account service is unavailable. Check your connection and try again.")
-        case .server(let status, _):
-            if status == 429 { L10n.text("操作较频繁，请稍后再试。", "Too many attempts. Please try again shortly.") }
-            else { L10n.text("账号服务暂时不可用，请稍后重试。", "The account service is temporarily unavailable. Try again later.") }
+        case .server(let status, let code):
+            // Only exact local status/code pairs can choose an actionable
+            // description. Never display a server message or arbitrary code.
+            switch (status, code) {
+            case (403, "sandbox_proof_already_bound"):
+                L10n.text("测试登录暂时受限。请稍后重试；若仍无法登录，请联系支持。", "Test sign-in is currently restricted. Try again later or contact support if the issue continues.")
+            case (403, "sandbox_app_transaction_required"), (403, "sandbox_app_transaction_invalid"):
+                L10n.text("App Store 凭据需要重新验证。请重新打开 App 后再尝试登录；若仍失败，请联系支持。", "Your App Store credentials need to be verified again. Reopen the app and try signing in again, or contact support if it continues.")
+            case (403, "sandbox_account_not_allowed"), (403, "sandbox_review_access_disabled"):
+                L10n.text("测试登录暂未开放。请稍后重试或联系支持。", "Test sign-in is not available yet. Try again later or contact support.")
+            case (403, "account_disabled"):
+                L10n.text("此账号已停用，请联系支持。", "This account has been disabled. Please contact support.")
+            case (503, "apple_unavailable"), (503, "apple_exchange_unavailable"),
+                 (503, "apple_credentials_missing"), (503, "apple_credentials_invalid"),
+                 (503, "apple_encryption_unavailable"), (503, "quota_setup_unavailable"),
+                 (503, "sandbox_not_configured"), (503, "sandbox_proof_not_configured"),
+                 (503, "sandbox_proof_unavailable"):
+                L10n.text("登录服务暂时不可用，请稍后重试。", "The sign-in service is temporarily unavailable. Please try again later.")
+            default:
+                if status == 429 { L10n.text("操作较频繁，请稍后再试。", "Too many attempts. Please try again shortly.") }
+                else { L10n.text("账号服务暂时不可用，请稍后重试。", "The account service is temporarily unavailable. Try again later.") }
+            }
         }
     }
 }

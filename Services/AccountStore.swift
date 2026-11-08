@@ -52,6 +52,13 @@ enum AccountAccessState: Equatable {
             store.debugUIFixture = true; store.restored = true
             if ProcessInfo.processInfo.arguments.contains("--ui-testing-auth-signed-out") {
                 store.accessState = .signedOut
+                if ProcessInfo.processInfo.arguments.contains("--ui-testing-auth-proof-restricted") {
+                    store.message = AccountAPIError.server(status: 403, code: "sandbox_proof_already_bound").localizedDescription
+                } else if ProcessInfo.processInfo.arguments.contains("--ui-testing-auth-proof-invalid") {
+                    store.message = AccountAPIError.server(status: 403, code: "sandbox_app_transaction_invalid").localizedDescription
+                } else if ProcessInfo.processInfo.arguments.contains("--ui-testing-auth-service-unavailable") {
+                    store.message = AccountAPIError.server(status: 503, code: "apple_exchange_unavailable").localizedDescription
+                }
             } else {
                 store.user = AccountUser(id: "ui-fixture-account", displayName: "测试账号", email: "tester@example.com", createdAt: "2026-11-06T00:00:00Z")
                 store.wallet = AccountWallet(paidCredits: 1200, bonusCredits: 300, reservedCredits: 100, availableCredits: 1400, quota: AccountQuota(remainingPercent: 100, isUnlimited: false, canStart: true))

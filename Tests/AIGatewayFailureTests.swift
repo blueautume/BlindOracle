@@ -4,7 +4,8 @@ import XCTest
 final class AIGatewayFailureTests: XCTestCase {
     private let cases: [(Int, [String])] = [
         (429, ["daily_budget", "daily_limit", "task_service_limit", "global_daily_budget", "service_busy", "throttled",
-               "generation_in_progress", "service_retry_limit", "stage_retry_limit", "stage_repair_limit", "task_stage_limit", "upstream_rejected"]),
+               "generation_in_progress", "service_retry_limit", "stage_retry_limit", "stage_repair_limit", "task_stage_limit", "upstream_rejected",
+               "sandbox_installation_daily_budget", "sandbox_installation_daily_limit", "sandbox_installation_busy", "sandbox_installation_retry_limit"]),
         (502, ["upstream_rejected", "upstream_unavailable", "upstream_interrupted", "gateway_interrupted", "worker_interrupted"]),
         (503, ["service_not_configured", "cache_not_configured", "response_cache_unavailable", "settlement_unavailable"]),
         (401, ["authentication_required", "not_authenticated", "authentication_failed"]),
@@ -40,7 +41,9 @@ final class AIGatewayFailureTests: XCTestCase {
     }
 
     func testAccountAdmissionFailureRetainsItsCodeAndDoesNotReachTheGenerationEndpoint() async throws {
-        for (status, code) in [(429, "throttled"), (429, "daily_budget"), (402, "quota_exhausted"), (403, "account_disabled"), (410, "task_closed")] {
+        for (status, code) in [(429, "throttled"), (429, "daily_budget"), (402, "quota_exhausted"), (403, "account_disabled"), (410, "task_closed"),
+                               (429, "sandbox_installation_daily_budget"), (429, "sandbox_installation_daily_limit"),
+                               (429, "sandbox_installation_busy"), (429, "sandbox_installation_retry_limit")] {
             let key = UUID().uuidString
             GatewayFailureURLProtocol.install(.init(status: status, body: try body(code)), for: key)
             defer { GatewayFailureURLProtocol.remove(key) }
@@ -106,6 +109,45 @@ final class AIGatewayFailureTests: XCTestCase {
             AppLanguage.$override.withValue(language) {
                 let directlyConstructed = DeepSeekError.gateway(status: 429, code: secret)
                 XCTAssertFalse(directlyConstructed.localizedDescription.contains(secret))
+            }
+        }
+    }
+
+    func testSharedTestInstallationLimitsPreserveAllowanceWithoutBlamingTheAccount() {
+        for language in [AppLanguage.simplifiedChinese, .english] {
+            AppLanguage.$override.withValue(language) {
+                for code in ["sandbox_installation_daily_budget", "sandbox_installation_daily_limit"] {
+                    let message = AIGatewayFailure.error(status: 429, code: code).localizedDescription
+                    XCTAssertEqual(message, language.isEnglish
+                        ? "The test service has reached its daily limit. Try again tomorrow. Your remaining allowance is preserved."
+                        : "测试服务今日已达使用上限，请明日重试。剩余额度会保留。")
+                    XCTAssertFalse(message.lowercased().contains("you’ve reached"))
+                    XCTAssertFalse(message.lowercased().contains("replenish"))
+                    XCTAssertFalse(message.contains("补充额度"))
+                }
+                let busy = AIGatewayFailure.error(status: 429, code: "sandbox_installation_busy").localizedDescription
+                let retry = AIGatewayFailure.error(status: 429, code: "sandbox_installation_retry_limit").localizedDescription
+                XCTAssertEqual(busy, AIGatewayFailure.error(status: 429, code: "service_busy").localizedDescription)
+                XCTAssertEqual(retry, AIGatewayFailure.error(status: 429, code: "service_retry_limit").localizedDescription)
+                let running = AIGatewayFailure.error(status: 429, code: "generation_in_progress").localizedDescription
+                XCTAssertNotEqual(busy, running); XCTAssertNotEqual(retry, running)
+            }
+        }
+    }
+
+    func testSharedTestLimitCodesRequire429AndDoNotAcceptMalformedAliases() {
+        let codes = ["sandbox_installation_daily_budget", "sandbox_installation_daily_limit", "sandbox_installation_busy", "sandbox_installation_retry_limit"]
+        for code in codes {
+            for status in [200, 400, 402, 403, 409, 500, 502, 503] {
+                guard case .http(let actualStatus) = AIGatewayFailure.error(status: status, code: code) else {
+                    return XCTFail("A test-installation limit must require its exact 429/code pair")
+                }
+                XCTAssertEqual(actualStatus, status)
+            }
+            for malformed in [code + " ", code.uppercased(), code + ".private-details"] {
+                guard case .http(429) = AIGatewayFailure.error(status: 429, code: malformed) else {
+                    return XCTFail("Unrecognized aliases must not select test-limit copy")
+                }
             }
         }
     }

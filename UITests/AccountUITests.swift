@@ -94,7 +94,8 @@ final class AccountUITests: XCTestCase {
 
     @MainActor func testUsageContainsQuietAllowanceAndOpensPurchaseDetails() {
         let app = launch(["--ui-testing-reset", "--ui-testing-reading-library"])
-        let data = app.tabBars.buttons["数据"]
+        // iPad's native top tabs are exposed as buttons outside a TabBar.
+        let data = app.buttons.matching(identifier: "dataTab").firstMatch
         XCTAssertTrue(data.waitForExistence(timeout: 15)); data.tap()
         XCTAssertFalse(element("remainingQuotaPercentage", in: app).exists)
         XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "100%")).firstMatch.exists)
@@ -174,6 +175,50 @@ final class AccountUITests: XCTestCase {
         XCTAssertTrue(app.buttons["appleSignInButton"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.tabBars.firstMatch.exists)
         capture("account-deletion-completed-gate", app: app)
+    }
+
+    @MainActor private func launchEnglishLoginFailure(_ flag: String) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset-language", "-oracle.appLanguage", "en",
+                               "--ui-testing-auth-signed-out", flag]
+        app.launch()
+        return app
+    }
+
+    /// Run this same case on iPhone and iPad; it reproduces the review login
+    /// surface with a closed local fixture, without any Apple/network request.
+    @MainActor func testSandboxLoginRestrictionOnPhoneAndPadDoesNotImplyServiceOutage() {
+        let app = launchEnglishLoginFailure("--ui-testing-auth-proof-restricted")
+        let button = app.buttons["appleSignInButton"]
+        XCTAssertTrue(button.waitForExistence(timeout: 10)); XCTAssertTrue(button.isEnabled)
+        let message = app.staticTexts["accountMessage"]
+        XCTAssertTrue(message.waitForExistence(timeout: 5))
+        XCTAssertEqual(message.label, "Test sign-in is currently restricted. Try again later or contact support if the issue continues.")
+        XCTAssertFalse(message.label.contains("The account service is temporarily unavailable."))
+        XCTAssertFalse(message.label.lowercased().contains("original account"))
+        XCTAssertFalse(app.staticTexts["The sign-in service is temporarily unavailable. Please try again later."].exists)
+        XCTAssertGreaterThanOrEqual(message.frame.minY, button.frame.maxY)
+        XCTAssertFalse(app.tabBars.firstMatch.exists)
+        XCTAssertFalse(element("signInProgress", in: app).exists)
+        capture("login-business-restriction-phone-and-pad", app: app)
+    }
+
+    @MainActor func testStoreProofAndTemporaryServiceOnPhoneAndPadHaveDistinctRecoveryMessages() {
+        let cases = [
+            ("--ui-testing-auth-proof-invalid", "Your App Store credentials need to be verified again. Reopen the app and try signing in again, or contact support if it continues."),
+            ("--ui-testing-auth-service-unavailable", "The sign-in service is temporarily unavailable. Please try again later.")
+        ]
+        for (flag, expected) in cases {
+            let app = launchEnglishLoginFailure(flag)
+            XCTAssertTrue(app.buttons["appleSignInButton"].waitForExistence(timeout: 10))
+            let message = app.staticTexts["accountMessage"]
+            XCTAssertTrue(message.waitForExistence(timeout: 5)); XCTAssertEqual(message.label, expected)
+            XCTAssertFalse(message.label.contains("The account service is temporarily unavailable."))
+            XCTAssertFalse(app.tabBars.firstMatch.exists)
+            XCTAssertTrue(app.buttons["appleSignInButton"].isEnabled)
+            capture(flag + "-phone-and-pad", app: app)
+            app.terminate()
+        }
     }
 
     @MainActor func testSignedOutLaunchCannotReachTabsDataOrSettingsButCanReadPrivacy() {
@@ -265,7 +310,7 @@ final class AccountUITests: XCTestCase {
         XCTAssertFalse(app.buttons["appleSignInButton"].exists)
         XCTAssertFalse(element("accountGate", in: app).exists)
         XCTAssertFalse(app.tabBars.firstMatch.exists)
-        XCTAssertTrue(app.tabBars.buttons["数据"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons.matching(identifier: "dataTab").firstMatch.waitForExistence(timeout: 15))
         XCTAssertFalse(launchScreen.exists)
         XCTAssertFalse(app.buttons["appleSignInButton"].exists)
     }

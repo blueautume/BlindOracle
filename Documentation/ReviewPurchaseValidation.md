@@ -32,7 +32,7 @@
 
 默认发布工程的 `OracleServiceEnvironmentResolution=AppleVerified`；`OracleServiceEnvironment=Production` 仅记录默认构建配置，不是运行时路由决定。启动先读取 `AppTransaction.shared`，只接受 Apple verified、匹配 Bundle ID 的 Production/Sandbox。路由冻结后才创建会话、AI、钱包和任务对象；unknown/Xcode、错误签名、错误应用和取凭据失败只显示恢复重试页，不读取另一套账号、不自动调用会弹商店认证的 refresh。
 
-自动 Sandbox 登录携带 signed AppTransaction，由独立 Sandbox 后端再次验签。非 owner 不再依赖人工添加审核账号名单；其 proof 原子绑定稳定 Apple 登录摘要。两套数据库、会话与任务目录继续隔离，正式服务不能发放测试额度。AppTransaction 是下载/环境证明，不等同 Sign in with Apple 身份或 App Attest。稳定 appTransactionId 可防跨身份复用；旧系统 nonce fallback 与首次抢绑仍受访问开关、限流和 Sandbox 全局预算约束。
+自动 Sandbox 登录携带 signed AppTransaction，由独立 Sandbox 后端再次验签。非 owner 不依赖人工添加审核账号名单。3.0.301 起，AppTransaction 仅证明下载与环境，不与单一 Sign in with Apple 身份排他绑定；不同的已验证登录身份各有独立账号、钱包和订单，同一身份不会重复获得首次赠额。下载凭据的共享每日成本、请求数、并发及失败限制与原有账号、全局限制同时生效；任务和请求保留可信凭据快照，账号删除与会话切换不能重置当日预算。两套数据库、会话与任务目录继续隔离，正式服务不能发放测试额度。此机制不等同 App Attest。
 
 `BLINDORACLE_SANDBOX=YES` 仅用于开发签名 owner 包，`OwnerSandbox` 模式沿用白名单。此包不能证明发布包的下载凭据可用；开发签名安装未必有 App Store AppTransaction。
 
@@ -41,16 +41,16 @@
 - 纯策略与启动测试：双环境、错误签名/应用/环境、缺凭据、失败重试、单飞、冻结后不能变更、登录 proof 与服务路由隔离。
 - 客户端故障注入：取消、等待审批、丢失验单响应、重启重放、错误交易响应、已退款确认、账号切换、重复点击、金额/币种错误；服务端确认前禁止 finish。
 - Apple 本地 StoreKitTest：本地 CNY 6 消耗商品、取消、等待审批、购买中断与恢复；Xcode 签名交易只能停在本地，不得提交真实后端或进入钱包。Fixture 仅复制到测试 bundle。
-- PostgreSQL：账号、钱包、购买、退款、任务、并发与 Sandbox proof 绑定。网络模拟与真实 Server API 验单证据分开记录。
+- PostgreSQL：账号、钱包、购买、退款、任务、并发、同一 Sandbox 下载凭据的多个登录身份与共享资源限制。网络模拟与真实 Server API 验单证据分开记录。
 
 ## 同一归档的真实分发验收（待完成）
 
 Apple 明确 TestFlight 和审核内购使用 Sandbox；自动 AppTransaction 路由仍须通过真实分发验收，不以本地 `.storekit` 或 owner 包代替。
 
-1. 从默认生成工程归档，核对 Bundle ID、3.0.20/46、AppleVerified、签名、无 provider key/p8/StoreKit fixture；名称保持「瞎子」。
-2. 仅在得到上传授权后将该归档用于内部 TestFlight，不自动提交 App Review 或公开发布。
-3. 使用非 owner 的正常 Apple 登录身份，从 TestFlight 启动；确认显示 Sandbox 标识并访问独立 Sandbox 后台。不得人工伪造凭据或关闭验签以通过。
-4. 核对 `com.lihao.BlindOracle.quota.1m` 真实商品、CNY 6 显示与交付。当前只支持中国大陆 storefront，审核备注需写明。
+1. 从默认生成工程归档，核对 Bundle ID、3.0.301/64、AppleVerified、签名、无 provider key/p8/StoreKit fixture；名称保持「瞎子」。
+2. 将同一归档以普通 App Store Connect 分发方式上传，确认不是 Internal Only。上传不等于提交 App Review 或公开发布。
+3. 在 iPad Air 11 英寸 M3 等支持设备上，从 TestFlight 全新安装及从旧版升级后分别登录；使用非 owner 的正常 Apple 身份，额外检查与下载账号不同的登录身份。确认能进入首页、显示 Sandbox 标识并访问独立 Sandbox 后台，两个登录身份的账号与余额不串用。不得人工伪造凭据或关闭验签以通过。
+4. 核对 `com.lihao.BlindOracle.quota.1m` 真实商品：CHN storefront 显示 Apple 的人民币 6 元报价，USA storefront 显示美元 0.99 报价，均交付 1,000,000 额度；其他地区暂不提供购买。不要求审核人员切换商店账号。
 5. 模拟取消、购买中断、完成付款后断网、服务器已入账但未确认、切后台/杀进程再启动。核对同一交易始终仅一笔订单和一次发额；其他登录身份不能交付该单。
 6. 测试少量余额下的最后完整任务、重试与下一问题拦截。正式与 Sandbox 用量和账本不能互通。
 
