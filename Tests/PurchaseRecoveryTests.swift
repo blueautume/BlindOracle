@@ -34,7 +34,17 @@ import XCTest
     }
 
     private func offer(currency: String = "CNY", price: Decimal = 6, consumable: Bool = true) -> AccountPurchaseProduct {
-        .init(id: productID, displayPrice: "¥6.00", price: price, currency: currency, isConsumable: consumable)
+        let amount = String(format: "%.2f", NSDecimalNumber(decimal: price).doubleValue)
+        return .init(id: productID, displayPrice: (currency == "USD" ? "$" : "¥") + amount,
+                     price: price, currency: currency, isConsumable: consumable)
+    }
+
+    private func useRegionalCatalog(prices: String? = nil) {
+        let productID = productID
+        let regionalPrices = prices ?? #"[{"storefront":"CHN","currency":"CNY","price_milliunits":6000},{"storefront":"USA","currency":"USD","price_milliunits":990}]"#
+        RecoveryURLProtocol.handler = { _ in
+            "{\"products\":[{\"product_id\":\"\(productID)\",\"name\":\"补充额度\",\"credits\":1000000,\"currency\":\"CNY\",\"price_milliunits\":6000,\"prices\":\(regionalPrices)}]}"
+        }
     }
 
     private func event(id: String = "recovery-transaction", owner: UUID? = nil, environment: String? = nil) -> AccountPurchaseEvent {
@@ -277,6 +287,207 @@ import XCTest
         }
     }
 
+    func testChineseAndUSStorefrontsSelectTheirApprovedLocalPrices() async throws {
+        useRegionalCatalog()
+        for (region, currency, price) in [("CHN", "CNY", Decimal(6)), ("USA", "USD", Decimal(99) / 100)] {
+            provider.storefront = region
+            provider.offers = [offer(currency: currency, price: price)]
+            let purchases = store()
+            await purchases.loadProducts()
+            let selected = try XCTUnwrap(purchases.products.first, purchases.message ?? "Missing regional offer")
+            XCTAssertEqual(selected.currency, currency)
+            XCTAssertEqual(selected.price, price)
+            XCTAssertEqual(selected.allowanceTokens, 1_000_000)
+            XCTAssertEqual(selected.displayPrice, currency == "USD" ? "$0.99" : "¥6.00")
+            await purchases.purchase(selected)
+        }
+        XCTAssertEqual(provider.purchaseCount, 2)
+    }
+
+    func testUSQuoteDoesNotDependOnCatalogPriceOrderingOrInterfaceLanguage() async throws {
+        provider.storefront = "USA"
+        provider.offers = [offer(currency: "USD", price: Decimal(99) / 100)]
+        useRegionalCatalog(prices: #"[{"storefront":"USA","currency":"USD","price_milliunits":990},{"storefront":"CHN","currency":"CNY","price_milliunits":6000}]"#)
+        for language in [AppLanguage.simplifiedChinese, .english] {
+            await AppLanguage.$override.withValue(language) {
+                let purchases = store()
+                await purchases.loadProducts()
+                XCTAssertEqual(purchases.products.first?.currency, "USD")
+                XCTAssertEqual(purchases.products.first?.displayPrice, "$0.99")
+            }
+        }
+    }
+
+    func testRegionCurrencyAndAmountMustAllMatchApprovedPrice() async throws {
+        useRegionalCatalog()
+        for (region, currency, price) in [("CHN", "USD", Decimal(99) / 100), ("USA", "CNY", Decimal(6)),
+                                          ("USA", "USD", Decimal(199) / 100)] {
+            provider.storefront = region
+            let candidate = offer(currency: currency, price: price)
+            provider.offers = [candidate]
+            let purchases = store()
+            await purchases.loadProducts()
+            XCTAssertTrue(purchases.products.isEmpty)
+            await purchases.purchase(candidate)
+            XCTAssertFalse(purchases.message?.contains("中国大陆测试账号") == true)
+        }
+        XCTAssertEqual(provider.purchaseCount, 0)
+    }
+
+    func testApprovedPriceChangeUsesServerQuoteRatherThanHardcodedAmount() async throws {
+        provider.storefront = "USA"
+        provider.offers = [offer(currency: "USD", price: Decimal(199) / 100)]
+        useRegionalCatalog(prices: #"[{"storefront":"USA","currency":"USD","price_milliunits":1990}]"#)
+        let purchases = store()
+        await purchases.loadProducts()
+        XCTAssertEqual(purchases.products.first?.price, Decimal(199) / 100)
+    }
+
+    func testAmbiguousOrInvalidRegionalQuotesCannotAuthorizePayment() async throws {
+        provider.storefront = "USA"
+        let candidate = offer(currency: "USD", price: Decimal(99) / 100)
+        provider.offers = [candidate]
+        for prices in [#"[{"storefront":"USA","currency":"USD","price_milliunits":990},{"storefront":"USA","currency":"USD","price_milliunits":990}]"#,
+                       #"[{"storefront":"USA","currency":"USD","price_milliunits":0}]"#,
+                       #"[{"storefront":"USA","currency":"USD","price_milliunits":-990}]"#,
+                       #"[{"storefront":"USA","currency":"CNY","price_milliunits":990}]"#,
+                       "null"] {
+            useRegionalCatalog(prices: prices)
+            let purchases = store()
+            await purchases.loadProducts()
+            XCTAssertTrue(purchases.products.isEmpty)
+            await purchases.purchase(candidate)
+        }
+        XCTAssertEqual(provider.purchaseCount, 0)
+    }
+
+    func testUnsupportedAndUnknownStorefrontsCannotUseDollarCurrencyAsFallback() async throws {
+        useRegionalCatalog()
+        provider.offers = [offer(currency: "USD", price: Decimal(99) / 100)]
+        for region: String? in ["CAN", "GBR", "HKG", "", nil] {
+            provider.storefront = region
+            let purchases = store()
+            await purchases.loadProducts()
+            XCTAssertTrue(purchases.products.isEmpty)
+            await purchases.purchase(provider.offers[0])
+        }
+        XCTAssertEqual(provider.purchaseCount, 0)
+    }
+
+    func testLegacyCatalogCannotAuthorizeDollarPurchases() async throws {
+        provider.storefront = "USA"
+        provider.offers = [offer(currency: "USD", price: Decimal(99) / 100)]
+        let purchases = store()
+        await purchases.loadProducts()
+        XCTAssertTrue(purchases.products.isEmpty)
+        await purchases.purchase(provider.offers[0])
+        XCTAssertEqual(provider.purchaseCount, 0)
+    }
+
+    func testSignedOutCatalogLoadDoesNotQueryAppleOrOpenAuthentication() async throws {
+        try await manager.clear()
+        let purchases = store()
+        await purchases.loadProducts()
+        XCTAssertTrue(purchases.products.isEmpty)
+        XCTAssertEqual(provider.storefrontReadCount, 0)
+        XCTAssertEqual(provider.storefrontObservationCount, 0)
+        XCTAssertEqual(provider.productLookupCount, 0)
+        XCTAssertEqual(provider.purchaseCount, 0)
+    }
+
+    func testExplicitEmptyRegionalPricesDoNotFallBackToLegacyChinesePrice() async throws {
+        useRegionalCatalog(prices: "[]")
+        let purchases = store()
+        await purchases.loadProducts()
+        XCTAssertTrue(purchases.products.isEmpty, "An explicitly empty policy must not regain legacy permission")
+    }
+
+    func testStorefrontChangedBeforePurchaseReloadsWithoutOpeningOldPayment() async throws {
+        useRegionalCatalog()
+        let purchases = store()
+        await purchases.loadProducts()
+        let chinese = try XCTUnwrap(purchases.products.first)
+        provider.storefront = "USA"
+        provider.offers = [offer(currency: "USD", price: Decimal(99) / 100)]
+        await purchases.purchase(chinese)
+        XCTAssertEqual(provider.purchaseCount, 0)
+        await waitFor { !purchases.isLoading && purchases.products.first?.currency == "USD" }
+        XCTAssertEqual(purchases.products.first?.currency, "USD")
+    }
+
+    func testSameSKUWithOldDisplayedPriceCannotStartANewPricedPurchase() async throws {
+        useRegionalCatalog()
+        provider.storefront = "USA"
+        provider.offers = [offer(currency: "USD", price: Decimal(99) / 100)]
+        let purchases = store()
+        await purchases.loadProducts()
+        let oldOffer = try XCTUnwrap(purchases.products.first)
+        useRegionalCatalog(prices: #"[{"storefront":"USA","currency":"USD","price_milliunits":1990}]"#)
+        provider.offers = [offer(currency: "USD", price: Decimal(199) / 100)]
+        await purchases.loadProducts()
+        XCTAssertEqual(purchases.products.first?.price, Decimal(199) / 100)
+        await purchases.purchase(oldOffer)
+        XCTAssertEqual(provider.purchaseCount, 0)
+    }
+
+    func testProductReloadWaitsUntilNativePurchaseFinishes() async throws {
+        useRegionalCatalog()
+        let purchases = store()
+        await purchases.loadProducts()
+        let selected = try XCTUnwrap(purchases.products.first)
+        let gate = RecoveryPurchaseGate()
+        provider.beforePurchaseReturns = { await gate.wait() }
+        let payment = Task { await purchases.purchase(selected) }
+        await waitFor { self.provider.purchaseCount == 1 }
+        await purchases.loadProducts()
+        XCTAssertEqual(provider.productLookupCount, 1, "Do not replace StoreKit's cached product during an open payment")
+        await gate.open()
+        await payment.value
+        await waitFor { !purchases.isLoading && self.provider.productLookupCount == 2 }
+        XCTAssertEqual(provider.productLookupCount, 2)
+        XCTAssertEqual(provider.purchaseCount, 1)
+    }
+
+    func testStorefrontChangedDuringProductLookupCannotPublishStaleOffer() async throws {
+        useRegionalCatalog()
+        provider.beforeProductsReturn = { [provider] in
+            provider?.beforeProductsReturn = nil
+            provider?.storefront = "USA"
+            provider?.offers = [self.offer(currency: "USD", price: Decimal(99) / 100)]
+        }
+        let purchases = store()
+        await purchases.loadProducts()
+        await waitFor { !purchases.isLoading && purchases.products.first?.currency == "USD" }
+        XCTAssertEqual(purchases.products.first?.currency, "USD")
+        XCTAssertEqual(provider.purchaseCount, 0)
+    }
+
+    func testStorefrontUpdatesClearAndReloadOffers() async throws {
+        useRegionalCatalog()
+        let purchases = store()
+        purchases.startObserving()
+        await purchases.loadProducts()
+        provider.offers = [offer(currency: "USD", price: Decimal(99) / 100)]
+        provider.emitStorefront("USA")
+        await waitFor { !purchases.isLoading && purchases.products.first?.currency == "USD" }
+        XCTAssertEqual(purchases.products.first?.currency, "USD")
+        provider.emitStorefront("GBR")
+        await waitFor { !purchases.isLoading && purchases.products.isEmpty }
+        XCTAssertTrue(purchases.products.isEmpty)
+        XCTAssertEqual(provider.purchaseCount, 0)
+    }
+
+    func testSwitchingStorefrontDoesNotPreventDeliveryOfOriginalPurchase() async throws {
+        provider.storefront = "USA"
+        provider.pending = [event()]
+        let reply = confirmation()
+        RecoveryURLProtocol.handler = { _ in reply }
+        let purchases = store()
+        await purchases.resumeUnfinished(userInitiated: true)
+        XCTAssertEqual(metrics.finishCount, 1)
+        XCTAssertFalse(purchases.hasUnresolvedPurchase)
+    }
+
     func testAccountSwitchWhileNativePurchaseIsPendingLeavesOriginalTransactionForOriginalAccount() async throws {
         let store = store(); await store.loadProducts()
         provider.result = .success(event())
@@ -298,15 +509,32 @@ import XCTest
 }
 
 @MainActor private final class RecoveryPurchaseProvider: AccountPurchaseProviding {
+    var storefront: String? = "CHN"
     var offers: [AccountPurchaseProduct] = []
     var result: AccountPurchaseResult = .cancelled
     var pending: [AccountPurchaseEvent] = []
     var purchaseCount = 0
+    var productLookupCount = 0
+    var storefrontReadCount = 0
+    var storefrontObservationCount = 0
     var scanCount = 0
     var unfinishedOverride: (() -> AsyncStream<AccountPurchaseEvent>)?
     var beforePurchaseReturns: (() async throws -> Void)?
+    var beforeProductsReturn: (() async -> Void)?
     private var continuation: AsyncStream<AccountPurchaseEvent>.Continuation?
-    func products(for ids: Set<String>) async throws -> [AccountPurchaseProduct] { offers.filter { ids.contains($0.id) } }
+    private var storefrontContinuation: AsyncStream<String?>.Continuation?
+    func currentStorefront() async -> String? { storefrontReadCount += 1; return storefront }
+    func storefrontUpdates() -> AsyncStream<String?> {
+        storefrontObservationCount += 1
+        return AsyncStream { storefrontContinuation = $0 }
+    }
+    func emitStorefront(_ region: String?) { storefront = region; storefrontContinuation?.yield(region) }
+    func products(for ids: Set<String>) async throws -> [AccountPurchaseProduct] {
+        productLookupCount += 1
+        let snapshot = offers.filter { ids.contains($0.id) }
+        await beforeProductsReturn?()
+        return snapshot
+    }
     func purchase(productID: String, accountToken: UUID) async throws -> AccountPurchaseResult {
         purchaseCount += 1
         try await beforePurchaseReturns?()

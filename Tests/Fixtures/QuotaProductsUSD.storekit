@@ -1,0 +1,58 @@
+{
+  "identifier": "237CBBA2-C824-4A70-9C89-535577762E27",
+  "nonRenewingSubscriptions": [],
+  "products": [
+    {
+      "displayPrice": "0.99",
+      "familyShareable": false,
+      "internalID": "9000010001",
+      "localizations": [
+        {
+          "description": "用于本地 StoreKit 自动化验证的测试额度。",
+          "displayName": "补充额度",
+          "locale": "zh_CN"
+        },
+        {
+          "description": "Allowance for local StoreKit automation only.",
+          "displayName": "Replenish allowance",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.lihao.BlindOracle.quota.1m",
+      "referenceName": "Local USD test allowance",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "0.01",
+      "familyShareable": false,
+      "internalID": "9000010002",
+      "localizations": [
+        {
+          "description": "Local configuration marker. Never purchase this product.",
+          "displayName": "Local configuration guard",
+          "locale": "zh_CN"
+        },
+        {
+          "description": "Local configuration marker. Never purchase this product.",
+          "displayName": "Local configuration guard",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.lihao.BlindOracle.localtest.configuration.guard",
+      "referenceName": "Local environment guard - never purchase",
+      "type": "Consumable"
+    }
+  ],
+  "settings": {
+    "_failTransactionsEnabled": false,
+    "_locale": "en_US",
+    "_storefront": "USA",
+    "_storeKitErrors": [],
+    "_timeRate": 0
+  },
+  "subscriptionGroups": [],
+  "version": {
+    "major": 3,
+    "minor": 0
+  }
+}

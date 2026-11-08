@@ -23,7 +23,7 @@ env -u BLINDORACLE_SANDBOX python3 Scripts/generate_project.py
 
 生产继续使用原 `com.lihao.BlindOracle.wellecho.account` Keychain service、原任务目录及原结束队列；沙盒使用 `.sandbox` service 和独立文件名，失效标记随命名空间隔离。共享本机资料与历史不自动删除；沙盒也不会读取或清除生产登录。正常 Apple 账号用于 App 登录，Sandbox tester 仅用于系统购买，后台可限制测试登录白名单。沙盒删号不撤销 Apple 全局授权；生产删号流程保持原规则。
 
-沙盒购买只接受 StoreKit 的 Sandbox 交易，生产只接受 Production。服务器独立验单并确认环境与账号归属，客户端仍严格校验商品币种及金额，不因测试而放宽。若商品已返回但币种或价格不匹配，应在系统「设置 → 开发者 → 沙盒 Apple 账户」登录中国大陆 tester 后刷新；App 不请求 tester 密码，也不自动切换系统购买账号。
+沙盒购买只接受 StoreKit 的 Sandbox 交易，生产只接受 Production。服务器独立验单并确认环境与账号归属，不因测试而放宽。3.0.36 起客户端使用 Apple 当前 storefront，在中国大陆（CHN）选择 CNY 报价、美国（USA）选择 USD 报价；其他或未知地区暂不购买。`products/` 每个商品新增 `prices: [{storefront, currency, price_milliunits}]`，保留旧 `currency` / `price_milliunits` 字段供旧人民币客户端读取。新客户端缺少 `prices` 时只允许 CHN 旧协议；显式空数组不回退，USD 必须有美国报价。商品显示价格始终来自 StoreKit 的 `displayPrice`，币种和金额仍须精确匹配服务器批准的当地报价。加载时和付款前核对地区，监听地区变化后重新加载，不要求审核人员切换测试账号。服务器使用 Apple 验签交易中的 storefront、币种和金额进行最终入账判定，客户端不能提供或覆盖可信地区；历史报价保留供原交易延迟补单。
 
 发布前检查 Debug/Release 包均不含 `dev-key.txt`、`qwen-key.txt` 或其他供应商凭据资源。密钥轮换只在服务器执行；不能通过重新打包 App 分发供应商密钥。真实联网测试需要有效的自有账号会话，并受同一网关任务、额度和并发策略约束；Debug 合成夹具不代表真实授权或付款成功。
 

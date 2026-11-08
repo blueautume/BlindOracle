@@ -33,15 +33,24 @@ struct VerifiedAccountPurchase: Sendable {
     private var reconcileUserInitiated = false
     private var reconciliationTask: Task<Void, Never>?
     private var updates: Task<Void, Never>?
+    private var storefrontObserver: Task<Void, Never>?
+    private var productReloadTask: Task<Void, Never>?
+    private var needsProductReload = false
+    private var storefrontRevision: UInt64 = 0
+    private var observedStorefront: String?
+    private var hasObservedStorefront = false
+    private var loadedStorefront: String?
     private var localDataGeneration = UUID()
     init(api: AccountAPI = AccountAPI(), sessions: AccountSessionManager = .shared, environment: ServiceEnvironment = .current,
          provider: AccountPurchaseProviding? = nil) {
         self.api = api; self.sessions = sessions; self.environment = environment; self.provider = provider ?? StoreKitPurchaseProvider()
     }
-    deinit { updates?.cancel(); reconciliationTask?.cancel() }
+    deinit { updates?.cancel(); storefrontObserver?.cancel(); productReloadTask?.cancel(); reconciliationTask?.cancel() }
     func clearDeletedAccountData() {
         localDataGeneration = UUID()
         reconciliationTask?.cancel(); reconciliationTask = nil
+        productReloadTask?.cancel(); productReloadTask = nil; needsProductReload = false
+        storefrontRevision &+= 1; loadedStorefront = nil
         products = []; allowedProductIDs = []; inFlightTransactions = []
         unresolvedByAccount = [:]; pendingApprovalAccounts = []; uncertainPurchaseAccounts = []
         needsReconciliation = false; reconcileUserInitiated = false
@@ -50,6 +59,7 @@ struct VerifiedAccountPurchase: Sendable {
         // finish an undelivered purchase merely because an account was deleted.
     }
     func startObserving() {
+        startObservingStorefront()
         guard updates == nil else { return }
         let events = provider.updates()
         updates = Task { [weak self] in
@@ -100,48 +110,88 @@ struct VerifiedAccountPurchase: Sendable {
     }
     func loadProducts() async {
         let expectedLocalDataGeneration = localDataGeneration
-        guard !isLoading else { return }
-        isLoading = true; message = nil
-        defer { isLoading = false }
+        // Do not replace StoreKit's cached Product while a payment is being
+        // prepared or presented. Its owner will drain this reload on completion.
+        guard !isPurchasing else { needsProductReload = true; return }
+        guard !isLoading else { needsProductReload = true; return }
+        isLoading = true; needsProductReload = false; message = nil
+        clearProductOffers()
+        defer { isLoading = false; scheduleProductReloadIfNeeded() }
         let context = await sessions.context()
-        do {
-            let catalog: AccountProductCatalog = try await authorized(expectedGeneration: context.generation) { [api] token in
-                try await api.products(token: token)
-            }
-            let ids = Set(catalog.products.map(\.productID).filter { !$0.isEmpty })
-            let loaded = ids.isEmpty ? [] : try await provider.products(for: ids)
+        guard expectedLocalDataGeneration == localDataGeneration,
+              await sessions.sessionGeneration() == context.generation else { return }
+        guard context.session != nil else {
+            message = AccountAPIError.unauthorized.localizedDescription
+            return
+        }
+        startObservingStorefront()
+        // A storefront change during either request gets one immediate fresh
+        // load. Further update events remain queued for the serial reload slot.
+        for attempt in 0..<2 {
+            let revision = storefrontRevision
+            let storefront = await provider.currentStorefront()
             guard expectedLocalDataGeneration == localDataGeneration, await sessions.sessionGeneration() == context.generation else { return }
-            allowedProductIDs = ids
-            let regionMismatch = loaded.contains { product in
-                guard let approved = catalog.products.first(where: { $0.productID == product.id }) else { return false }
-                return product.currency != approved.currency || product.price * 1000 != approved.priceMilliunits
+            guard revision == storefrontRevision else {
+                if attempt == 0 { needsProductReload = false; continue }
+                return
             }
-            products = loaded.compactMap { product -> AccountPurchaseProduct? in
-                guard product.isConsumable, let approved = catalog.products.first(where: { $0.productID == product.id }),
-                      approved.currency == "CNY", product.currency == approved.currency,
-                      product.price * 1000 == approved.priceMilliunits else { return nil }
-                var offer = product
-                offer.allowanceTokens = approved.credits.flatMap { $0 > 0 ? $0 : nil }
-                return offer
-            }.sorted { $0.price < $1.price }
-            if products.isEmpty {
-                message = regionMismatch && environment.isSandbox
-                    ? L10n.text("请在设置→开发者→沙盒 Apple 账户登录中国大陆测试账号，再刷新购买选项。", "In Settings → Developer → Sandbox Apple Account, sign in with a China mainland tester, then refresh purchase options.")
-                    : L10n.text("补充额度功能正在准备中，请稍后再来。", "Top-ups are being prepared. Please check back later.")
+            observedStorefront = storefront; hasObservedStorefront = true
+            guard let storefront, storefront == "CHN" || storefront == "USA" else {
+                message = storefront == nil
+                    ? L10n.text("暂时无法确认 App Store 地区，请重新加载购买选项。", "Your App Store region is unavailable. Please reload purchase options.")
+                    : L10n.text("当前 App Store 地区暂不支持补充额度。", "Top-ups are not available in your App Store region.")
+                return
             }
-        } catch {
-            guard expectedLocalDataGeneration == localDataGeneration, await sessions.sessionGeneration() == context.generation else { return }
-            products = []; allowedProductIDs = []
-            message = L10n.text("暂时无法获取购买选项，请稍后重试。", "Purchase options are unavailable. Please try again later.")
+            do {
+                let catalog: AccountProductCatalog = try await authorized(expectedGeneration: context.generation) { [api] token in
+                    try await api.products(token: token)
+                }
+                let ids = Set(catalog.products.filter { $0.approvedPrice(for: storefront) != nil }.map(\.productID).filter { !$0.isEmpty })
+                let loaded = ids.isEmpty ? [] : try await provider.products(for: ids)
+                let finalStorefront = await provider.currentStorefront()
+                guard expectedLocalDataGeneration == localDataGeneration, await sessions.sessionGeneration() == context.generation else { return }
+                guard revision == storefrontRevision, finalStorefront == storefront else {
+                    clearProductOffers()
+                    if attempt == 0 { needsProductReload = false; continue }
+                    message = storefrontChangedMessage
+                    return
+                }
+                products = loaded.compactMap { product -> AccountPurchaseProduct? in
+                    guard product.isConsumable,
+                          let approved = catalog.products.first(where: { $0.productID == product.id }),
+                          let price = approved.approvedPrice(for: storefront),
+                          product.currency == price.currency, product.price * 1000 == price.priceMilliunits else { return nil }
+                    var offer = product
+                    offer.allowanceTokens = approved.credits.flatMap { $0 > 0 ? $0 : nil }
+                    return offer
+                }.sorted { $0.price < $1.price }
+                allowedProductIDs = Set(products.map(\.id)); loadedStorefront = storefront
+                needsProductReload = false
+                if products.isEmpty {
+                    message = L10n.text("当前 App Store 暂无可用的购买选项，请稍后重新加载。", "No purchase options are available for your App Store right now. Please reload later.")
+                }
+                return
+            } catch {
+                guard expectedLocalDataGeneration == localDataGeneration, await sessions.sessionGeneration() == context.generation else { return }
+                clearProductOffers()
+                if attempt == 0, revision != storefrontRevision || error is AccountPurchaseStorefrontError {
+                    needsProductReload = false
+                    continue
+                }
+                message = L10n.text("暂时无法获取购买选项，请稍后重试。", "Purchase options are unavailable. Please try again later.")
+                return
+            }
         }
     }
     func purchase(_ product: AccountPurchaseProduct) async {
         let expectedLocalDataGeneration = localDataGeneration
-        guard !isPurchasing, !isCheckingPurchases, allowedProductIDs.contains(product.id),
-              products.contains(where: { $0.id == product.id }), product.isConsumable else { return }
+        let expectedStorefrontRevision = storefrontRevision
+        let expectedStorefront = loadedStorefront
+        guard !isPurchasing, !isCheckingPurchases, !isLoading, allowedProductIDs.contains(product.id),
+              products.contains(product), product.isConsumable else { return }
         // Reserve before the first suspension, including the session lookup.
         isPurchasing = true
-        defer { isPurchasing = false; scheduleReconciliationIfNeeded() }
+        defer { isPurchasing = false; scheduleReconciliationIfNeeded(); scheduleProductReloadIfNeeded() }
         let context = await sessions.context()
         guard expectedLocalDataGeneration == localDataGeneration else { return }
         guard let accountID = context.session.flatMap({ UUID(uuidString: $0.user.id) }) else {
@@ -150,6 +200,15 @@ struct VerifiedAccountPurchase: Sendable {
         hasUnresolvedPurchase = hasUnresolved(for: accountID)
         guard !hasUnresolvedPurchase else {
             message = L10n.text("有购买正在核对，请先点“核对购买”，无需再次付款。", "A purchase is awaiting verification. Use Check purchases before buying again.")
+            return
+        }
+        let storefront = await provider.currentStorefront()
+        guard expectedLocalDataGeneration == localDataGeneration, await sessions.sessionGeneration() == context.generation else { return }
+        guard let expectedStorefront, storefront == expectedStorefront,
+              expectedStorefrontRevision == storefrontRevision, loadedStorefront == expectedStorefront,
+              allowedProductIDs.contains(product.id), products.contains(product) else {
+            clearProductOffers(); message = storefrontChangedMessage
+            needsProductReload = true
             return
         }
         message = nil
@@ -179,6 +238,11 @@ struct VerifiedAccountPurchase: Sendable {
             }
         } catch {
             if expectedLocalDataGeneration == localDataGeneration, await sessions.sessionGeneration() == context.generation {
+                if error is AccountPurchaseStorefrontError {
+                    clearProductOffers(); message = storefrontChangedMessage
+                    needsProductReload = true
+                    return
+                }
                 message = L10n.text("购买未完成，请稍后重试。", "The purchase did not complete. Please try again later.")
             }
         }
@@ -234,6 +298,37 @@ struct VerifiedAccountPurchase: Sendable {
     private func hasUnresolved(for accountID: UUID) -> Bool {
         pendingApprovalAccounts.contains(accountID) || uncertainPurchaseAccounts.contains(accountID)
             || !(unresolvedByAccount[accountID] ?? []).isEmpty
+    }
+    private var storefrontChangedMessage: String {
+        L10n.text("App Store 地区已变化，请核对重新加载后的购买选项。", "Your App Store region changed. Review the reloaded purchase options.")
+    }
+    private func clearProductOffers() {
+        products = []; allowedProductIDs = []; loadedStorefront = nil
+    }
+    private func startObservingStorefront() {
+        guard storefrontObserver == nil else { return }
+        let events = provider.storefrontUpdates()
+        storefrontObserver = Task { [weak self] in
+            for await storefront in events {
+                guard !Task.isCancelled, let self else { return }
+                guard !self.hasObservedStorefront || self.observedStorefront != storefront else { continue }
+                self.hasObservedStorefront = true; self.observedStorefront = storefront
+                self.storefrontRevision &+= 1
+                self.clearProductOffers()
+                self.message = self.storefrontChangedMessage
+                self.needsProductReload = true
+                self.scheduleProductReloadIfNeeded()
+            }
+        }
+    }
+    private func scheduleProductReloadIfNeeded() {
+        guard needsProductReload, !isLoading, !isPurchasing, productReloadTask == nil else { return }
+        needsProductReload = false
+        productReloadTask = Task { [weak self] in
+            guard !Task.isCancelled, let self else { return }
+            self.productReloadTask = nil
+            await self.loadProducts()
+        }
     }
     private func scheduleReconciliationIfNeeded() {
         guard needsReconciliation, !isCheckingPurchases, !isPurchasing, reconciliationTask == nil else { return }

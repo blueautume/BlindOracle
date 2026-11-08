@@ -21,15 +21,17 @@ import CryptoKit
         }
         for (language, locale) in [(AppLanguage.simplifiedChinese, "zh-Hans"), (.english, "en-US")] {
             defaults.set(language.rawValue, forKey: AppLanguage.preferenceKey)
-            try await AppLanguage.$override.withValue(language) {
-                try await capture(language: language, locale: locale)
+            for market in IapReviewScreenshotMarket.allCases {
+                try await AppLanguage.$override.withValue(language) {
+                    try await capture(language: language, locale: locale, market: market)
+                }
             }
         }
     }
 
-    private func capture(language: AppLanguage, locale: String) async throws {
+    private func capture(language: AppLanguage, locale: String, market: IapReviewScreenshotMarket) async throws {
         IapReviewScreenshotURLProtocol.install(routes: [
-            "/products/": "{\"products\":[{\"product_id\":\"\(productID)\",\"name\":\"补充额度\",\"credits\":1000000,\"currency\":\"CNY\",\"price_milliunits\":6000}]}",
+            "/products/": "{\"products\":[{\"product_id\":\"\(productID)\",\"name\":\"补充额度\",\"credits\":1000000,\"currency\":\"CNY\",\"price_milliunits\":6000,\"prices\":[{\"storefront\":\"CHN\",\"currency\":\"CNY\",\"price_milliunits\":6000},{\"storefront\":\"USA\",\"currency\":\"USD\",\"price_milliunits\":990}]}]}",
             "/me/": "{\"id\":\"\(exampleID)\",\"display_name\":\"示例账号 / Example account\",\"email\":null,\"created_at\":\"2026-11-07T00:00:00Z\"}",
             "/wallet/": #"{"quota":{"remaining_percent":100,"is_unlimited":false,"can_start":true}}"#,
             "/usage/summary/": #"{"request_count":0,"input_tokens":0,"output_tokens":0,"total_tokens":0,"confirmed_cost_cny":"0","unknown_count":0}"#,
@@ -43,7 +45,7 @@ import CryptoKit
             appleUserID: nil)
         let sessions = AccountSessionManager(api: api, vault: IapReviewScreenshotVault(sampleSession))
         let account = AccountStore(api: api, sessions: sessions)
-        let provider = IapReviewScreenshotPurchaseProvider(productID: productID, language: language)
+        let provider = IapReviewScreenshotPurchaseProvider(productID: productID, market: market)
         let purchases = AccountPurchaseStore(api: api, sessions: sessions, provider: provider)
         // No restoration/Apple credential checks: all account metadata comes
         // from this test's memory vault and isolated URLProtocol responses.
@@ -54,8 +56,11 @@ import CryptoKit
                       "Unmatched isolated fixture endpoint: \(IapReviewScreenshotURLProtocol.unexpectedRequests)")
         let product = try XCTUnwrap(purchases.products.first, purchases.message ?? "Expected the isolated approved product")
         XCTAssertEqual(product.id, productID)
-        XCTAssertEqual(product.currency, "CNY")
-        XCTAssertEqual(product.price, Decimal(6))
+        XCTAssertEqual(product.currency, market.currency)
+        XCTAssertEqual(product.price, market.price)
+        XCTAssertEqual(product.displayPrice, market.displayPrice, "The storefront determines the offered price, independently of interface language.")
+        let storefront = await provider.currentStorefront()
+        XCTAssertEqual(storefront, market.storefront)
         XCTAssertTrue(product.isConsumable)
         XCTAssertEqual(product.allowanceTokens, 1_000_000)
         XCTAssertEqual(account.wallet?.quota?.displayedPercent, 100)
@@ -108,7 +113,7 @@ import CryptoKit
         let compactText = text.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "％", with: "%")
         let titleVisible = compactText.contains(language.isEnglish ? "Replenishallowance" : "补充额度")
         let allowanceVisible = compactText.contains("1,000,000Token")
-        let priceVisible = compactText.contains("6.00")
+        let priceVisible = compactText.contains(market.priceText)
         XCTAssertTrue(titleVisible, "The actual view title must be visible")
         XCTAssertTrue(allowanceVisible, "The package Token amount must be rendered before payment")
         XCTAssertFalse(compactText.contains("100%"), "The purchase page does not show remaining allowance")
@@ -129,17 +134,18 @@ import CryptoKit
             throw IapReviewScreenshotError.captureNotValidated
         }
         let screenshot = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
-        screenshot.name = "iap-review-\(locale)"
+        screenshot.name = "iap-review-\(locale)-\(market.storefront)"
         screenshot.lifetime = .keepAlways
         add(screenshot)
         let metadata: [String: Any] = [
             "locale": locale,
+            "storefront": market.storefront,
             "capture_kind": "actual view rendering with isolated catalog fixture; no financial event; not marketing/native-payment validation",
             "rendered_view": "AccountTopUpView",
             "product_id": productID,
             "product_type": "CONSUMABLE",
-            "currency": "CNY",
-            "fixture_price": "6.00",
+            "currency": market.currency,
+            "fixture_price": market.priceText,
             "display_price": product.displayPrice,
             "price_source": "isolated AccountPurchaseProviding fixture; not a live StoreKit price lookup",
             "account_data": "explicit synthetic example account; no private identity or remaining allowance shown",
@@ -162,7 +168,7 @@ import CryptoKit
         ]
         let evidence = XCTAttachment(data: try JSONSerialization.data(withJSONObject: metadata, options: [.prettyPrinted, .sortedKeys]),
                                      uniformTypeIdentifier: "public.json")
-        evidence.name = "iap-review-\(locale)-metadata"
+        evidence.name = "iap-review-\(locale)-\(market.storefront)-metadata"
         evidence.lifetime = .keepAlways
         add(evidence)
     }
@@ -180,17 +186,28 @@ import CryptoKit
 
 private enum IapReviewScreenshotError: Error { case captureNotValidated }
 
+private enum IapReviewScreenshotMarket: CaseIterable {
+    case china, unitedStates
+    var storefront: String { self == .china ? "CHN" : "USA" }
+    var currency: String { self == .china ? "CNY" : "USD" }
+    var price: Decimal { self == .china ? Decimal(6) : Decimal(99) / Decimal(100) }
+    var priceText: String { self == .china ? "6.00" : "0.99" }
+    var displayPrice: String { self == .china ? "¥6.00" : "$0.99" }
+}
+
 @MainActor private final class IapReviewScreenshotPurchaseProvider: AccountPurchaseProviding {
     private let productID: String
-    private let language: AppLanguage
+    private let market: IapReviewScreenshotMarket
     private(set) var purchaseCount = 0
     private(set) var scanCount = 0
-    init(productID: String, language: AppLanguage) { self.productID = productID; self.language = language }
+    init(productID: String, market: IapReviewScreenshotMarket) { self.productID = productID; self.market = market }
     func products(for ids: Set<String>) async throws -> [AccountPurchaseProduct] {
         guard ids == [productID] else { throw AccountAPIError.invalidResponse }
-        return [AccountPurchaseProduct(id: productID, displayPrice: language.isEnglish ? "CN¥6.00" : "¥6.00",
-                                       price: Decimal(6), currency: "CNY", isConsumable: true)]
+        return [AccountPurchaseProduct(id: productID, displayPrice: market.displayPrice,
+                                       price: market.price, currency: market.currency, isConsumable: true)]
     }
+    func currentStorefront() async -> String? { market.storefront }
+    func storefrontUpdates() -> AsyncStream<String?> { AsyncStream { $0.finish() } }
     func purchase(productID: String, accountToken: UUID) async throws -> AccountPurchaseResult {
         purchaseCount += 1
         XCTFail("The review screenshot must never initiate a purchase")

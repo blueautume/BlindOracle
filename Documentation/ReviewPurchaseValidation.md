@@ -1,4 +1,16 @@
-# App Store 凭据恢复修复 · 3.0.21 / 47
+# 人民币与美元购买 · 3.0.36 / 62
+
+同一消耗型商品 `com.lihao.BlindOracle.quota.1m` 按 Apple 当前 App Store storefront 自动选择报价：中国大陆 CHN / CNY 6.00（6000 千分单位），美国 USA / USD 0.99（990 千分单位），均补充 1,000,000。其他地区及未知地区不开放新购买，不按语言、手机地区或 GPS 猜测商店。
+
+服务端目录每个商品保留旧人民币字段，新增 `prices` 数组，每项包含 `storefront`、`currency` 和 `price_milliunits`。客户端只展示匹配当前商店、Apple 实际币种及金额的消耗商品，使用 StoreKit `displayPrice` 显示价格；加载期间或点击付款前地区改变时清除并重载。服务端按官方查单、验签后的交易地区与批准的当前或历史报价交付；当前商店改变不妨碍原地区已付款交易补单。环境隔离、账号归属、仅交付一次和退款规则继续有效。
+
+本地验收：739 项非联网单元测试、2 项账号 UI 测试通过；7 项原生 StoreKitTest 分两次运行通过，中文／英文与人民币／美元四种页面均通过 OCR 并已目检。首次冷启动 Ask-to-Buy 测试挂起后中断，暖机重跑通过，保留原记录且不推断具体原因。另修正一项适配前已存在的测试等待竞态，不修改生产启动逻辑、不放宽精确请求次数断言。未签名 arm64 Release 构建零编译警告，包内无密钥或 StoreKit 测试资源。后端本地 270 项中 253 项通过、17 项条件跳过；本机没有 PostgreSQL，不将并发跳过视为通过。详细证据在 `Validation.json` 和 `build/regional-3.0.36-62/`。
+
+发布前需部署配套后端及迁移，并在 App Store Connect 核对该商品中国大陆与美国均可用、对应价格为 CNY 6.00 / USD 0.99、付费协议有效、商品已关联送审版本。新增价目迁移不会启用原本未启用的正式商品，也不代表 Apple 已批准。应以实际分发包分别验证两地区的商品、付款、断线补单、重复验单与退款；本地模拟和 StoreKitTest 不能替代真实 Sandbox 或 App Review 验收。
+
+审核入口：Sign in with Apple → **Data → Usage → Replenish allowance → Purchase**。审核备注应说明当前仅支持 China mainland 和 United States storefronts，价格由 Apple 返回；无需修改设备语言或定位，不要求审核人员切换为中国大陆测试账号。
+
+## 历史：App Store 凭据恢复修复 · 3.0.21 / 47
 
 3.0.20/46 真实 TestFlight 验收未通过：用户安装后停留在「暂时无法确认购买环境，请重试」启动页，尚未构建账号与 AI 服务。原实现将错误和未验证结果合并，恢复按钮仅再次读取 `AppTransaction.shared`，缺少 Apple 文档建议的显式刷新恢复路径。截图不能确定底层 StoreKit 错误码，不将其归因于账号服务器或备案拦截。
 

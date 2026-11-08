@@ -2,17 +2,18 @@
   "date": "2026-11-08",
   "xcode": "27.2 (27B52)",
   "minimum_iOS": "17.0",
-  "release_arm64_bundle_bytes": 19557254,
+  "release_arm64_bundle_bytes": 30227712,
   "release_contains_development_key_resource": false,
   "source_credential_matches": null,
   "release_credential_matches": 0,
-  "unit_tests_passed": 673,
-  "ui_tests_passed": 8,
+  "unit_tests_passed": 739,
+  "ui_tests_passed": 2,
   "live_api_tests_passed": 0,
   "default_live_test_skipped_intentionally": 3,
   "local_plugin_count": 10,
-  "release_is_signed": true,
+  "release_is_signed": false,
   "notes": [
+    "Regional IAP 3.0.36 / 62: Apple storefront CHN selects approved CNY pricing and USA selects USD; other/unknown regions cannot start a new purchase. The shared SKU defaults to CNY 6.00 / USD 0.99 for 1,000,000 allowance, while StoreKit owns displayPrice and the server owns current/history price approvals. Loading, updates and payment recheck region and reject stale prices; already-paid transactions recover under their original Apple-signed region. Final 739 non-live unit tests and two account UI tests passed. Four Chinese/English x CNY/USD view captures passed OCR and were visually inspected. Seven distinct native StoreKit tests passed across the six-test run and the warmed Ask-to-Buy run; an initial cold Ask-to-Buy stall was interrupted and retained in storekit-initial-interrupted.log, not attributed to a proven root cause. An existing pre-adaptation launch test race was reproduced and fixed by waiting for native completion and the separate recovery task, without changing production launch behavior or relaxing the exact request assertion. Signed-out catalog loading avoids Apple queries. Unsigned arm64 Release build passed with zero compiler warnings, AppleVerified routing, unchanged bundle ID and no credentials or StoreKit test assets. Backend main 391d69c has local 270-test evidence: 253 passed and 17 conditional skips, with no local PostgreSQL. No live purchase, physical-device validation, deployment, App Store Connect change or store upload is asserted. Evidence: build/regional-3.0.36-62/.",
     "Baseline checkpoint 3.0.35 / 61: preserved the existing localization catalog cleanup and two icon exploration source directories before merging to main. Version consistency and staged secret checks only; earlier functional evidence retains its actual version. No new archive, store upload or deployment for this checkpoint.",
     "Cancelled refresh recovery 3.0.34 / 60: A manually requested StoreKit refresh returning typed userCancelled gets exactly one fresh shared read, with no extra refresh or HTTPS probe. The original verified signature/Bundle/environment/JWS admission remains mandatory. Failure, timeout and late results cannot replenish the read allowance; late cancellation after a manual timeout uses the same bounded path. Final combined regression passed all 737 selected tests: 723 non-live units and 14 UI cases, including the two cancellation-recovery flows whose screenshots were inspected. Initial DEBUG fixture ordering failures were corrected and the entire suite rerun; no cancellation fixture markers are in Release. Signed archive has zero compiler warnings and distribution candidate checks passed. Apple acknowledged Upload succeeded and Uploaded package is processing. Affected physical-tester recovery and TestFlight download readiness are not asserted. Evidence: build/cancel-recovery-3.0.34-60-upload.log.",
     "Launch timing recovery 3.0.33 / 59: HTTPS readiness waiting excludes the StoreKit retry budget; foreground/network recovery is bounded and only reads shared automatically. SDK calls stay serial until actual completion, including after UI timeout. Diagnostics persist first and wait for active idle delivery, with cancellation awaiting native URLSession task completion. Final 718 non-live unit tests and 12 UI regressions passed; network-wait and recovery-copy screenshots were inspected. Signed Release archive has zero compiler warnings and distribution candidate checks passed. Apple acknowledged Upload succeeded and Uploaded package is processing. No physical-device permission grant or affected-tester recovery is asserted; TestFlight download readiness remains unverified. Evidence: build/launch-timing-3.0.33-59-upload.log.",
@@ -76,14 +77,14 @@
     "Earlier offline tarot deck, keyboard, broader interaction, and history regression evidence remains at the retained paths. No reasoning_content is decoded, displayed, or persisted.",
     "Changing the requested method while supplying data preserves the original question, applies the new method, and requires a new summary confirmation. A clock correction alone cannot change methods; ambiguous questions or negative replies cannot act as confirmation."
   ],
-  "unit_test_result": "build/gateway-limits-3.0.27-53-unit-final.xcresult",
-  "final_ui_result": "build/meihua-numbers-3.0.26-52-ui.xcresult",
+  "unit_test_result": "build/regional-3.0.36-62/verified-regression.xcresult",
+  "final_ui_result": "build/regional-3.0.36-62/verified-regression.xcresult",
   "live_api_result": "build-conversation/live-verified.xcresult",
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "3.0.35",
-  "build": "61",
+  "version": "3.0.36",
+  "build": "62",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",
@@ -2412,5 +2413,38 @@
       "Design/IconExplorations/2026-11-02-xiazi-40/",
       "Design/IconExplorations/2026-11-02-xiazi-young-ink-3/"
     ]
+  },
+  "regional_iap_validation": {
+    "version": "3.0.36",
+    "build": 62,
+    "storefronts": {
+      "CHN": {
+        "currency": "CNY",
+        "price_milliunits": 6000
+      },
+      "USA": {
+        "currency": "USD",
+        "price_milliunits": 990
+      }
+    },
+    "non_live_unit_tests_passed": 739,
+    "ui_tests_passed": 2,
+    "rendered_language_currency_combinations": 4,
+    "native_storekit_tests_passed": 7,
+    "native_storekit_results": [
+      "build/regional-3.0.36-62/storekit-six.xcresult",
+      "build/regional-3.0.36-62/storekit-ask.xcresult"
+    ],
+    "release_build": "build/regional-3.0.36-62/release-build.log",
+    "release_verification": "build/regional-3.0.36-62/release-verification.json",
+    "backend_commit": "391d69c",
+    "backend_tests": {
+      "total": 270,
+      "passed": 253,
+      "skipped": 17
+    },
+    "live_purchase_tested": false,
+    "deployed": false,
+    "app_store_connect_modified": false
   }
 }

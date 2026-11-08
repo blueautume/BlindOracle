@@ -12,20 +12,20 @@ final class StoreKitLocalPurchaseTests: XCTestCase {
     private let configurationGuardID = "com.lihao.BlindOracle.localtest.configuration.guard"
     @MainActor private var updatesObserver: Task<Void, Never>?
 
-    @MainActor private func makeSession() async throws -> SKTestSession {
+    @MainActor private func makeSession(_ market: LocalStoreKitMarket = .china) async throws -> SKTestSession {
         print("[Local StoreKit] Initializing the local test session.")
         let bundle = Bundle(for: Self.self)
         let url = try XCTUnwrap(
-            bundle.url(forResource: "QuotaProducts", withExtension: "storekit", subdirectory: "Fixtures")
-                ?? bundle.url(forResource: "QuotaProducts", withExtension: "storekit"),
-            "QuotaProducts.storekit must be copied into the test bundle, not the shipping app."
+            bundle.url(forResource: market.configurationName, withExtension: "storekit", subdirectory: "Fixtures")
+                ?? bundle.url(forResource: market.configurationName, withExtension: "storekit"),
+            "\(market.configurationName).storekit must be copied into the test bundle, not the shipping app."
         )
         let session = try SKTestSession(contentsOf: url)
         session.resetToDefaultState()
         session.clearTransactions()
         session.disableDialogs = true
-        session.storefront = "CHN"
-        session.locale = Locale(identifier: "zh_CN")
+        session.storefront = market.storefront
+        session.locale = Locale(identifier: market.locale)
         LocalStoreKitRejectingURLProtocol.reset()
         // SKTestSession can log a configuration error without throwing, and
         // StoreKit may then use the real App Store. An actual SKU and price do
@@ -35,7 +35,7 @@ final class StoreKitLocalPurchaseTests: XCTestCase {
         let markers = try await Product.products(for: [configurationGuardID])
         guard markers.contains(where: {
             $0.id == configurationGuardID && $0.displayName == "Local configuration guard"
-                && $0.price == Decimal(1) / Decimal(100) && $0.priceFormatStyle.currencyCode == "CNY"
+                && $0.price == Decimal(1) / Decimal(100) && $0.priceFormatStyle.currencyCode == market.currency
         }) else {
             XCTFail("The local StoreKit configuration is not active. Use the dedicated StoreKit scheme and a supported simulator; never continue with a real App Store purchase.")
             throw LocalStoreKitFailure.configurationNotActive
@@ -104,11 +104,38 @@ final class StoreKitLocalPurchaseTests: XCTestCase {
         XCTAssertEqual(product.currency, "CNY")
         XCTAssertTrue(product.isConsumable)
         XCTAssertFalse(product.displayPrice.isEmpty)
+        let storefront = await provider.currentStorefront()
+        XCTAssertEqual(storefront, "CHN")
+    }
+
+    @MainActor func testNativeProductsUseUSAStorefrontAndLocalizedNinetyNineCentUSDPrice() async throws {
+        let session = try await makeSession(.unitedStates)
+        defer { clean(session) }
+        let provider = try await provider()
+        let storefront = await provider.currentStorefront()
+        XCTAssertEqual(storefront, "USA", "Use StoreKit's current storefront, independently of the interface language.")
+        let products = try await provider.products(for: [productID])
+        let product = try XCTUnwrap(products.first)
+        XCTAssertEqual(product.id, productID)
+        XCTAssertEqual(product.price, Decimal(99) / Decimal(100))
+        XCTAssertEqual(product.currency, "USD")
+        XCTAssertTrue(product.isConsumable)
+        XCTAssertFalse(product.displayPrice.isEmpty)
     }
 
     @MainActor func testNativeXcodePurchaseCannotEnterEitherRealServiceAndRemainsUnfinished() async throws {
         let session = try await makeSession()
         defer { clean(session) }
+        try await assertNativePurchaseRemainsLocal()
+    }
+
+    @MainActor func testNativeUSDXcodePurchaseCannotEnterEitherRealServiceAndRemainsUnfinished() async throws {
+        let session = try await makeSession(.unitedStates)
+        defer { clean(session) }
+        try await assertNativePurchaseRemainsLocal()
+    }
+
+    @MainActor private func assertNativePurchaseRemainsLocal() async throws {
         let provider = try await provider()
         let accountID = UUID()
         let result = try await provider.purchase(productID: productID, accountToken: accountID)
@@ -207,6 +234,14 @@ final class StoreKitLocalPurchaseTests: XCTestCase {
         XCTAssertEqual(resolved.appAccountToken, accountID)
         XCTAssertEqual(LocalStoreKitRejectingURLProtocol.requestCount, 0)
     }
+}
+
+private enum LocalStoreKitMarket {
+    case china, unitedStates
+    var configurationName: String { self == .china ? "QuotaProducts" : "QuotaProductsUSD" }
+    var storefront: String { self == .china ? "CHN" : "USA" }
+    var locale: String { self == .china ? "zh_CN" : "en_US" }
+    var currency: String { self == .china ? "CNY" : "USD" }
 }
 
 private enum LocalStoreKitFailure: Error { case configurationNotActive, missingTransaction }

@@ -119,13 +119,54 @@ struct AccountUsageSummary: Decodable, Equatable, Sendable {
 }
 
 struct AccountProductCatalog: Decodable, Sendable {
+    struct Price: Decodable, Sendable {
+        var storefront: String
+        var currency: String
+        var priceMilliunits: Decimal
+        enum CodingKeys: String, CodingKey { case storefront, currency, priceMilliunits = "price_milliunits" }
+    }
     struct Item: Decodable, Sendable {
         var productID: String
         var name: String
         var currency: String
         var priceMilliunits: Decimal
         var credits: Int?
-        enum CodingKeys: String, CodingKey { case productID = "product_id", name, currency, credits, priceMilliunits = "price_milliunits" }
+        var prices: [Price]?
+        enum CodingKeys: String, CodingKey { case productID = "product_id", name, currency, credits, prices, priceMilliunits = "price_milliunits" }
+
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            productID = try values.decode(String.self, forKey: .productID)
+            name = try values.decode(String.self, forKey: .name)
+            currency = try values.decode(String.self, forKey: .currency)
+            priceMilliunits = try values.decode(Decimal.self, forKey: .priceMilliunits)
+            credits = try values.decodeIfPresent(Int.self, forKey: .credits)
+            // Only an absent field is a legacy catalog. An explicit empty list
+            // disables offers, and malformed/null regional prices fail closed.
+            prices = values.contains(.prices) ? try values.decode([Price].self, forKey: .prices) : nil
+        }
+
+        func approvedPrice(for storefront: String) -> Price? {
+            let expectedCurrency: String
+            switch storefront {
+            case "CHN": expectedCurrency = "CNY"
+            case "USA": expectedCurrency = "USD"
+            default: return nil
+            }
+            let matches: [Price]
+            if let prices { matches = prices.filter { $0.storefront == storefront } }
+            else if storefront == "CHN" {
+                matches = [Price(storefront: storefront, currency: currency, priceMilliunits: priceMilliunits)]
+            } else { return nil }
+            guard matches.count == 1, let price = matches.first,
+                  price.currency == expectedCurrency, !price.priceMilliunits.isNaN,
+                  price.priceMilliunits > 0, price.priceMilliunits <= Decimal(Int64.max) else { return nil }
+            var amount = price.priceMilliunits
+            var rounded = Decimal()
+            NSDecimalRound(&rounded, &amount, 0, .plain)
+            guard rounded == amount else { return nil }
+            return price
+        }
     }
     var products: [Item]
 }

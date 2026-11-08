@@ -1,5 +1,6 @@
 import XCTest
 import StoreKit
+import Combine
 @testable import BlindOracle
 
 final class ServiceEnvironmentTests: XCTestCase {
@@ -606,10 +607,30 @@ final class ServiceEnvironmentTests: XCTestCase {
         await coordinator.resolve()
         let manual = Task { await coordinator.retryFromUser() }
         await reporter.waitForTimeoutReport()
+        // Keep timeout persistence suspended until the late native completion
+        // actually reaches the coordinator. A fixed number of yields does not
+        // establish that ordering under a busy test runner.
+        let nativeCompletion = expectation(description: "Late refresh cancellation reached the coordinator")
+        let completionObservation = coordinator.$isWaitingForStoreKit.dropFirst().sink { waiting in
+            if !waiting { nativeCompletion.fulfill() }
+        }
         await provider.cancelRefresh()
-        for _ in 0..<30 { await Task.yield() }
+        await fulfillment(of: [nativeCompletion], timeout: 2)
+        completionObservation.cancel()
+        let whilePersisting = await provider.requests
+        XCTAssertEqual(whilePersisting, [.current, .userInitiatedRefresh], "The original flight must finish persistence before a dedicated read starts")
         await reporter.release()
         await manual.value
+        // The original flight schedules the dedicated read in a separate Task;
+        // awaiting manual.value does not await that child's SDK request.
+        for _ in 0..<200 {
+            if await provider.requests.count >= 3, coordinator.state == .recoveryRequired,
+               coordinator.failure?.kind == .unavailable, !coordinator.isWaitingForStoreKit { break }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertEqual(coordinator.state, .recoveryRequired)
+        XCTAssertEqual(coordinator.failure?.kind, .unavailable)
+        XCTAssertFalse(coordinator.isWaitingForStoreKit)
         await coordinator.setApplicationActive(false)
         await coordinator.setApplicationActive(true)
         await coordinator.networkDidChange()
