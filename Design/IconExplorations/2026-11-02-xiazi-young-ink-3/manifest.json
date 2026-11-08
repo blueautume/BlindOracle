@@ -1,0 +1,32 @@
+{
+  "count" : 3,
+  "date" : "2026-11-02",
+  "generator" : "Built-in ImageGen",
+  "icons" : [
+    {
+      "file" : "01-young-sage.png",
+      "height" : 1254,
+      "id" : "01",
+      "promptFile" : "prompt-01.txt",
+      "title" : "沉静亲和",
+      "width" : 1254
+    },
+    {
+      "file" : "02-young-sage.png",
+      "height" : 1254,
+      "id" : "02",
+      "promptFile" : "prompt-02.txt",
+      "title" : "清朗温润",
+      "width" : 1254
+    },
+    {
+      "file" : "03-young-sage.png",
+      "height" : 1254,
+      "id" : "03",
+      "promptFile" : "prompt-03.txt",
+      "title" : "松弛含笑",
+      "width" : 1254
+    }
+  ],
+  "project" : "瞎子"
+}
