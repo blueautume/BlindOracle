@@ -2,7 +2,7 @@
   "date": "2026-11-08",
   "xcode": "27.2 (27B52)",
   "minimum_iOS": "17.0",
-  "release_arm64_bundle_bytes": 30227712,
+  "release_arm64_bundle_bytes": 19904836,
   "release_contains_development_key_resource": false,
   "source_credential_matches": null,
   "release_credential_matches": 0,
@@ -11,8 +11,9 @@
   "live_api_tests_passed": 0,
   "default_live_test_skipped_intentionally": 3,
   "local_plugin_count": 10,
-  "release_is_signed": false,
+  "release_is_signed": true,
   "notes": [
+    "First release numbering 3.0.300 / Build 63: user-requested first release version. Only four version metadata files changed from 92c9954; runtime code remains the tested CNY/USD implementation from 3.0.36 / 62. Signed archive and exported App Store distribution IPA passed version, bundle ID, AppleVerified routing, entitlement/profile/privacy, credential and test-asset checks with zero compiler warnings. Actual export and upload options have testFlightInternalTestingOnly=false and manageAppVersionAndBuildNumber=false. Apple acknowledged Upload succeeded at 2026-11-08 20:46:08 +08:00; App Store Connect completed processing and shows build 63 Ready to Submit without the Internal label. Existing review build 60 was left untouched; no build selector was opened, no review build selected/saved, and no App Review submission or public release performed. The 739 non-live unit, two UI and seven native StoreKit test results retain their actual 3.0.36 / 62 version; this metadata-only batch did not rerun them. Evidence: build/release-3.0.300-63/asc-verification.json, candidate-verification.json and upload.log.",
     "Regional IAP 3.0.36 / 62: Apple storefront CHN selects approved CNY pricing and USA selects USD; other/unknown regions cannot start a new purchase. The shared SKU defaults to CNY 6.00 / USD 0.99 for 1,000,000 allowance, while StoreKit owns displayPrice and the server owns current/history price approvals. Loading, updates and payment recheck region and reject stale prices; already-paid transactions recover under their original Apple-signed region. Final 739 non-live unit tests and two account UI tests passed. Four Chinese/English x CNY/USD view captures passed OCR and were visually inspected. Seven distinct native StoreKit tests passed across the six-test run and the warmed Ask-to-Buy run; an initial cold Ask-to-Buy stall was interrupted and retained in storekit-initial-interrupted.log, not attributed to a proven root cause. An existing pre-adaptation launch test race was reproduced and fixed by waiting for native completion and the separate recovery task, without changing production launch behavior or relaxing the exact request assertion. Signed-out catalog loading avoids Apple queries. Unsigned arm64 Release build passed with zero compiler warnings, AppleVerified routing, unchanged bundle ID and no credentials or StoreKit test assets. Backend main 391d69c has local 270-test evidence: 253 passed and 17 conditional skips, with no local PostgreSQL. No live purchase, physical-device validation, deployment, App Store Connect change or store upload is asserted. Evidence: build/regional-3.0.36-62/.",
     "Baseline checkpoint 3.0.35 / 61: preserved the existing localization catalog cleanup and two icon exploration source directories before merging to main. Version consistency and staged secret checks only; earlier functional evidence retains its actual version. No new archive, store upload or deployment for this checkpoint.",
     "Cancelled refresh recovery 3.0.34 / 60: A manually requested StoreKit refresh returning typed userCancelled gets exactly one fresh shared read, with no extra refresh or HTTPS probe. The original verified signature/Bundle/environment/JWS admission remains mandatory. Failure, timeout and late results cannot replenish the read allowance; late cancellation after a manual timeout uses the same bounded path. Final combined regression passed all 737 selected tests: 723 non-live units and 14 UI cases, including the two cancellation-recovery flows whose screenshots were inspected. Initial DEBUG fixture ordering failures were corrected and the entire suite rerun; no cancellation fixture markers are in Release. Signed archive has zero compiler warnings and distribution candidate checks passed. Apple acknowledged Upload succeeded and Uploaded package is processing. Affected physical-tester recovery and TestFlight download readiness are not asserted. Evidence: build/cancel-recovery-3.0.34-60-upload.log.",
@@ -83,8 +84,8 @@
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "3.0.36",
-  "build": "62",
+  "version": "3.0.300",
+  "build": "63",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",
@@ -2446,5 +2447,22 @@
     "live_purchase_tested": false,
     "deployed": false,
     "app_store_connect_modified": false
+  },
+  "first_release_candidate": {
+    "version": "3.0.300",
+    "build": 63,
+    "archive_zero_compiler_warnings": true,
+    "distribution": "app-store-connect",
+    "internal_testing_only": false,
+    "upload_succeeded": true,
+    "apple_processing_completed": true,
+    "asc_status": "Ready to Submit",
+    "direct_review_selector_checked": false,
+    "existing_review_build_changed": false,
+    "app_review_submitted": false,
+    "public_release_performed": false,
+    "functional_tests_retained_from": "3.0.36 / 62",
+    "new_functional_tests_run": false,
+    "evidence_directory": "build/release-3.0.300-63/"
   }
 }
