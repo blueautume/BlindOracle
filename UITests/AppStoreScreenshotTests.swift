@@ -18,7 +18,7 @@ final class AppStoreScreenshotTests: XCTestCase {
         let locale = isChinese ? "zh-Hans" : "en-US"
 
         let chat = launch(language: language)
-        let input = chat.textFields["questionInput"]
+        let input = chat.textViews["questionInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 15))
         capture("appstore-\(locale)-01-question", app: chat)
         input.tap()
@@ -58,7 +58,7 @@ final class AppStoreScreenshotTests: XCTestCase {
         if profile.frame.width > 700 {
             // iPad presents editors in a centered sheet. Enter through Chat
             // so its background cannot expose the DEBUG account fixture.
-            let question = profile.textFields["questionInput"]
+            let question = profile.textViews["questionInput"]
             XCTAssertTrue(question.waitForExistence(timeout: 15))
             question.tap()
             question.typeText(isChinese

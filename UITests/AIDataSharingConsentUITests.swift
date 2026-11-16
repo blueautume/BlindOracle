@@ -23,7 +23,7 @@ final class AIDataSharingConsentUITests: XCTestCase {
 
     @MainActor func testDecliningKeepsDraftAndLocalDataAccessible() {
         let app = launch()
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 15))
         let draft = "这是一条尚未发送的问题"
         input.tap(); input.typeText(draft)
@@ -45,7 +45,7 @@ final class AIDataSharingConsentUITests: XCTestCase {
 
     @MainActor func testAgreementContinuesPendingSendAndWithdrawalRequiresConsentAgain() {
         let app = launch()
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 15))
         let question = "只用塔罗看看今年工作的方向"
         input.tap(); input.typeText(question)

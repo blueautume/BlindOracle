@@ -96,6 +96,10 @@ F0B356011F6FAEF59E7D63A4 = { isa = PBXFileReference; lastKnownFileType = "source
 587B702876373BF0CEF258DE = { isa = PBXBuildFile; fileRef = F0B356011F6FAEF59E7D63A4; };
 5A2E1DF210081A5759E67370 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/ServiceEnvironment.swift"; sourceTree = "<group>"; };
 7A9C9C9A84BA9FEC99282902 = { isa = PBXBuildFile; fileRef = 5A2E1DF210081A5759E67370; };
+A23292CBB2E801CA62C6365A = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/SpeechInputController.swift"; sourceTree = "<group>"; };
+2CED4AB56125ED40FC9500CC = { isa = PBXBuildFile; fileRef = A23292CBB2E801CA62C6365A; };
+BC098EBF8C89F9BA0DFA4AC1 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Services/SpeechInputTesting.swift"; sourceTree = "<group>"; };
+D4F29C5AB0622B2EBC47EC3C = { isa = PBXBuildFile; fileRef = BC098EBF8C89F9BA0DFA4AC1; };
 AD8DAFF1E2D591F4547537AA = { isa = PBXFileReference; lastKnownFileType = "sourcecode.c.c"; path = "Vendor/Astronomy/BlindOracleSky.c"; sourceTree = "<group>"; };
 77D1B4D6E941FE3FA21B98A8 = { isa = PBXBuildFile; fileRef = AD8DAFF1E2D591F4547537AA; };
 B23A91BB4F68D3CBD8864718 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.c.c"; path = "Vendor/Astronomy/astronomy.c"; sourceTree = "<group>"; };
@@ -178,6 +182,8 @@ AAAE2095FD8E3FA1AD8875F7 = { isa = PBXFileReference; lastKnownFileType = "source
 0B77E5E4F7CFB30FC448AFB9 = { isa = PBXBuildFile; fileRef = 458DA343CF351A710189AD91; };
 85A686C20CF5424466E74A5D = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/GroupIntakeView.swift"; sourceTree = "<group>"; };
 04840FBF67C1A7637ADAF6AD = { isa = PBXBuildFile; fileRef = 85A686C20CF5424466E74A5D; };
+82182E3C5EB8025377B6D27B = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/HoldToDictateTextInput.swift"; sourceTree = "<group>"; };
+350DA42D867641B39E70A71C = { isa = PBXBuildFile; fileRef = 82182E3C5EB8025377B6D27B; };
 8C2D6782D5487BC856F682EB = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/InkTheme.swift"; sourceTree = "<group>"; };
 A610D2D8AFAD6041D279FAAC = { isa = PBXBuildFile; fileRef = 8C2D6782D5487BC856F682EB; };
 DBC60C2872AB143498164C85 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Views/IntakeView.swift"; sourceTree = "<group>"; };
@@ -271,6 +277,8 @@ FBDC4F23F93125BBEEAE800C = { isa = PBXGroup; children = (
     8E51DBF45614D11AA84C0EC5,
     F0B356011F6FAEF59E7D63A4,
     5A2E1DF210081A5759E67370,
+    A23292CBB2E801CA62C6365A,
+    BC098EBF8C89F9BA0DFA4AC1,
     AD8DAFF1E2D591F4547537AA,
     B23A91BB4F68D3CBD8864718,
     33DBC853DD9D605566BA52A8,
@@ -312,6 +320,7 @@ FBDC4F23F93125BBEEAE800C = { isa = PBXGroup; children = (
     AAAE2095FD8E3FA1AD8875F7,
     458DA343CF351A710189AD91,
     85A686C20CF5424466E74A5D,
+    82182E3C5EB8025377B6D27B,
     8C2D6782D5487BC856F682EB,
     DBC60C2872AB143498164C85,
     A9908ED988795AD060EACED1,
@@ -382,6 +391,8 @@ FBDC4F23F93125BBEEAE800C = { isa = PBXGroup; children = (
     51E04D8379A6DB36BF561F9F,
     587B702876373BF0CEF258DE,
     7A9C9C9A84BA9FEC99282902,
+    2CED4AB56125ED40FC9500CC,
+    D4F29C5AB0622B2EBC47EC3C,
     77D1B4D6E941FE3FA21B98A8,
     C27D346B01DDF74439BD2A66,
     3DE6CBA0A22BDCD953774104,
@@ -423,6 +434,7 @@ FBDC4F23F93125BBEEAE800C = { isa = PBXGroup; children = (
     876ECDAAA3EB1315056096B9,
     0B77E5E4F7CFB30FC448AFB9,
     04840FBF67C1A7637ADAF6AD,
+    350DA42D867641B39E70A71C,
     A610D2D8AFAD6041D279FAAC,
     5DA2F73375E50353D155104C,
     5C710B275462269B0D966C86,
@@ -449,14 +461,14 @@ F01580CCB5F725E4E879D491 = { isa = PBXFrameworksBuildPhase; buildActionMask = 21
 1FA51788B7965A8459664B67 = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = "5.0"; IPHONEOS_DEPLOYMENT_TARGET = "17.0"; SDKROOT = "iphoneos"; CODE_SIGN_STYLE = "Automatic"; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_STRICT_CONCURRENCY = "minimal"; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; GCC_C_LANGUAGE_STANDARD = "gnu11"; ENABLE_USER_SCRIPT_SANDBOXING = NO; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; HEADER_SEARCH_PATHS = (
     "$(inherited)",
     "$(SRCROOT)/Vendor/Astronomy",
-); PRODUCT_BUNDLE_IDENTIFIER = "com.lihao.BlindOracle"; BLINDORACLE_SANDBOX = "NO"; BLINDORACLE_APP_DISPLAY_NAME = "瞎子"; BLINDORACLE_APP_DISPLAY_NAME_EN = "BlindOracle"; ORACLE_SERVICE_ENVIRONMENT = "Production"; ORACLE_SERVICE_ENVIRONMENT_RESOLUTION = "AppleVerified"; DEVELOPMENT_TEAM = "A82X46N3WS"; INFOPLIST_FILE = "App/Info.plist"; CODE_SIGN_ENTITLEMENTS = "App/BlindOracle.entitlements"; CURRENT_PROJECT_VERSION = 64; MARKETING_VERSION = 3.0.301; ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon"; SWIFT_OBJC_BRIDGING_HEADER = "App/BlindOracle-Bridging-Header.h"; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = "dwarf"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; GCC_PREPROCESSOR_DEFINITIONS = (
+); PRODUCT_BUNDLE_IDENTIFIER = "com.lihao.BlindOracle"; BLINDORACLE_SANDBOX = "NO"; BLINDORACLE_APP_DISPLAY_NAME = "瞎子"; BLINDORACLE_APP_DISPLAY_NAME_EN = "BlindOracle"; ORACLE_SERVICE_ENVIRONMENT = "Production"; ORACLE_SERVICE_ENVIRONMENT_RESOLUTION = "AppleVerified"; DEVELOPMENT_TEAM = "A82X46N3WS"; INFOPLIST_FILE = "App/Info.plist"; CODE_SIGN_ENTITLEMENTS = "App/BlindOracle.entitlements"; CURRENT_PROJECT_VERSION = 66; MARKETING_VERSION = 3.0.303; ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon"; SWIFT_OBJC_BRIDGING_HEADER = "App/BlindOracle-Bridging-Header.h"; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = "dwarf"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; GCC_PREPROCESSOR_DEFINITIONS = (
     "DEBUG=1",
     "$(inherited)",
 ); ENABLE_TESTABILITY = YES; }; name = "Debug"; };
 8AD3BB4A5DF33E553662F892 = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = "5.0"; IPHONEOS_DEPLOYMENT_TARGET = "17.0"; SDKROOT = "iphoneos"; CODE_SIGN_STYLE = "Automatic"; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_STRICT_CONCURRENCY = "minimal"; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; GCC_C_LANGUAGE_STANDARD = "gnu11"; ENABLE_USER_SCRIPT_SANDBOXING = NO; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; HEADER_SEARCH_PATHS = (
     "$(inherited)",
     "$(SRCROOT)/Vendor/Astronomy",
-); PRODUCT_BUNDLE_IDENTIFIER = "com.lihao.BlindOracle"; BLINDORACLE_SANDBOX = "NO"; BLINDORACLE_APP_DISPLAY_NAME = "瞎子"; BLINDORACLE_APP_DISPLAY_NAME_EN = "BlindOracle"; ORACLE_SERVICE_ENVIRONMENT = "Production"; ORACLE_SERVICE_ENVIRONMENT_RESOLUTION = "AppleVerified"; DEVELOPMENT_TEAM = "A82X46N3WS"; INFOPLIST_FILE = "App/Info.plist"; CODE_SIGN_ENTITLEMENTS = "App/BlindOracle.entitlements"; CURRENT_PROJECT_VERSION = 64; MARKETING_VERSION = 3.0.301; ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon"; SWIFT_OBJC_BRIDGING_HEADER = "App/BlindOracle-Bridging-Header.h"; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)"; }; name = "Release"; };
+); PRODUCT_BUNDLE_IDENTIFIER = "com.lihao.BlindOracle"; BLINDORACLE_SANDBOX = "NO"; BLINDORACLE_APP_DISPLAY_NAME = "瞎子"; BLINDORACLE_APP_DISPLAY_NAME_EN = "BlindOracle"; ORACLE_SERVICE_ENVIRONMENT = "Production"; ORACLE_SERVICE_ENVIRONMENT_RESOLUTION = "AppleVerified"; DEVELOPMENT_TEAM = "A82X46N3WS"; INFOPLIST_FILE = "App/Info.plist"; CODE_SIGN_ENTITLEMENTS = "App/BlindOracle.entitlements"; CURRENT_PROJECT_VERSION = 66; MARKETING_VERSION = 3.0.303; ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon"; SWIFT_OBJC_BRIDGING_HEADER = "App/BlindOracle-Bridging-Header.h"; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)"; }; name = "Release"; };
 60EA43DB068BD71C9709BED5 = { isa = XCConfigurationList; buildConfigurations = (
     1FA51788B7965A8459664B67,
     8AD3BB4A5DF33E553662F892,
@@ -547,6 +559,8 @@ C336DE80D20BB10B10D16E05 = { isa = PBXBuildFile; fileRef = BE55F98D9D3E05A5FF301
 62FEC7733241E74A868879E7 = { isa = PBXBuildFile; fileRef = 5498D7F0E5F2E5E2FB8A6799; };
 CCE4C06BC3AF8C82E110A377 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/SolarReadinessContinuationTests.swift"; sourceTree = "<group>"; };
 A8FEB79DEB9646C574065D4D = { isa = PBXBuildFile; fileRef = CCE4C06BC3AF8C82E110A377; };
+E748EF0272AC868516899BF3 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/SpeechInputControllerTests.swift"; sourceTree = "<group>"; };
+35D3863939E3D95980D9AC95 = { isa = PBXBuildFile; fileRef = E748EF0272AC868516899BF3; };
 35E4D0E2DCF7976EAC5FD95F = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/StoreKitLocalPurchaseTests.swift"; sourceTree = "<group>"; };
 0654D4A332F63734E0A216C2 = { isa = PBXBuildFile; fileRef = 35E4D0E2DCF7976EAC5FD95F; };
 2660E297A06FA807B423590F = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "Tests/TarotPluginTests.swift"; sourceTree = "<group>"; };
@@ -600,6 +614,7 @@ DFD4894D9D213E0155E03331 = { isa = PBXBuildFile; fileRef = 6F7C2242AC1FABACA52B0
     BE55F98D9D3E05A5FF30160D,
     5498D7F0E5F2E5E2FB8A6799,
     CCE4C06BC3AF8C82E110A377,
+    E748EF0272AC868516899BF3,
     35E4D0E2DCF7976EAC5FD95F,
     2660E297A06FA807B423590F,
     8039C36685EC6830637ED006,
@@ -648,6 +663,7 @@ EC2E9EAA9E1CA4B18AE2370A = { isa = PBXSourcesBuildPhase; buildActionMask = 21474
     C336DE80D20BB10B10D16E05,
     62FEC7733241E74A868879E7,
     A8FEB79DEB9646C574065D4D,
+    35D3863939E3D95980D9AC95,
     0654D4A332F63734E0A216C2,
     9C79F323EE8960ED9D06526C,
     3A1F69ADF00F6010617C39AA,
@@ -712,6 +728,8 @@ BF20B46C59FF9D96E2637E58 = { isa = PBXFileReference; lastKnownFileType = "source
 51EC3E8B650FB2A8AF7218C0 = { isa = PBXBuildFile; fileRef = BF20B46C59FF9D96E2637E58; };
 B673BDAA72D5374F03470678 = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/ServiceEnvironmentUITests.swift"; sourceTree = "<group>"; };
 69947290A08182A9DE28E509 = { isa = PBXBuildFile; fileRef = B673BDAA72D5374F03470678; };
+9BC7A834A440E922921D009C = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/SpeechInputUITests.swift"; sourceTree = "<group>"; };
+019B932007C7614B94EDFDC2 = { isa = PBXBuildFile; fileRef = 9BC7A834A440E922921D009C; };
 F91A3C59684243187AA739DC = { isa = PBXFileReference; lastKnownFileType = "sourcecode.swift"; path = "UITests/TrueSolarCastingUITests.swift"; sourceTree = "<group>"; };
 109A6CA1D03620EE1470D0C6 = { isa = PBXBuildFile; fileRef = F91A3C59684243187AA739DC; };
 666C2AE724655A458A689DF0 = { isa = PBXGroup; children = (
@@ -731,6 +749,7 @@ F91A3C59684243187AA739DC = { isa = PBXFileReference; lastKnownFileType = "source
     2117640136054B5D1E93DE6A,
     BF20B46C59FF9D96E2637E58,
     B673BDAA72D5374F03470678,
+    9BC7A834A440E922921D009C,
     F91A3C59684243187AA739DC,
 ); name = "UITests"; sourceTree = "<group>"; };
 0AA69D9A4583D0A6B3B9DD67 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
@@ -750,6 +769,7 @@ F91A3C59684243187AA739DC = { isa = PBXFileReference; lastKnownFileType = "source
     52A1BDB30179C2605296AB11,
     51EC3E8B650FB2A8AF7218C0,
     69947290A08182A9DE28E509,
+    019B932007C7614B94EDFDC2,
     109A6CA1D03620EE1470D0C6,
 ); runOnlyForDeploymentPostprocessing = 0; };
 9FE15850D9525F77FD6AA721 = { isa = PBXContainerItemProxy; containerPortal = 98F54143AB4E86B28C3AFEE0; proxyType = 1; remoteGlobalIDString = 4F6027D858B72CC70E5CC8E9; remoteInfo = "BlindOracle"; };

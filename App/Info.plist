@@ -32,6 +32,10 @@
 	<false/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>用于自动取得本次起卦地点，按当地经度换算真太阳时；你也可以手动选择地点。</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>按住对话输入框时使用麦克风，将你说的话转成输入框中的文字；松手即停止录音。</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>将按住输入框时说的话转成可编辑文字；部分设备或语言可能通过 Apple 的语音识别服务处理。</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchScreen</key>

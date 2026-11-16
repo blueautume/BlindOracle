@@ -227,7 +227,7 @@ final class AccountUITests: XCTestCase {
         XCTAssertTrue(element("accountGate", in: app).exists)
         XCTAssertFalse(element("accountLaunchScreen", in: app).exists)
         XCTAssertFalse(app.tabBars.firstMatch.exists)
-        XCTAssertFalse(app.textFields["questionInput"].exists)
+        XCTAssertFalse(app.textViews["questionInput"].exists)
         XCTAssertFalse(app.buttons["settingsButton"].exists)
         XCTAssertFalse(app.buttons["accountEntry"].exists)
         let title = app.staticTexts["慢听一问，静观其变。"]

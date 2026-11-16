@@ -3,7 +3,9 @@ import SwiftUI
 struct ChatView: View {
     @EnvironmentObject private var store: OracleStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @Binding var draft: String
+    @StateObject private var speechInput = SpeechInputController.forChat()
     @State private var showHistory = false
     @State private var topUpPresented = false
     @State private var aiConsentPresented = false
@@ -13,7 +15,7 @@ struct ChatView: View {
     @State private var selectedReading: ReadingReference?
     @State private var inspectingActivities = false
     @State private var followsLatest = true
-    @FocusState private var composing: Bool
+    @State private var composing = false
     private let suggestions = [L10n.text("最近的工作，该进还是该守？", "Is it time to make a move at work, or should I stay put?"), L10n.text("这段关系，我该如何往前走？", "How should I move forward in this relationship?"), L10n.text("心里有件事，想听一句建议。", "Something’s on my mind. Can you offer some advice?")]
 
     var body: some View {
@@ -106,6 +108,7 @@ struct ChatView: View {
                     }
                     .onChange(of: store.activitySessionID) { _, _ in inspectingActivities = false }
                     .onChange(of: store.activeConversationID) { _, _ in
+                        speechInput.cancel()
                         draft = ""; selectedReading = nil; inspectingActivities = false
                         followsLatest = true
                         Task { @MainActor in
@@ -114,6 +117,7 @@ struct ChatView: View {
                         }
                     }
                     .onChange(of: store.historyResetID) { _, _ in
+                        speechInput.cancel()
                         draft = ""; selectedReading = nil; inspectingActivities = false
                         composing = false; showHistory = false
                         followsLatest = true
@@ -208,7 +212,22 @@ struct ChatView: View {
             }
         }
         .toolbar(showHistory ? .hidden : .visible, for: .tabBar)
-        .onChange(of: store.selectedTab) { _, _ in composing = false }
+        .onChange(of: store.selectedTab) { _, _ in composing = false; speechInput.cancel() }
+        .onChange(of: showHistory) { _, presented in if presented { speechInput.cancel() } }
+        .onChange(of: selectedReading?.id) { _, id in if id != nil { speechInput.cancel() } }
+        .onChange(of: topUpPresented) { _, presented in if presented { speechInput.cancel() } }
+        .onChange(of: aiConsentPresented) { _, presented in if presented { speechInput.cancel() } }
+        .onChange(of: store.showIntake) { _, presented in if presented { speechInput.cancel() } }
+        .onChange(of: store.showInteraction) { _, presented in if presented { speechInput.cancel() } }
+        .onChange(of: scenePhase) { _, phase in
+            // Permission sheets temporarily make the scene inactive. They must
+            // finish authorization, but never start recording after dismissal.
+            if phase == .background || (phase == .inactive && speechInput.phase != .authorizing) {
+                speechInput.cancel()
+            }
+        }
+        .onDisappear { composing = false; speechInput.cancel() }
+        .sensoryFeedback(.impact(weight: .light), trigger: speechInput.isListening) { _, listening in listening }
         .accessibilityHidden(showHistory)
         .overlay {
             if showHistory {
@@ -255,6 +274,7 @@ struct ChatView: View {
                             Image(systemName: "arrow.up.left").font(.system(size: 10)).foregroundStyle(InkTheme.secondary.opacity(0.6))
                         }.padding(.vertical, 15)
                     }.buttonStyle(.plain)
+                        .disabled(speechInput.isActive)
                     if index < 2 { Divider().overlay(InkTheme.line.opacity(0.5)) }
                 }
             }.padding(.horizontal, 18).background(.white.opacity(0.24), in: RoundedRectangle(cornerRadius: 16))
@@ -322,6 +342,7 @@ struct ChatView: View {
                                 }
                             } else {
                                 Button { draft = L10n.text("请结合刚才的结果再详细解释一下，给我更具体的建议。", "Please explain the same reading in more detail and give me some practical advice."); submit() } label: { Label(L10n.text("再细说些", "Explain further"), systemImage: "text.bubble") }
+                                    .disabled(speechInput.isActive)
                             }
                         }
                     }.font(.system(size: 11)).foregroundStyle(InkTheme.secondary).padding(.top, 6)
@@ -398,10 +419,23 @@ struct ChatView: View {
     private var composer: some View {
         let hasDraft = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let stopWithoutSending = store.isBusy && !hasDraft
-        let actionEnabled = hasDraft || stopWithoutSending
+        let actionEnabled = (hasDraft || stopWithoutSending) && !speechInput.isActive
         let sendLabel = store.isBusy ? L10n.text("停止并发送追问", "Stop and send follow-up") : L10n.text("发送问题", "Send question")
         let stopLabel = L10n.text("停止回答", "Stop reply")
         return VStack(spacing: 8) {
+            if let status = speechInputStatus {
+                HStack(spacing: 7) {
+                    if speechInput.isListening {
+                        Circle().fill(InkTheme.cinnabar).frame(width: 6, height: 6)
+                            .accessibilityHidden(true)
+                    }
+                    Text(status)
+                        .font(.system(size: 12))
+                        .foregroundStyle(speechInput.isListening ? InkTheme.cinnabar : InkTheme.secondary)
+                        .accessibilityIdentifier("speechInputStatus")
+                    Spacer(minLength: 0)
+                }.padding(.horizontal, 8)
+            }
             if store.canRetryAnalysis {
                 Button {
                     composing = false
@@ -415,14 +449,16 @@ struct ChatView: View {
                         .background(InkTheme.cinnabar.opacity(0.08), in: Capsule())
                 }
                 .buttonStyle(.plain)
+                .disabled(speechInput.isActive)
                 .accessibilityIdentifier("retryAnalysis")
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack(alignment: .bottom, spacing: 10) {
-                TextField(store.isBusy ? L10n.text("想补充什么？", "Add a follow-up…") : L10n.text("说说你想问的事…", "What’s on your mind?"), text: $draft, axis: .vertical).lineLimit(1...5)
-                    .font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.ink).focused($composing)
-                    .submitLabel(.send).onSubmit { submit() }.accessibilityIdentifier("questionInput")
-                    .padding(.leading, 4).padding(.vertical, 10)
+                HoldToDictateTextInput(text: $draft, isFocused: $composing,
+                    placeholder: store.isBusy ? L10n.text("补充内容，或按住说话…", "Type a follow-up, or hold to speak…") : L10n.text("输入问题，或按住说话…", "Type a question, or hold to speak…"),
+                    isInputLocked: speechInput.isActive,
+                    onHoldBegan: beginSpeechInput, onHoldEnded: speechInput.finish,
+                    onHoldCancelled: speechInput.finish, onSubmit: submit)
                 if store.isBusy && hasDraft {
                     Button { store.stop() } label: {
                         Image(systemName: "stop.fill").font(.system(size: 15, weight: .medium))
@@ -453,8 +489,35 @@ struct ChatView: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("chatComposerPanel")
     }
+
+    private var speechInputStatus: String? {
+        switch speechInput.phase {
+        case .idle: speechInput.notice
+        case .authorizing: L10n.text("请允许麦克风和语音识别，完成后再次按住说话。", "Allow microphone and speech access, then hold again to speak.")
+        case .listening: L10n.text("正在听，松手结束", "Listening · release to finish")
+        case .finishing: L10n.text("正在完成识别…", "Finishing transcription…")
+        }
+    }
+
+    private func beginSpeechInput() {
+        guard !speechInput.isActive, scenePhase == .active, store.selectedTab == 0,
+              !showHistory, selectedReading == nil, !topUpPresented, !aiConsentPresented,
+              !store.showIntake, !store.showInteraction, !checkingAIConsent else { return }
+        composing = false
+        let originalDraft = draft
+        let conversationID = store.activeConversationID
+        speechInput.begin { transcript in
+            guard store.activeConversationID == conversationID, store.selectedTab == 0 else { return }
+            // Partial results replace this utterance in full; appending each
+            // callback would duplicate the same words throughout the draft.
+            guard !transcript.isEmpty else { draft = originalDraft; return }
+            let separator = originalDraft.isEmpty || originalDraft.last?.isWhitespace == true ? "" : " "
+            draft = originalDraft + separator + transcript
+        }
+    }
+
     private func submit() {
-        guard !checkingAIConsent else { return }
+        guard !checkingAIConsent, !speechInput.isActive else { return }
         let question = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty else { return }
         checkingAIConsent = true
@@ -482,6 +545,7 @@ struct ChatView: View {
     }
 
     private func performSubmit() {
+        speechInput.cancel()
         let question = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty else { return }
         draft = ""

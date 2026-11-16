@@ -118,7 +118,7 @@ final class TrueSolarCastingUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-reset-language", fixture, "-oracle.appLanguage", language]
         app.launch()
-        let question = app.textFields["questionInput"]
+        let question = app.textViews["questionInput"]
         XCTAssertTrue(question.waitForExistence(timeout: 15)); question.tap()
         question.typeText(language == "en" ? "Use only Qi Men to consider tomorrow's study plan." : "只用奇门看看明天的学习安排")
         app.buttons["sendQuestion"].tap()

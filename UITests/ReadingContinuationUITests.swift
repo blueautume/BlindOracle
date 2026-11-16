@@ -14,7 +14,7 @@ final class ReadingContinuationUITests: XCTestCase {
         app.terminate()
         app.launchArguments = ["--ui-testing-local"]
         app.launch()
-        XCTAssertTrue(app.textFields["questionInput"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.textViews["questionInput"].waitForExistence(timeout: 15))
         let restoredReferences = readingReferenceIDs(in: app)
         send("我接下来应该先做哪件事？", in: app)
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "沿用这次已保存的卦象")).firstMatch.waitForExistence(timeout: 15))
@@ -44,7 +44,7 @@ final class ReadingContinuationUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]
         app.launch()
-        XCTAssertTrue(app.textFields["questionInput"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.textViews["questionInput"].waitForExistence(timeout: 15))
         send("只用六爻看看这次出行如何安排", in: app)
         let intake = app.buttons["confirmIntake"]
         XCTAssertTrue(intake.waitForExistence(timeout: 15))
@@ -168,12 +168,12 @@ final class ReadingContinuationUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-reading-library"]
         app.launch()
-        XCTAssertTrue(app.textFields["questionInput"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.textViews["questionInput"].waitForExistence(timeout: 15))
         return app
     }
 
     @MainActor private func send(_ text: String, in app: XCUIApplication) {
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         input.tap(); input.typeText(text)
         app.buttons["sendQuestion"].tap()
     }

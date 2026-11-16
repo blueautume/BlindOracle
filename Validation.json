@@ -1,5 +1,5 @@
 {
-  "date": "2026-11-09",
+  "date": "2026-11-16",
   "xcode": "27.2 (27B52)",
   "minimum_iOS": "17.0",
   "release_arm64_bundle_bytes": 19905400,
@@ -13,6 +13,8 @@
   "local_plugin_count": 10,
   "release_is_signed": true,
   "notes": [
+    "Faster voice hold 3.0.303 / Build 66: user-requested 0.08-second threshold replaces 0.3 seconds. Four speech UI regressions passed on iOS 26.5, including a 0.04-second keyboard press and 0.12-second voice hold, cumulative draft preservation and explicit edit/send. No new service/unit rerun; the earlier 20-unit/7-UI evidence retains its 3.0.302 version. Signed owner-test Release installed in place and normally launched on 穷奇 as 3.0.303 / 66. Local vault metadata preservation and exact evidence are in build/speech-input-3.0.303-66/verification.json.",
+    "Hold-to-dictate 3.0.302 / Build 65: the conversation input uses Apple Speech + AVAudioEngine after a 0.3-second hold, stops capture on release, preserves editable accumulated text and never sends automatically. Final focused iOS 26.5 simulator verification passed 20 unit tests (15 speech, 4 AI sharing, 1 language) and 7 UI tests (4 speech and 3 existing composer/consent regressions), with zero failures. The first UI run exposed a first-focus caret reset after transcription; one-time selection restoration fixed it, and the original edit/send test plus later caret repositioning passed in the final run. Two final UI screenshots were reviewed. Signed owner-test Release build had zero compiler warnings; it was installed in place on 穷奇 (iPhone 15 Plus, iOS 27.2), confirmed as 3.0.302 / 65 and normally launched with a running process. All nine pre-existing vault entries retained their sizes and modification times immediately after installation. No native spoken-audio accuracy test is claimed; UI recognition uses a DEBUG-only in-memory fixture excluded from the installed Release. Earlier full-suite and store evidence retains its actual version. Evidence: build/speech-input-3.0.302-65/verification.json.",
     "Sandbox sign-in identity compatibility 3.0.301 / Build 64: all 748 non-live unit tests passed, with live integration and native StoreKit suites excluded. Four UI tests passed on iPad Air 11-inch (M3), iPadOS 27.2, and two new login error UI tests passed on iPhone iOS 27.2. The first run exposed a test URL fixture mismatch and old iPhone-only TabBar locators; corrected tests passed in final bundles. Release runtime authentication state handling is unchanged. Server commit 8e5848d passed all 292 isolated PostgreSQL tests with zero skips and was deployed to Sandbox and Production with account/session/task and financial hashes unchanged. Signed distribution and upload evidence is recorded separately after completion; no physical Apple sign-in or purchase is claimed for this candidate. Signed Release archive and actual App Store distribution IPA passed audit with zero compiler warnings and internalOnly=false. Apple confirmed Upload succeeded at 2026-11-09 03:56:00 +08:00; authenticated App Store Connect then showed 3.0.301 / 64 Ready to Submit without Internal badge. No review build was selected/saved, no App Review submission or public release performed. Archive attribution remains the recorded pre-archive worktree snapshot; this final Validation note was added afterward.",
     "First release numbering 3.0.300 / Build 63: user-requested first release version. Only four version metadata files changed from 92c9954; runtime code remains the tested CNY/USD implementation from 3.0.36 / 62. Signed archive and exported App Store distribution IPA passed version, bundle ID, AppleVerified routing, entitlement/profile/privacy, credential and test-asset checks with zero compiler warnings. Actual export and upload options have testFlightInternalTestingOnly=false and manageAppVersionAndBuildNumber=false. Apple acknowledged Upload succeeded at 2026-11-08 20:46:08 +08:00; App Store Connect completed processing and shows build 63 Ready to Submit without the Internal label. Existing review build 60 was left untouched; no build selector was opened, no review build selected/saved, and no App Review submission or public release performed. The 739 non-live unit, two UI and seven native StoreKit test results retain their actual 3.0.36 / 62 version; this metadata-only batch did not rerun them. Evidence: build/release-3.0.300-63/asc-verification.json, candidate-verification.json and upload.log.",
     "Regional IAP 3.0.36 / 62: Apple storefront CHN selects approved CNY pricing and USA selects USD; other/unknown regions cannot start a new purchase. The shared SKU defaults to CNY 6.00 / USD 0.99 for 1,000,000 allowance, while StoreKit owns displayPrice and the server owns current/history price approvals. Loading, updates and payment recheck region and reject stale prices; already-paid transactions recover under their original Apple-signed region. Final 739 non-live unit tests and two account UI tests passed. Four Chinese/English x CNY/USD view captures passed OCR and were visually inspected. Seven distinct native StoreKit tests passed across the six-test run and the warmed Ask-to-Buy run; an initial cold Ask-to-Buy stall was interrupted and retained in storekit-initial-interrupted.log, not attributed to a proven root cause. An existing pre-adaptation launch test race was reproduced and fixed by waiting for native completion and the separate recovery task, without changing production launch behavior or relaxing the exact request assertion. Signed-out catalog loading avoids Apple queries. Unsigned arm64 Release build passed with zero compiler warnings, AppleVerified routing, unchanged bundle ID and no credentials or StoreKit test assets. Backend main 391d69c has local 270-test evidence: 253 passed and 17 conditional skips, with no local PostgreSQL. No live purchase, physical-device validation, deployment, App Store Connect change or store upload is asserted. Evidence: build/regional-3.0.36-62/.",
@@ -85,8 +87,8 @@
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "3.0.301",
-  "build": "64",
+  "version": "3.0.303",
+  "build": "66",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",
@@ -2512,6 +2514,90 @@
       "physical_download_confirmed": false,
       "report": "build/release-3.0.301-64/release-validation.json",
       "source_attribution": "Pre-archive worktree based on 362b038 plus recorded file hashes; final Validation notes added after archive. Release commit recorded separately."
+    }
+  },
+  "speech_input_3_0_302": {
+    "version": "3.0.302",
+    "build": 65,
+    "verified_at": "2026-11-16T17:49:25.423719+08:00",
+    "branch": "feature/hold-to-dictate",
+    "base_commit": "6719936414de6609fca84cee82383b0798e51df5",
+    "source_files_sha256": {
+      "Views/ChatView.swift": "3ebc4831c3b68f831e915a392f4c3b966e9a7ed9c2f0f660c1823343d0c8a753",
+      "Views/HoldToDictateTextInput.swift": "19227527651ac5b3579e64c4dcd6f56752bb98f804f73525381fe9a2880d2b3a",
+      "Services/SpeechInputController.swift": "38f18006c01456aa0b924a01637dc728b51b15d6fa8da6627cbc55583683407b",
+      "Services/SpeechInputTesting.swift": "69d57ab0806235aa6ed78040f8e4deac5415cdea2e2412d7cd405b80c879482c",
+      "Views/LegalDocumentView.swift": "cd8b7d58613ece7b76e7b1f9820a16326add227358c6c7a47cfdc7573af00111",
+      "Tests/SpeechInputControllerTests.swift": "89d863bdd5592a8d801b533018c224295e69e85d6219717b1f1e8df86e56a680",
+      "UITests/SpeechInputUITests.swift": "9ba33260cf75524e28b84d6758e68933e038fc29094217ca7b0ccc981f5ca8a3",
+      "App/Info.plist": "5dd416aef6c345951fd3b0c1ac09ee629d45929484a397a4def72badaaa3d834",
+      "Resources/InfoPlist.xcstrings": "dfec4fa997ab9e8dbba397c1c073a082d054ac30505500b617c1cb4817141bd2",
+      "BlindOracle.xcodeproj/project.pbxproj": "8e5fa0719a8c5f40663506668a9f3a5f5099c6499e555f37dac2d48f89d9a2f1",
+      "Configuration/Version.json": "e00f1771c79364c0d0ce91b665240fe9a052e8995a353898860d928be23ed2e8"
+    },
+    "tests": {
+      "total_passed": 27,
+      "failures": 0,
+      "unit_passed": 20,
+      "speech_controller_unit_passed": 15,
+      "ui_passed": 7,
+      "speech_ui_passed": 4,
+      "simulator_os": "26.5",
+      "result_bundle": "build/speech-input-3.0.302-65/final-tests.xcresult",
+      "ui_speech_is_in_memory_fixture": true,
+      "native_microphone_transcription_tested": false,
+      "initial_caret_failure_fixed_and_original_test_passed": true,
+      "draft_and_explicit_send_screenshots_visually_reviewed": true
+    },
+    "device": {
+      "name": "穷奇",
+      "model": "iPhone 15 Plus",
+      "os": "27.2",
+      "installed_version": "3.0.302",
+      "installed_build": "65",
+      "bundle_id": "com.lihao.BlindOracle",
+      "environment": "Sandbox",
+      "routing": "OwnerSandbox",
+      "release_build_warnings": 0,
+      "normal_launch_arguments": [],
+      "running_pid": 30446,
+      "data_preservation": {
+        "before_count": 9,
+        "after_count": 9,
+        "all_existing_files_retained": true,
+        "all_existing_sizes_and_modified_times_unchanged": true
+      },
+      "signature_verified": true,
+      "localized_microphone_and_speech_permissions_verified": true,
+      "ui_speech_fixture_excluded_from_release": true
+    },
+    "runtime_source_unchanged_after_final_tests": true
+  },
+  "speech_input_3_0_303": {
+    "version": "3.0.303",
+    "build": 66,
+    "hold_threshold_seconds": 0.08,
+    "ui_tests_passed": 4,
+    "ui_tests_failed": 0,
+    "short_press_test_seconds": 0.04,
+    "hold_test_seconds": 0.12,
+    "test_result": "build/speech-input-3.0.303-66/ui-tests.xcresult",
+    "recognition_ui_uses_debug_fixture": true,
+    "native_audio_accuracy_retested": false,
+    "device_name": "穷奇",
+    "installed_version": "3.0.303",
+    "installed_build": "66",
+    "normal_launch_verified": true,
+    "existing_vault_entries_retained": true,
+    "existing_vault_metadata_unchanged": false,
+    "vault_entries_before": 9,
+    "vault_entries_after": 9,
+    "prior_full_feature_checks": "3.0.302 / 65 (20 unit + 7 UI)",
+    "source_sha256": {
+      "Views/HoldToDictateTextInput.swift": "f5317572610ce9e94503de55a7bb5fe6a6bd1ec9f4fcf831ac3cbaf1dbff1bea",
+      "UITests/SpeechInputUITests.swift": "9399d91768eae40fb763a6a0080883c713b0441809d3df86bdb0d630e4393b58",
+      "Views/LegalDocumentView.swift": "dd4b875cc022b4145f5407b7034108a9ee778039894a5972860604397e6f0e79",
+      "Configuration/Version.json": "d8b0c5c0d1e09ed440bb2cf654fd4ac25a3ed2561ff8152588603a7416c18657"
     }
   }
 }

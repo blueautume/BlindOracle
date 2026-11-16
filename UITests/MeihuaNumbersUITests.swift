@@ -8,7 +8,7 @@ final class MeihuaNumbersUITests: XCTestCase {
                                "--ui-testing-reset-language", "-oracle.appLanguage", "zh-Hans"]
         app.launch()
         selectCastingMode(method: "meihua", mode: "twoNumbers", in: app)
-        let question = app.textFields["questionInput"]
+        let question = app.textViews["questionInput"]
         question.tap(); question.typeText("只用梅花看看这次出行如何安排")
         app.buttons["sendQuestion"].tap()
         let intake = app.buttons["confirmIntake"]
@@ -53,7 +53,7 @@ final class MeihuaNumbersUITests: XCTestCase {
                                "--ui-testing-reset-language", "-oracle.appLanguage", language]
         app.launch()
         selectCastingMode(method: "meihua", mode: "threeNumbers", in: app, language: language)
-        let question = app.textFields["questionInput"]
+        let question = app.textViews["questionInput"]
         XCTAssertTrue(question.waitForExistence(timeout: 15)); question.tap()
         question.typeText(english ? "Use only Meihua with three numbers to explore this trip." : "只用梅花报数，看看这次出行如何安排")
         app.buttons["sendQuestion"].tap()

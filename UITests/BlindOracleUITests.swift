@@ -50,7 +50,7 @@ final class BlindOracleUITests: XCTestCase {
             let app = XCUIApplication()
             app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "-oracle.appLanguage", "zh-Hans"]
             app.launch()
-            let input = app.textFields["questionInput"]
+            let input = app.textViews["questionInput"]
             XCTAssertTrue(input.waitForExistence(timeout: 15))
             input.tap(); input.typeText("只用\(method)看看今年工作的方向")
             app.buttons["sendQuestion"].tap()
@@ -205,7 +205,7 @@ final class BlindOracleUITests: XCTestCase {
         XCTAssertTrue(app.tabBars.buttons["数据"].exists)
         XCTAssertEqual(app.tabBars.buttons.count, 2)
         let welcome = XCTAttachment(screenshot: app.screenshot()); welcome.name = "01-welcome"; welcome.lifetime = .keepAlways; add(welcome)
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         XCTAssertTrue(input.exists)
         input.tap(); input.typeText("未来一周适合推进手头的计划吗？")
         app.buttons["sendQuestion"].tap()
@@ -241,7 +241,7 @@ final class BlindOracleUITests: XCTestCase {
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]
         app.launch()
         let question = "明天适合推进这个计划吗？"
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 15)); input.tap(); input.typeText(question)
         app.buttons["sendQuestion"].tap()
         XCTAssertTrue(app.buttons["confirmIntake"].waitForExistence(timeout: 15))
@@ -303,7 +303,7 @@ final class BlindOracleUITests: XCTestCase {
         let first = "只用八字看看今年换工作的方向"
         let current = "只用紫微看看下半年的工作机会"
         for question in [first, current] {
-            let input = app.textFields["questionInput"]
+            let input = app.textViews["questionInput"]
             XCTAssertTrue(input.waitForExistence(timeout: 15))
             input.tap(); input.typeText(question)
             app.buttons["sendQuestion"].tap()
@@ -311,7 +311,7 @@ final class BlindOracleUITests: XCTestCase {
             cancelForm(in: app)
             if question == first { startNewConversation(app) }
         }
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         input.tap(); input.typeText("尚未发送的聊天草稿")
         app.buttons["historyButton"].tap()
         XCTAssertTrue(historyRow(in: app, titled: first).waitForExistence(timeout: 5))
@@ -368,7 +368,7 @@ final class BlindOracleUITests: XCTestCase {
         XCTAssertTrue(welcome.waitForExistence(timeout: 10))
     }
     @MainActor private func completeLocalQuestion(_ question: String, in app: XCUIApplication) {
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 15)); input.tap(); input.typeText(question)
         app.buttons["sendQuestion"].tap()
         let confirm = app.buttons["confirmIntake"]

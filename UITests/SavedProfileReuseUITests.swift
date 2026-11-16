@@ -72,7 +72,7 @@ final class SavedProfileReuseUITests: XCTestCase {
 
     @MainActor private func send(_ text: String, in app: XCUIApplication) {
         waitUntilReadyToSend(in: app)
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 10)); input.tap(); input.typeText(text)
         app.buttons["sendQuestion"].tap()
     }

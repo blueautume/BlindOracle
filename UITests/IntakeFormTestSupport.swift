@@ -26,7 +26,7 @@ extension XCTestCase {
         XCTAssertTrue(choice.isSelected, file: file, line: line)
         let chat = app.tabBars.buttons[language == "en" ? "Chat" : "对话"]
         XCTAssertTrue(chat.exists, file: file, line: line); chat.tap()
-        XCTAssertTrue(app.textFields["questionInput"].waitForExistence(timeout: 10), file: file, line: line)
+        XCTAssertTrue(app.textViews["questionInput"].waitForExistence(timeout: 10), file: file, line: line)
     }
 
     @MainActor func assertReadingConfirmationInNavigationBar(in app: XCUIApplication, language: String,

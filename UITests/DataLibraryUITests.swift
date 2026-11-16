@@ -94,7 +94,7 @@ final class DataLibraryUITests: XCTestCase {
         // Create a second person through the normal chat path so deleting the
         // fixture person must not clear the whole directory or its old runs.
         openChatTab(in: app)
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 10))
         input.tap(); input.typeText("姓名：李岚，女，出生日期1995-03-11。")
         app.buttons["sendQuestion"].tap()
@@ -244,7 +244,7 @@ final class DataLibraryUITests: XCTestCase {
     @MainActor private func openChatTab(in app: XCUIApplication) {
         let tab = app.buttons["对话"].firstMatch
         XCTAssertTrue(tab.waitForExistence(timeout: 10)); tab.tap()
-        XCTAssertTrue(app.textFields["questionInput"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.textViews["questionInput"].waitForExistence(timeout: 10))
     }
 
     @MainActor private func profileRows(in app: XCUIApplication) -> XCUIElementQuery {

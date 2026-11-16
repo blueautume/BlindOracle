@@ -51,6 +51,40 @@
           }
         }
       }
+    },
+    "NSMicrophoneUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按住对话输入框时使用麦克风，将你说的话转成输入框中的文字；松手即停止录音。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BlindOracle uses the microphone while you hold the conversation input to turn speech into editable text. Recording stops when you release."
+          }
+        }
+      }
+    },
+    "NSSpeechRecognitionUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将按住输入框时说的话转成可编辑文字；部分设备或语言可能通过 Apple 的语音识别服务处理。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Converts speech into editable text while you hold the input. Some devices or languages may use Apple’s speech recognition servers."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

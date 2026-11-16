@@ -88,7 +88,7 @@ final class MultiPersonUITests: XCTestCase {
     }
 
     @MainActor private func send(_ text: String, in app: XCUIApplication) {
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 15))
         waitUntilReadyToSend(in: app)
         input.tap(); input.typeText(text)

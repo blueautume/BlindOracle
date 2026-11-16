@@ -14,7 +14,7 @@ final class InteractionUITests: XCTestCase {
         }
 
         let draft = "An unsent question"
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         guard input.waitForExistence(timeout: 15) else { return XCTFail("Chat input was not shown") }
         input.tap()
         input.typeText(draft)
@@ -49,7 +49,7 @@ final class InteractionUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "-oracle.appLanguage", "en"]
         app.launch()
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 15))
         XCTAssertEqual(input.placeholderValue, "What’s on your mind?")
         input.tap()
@@ -113,7 +113,7 @@ final class InteractionUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]
         app.launch()
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 15))
         input.tap(); input.typeText("先留下这句话")
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
@@ -136,7 +136,7 @@ final class InteractionUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]
         app.launch()
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 15))
         input.tap(); input.typeText("用塔罗看看这次选择有哪些启发")
         app.buttons["sendQuestion"].tap()
@@ -452,7 +452,7 @@ final class InteractionUITests: XCTestCase {
     }
 
     @MainActor private func send(_ question: String, in app: XCUIApplication) {
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 15))
         input.tap(); input.typeText(question)
         app.buttons["sendQuestion"].tap()

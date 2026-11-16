@@ -48,7 +48,7 @@ final class ChatProgressUITests: XCTestCase {
         XCTAssertTrue(toggle.waitForExistence(timeout: 15))
         let panel = app.descendants(matching: .any).matching(identifier: "chatComposerPanel").firstMatch
         let transcript = app.scrollViews["chatTranscript"]
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         XCTAssertTrue(panel.exists)
         XCTAssertTrue(transcript.exists)
         XCTAssertFalse(app.staticTexts["aiConnectionStatus"].exists)
@@ -72,7 +72,7 @@ final class ChatProgressUITests: XCTestCase {
         XCTAssertEqual(send.label, "停止回答")
 
         let question = "这次还需要留意什么？"
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         input.tap()
         input.typeText(question)
         XCTAssertTrue(app.buttons["stopAnswer"].isHittable)

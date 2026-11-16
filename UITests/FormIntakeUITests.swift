@@ -6,7 +6,7 @@ final class FormIntakeUITests: XCTestCase {
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "-oracle.appLanguage", "en",
                                "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 15))
         input.tap()
         input.typeText("Please use BaZi to explore my career strengths and what kind of work would suit me best. My name is Alex Chen, and I’m male. I was born on June 15, 1995, at 9:30 a.m. in Shanghai, China.")
@@ -53,7 +53,7 @@ final class FormIntakeUITests: XCTestCase {
                                        "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
                 app.launch()
                 defer { app.terminate() }
-                let input = app.textFields["questionInput"]
+                let input = app.textViews["questionInput"]
                 XCTAssertTrue(input.waitForExistence(timeout: 15))
                 input.tap()
                 input.typeText("Please use BaZi to explore my career strengths. My name is Alex Chen, and I’m male. I was born on \(scenario.date), at \(scenario.clock) in \(scenario.place), China.")
@@ -211,7 +211,7 @@ final class FormIntakeUITests: XCTestCase {
 
     @MainActor private func send(_ text: String, in app: XCUIApplication) {
         waitUntilReadyToSend(in: app)
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 10))
         input.tap(); input.typeText(text)
         app.buttons["sendQuestion"].tap()

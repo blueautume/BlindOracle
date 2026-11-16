@@ -19,7 +19,7 @@ final class ExperienceFixUITests: XCTestCase {
         XCTAssertFalse(app.buttons["shuffleTarot"].exists)
         XCTAssertFalse(app.buttons["confirmIntake"].exists)
         XCTAssertTrue(app.buttons["interactionCard"].exists)
-        XCTAssertFalse((app.textFields["questionInput"].value as? String ?? "").contains(help))
+        XCTAssertFalse((app.textViews["questionInput"].value as? String ?? "").contains(help))
         capture("pending-tarot-help-keeps-chat-open", in: app)
 
         send("先不抽了，改用梅花", in: app)
@@ -100,12 +100,12 @@ final class ExperienceFixUITests: XCTestCase {
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-reset-language"]
         if withSavedProfile { app.launchArguments.append("--ui-testing-reading-library") }
         app.launch()
-        XCTAssertTrue(app.textFields["questionInput"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.textViews["questionInput"].waitForExistence(timeout: 15))
         return app
     }
 
     @MainActor private func send(_ text: String, in app: XCUIApplication) {
-        let input = app.textFields["questionInput"]
+        let input = app.textViews["questionInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 10))
         input.tap(); input.typeText(text)
         app.buttons["sendQuestion"].tap()
