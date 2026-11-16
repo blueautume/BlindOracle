@@ -5,6 +5,9 @@ struct AIQuotaStage: Sendable {
     var taskID: UUID
     var stageID: String
     var conversationID: UUID? = nil
+    /// Transient progress for a known server generation that must finish first.
+    /// This callback is not persisted with the billing/request snapshots.
+    var onGenerationWaitChanged: (@Sendable (Bool) async -> Void)? = nil
 }
 
 enum AIQuotaTaskScope {

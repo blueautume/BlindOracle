@@ -2285,7 +2285,27 @@ struct CastingLocationDraft: Equatable, Sendable {
 
     private func quotaStage(_ name: String) -> AIQuotaStage {
         if quotaTaskID == nil { quotaTaskID = UUID(); persist() }
-        return AIQuotaStage(taskID: quotaTaskID!, stageID: name, conversationID: activeConversationID)
+        let taskID = quotaTaskID!
+        let operation = operationID
+        let conversationID = activeConversationID
+        let resumeStatus = status
+        return AIQuotaStage(taskID: taskID, stageID: name, conversationID: conversationID,
+            onGenerationWaitChanged: { [weak self] waiting in
+                await self?.generationWaitChanged(waiting, taskID: taskID, operation: operation,
+                    conversationID: conversationID, resumeStatus: resumeStatus)
+            })
+    }
+
+    private func generationWaitChanged(_ waiting: Bool, taskID: UUID, operation: UUID?,
+                                       conversationID: UUID, resumeStatus: String) {
+        guard let operation, operationID == operation, quotaTaskID == taskID,
+              activeConversationID == conversationID, isBusy, !Task.isCancelled else { return }
+        if waiting {
+            progress(L10n.text("已收到，等待上一份回答完成后继续", "Received. Waiting for the previous reply to finish"))
+        } else {
+            progress(resumeStatus.isEmpty ? L10n.text("继续处理问题", "Continuing your question") : resumeStatus)
+        }
+        persist()
     }
     private func finishOperation(keepRetry: Bool = false) {
         task = nil; operationID = nil

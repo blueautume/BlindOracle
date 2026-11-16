@@ -104,6 +104,7 @@ actor DeepSeekClient {
     private let quotaTasks: AIQuotaTaskService
     private let manageQuota: Bool
     private let dataSharingConsent: AIDataSharingConsentStore
+    private let generationWaitPolicy: GatewayGenerationWaitPolicy
     #if DEBUG
     private let bypassConsentForFixture: Bool
     #endif
@@ -165,12 +166,13 @@ actor DeepSeekClient {
     Example: {"action":"intake","intent":"Career decision","subject":"本人","methods":["tarot"],"requiredFields":[],"note":"Let's review the details before we draw.","question":"Should I apply for the new job?","understanding":{"relation":"newQuestion","resolvedQuestion":"Should I apply for the new job?","execution":{"operation":"calculate","coverage":"changed","evidence":"Should I apply for the new job?"}},"interactions":[{"method":"tarot","kind":"tarot","prompt":"Choose three cards."}]}
     """
 
-    init(accessToken: String? = nil, accountSessions: AccountSessionManager = .shared, quotaTasks: AIQuotaTaskService = .shared, manageQuota: Bool = true, sessionConfiguration: URLSessionConfiguration? = nil, dataSharingConsent: AIDataSharingConsentStore? = nil) {
+    init(accessToken: String? = nil, accountSessions: AccountSessionManager = .shared, quotaTasks: AIQuotaTaskService = .shared, manageQuota: Bool = true, sessionConfiguration: URLSessionConfiguration? = nil, dataSharingConsent: AIDataSharingConsentStore? = nil, generationWaitPolicy: GatewayGenerationWaitPolicy = .init()) {
         credential = accessToken
         self.accountSessions = accountSessions
         self.quotaTasks = quotaTasks
         self.manageQuota = manageQuota && accessToken == nil
         self.dataSharingConsent = dataSharingConsent ?? .shared
+        self.generationWaitPolicy = generationWaitPolicy
         #if DEBUG
         // Existing isolated URLProtocol fixtures exercise transport, not user
         // permission. An explicit consent store always enables the real gate.
@@ -675,43 +677,146 @@ actor DeepSeekClient {
                              purpose: String, requestID: String, sessionGeneration: UUID? = nil) async throws -> (Data, URLResponse) {
         let currentGeneration = await accountSessions.sessionGeneration()
         let expected = sessionGeneration ?? currentGeneration
-        let initialRequest = try await request(messages, jsonMode: jsonMode, streaming: false,
+        var preparedRequest = try await request(messages, jsonMode: jsonMode, streaming: false,
             maxTokens: maxTokens, purpose: purpose, requestID: requestID, sessionGeneration: expected)
-        try await requireDataSharingConsent()
-        var result = try await session.data(for: initialRequest)
-        if (result.1 as? HTTPURLResponse)?.statusCode == 401, credential == nil {
-            try await renewGatewaySession(rejectedRequest: initialRequest, expectedGeneration: expected)
-            let retryRequest = try await request(messages, jsonMode: jsonMode, streaming: false,
-                maxTokens: maxTokens, purpose: purpose, requestID: requestID, sessionGeneration: expected)
-            try await requireDataSharingConsent()
-            result = try await session.data(for: retryRequest)
-            if (result.1 as? HTTPURLResponse)?.statusCode == 401 {
-                try? await accountSessions.invalidate(expectedGeneration: expected)
-                throw DeepSeekError.signInRequired
+        var refreshedSession = false
+        var wait = GenerationWaitState(delay: generationWaitPolicy.initialDelay,
+            onChanged: AIQuotaTaskScope.stage?.onGenerationWaitChanged)
+        do {
+            while true {
+                try await validateGatewayContext(expectedGeneration: expected)
+                let result = try await session.data(for: preparedRequest)
+                try await validateGatewayContext(expectedGeneration: expected, checkConsent: false)
+                if let http = result.1 as? HTTPURLResponse {
+                    if http.statusCode == 401, credential == nil {
+                        guard !refreshedSession else {
+                            try? await accountSessions.invalidate(expectedGeneration: expected)
+                            throw DeepSeekError.signInRequired
+                        }
+                        try await renewGatewaySession(rejectedRequest: preparedRequest, expectedGeneration: expected)
+                        preparedRequest = try await request(messages, jsonMode: jsonMode, streaming: false,
+                            maxTokens: maxTokens, purpose: purpose, requestID: requestID, sessionGeneration: expected)
+                        refreshedSession = true
+                        continue
+                    }
+                    if manageQuota, let rejection = GatewayGenerationWaitPolicy.rejection(status: http.statusCode, body: result.0) {
+                        try await waitForGeneration(rejection, state: &wait, expectedGeneration: expected)
+                        continue
+                    }
+                }
+                await finishGenerationWait(&wait)
+                try await validateGatewayContext(expectedGeneration: expected, checkConsent: false)
+                return result
             }
+        } catch {
+            await finishGenerationWait(&wait)
+            throw error
         }
-        if credential == nil, await accountSessions.sessionGeneration() != expected { throw AccountAPIError.staleSession }
-        return result
     }
 
     private func gatewayBytes(_ messages: [AIConversationTurn], jsonMode: Bool, maxTokens: Int,
                               purpose: String, requestID: String, sessionGeneration: UUID) async throws -> (URLSession.AsyncBytes, URLResponse) {
-        let initialRequest = try await request(messages, jsonMode: jsonMode, streaming: true,
+        var preparedRequest = try await request(messages, jsonMode: jsonMode, streaming: true,
             maxTokens: maxTokens, purpose: purpose, requestID: requestID, sessionGeneration: sessionGeneration)
-        try await requireDataSharingConsent()
-        var result = try await session.bytes(for: initialRequest)
-        if (result.1 as? HTTPURLResponse)?.statusCode == 401, credential == nil {
-            try await renewGatewaySession(rejectedRequest: initialRequest, expectedGeneration: sessionGeneration)
-            let retryRequest = try await request(messages, jsonMode: jsonMode, streaming: true,
-                maxTokens: maxTokens, purpose: purpose, requestID: requestID, sessionGeneration: sessionGeneration)
-            try await requireDataSharingConsent()
-            result = try await session.bytes(for: retryRequest)
-            if (result.1 as? HTTPURLResponse)?.statusCode == 401 {
-                try? await accountSessions.invalidate(expectedGeneration: sessionGeneration)
-                throw DeepSeekError.signInRequired
+        var refreshedSession = false
+        var wait = GenerationWaitState(delay: generationWaitPolicy.initialDelay,
+            onChanged: AIQuotaTaskScope.stage?.onGenerationWaitChanged)
+        do {
+            while true {
+                try await validateGatewayContext(expectedGeneration: sessionGeneration)
+                let result = try await session.bytes(for: preparedRequest)
+                do { try await validateGatewayContext(expectedGeneration: sessionGeneration, checkConsent: false) }
+                catch { result.0.task.cancel(); throw error }
+                if let http = result.1 as? HTTPURLResponse {
+                    if http.statusCode == 401, credential == nil {
+                        result.0.task.cancel()
+                        guard !refreshedSession else {
+                            try? await accountSessions.invalidate(expectedGeneration: sessionGeneration)
+                            throw DeepSeekError.signInRequired
+                        }
+                        try await renewGatewaySession(rejectedRequest: preparedRequest, expectedGeneration: sessionGeneration)
+                        preparedRequest = try await request(messages, jsonMode: jsonMode, streaming: true,
+                            maxTokens: maxTokens, purpose: purpose, requestID: requestID, sessionGeneration: sessionGeneration)
+                        refreshedSession = true
+                        continue
+                    }
+                    // AsyncBytes cannot be replayed after consuming an error
+                    // body. Handle only candidate rejection statuses here; all
+                    // other responses retain the ordinary streaming parser.
+                    if manageQuota, (http.statusCode == 409 || http.statusCode == 429) {
+                        let body = try await gatewayRejectionBody(result.0)
+                        if let rejection = GatewayGenerationWaitPolicy.rejection(status: http.statusCode, body: body) {
+                            try await waitForGeneration(rejection, state: &wait, expectedGeneration: sessionGeneration)
+                            continue
+                        }
+                        throw AIGatewayFailure.error(status: http.statusCode, body: body)
+                    }
+                }
+                await finishGenerationWait(&wait)
+                do { try await validateGatewayContext(expectedGeneration: sessionGeneration, checkConsent: false) }
+                catch { result.0.task.cancel(); throw error }
+                return result
             }
+        } catch {
+            await finishGenerationWait(&wait)
+            throw error
         }
-        return result
+    }
+
+    private struct GenerationWaitState {
+        var deadline: ContinuousClock.Instant?
+        var delay: Duration
+        var didNotify = false
+        var onChanged: (@Sendable (Bool) async -> Void)?
+    }
+
+    private func validateGatewayContext(expectedGeneration: UUID, checkConsent: Bool = true) async throws {
+        try Task.checkCancellation()
+        // Withdrawal prevents new transmissions; it does not revoke a response
+        // for a request that was already sent with permission.
+        if checkConsent { try await requireDataSharingConsent() }
+        try Task.checkCancellation()
+        if credential == nil, await accountSessions.sessionGeneration() != expectedGeneration {
+            throw AccountAPIError.staleSession
+        }
+        try Task.checkCancellation()
+    }
+
+    private func waitForGeneration(_ rejection: DeepSeekError, state: inout GenerationWaitState,
+                                   expectedGeneration: UUID) async throws {
+        let now = ContinuousClock.now
+        if state.deadline == nil { state.deadline = now.advanced(by: generationWaitPolicy.timeout) }
+        guard let deadline = state.deadline, now < deadline else { throw rejection }
+        if !state.didNotify {
+            state.didNotify = true
+            await state.onChanged?(true)
+        }
+        try await validateGatewayContext(expectedGeneration: expectedGeneration)
+        let remaining = ContinuousClock.now.duration(to: deadline)
+        guard remaining > .zero else { throw rejection }
+        try await Task.sleep(for: min(state.delay, remaining))
+        try await validateGatewayContext(expectedGeneration: expectedGeneration)
+        guard ContinuousClock.now < deadline else { throw rejection }
+        state.delay = min(generationWaitPolicy.maximumDelay, state.delay * 2)
+    }
+
+    private func finishGenerationWait(_ state: inout GenerationWaitState) async {
+        guard state.didNotify else { return }
+        // Consume the notification before suspension. A cancellation or account
+        // change detected after this callback must not notify completion twice.
+        state.didNotify = false
+        await state.onChanged?(false)
+    }
+
+    private func gatewayRejectionBody(_ bytes: URLSession.AsyncBytes) async throws -> Data {
+        defer { bytes.task.cancel() }
+        var body = Data()
+        for try await byte in bytes {
+            try Task.checkCancellation()
+            body.append(byte)
+            if body.count == AIGatewayFailure.maximumBodyBytes { break }
+        }
+        return body
     }
 
     static func modelsMatch(requested: String, returned: String) -> Bool {
