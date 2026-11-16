@@ -128,12 +128,21 @@ final class AIServiceTests: XCTestCase {
         XCTAssertNil(invalid.reasoningTokens)
     }
 
-    func testPlanningAndStreamingRequestsKeepTheSameProThinkingAndOutputBudget() {
+    func testPlanningUsesFastRoutingWhileFinalAnswersKeepTheirProThinkingBudget() {
         let messages = [AIConversationTurn(role: "user", content: "synthetic check")]
-        for streaming in [false, true] {
+        let planning = DeepSeekClient.requestBody(messages,
+            jsonMode: true, streaming: false, maxTokens: 2400, purpose: "plan")
+        XCTAssertEqual(planning["model"] as? String, "deepseek-v4-pro")
+        XCTAssertEqual(planning["planning_version"] as? String, "routing-v2")
+        XCTAssertEqual((planning["thinking"] as? [String: String])?["type"], "disabled")
+        XCTAssertNil(planning["reasoning_effort"])
+        XCTAssertEqual(planning["max_tokens"] as? Int, 2048)
+        XCTAssertEqual((planning["response_format"] as? [String: String])?["type"], "json_object")
+        for (purpose, streaming) in [("synthesize", true), ("follow_up", true), ("summarize", false)] {
             let body = DeepSeekClient.requestBody(messages,
-                jsonMode: true, streaming: streaming, maxTokens: 2400)
+                jsonMode: true, streaming: streaming, maxTokens: 2400, purpose: purpose)
             XCTAssertEqual(body["model"] as? String, "deepseek-v4-pro")
+            XCTAssertNil(body["planning_version"], purpose)
             XCTAssertEqual((body["thinking"] as? [String: String])?["type"], "enabled")
             XCTAssertEqual(body["reasoning_effort"] as? String, "max")
             XCTAssertEqual(body["max_tokens"] as? Int, 65_536)
@@ -547,11 +556,21 @@ private final class ReadingURLProtocol: URLProtocol, @unchecked Sendable {
                   let system = turns.first?["content"],
                   let latest = turns.last?["content"],
                   turns.contains(["role": "assistant", "content": "上次的对话原文"]),
-                  host == "wellecho.cn", model == DeepSeekConfiguration.defaultModel,
-                  (body["thinking"] as? [String: String])?["type"] == "enabled",
-                  body["reasoning_effort"] as? String == "max",
-                  body["max_tokens"] as? Int == 65_536 else {
+                  host == "wellecho.cn", model == DeepSeekConfiguration.defaultModel else {
                 throw URLError(.badServerResponse)
+            }
+
+            if body["purpose"] as? String == "plan" {
+                guard !stream, body["planning_version"] as? String == "routing-v2",
+                      (body["thinking"] as? [String: String])?["type"] == "disabled",
+                      body["reasoning_effort"] == nil, body["max_tokens"] as? Int == 2048 else {
+                    throw URLError(.badServerResponse)
+                }
+            } else {
+                guard body["planning_version"] == nil,
+                      (body["thinking"] as? [String: String])?["type"] == "enabled",
+                      body["reasoning_effort"] as? String == "max",
+                      body["max_tokens"] as? Int == 65_536 else { throw URLError(.badServerResponse) }
             }
 
             let jsonMode = (body["response_format"] as? [String: String])?["type"] == "json_object"

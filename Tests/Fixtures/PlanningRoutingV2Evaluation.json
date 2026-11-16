@@ -1,0 +1,655 @@
+{
+  "version": "routing-v2",
+  "description": "Synthetic real-model routing evaluation; explicit requests require exact/mandatory method sets, capability requests require inclusion, and no model profile autofill is allowed.",
+  "provider_request_cap": 60,
+  "contexts": {
+    "self-full": "Synthetic 陈平: male, 1992-06-15 08:30 Asia/Shanghai, Shanghai coordinates; explicit self binding.",
+    "pair-full": "Synthetic complete 陈平 and 李岚 profiles; neither is silently selected as self.",
+    "names-only": "陈平 and 李岚 have names only; birth facts absent.",
+    "empty": "No saved people, no known birth facts or casting place.",
+    "prior-tarot": "Completed Tarot for a weekend creative market project, with an anchored conversation and saved result; original cards must be retained for explanations/supplements and replaced for recast.",
+    "self-time-unknown": "Synthetic 陈平 has a known birth date/place, but explicitly unknown birth time; Zi Wei must remain mandated and wait for user data."
+  },
+  "cases": [
+    {
+      "id": "explicit-bazi-zh",
+      "category": "explicit",
+      "language": "zh-Hans",
+      "question": "只用八字分析我明年的职业发展，不要使用其他方法。",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "本人",
+        "methods": [
+          "bazi"
+        ],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": [
+          "bazi"
+        ]
+      }
+    },
+    {
+      "id": "explicit-ziwei-en",
+      "category": "explicit",
+      "language": "en",
+      "question": "Use only Zi Wei Dou Shu to calculate my career outlook for next year.",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "本人",
+        "methods": [
+          "ziwei"
+        ],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": [
+          "ziwei"
+        ]
+      }
+    },
+    {
+      "id": "explicit-liuyao-zh",
+      "category": "explicit",
+      "language": "zh-Hans",
+      "question": "只用六爻看这次合作能不能谈成，我愿意自己摇卦。",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "事件",
+        "methods": [
+          "liuyao"
+        ],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": [
+          "liuyao"
+        ],
+        "subjects": [
+          "事件",
+          "本人"
+        ],
+        "subject_reason": "One cooperation event, personally cast by the user; Liu Yao runs once and uses no participant birth facts."
+      }
+    },
+    {
+      "id": "explicit-meihua-en",
+      "category": "explicit",
+      "language": "en",
+      "question": "Use only Mei Hua Yi Shu to calculate whether tomorrow’s contract negotiation will go smoothly.",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "事件",
+        "methods": [
+          "meihua"
+        ],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": [
+          "meihua"
+        ],
+        "subjects": [
+          "事件",
+          "本人"
+        ],
+        "subject_reason": "One contract negotiation event; Mei Hua runs once and uses no participant birth facts."
+      }
+    },
+    {
+      "id": "explicit-qimen-zh",
+      "category": "explicit",
+      "language": "zh-Hans",
+      "question": "只用奇门遁甲看明天下午拜访客户的安排，重点看出行与沟通。",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "事件",
+        "methods": [
+          "qimen"
+        ],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": [
+          "qimen"
+        ],
+        "subjects": [
+          "事件",
+          "本人"
+        ],
+        "subject_reason": "One client visit event; Qi Men runs once and uses no participant birth facts."
+      }
+    },
+    {
+      "id": "explicit-xiaoliuren-en",
+      "category": "explicit",
+      "language": "en",
+      "question": "Use only Xiao Liu Ren to calculate whether this evening’s short trip will go smoothly.",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "事件",
+        "methods": [
+          "xiaoliuren"
+        ],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": [
+          "xiaoliuren"
+        ],
+        "subjects": [
+          "事件",
+          "本人"
+        ],
+        "subject_reason": "One short trip event; Xiao Liu Ren runs once and uses no participant birth facts."
+      }
+    },
+    {
+      "id": "explicit-chenggu-zh",
+      "category": "explicit",
+      "language": "zh-Hans",
+      "question": "只用称骨看我出生资料对应的骨重和传统歌诀，不要混用其他方法。",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "本人",
+        "methods": [
+          "chenggu"
+        ],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": [
+          "chenggu"
+        ]
+      }
+    },
+    {
+      "id": "explicit-xingming-en",
+      "category": "explicit",
+      "language": "en",
+      "question": "Use only Chinese Name Numerology to calculate the five-grid stroke pattern of my name 陈平.",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "本人",
+        "methods": [
+          "xingming"
+        ],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": [
+          "xingming"
+        ]
+      }
+    },
+    {
+      "id": "explicit-astrology-zh",
+      "category": "explicit",
+      "language": "zh-Hans",
+      "question": "只用西方占星分析我本命盘里的性格特点与职业倾向。",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "本人",
+        "methods": [
+          "astrology"
+        ],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": [
+          "astrology"
+        ]
+      }
+    },
+    {
+      "id": "explicit-tarot-en",
+      "category": "explicit",
+      "language": "en",
+      "question": "Use only Tarot to read the prospects of this weekend’s project discussion; let me draw the cards.",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "事件",
+        "methods": [
+          "tarot"
+        ],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": [
+          "tarot"
+        ],
+        "subjects": [
+          "事件",
+          "本人"
+        ],
+        "subject_reason": "One project discussion event, personally drawn by the user; Tarot runs once and uses no participant birth facts."
+      }
+    },
+    {
+      "id": "implicit-bazi-zh",
+      "category": "capability",
+      "language": "zh-Hans",
+      "question": "请根据出生年、月、日、时对应的天干地支，分析我的日主强弱、喜忌和未来十年运势。",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "本人",
+        "methods": [
+          "bazi"
+        ],
+        "methods_match": "contains",
+        "profile_updates": "none"
+      }
+    },
+    {
+      "id": "implicit-ziwei-en",
+      "category": "capability",
+      "language": "en",
+      "question": "Please place my natal life and body palaces, examine the major stars across the twelve palaces, and calculate my career tendencies.",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "本人",
+        "methods": [
+          "ziwei"
+        ],
+        "methods_match": "contains",
+        "profile_updates": "none"
+      }
+    },
+    {
+      "id": "implicit-liuyao-zh",
+      "category": "capability",
+      "language": "zh-Hans",
+      "question": "我想自己分六次投硬币，记录每次正反面的结果，按这组阴阳变化推算合作是否能成。",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "事件",
+        "methods": [
+          "liuyao"
+        ],
+        "methods_match": "contains",
+        "profile_updates": "none",
+        "subjects": [
+          "事件",
+          "本人"
+        ],
+        "subject_reason": "One cooperation event, personally cast by the user; Liu Yao runs once and uses no participant birth facts."
+      }
+    },
+    {
+      "id": "implicit-meihua-en",
+      "category": "capability",
+      "language": "en",
+      "question": "I spontaneously chose the numbers 12, 23 and 6. Please use those numbers to cast a hexagram about tomorrow’s contract negotiation.",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "事件",
+        "methods": [
+          "meihua"
+        ],
+        "methods_match": "contains",
+        "profile_updates": "none",
+        "subjects": [
+          "事件",
+          "本人"
+        ],
+        "subject_reason": "One contract negotiation event, with user-selected casting numbers; Mei Hua uses no participant birth facts."
+      }
+    },
+    {
+      "id": "implicit-qimen-zh",
+      "category": "capability",
+      "language": "zh-Hans",
+      "question": "请按当前时间和地点起局，结合九宫、九星和八门，推算这次出行适合先往哪个方向拜访客户。",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "事件",
+        "methods": [
+          "qimen"
+        ],
+        "methods_match": "contains",
+        "profile_updates": "none",
+        "subjects": [
+          "事件",
+          "本人"
+        ],
+        "subject_reason": "One client trip event; Qi Men runs once and uses no participant birth facts."
+      }
+    },
+    {
+      "id": "implicit-xiaoliuren-en",
+      "category": "capability",
+      "language": "en",
+      "question": "Please use the six outcomes Da An, Liu Lian, Su Xi, Chi Kou, Xiao Ji and Kong Wang for a quick time-based reading of tonight’s trip.",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "事件",
+        "methods": [
+          "xiaoliuren"
+        ],
+        "methods_match": "contains",
+        "profile_updates": "none",
+        "subjects": [
+          "事件",
+          "本人"
+        ],
+        "subject_reason": "One trip event; Xiao Liu Ren runs once and uses no participant birth facts."
+      }
+    },
+    {
+      "id": "implicit-chenggu-zh",
+      "category": "capability",
+      "language": "zh-Hans",
+      "question": "请把我出生年、月、日、时对应的传统骨重相加，给出总重量和对应歌诀。",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "本人",
+        "methods": [
+          "chenggu"
+        ],
+        "methods_match": "contains",
+        "profile_updates": "none"
+      }
+    },
+    {
+      "id": "implicit-xingming-en",
+      "category": "capability",
+      "language": "en",
+      "question": "Please calculate the Heaven, Personality, Earth, Outer and Total grids from the stroke counts of my Chinese name 陈平.",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "本人",
+        "methods": [
+          "xingming"
+        ],
+        "methods_match": "contains",
+        "profile_updates": "none"
+      }
+    },
+    {
+      "id": "implicit-astrology-zh",
+      "category": "capability",
+      "language": "zh-Hans",
+      "question": "请按出生时刻的太阳、月亮、上升、行星宫位和相位，分析我的个性和职业倾向。",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "本人",
+        "methods": [
+          "astrology"
+        ],
+        "methods_match": "contains",
+        "profile_updates": "none"
+      }
+    },
+    {
+      "id": "implicit-tarot-en",
+      "category": "capability",
+      "language": "en",
+      "question": "Let me personally draw three cards, including upright or reversed positions, to examine the situation, obstacle and advice for this project.",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "事件",
+        "methods": [
+          "tarot"
+        ],
+        "methods_match": "contains",
+        "profile_updates": "none",
+        "subjects": [
+          "事件",
+          "本人"
+        ],
+        "subject_reason": "One project event, personally drawn by the user; Tarot runs once and uses no participant birth facts."
+      }
+    },
+    {
+      "id": "missing-birth-bazi",
+      "category": "missing-data",
+      "language": "zh-Hans",
+      "question": "我没有提供出生年月日时，只用八字看事业，缺什么资料就让我填，不要换方法。",
+      "context": "empty",
+      "expected": {
+        "action": "intake",
+        "subject": "本人",
+        "methods": [
+          "bazi"
+        ],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": [
+          "bazi"
+        ]
+      }
+    },
+    {
+      "id": "missing-place-qimen",
+      "category": "missing-data",
+      "language": "en",
+      "question": "Use only Qi Men Dun Jia to calculate this trip. I have not provided the location yet; ask me for it rather than switching methods.",
+      "context": "empty",
+      "expected": {
+        "action": "intake",
+        "subject": "事件",
+        "methods": [
+          "qimen"
+        ],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": [
+          "qimen"
+        ],
+        "subjects": [
+          "事件",
+          "本人"
+        ],
+        "subject_reason": "One trip event; missing casting location stays user-entered and neither subject label supplies participant birth facts."
+      }
+    },
+    {
+      "id": "multi-method-bazi-tarot",
+      "category": "multiple-methods",
+      "language": "zh-Hans",
+      "question": "请同时用八字和塔罗分析我的职业发展，两个方法都要，其他方法不要加。",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "本人",
+        "methods": [
+          "bazi",
+          "tarot"
+        ],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": [
+          "bazi",
+          "tarot"
+        ]
+      }
+    },
+    {
+      "id": "multi-person-astrology",
+      "category": "multiple-people",
+      "language": "en",
+      "question": "Use only Western Astrology to calculate a synastry comparison of 陈平 and 李岚 for their working relationship.",
+      "context": "pair-full",
+      "expected": {
+        "action": "intake",
+        "subject": "多人",
+        "methods": [
+          "astrology"
+        ],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": [
+          "astrology"
+        ]
+      }
+    },
+    {
+      "id": "quoted-negated-command",
+      "category": "negative-quoted",
+      "language": "zh-Hans",
+      "question": "不要替我计算。朋友说“用八字重新算一下”是什么意思？只解释这句话。",
+      "context": "empty",
+      "expected": {
+        "action": "reply",
+        "subject": "事件",
+        "methods": [],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": [],
+        "subjects": [
+          "事件",
+          "他人"
+        ],
+        "subject_reason": "Ordinary explanation of a friend's quoted words; no calculation, participant selection or profile facts are requested."
+      }
+    },
+    {
+      "id": "ambiguous-short-question",
+      "category": "ambiguous",
+      "language": "zh-Hans",
+      "question": "那个怎么样？",
+      "context": "empty",
+      "expected": {
+        "action": "clarify",
+        "subject": "事件",
+        "methods": [],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": []
+      }
+    },
+    {
+      "id": "explain-existing-tarot",
+      "category": "follow-up-explain",
+      "language": "en",
+      "question": "Please explain why the existing reading recommends agreeing on the budget first. Do not calculate again.",
+      "context": "prior-tarot",
+      "expected": {
+        "action": "reply",
+        "subject": "事件",
+        "methods": [],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": []
+      }
+    },
+    {
+      "id": "add-liuyao-to-existing",
+      "category": "follow-up-add",
+      "language": "zh-Hans",
+      "question": "同一个市集合作安排，再用六爻补充推算一次，保留原来的塔罗结果。",
+      "context": "prior-tarot",
+      "expected": {
+        "action": "supplement",
+        "subject": "事件",
+        "methods": [
+          "liuyao"
+        ],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": [
+          "liuyao"
+        ],
+        "subjects": [
+          "事件",
+          "本人"
+        ],
+        "subject_reason": "One previously anchored market project; adding Liu Yao preserves the old reading and uses no participant birth facts."
+      }
+    },
+    {
+      "id": "recast-existing-tarot",
+      "category": "follow-up-recast",
+      "language": "en",
+      "question": "For the same market project, please draw a completely new Tarot spread and recalculate. Do not reuse the old cards.",
+      "context": "prior-tarot",
+      "expected": {
+        "action": "intake",
+        "subject": "事件",
+        "methods": [
+          "tarot"
+        ],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": [
+          "tarot"
+        ],
+        "subjects": [
+          "事件",
+          "本人"
+        ],
+        "subject_reason": "One previously anchored market project; a new Tarot spread runs once and uses no participant birth facts."
+      }
+    },
+    {
+      "id": "hypothetical-birth-not-fact",
+      "category": "hypothetical",
+      "language": "zh-Hans",
+      "question": "假设一位未保存的林舟出生于1990年1月2日08:30，出生地上海。请只用八字计算这个假设，不要保存或改写任何人的资料。",
+      "context": "names-only",
+      "expected": {
+        "action": "intake",
+        "subject": "他人",
+        "methods": [
+          "bazi"
+        ],
+        "methods_match": "exact",
+        "profile_updates": "none",
+        "mandatory_methods": [
+          "bazi"
+        ]
+      }
+    },
+    {
+      "id": "named-ziwei-unknown-time",
+      "category": "named-without-only",
+      "language": "zh-Hans",
+      "question": "请用紫微斗数看我的职业发展，但我不记得出生时辰。",
+      "context": "self-time-unknown",
+      "expected": {
+        "action": "intake",
+        "subject": "本人",
+        "methods": [
+          "ziwei"
+        ],
+        "methods_match": "exact",
+        "mandatory_methods": [
+          "ziwei"
+        ],
+        "profile_updates": "none"
+      }
+    },
+    {
+      "id": "named-multiple-without-only",
+      "category": "named-without-only",
+      "language": "zh-Hans",
+      "question": "请用八字和塔罗一起分析我的职业发展。",
+      "context": "self-full",
+      "expected": {
+        "action": "intake",
+        "subject": "本人",
+        "methods": [
+          "bazi",
+          "tarot"
+        ],
+        "methods_match": "exact",
+        "mandatory_methods": [
+          "bazi",
+          "tarot"
+        ],
+        "profile_updates": "none"
+      }
+    }
+  ]
+}

@@ -9,7 +9,7 @@
 - `followUp(question:run:profile:history:onDelta:)` 对已有资料与结果补充解释，不假装执行新算法。
 - `summarize(transcript:previous:)` 专用于压缩过长的出站上下文。
 
-规划时传入已有记录的完整输入、已调用方法及人员归属、全部可用结果与限制，避免把普通追问当作新一轮推演。supplement只提议本条确需新增或更新的方法，最终是否计算由客户端按方法、人员UUID、实际相关输入和插件版本判断。complete/partial可复用，failed/unavailable可重试；资料未变时，partial、方法名称被提到或用户要求展开都不会自行触发重算。
+规划时传入可引用消息ID、问题与人员归属、已调用方法及结果状态等摘要，完整盘面和实际出生资料留给最终解读与本地表单；最近12条用户原文和延续摘要完整保留，仅普通助手答文摘录，避免把普通追问当作新一轮推演。supplement只提议本条确需新增或更新的方法，最终是否计算由客户端按方法、人员UUID、实际相关输入和插件版本判断。complete/partial可复用，failed/unavailable可重试；资料未变时，partial、方法名称被提到或用户要求展开都不会自行触发重算。
 
 出生资料、坐标、时区等可定位的输入修正适合局部补算。事件的目标、所问时段、交易对象或关键约束发生实质变化，使原起卦所问不再成立时，规划为intake并确认新的问事；不能只在说明里宣称条件变化、却用相同输入要求重算。补充背景、情绪变化与自然过了一段时间本身不触发新起卦。
 
@@ -21,7 +21,7 @@ API 统一使用 wellecho.cn 的账号网关，客户端兼容模型标识为 `d
 
 连接检查仅供开发验证使用，不出现在产品设置中。测试可读取请求与返回模型、thinking、推理强度和输出预算元数据；这些请求同样经过账号网关并受服务器策略约束。未完成真实设备授权和请求验证时，不将模拟器或 mock 结果当作 iPhone 的诊断结论。
 
-3.0.15 起所有 AI 调用统一走 `https://wellecho.cn/xiazi-api/v1/ai/chat/completions/`，使用自有账号 access token，不读取或携带供应商 key。请求包含 plan / synthesize / follow_up / summarize / geocoding / diagnostic purpose；服务器执行真实模型与预算策略并记录用量。客户端保留兼容模型配置、thinking 参数与 65,536 请求预算，服务器上限优先。`URLSession` 请求超时为 300 秒，资源总超时为 900 秒。仅最终 `content` 进入聊天，隐藏推理不会写入聊天或后续请求。
+3.0.15 起所有 AI 调用统一走 `https://wellecho.cn/xiazi-api/v1/ai/chat/completions/`，使用自有账号 access token，不读取或携带供应商 key。请求包含 plan / synthesize / follow_up / summarize / geocoding / diagnostic purpose；服务器执行真实模型与预算策略并记录用量。3.0.305 起仅规划请求显式携带 `planning_version=routing-v2`，同一 deepseek-v4-pro 使用 non-thinking、2,048 token 预算；无标记的旧规划仍使用 thinking/low、4,096，已提交阶段与缓存保持原指纹。最终解读和追问继续使用既有 thinking/max；其客户端 65,536 请求预算仍由服务器上限约束。资料由用户在表单填写并选择人员，不采用模型返回的 profileUpdates 自动填写。`URLSession` 请求超时为 300 秒，资源总超时为 900 秒。仅最终 `content` 进入聊天，隐藏推理不会写入聊天或后续请求。
 
 3.0.19 起显式沙盒构建使用 `ServiceEnvironment.current` 切换整套账号与 AI base 至 `https://wellecho.cn/xiazi-sandbox-api/v1/`。默认工程仍为生产，运行期没有环境开关。沙盒会话、失效标记、请求快照及结束队列独立；同一本机历史任务在沙盒映射为另一个稳定服务器 UUID，不能沿用生产票据。任务记录也校验环境标记，旧无标记记录仅允许生产迁移。
 

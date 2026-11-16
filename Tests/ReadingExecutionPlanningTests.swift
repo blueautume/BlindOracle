@@ -5,6 +5,218 @@ import XCTest
 /// These exercise the actual response decoder and method selection together.
 /// The mock transport never sends a request to the account or model services.
 final class ReadingExecutionPlanningTests: XCTestCase {
+    func testSelectedExplicitMethodsBecomeMandatoryWithoutAPlannerMandatoryField() async throws {
+        let names: [OracleMethod: String] = [.bazi: "八字", .ziwei: "紫微斗数", .liuyao: "六爻", .meihua: "梅花易数",
+            .qimen: "奇门遁甲", .xiaoliuren: "小六壬", .chenggu: "称骨", .xingming: "姓名五格", .astrology: "西方占星", .tarot: "塔罗"]
+        let cases: [(String, [OracleMethod])] = OracleMethod.allCases.map { method in
+            ("请用\(names[method]!)推算这次安排。", [method])
+        } + [("请用八字和塔罗一起分析我的职业发展。", [.bazi, .tarot])]
+        for (question, methods) in cases {
+            let plan = try await planned(question: question,
+                payload: payload(question: question, action: "intake", methods: methods.map(\.rawValue),
+                    relation: "newQuestion", execution: execution("calculate", "changed", question)))
+            XCTAssertEqual(plan.action, "intake", question)
+            XCTAssertEqual(Set(plan.methods), Set(methods), question)
+            XCTAssertEqual(Set(plan.mandatoryMethods ?? []), Set(methods), question)
+        }
+
+        // The decoder must report a genuinely wrong model selection. Product
+        // enforcement is separately exercised through the actual Store below.
+        let question = "请用紫微斗数看我的职业发展。"
+        let wrongSelection = try await planned(question: question,
+            payload: payload(question: question, action: "intake", methods: ["xiaoliuren"],
+                relation: "newQuestion", execution: execution("calculate", "changed", question)))
+        XCTAssertEqual(wrongSelection.methods, [.xiaoliuren])
+        XCTAssertTrue((wrongSelection.mandatoryMethods ?? []).isEmpty)
+    }
+
+    func testQuotedMethodNamesDoNotBecomeMandatoryForAnExplanation() async throws {
+        let question = "不要替我计算。朋友说“用八字重新算一下”是什么意思？只解释这句话。"
+        let plan = try await planned(question: question,
+            payload: payload(question: question, action: "reply", methods: [], relation: "newQuestion",
+                execution: execution("answer", "existing", question)))
+        XCTAssertEqual(plan.action, "reply")
+        XCTAssertTrue(plan.methods.isEmpty)
+        XCTAssertTrue((plan.mandatoryMethods ?? []).isEmpty)
+    }
+
+    func testQuotedMethodCommandsCannotTurnAnAnchoredExplanationIntoASupplement() async throws {
+        let reference = makeReference(run: makeRun(methods: [.tarot]))
+        for question in ["朋友说“用八字看事业”这句话是否可靠？",
+            "朋友说「再用紫微斗数补充分析事业」，我该怎么理解？",
+            "『用八字推算事业』是朋友的话，请解释这句话。"] {
+            let plan = try await planned(question: question,
+                payload: payload(question: question, action: "reply", methods: [],
+                    reference: reference.messageID, execution: execution("answer", "existing", question)),
+                references: [reference])
+            XCTAssertEqual(plan.action, "reply", question)
+            XCTAssertTrue(plan.methods.isEmpty, question)
+            XCTAssertTrue((plan.mandatoryMethods ?? []).isEmpty, question)
+            XCTAssertNil(plan.baseRunID, question)
+        }
+    }
+
+    func testApostropheOnlyEvidenceChangesRestoreTheExactUserSpan() async throws {
+        let original = "Use only Mei Hua Yi Shu to calculate whether tomorrow’s contract negotiation will go smoothly."
+        let normalized = original.replacingOccurrences(of: "’", with: "'")
+        for (question, evidence) in [(original, normalized), (normalized, original),
+            ("明天的安排📅：" + original, normalized)] {
+            let plan = try await planned(question: question,
+                payload: payload(question: question, action: "intake", methods: ["meihua"],
+                    relation: "newQuestion", execution: execution("calculate", "changed", evidence)))
+            XCTAssertEqual(plan.action, "intake", question)
+            XCTAssertEqual(plan.methods, [.meihua], question)
+            let expected = question.contains(original) ? original : normalized
+            XCTAssertEqual(plan.understanding?.execution?.evidence, expected,
+                "Later authorization must use the exact source spelling, including Unicode boundaries")
+            XCTAssertTrue(question.contains(try XCTUnwrap(plan.understanding?.execution?.evidence)))
+        }
+    }
+
+    func testApostropheEvidenceAlignmentCannotChangeWordsOrAuthorizeQuotedAndNegatedCommands() async throws {
+        let cases: [(String, String)] = [
+            ("Use only Mei Hua Yi Shu to calculate tomorrow’s contract negotiation.",
+             "Use only Mei Hua Yi Shu to calculate today's contract negotiation."),
+            ("Don’t calculate tomorrow’s negotiation; explain the existing reading.",
+             "Calculate tomorrow's negotiation; explain the existing reading."),
+            ("What does \"Use only Mei Hua Yi Shu to calculate tomorrow’s negotiation\" mean?",
+             "Use only Mei Hua Yi Shu to calculate tomorrow's negotiation"),
+            ("Don’t use Mei Hua Yi Shu to calculate tomorrow’s negotiation.",
+             "Don't use Mei Hua Yi Shu to calculate tomorrow's negotiation.")
+        ]
+        for (question, evidence) in cases {
+            let plan = try await planned(question: question,
+                payload: payload(question: question, action: "intake", methods: ["meihua"],
+                    relation: "newQuestion", execution: execution("calculate", "changed", evidence)))
+            assertClarification(plan, context: question)
+            XCTAssertNil(plan.mandatoryMethods, question)
+        }
+    }
+
+    func testKnownZiweiQuestionWithMissingBirthTimeOpensTheFormInsteadOfChangingMethods() async throws {
+        // This response reproduces the actual model failure from the live matrix.
+        let question = "请用紫微斗数看我的职业发展，但我不记得出生时辰。"
+        var response = payload(question: question, action: "clarify", methods: [], relation: "newQuestion",
+            execution: execution("clarify", "unknown", question))
+        response["subject"] = "本人"
+        response["note"] = "紫微斗数需要唯一的出生时辰，你记得大致是几点，或者有其他线索吗？"
+        let plan = try await planned(question: question, payload: response)
+        XCTAssertEqual(plan.action, "intake")
+        XCTAssertEqual(plan.methods, [.ziwei])
+        XCTAssertEqual(plan.mandatoryMethods, [.ziwei])
+        XCTAssertTrue(plan.requiredFields.contains(.birthTime))
+        XCTAssertEqual(plan.question, question)
+        XCTAssertNil(plan.profileUpdates)
+
+        let run = makeRun(methods: [.bazi])
+        let reference = makeReference(run: run)
+        let supplement = "同一个职业问题，请再用紫微斗数补充分析，但我不记得出生时辰。"
+        response = payload(question: supplement, action: "clarify", methods: [],
+            reference: reference.messageID, execution: execution("clarify", "unknown", supplement))
+        response["note"] = "紫微斗数需要唯一的出生时辰，你记得大致是几点，或者有其他线索吗？"
+        let added = try await planned(question: supplement, payload: response, references: [reference])
+        XCTAssertEqual(added.action, "supplement")
+        XCTAssertEqual(added.methods, [.ziwei])
+        XCTAssertEqual(added.mandatoryMethods, [.ziwei])
+        XCTAssertEqual(added.baseRunID, run.id)
+        XCTAssertTrue(added.requiredFields.contains(.birthTime))
+        XCTAssertNil(added.profileUpdates)
+    }
+
+    func testMissingProfileRecoveryCannotResolveAnAmbiguousTopicOrAConsultation() async throws {
+        let question = "请用紫微斗数看我的职业发展，但我不记得出生时辰。"
+        let cases: [(String, String, String)] = [
+            (question, "ambiguous", "请提供出生时辰，你具体想看哪件事？"),
+            (question, "newQuestion", "你具体想看哪份工作，还是换一个问题？"),
+            ("请用紫微斗数看职业发展，但不记得出生时辰。", "newQuestion",
+             "请先确认这次要看你还是朋友的职业发展，并补充出生时辰。"),
+            ("不要算紫微斗数，只解释为什么需要出生时辰。", "newQuestion", "请提供出生时辰。")
+        ]
+        for (question, relation, note) in cases {
+            var response = payload(question: question, action: "clarify", methods: [], relation: relation,
+                execution: execution("clarify", "unknown", question))
+            response["note"] = note
+            let plan = try await planned(question: question, payload: response)
+            assertClarification(plan, context: question + note)
+            XCTAssertNil(plan.mandatoryMethods)
+            XCTAssertNil(plan.profileUpdates)
+        }
+    }
+
+    func testMissingCastingLocationOpensQimenFormWithoutReplacingTheMethod() async throws {
+        let cases = [
+            ("Use only Qi Men Dun Jia to calculate this trip. I have not provided the location yet; ask me for it rather than switching methods.",
+             "Please provide the current location so I can calculate the Qi Men Dun Jia chart for this trip."),
+            ("Use only Qi Men Dun Jia to calculate this trip. I have not provided the location yet; ask me for it rather than switching methods.",
+             "Please provide the location for the Qi Men Dun Jia calculation."),
+            ("请用奇门遁甲看这次出行，我还没有提供起局地。",
+             "请提供当前地点，以便为这次出行起奇门遁甲局。")
+        ]
+        for (question, note) in cases {
+            var response = payload(question: question, action: "clarify", methods: [], relation: "newQuestion",
+                execution: execution("clarify", "unknown", question))
+            response["note"] = note
+            let plan = try await planned(question: question, payload: response)
+            XCTAssertEqual(plan.action, "intake", question)
+            XCTAssertEqual(plan.methods, [.qimen], question)
+            XCTAssertEqual(plan.mandatoryMethods, [.qimen], question)
+            XCTAssertTrue(plan.requiredFields.contains(.currentLocation), question)
+            XCTAssertNil(plan.profileUpdates, question)
+        }
+    }
+
+    @MainActor func testExplicitMethodsRemainMandatoryThroughTheRealStoreWhenPlannerChoosesAnAlternative() async throws {
+        let names: [OracleMethod: String] = [.bazi: "八字", .ziwei: "紫微斗数", .liuyao: "六爻", .meihua: "梅花易数",
+            .qimen: "奇门遁甲", .xiaoliuren: "小六壬", .chenggu: "称骨", .xingming: "姓名五格", .astrology: "西方占星", .tarot: "塔罗"]
+        let cases: [(String, [OracleMethod])] = OracleMethod.allCases.map { method in
+            ("请用\(names[method]!)推算这次安排。", [method])
+        } + [("请用八字和塔罗一起分析我的职业发展。", [.bazi, .tarot]),
+             ("请用紫微斗数看我的职业发展，但我不记得出生时辰。", [.ziwei])]
+        for (question, expected) in cases {
+            let key = "mandatory-store-" + UUID().uuidString
+            let proposal = payload(question: question, action: "intake", methods: ["xiaoliuren"],
+                relation: "newQuestion", execution: execution("calculate", "changed", question))
+            let content = String(decoding: try JSONSerialization.data(withJSONObject: proposal), as: UTF8.self)
+            let response = try JSONSerialization.data(withJSONObject: ["model": DeepSeekConfiguration.defaultModel,
+                "choices": [["message": ["content": content], "finish_reason": "stop"]]])
+            ExecutionPlanningURLProtocol.install(.init(body: response, question: question), for: key)
+            defer { ExecutionPlanningURLProtocol.remove(key) }
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [ExecutionPlanningURLProtocol.self]
+            let client = DeepSeekClient(accessToken: key, sessionConfiguration: configuration)
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(key)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let store = OracleStore(vault: LocalVault(directory: directory), bootstrapCredential: false, aiClient: client)
+            store.send(question)
+            let deadline = ContinuousClock.now + .seconds(3)
+            while store.isBusy && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+            XCTAssertFalse(store.isBusy, question)
+            let plan = try XCTUnwrap(store.pendingPlan, question)
+            XCTAssertEqual(Set(plan.methods), Set(expected), question)
+            XCTAssertEqual(Set(plan.mandatoryMethods ?? []), Set(expected), question)
+            XCTAssertTrue(store.runs.isEmpty, "An explicit method request must still await user confirmation")
+            if expected == [.ziwei] {
+                XCTAssertFalse(store.confirmGroupIntake(profiles: [], numbers: [], save: false),
+                    "Missing birth facts must not silently downgrade the mandated method")
+                XCTAssertEqual(store.pendingPlan?.methods, [.ziwei])
+                XCTAssertTrue(store.runs.isEmpty)
+            }
+        }
+    }
+
+    func testValidRoutingResponseCannotAutomaticallySupplyBirthFacts() async throws {
+        let question = "请用八字分析事业，出生资料我会在表单里填写。"
+        var response = payload(question: question, action: "intake", methods: ["bazi"],
+            relation: "newQuestion", execution: execution("calculate", "changed", question))
+        response["profileUpdates"] = [["name": "虚构自动填写", "birthDate": "1990-01-02", "birthTime": "08:30",
+            "birthTimeZoneID": "Asia/Shanghai", "birthPlace": "上海市黄浦区", "birthLatitude": 31.2304,
+            "birthLongitude": 121.4737]]
+        let plan = try await planned(question: question, payload: response)
+        XCTAssertEqual(plan.action, "intake")
+        XCTAssertEqual(plan.methods, [.bazi])
+        XCTAssertNil(plan.profileUpdates, "Routing may ask for a form; it must not fabricate its values")
+    }
+
     func testChangedTargetsRecoverReferencedMethodsBeforeReplyCanDiscardThem() async throws {
         let referenced = makeRun(methods: [.tarot, .xiaoliuren])
         let unrelatedLatest = makeRun(methods: [.bazi])
@@ -45,6 +257,31 @@ final class ReadingExecutionPlanningTests: XCTestCase {
         XCTAssertNil(plan.baseRunID)
         XCTAssertEqual(plan.question, question)
         XCTAssertEqual(plan.interactions?.map(\.method), [.tarot])
+    }
+
+    func testRecastKeepsSelectedMethodsMandatoryWhenTheModelOmitsThatField() async throws {
+        let reference = makeReference(run: makeRun(methods: [.tarot]))
+        let question = "For the same market project, please draw a completely new Tarot spread and recalculate. Do not reuse the old cards."
+        let response = payload(question: question, action: "intake", methods: ["tarot"],
+            reference: reference.messageID, execution: execution("recast", "changed", question))
+        XCTAssertNil(response["mandatoryMethods"])
+        let plan = try await planned(question: question, payload: response, references: [reference])
+        XCTAssertEqual(plan.action, "intake")
+        XCTAssertEqual(plan.methods, [.tarot])
+        XCTAssertEqual(plan.mandatoryMethods, [.tarot])
+        XCTAssertNil(plan.baseRunID)
+        XCTAssertEqual(plan.interactions?.map(\.method), [.tarot])
+
+        for question in ["Don't redraw; explain the saved spread.",
+            "What does \"draw a completely new Tarot spread\" mean? Do not calculate.",
+            "他说“重新起卦”是什么意思？"] {
+            let denied = try await planned(question: question,
+                payload: payload(question: question, action: "intake", methods: ["tarot"],
+                    reference: reference.messageID, execution: execution("recast", "changed", question)),
+                references: [reference])
+            assertClarification(denied, context: question)
+            XCTAssertNil(denied.mandatoryMethods, "A fabricated recast cannot lock any method")
+        }
     }
 
     func testCoveredAnswerCannotBecomeANewReadingBecauseThePayloadSaysIntake() async throws {
@@ -182,6 +419,70 @@ final class ReadingExecutionPlanningTests: XCTestCase {
             existingRun: makeRun(methods: [.bazi]))
         assertClarification(plan)
         XCTAssertNil(plan.understanding?.referenceMessageID)
+    }
+
+    func testNewQuestionIgnoresUnusedReferencePlaceholdersWithoutAdoptingAnOldReading() async throws {
+        let reference = makeReference(run: makeRun(methods: [.bazi]))
+        let question = "Use only Chinese Name Numerology to calculate the five-grid stroke pattern of my name 陈平."
+        let placeholders: [Any] = ["", "not-a-uuid", 17, ["id": reference.messageID.uuidString],
+            [reference.messageID.uuidString], NSNull(), reference.messageID.uuidString]
+        for placeholder in placeholders {
+            var response = payload(question: question, action: "intake", methods: ["xingming"],
+                relation: "newQuestion", execution: execution("calculate", "changed", question))
+            var understanding = try XCTUnwrap(response["understanding"] as? [String: Any])
+            understanding["referenceMessageID"] = placeholder
+            response["understanding"] = understanding
+            let plan = try await planned(question: question, payload: response,
+                existingRun: reference.run, references: [reference])
+            XCTAssertEqual(plan.action, "intake", String(describing: placeholder))
+            XCTAssertEqual(plan.methods, [.xingming])
+            XCTAssertEqual(plan.mandatoryMethods, [.xingming])
+            XCTAssertEqual(plan.understanding?.relation, .newQuestion)
+            XCTAssertEqual(plan.understanding?.execution?.evidence, question)
+            XCTAssertNil(plan.understanding?.referenceMessageID)
+            XCTAssertNil(plan.baseRunID)
+            XCTAssertEqual(plan.question, question)
+        }
+    }
+
+    func testActualContinuationReferencesRemainStrictAndAmbiguousMessagesStayUnbound() async throws {
+        let reference = makeReference(run: makeRun(methods: [.bazi]))
+        let question = "请用姓名五格推算陈平的名字。"
+        for relation in ["continuation", "changedConditions", "changedParticipants", "ambiguous"] {
+            for placeholder: Any in ["", "not-a-uuid", 17, NSNull()] {
+                var response = payload(question: question, action: "intake", methods: ["xingming"],
+                    relation: relation, execution: execution("calculate", "changed", question))
+                var understanding = try XCTUnwrap(response["understanding"] as? [String: Any])
+                understanding["referenceMessageID"] = placeholder
+                response["understanding"] = understanding
+                let plan = try await planned(question: question, payload: response,
+                    existingRun: reference.run, references: [reference])
+                assertClarification(plan, context: relation + ": " + String(describing: placeholder))
+                XCTAssertNil(plan.understanding?.referenceMessageID)
+                XCTAssertNil(plan.mandatoryMethods)
+            }
+        }
+    }
+
+    func testIgnoringANewQuestionReferenceCannotHideMalformedExecution() async throws {
+        let reference = makeReference(run: makeRun(methods: [.bazi]))
+        let question = "请用姓名五格推算陈平的名字。"
+        let invalidExecution: [Any] = [NSNull(), "calculate",
+            execution("unknown", "changed", question),
+            ["operation": "calculate", "evidence": question],
+            execution("calculate", "changed", "模型编造的执行授权")]
+        for invalid in invalidExecution {
+            var response = payload(question: question, action: "intake", methods: ["xingming"],
+                relation: "newQuestion", execution: invalid)
+            var understanding = try XCTUnwrap(response["understanding"] as? [String: Any])
+            understanding["referenceMessageID"] = ""
+            response["understanding"] = understanding
+            let plan = try await planned(question: question, payload: response,
+                existingRun: reference.run, references: [reference])
+            assertClarification(plan, context: String(describing: invalid))
+            XCTAssertNil(plan.understanding?.referenceMessageID)
+            XCTAssertNil(plan.mandatoryMethods)
+        }
     }
 
     func testMalformedExecutionAndFabricatedEvidenceDecodeIntoSafeClarification() async throws {

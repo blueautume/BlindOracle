@@ -12,6 +12,25 @@ struct ReadingExecutionIntent: Codable, Sendable {
 /// Topic relation selects the context. This policy separately selects the work
 /// to perform, before a reply action can discard methods or reuse a saved cast.
 enum ReadingExecutionPolicy {
+    /// Match a continuous source span, allowing only typographic apostrophes
+    /// to change shape. Return the original text so later authorization still
+    /// validates verbatim evidence, including every word and negation.
+    static func groundedEvidence(_ evidence: String, in question: String) -> String? {
+        guard !evidence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              evidence.count <= 1000 else { return nil }
+        if question.contains(evidence) { return evidence }
+        func apostrophes(_ text: String) -> String {
+            String(text.map { $0 == "’" || $0 == "‘" ? Character("'") : $0 })
+        }
+        let source = apostrophes(question)
+        guard let range = source.range(of: apostrophes(evidence)) else { return nil }
+        let start = source.distance(from: source.startIndex, to: range.lowerBound)
+        let length = source.distance(from: range.lowerBound, to: range.upperBound)
+        let lower = question.index(question.startIndex, offsetBy: start)
+        let upper = question.index(lower, offsetBy: length)
+        return String(question[lower..<upper])
+    }
+
     static func validatedAction(understanding: ConversationUnderstanding?, rawQuestion: String,
                                 proposedAction: String, hasRelatedRun: Bool) -> String? {
         guard understanding?.relation != .ambiguous else { return "clarify" }

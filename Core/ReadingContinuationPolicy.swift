@@ -16,8 +16,8 @@ enum ReadingContinuationPolicy {
     ]
     private static let newQuestionPattern = #"(?:换个新?|换一个新?|另一个|另外一个|另问(?:一件|一桩|个|一个)?|换一件|问(?:个|一个|一件)新)(?:问题|事|事情)"#
     private static let personSwitch = #"(?:换(?:个|一个|一位|位|成另一个|成另一位|成别的|成其他)人|(?:换成|改看|改问|改算)(?:(?:我自己|本人|我|他|她|别人|其他人|另一个人|另一位)(?=$|[的呢吧了])|我(?:的)?(?:同事|同学|朋友|对象|家人|爸爸|妈妈)))"#
-    private static let calculationVerb = #"(?:计算|测算|算(?:一下|一次|一遍|一算|算)?|看看|看一下|看一看|排盘(?:分析)?|推演(?:一下)?|试试看|试试|试一下|试一试|尝试|分析(?:一下)?|解读(?:一下)?|参考(?:一下)?|测(?:一测|一下|测)|占卜|起(?:一|个|一轮)?卦|抽(?:(?:一次|一组|三张)牌?|牌))"#
-    private static let calculationModifiers = #"(?:再|也|来|帮我|替我|给我|仔细|好好|认真)*"#
+    private static let calculationVerb = #"(?:计算|测算|推算|算(?:一下|一次|一遍|一算|算)?|看(?:看|一下|一看)?|排盘(?:分析)?|推演(?:一下)?|试试看|试试|试一下|试一试|尝试|分析(?:一下)?|解读(?:一下)?|参考(?:一下)?|测(?:一测|一下|测)|占卜|起(?:一|个|一轮)?卦|抽(?:(?:一次|一组|三张)牌?|牌))"#
+    private static let calculationModifiers = #"(?:再|也|来|帮我|替我|给我|仔细|好好|认真|补充)*"#
 
     enum ScopeChange: Equatable { case none, explicit, inferred }
 
@@ -169,8 +169,13 @@ enum ReadingContinuationPolicy {
     /// Extract explicit method commands independently of whether they belong to
     /// a new question or supplement. A mention or explanation is not a command.
     static func requestedCalculationMethods(in question: String, requiresAdditiveWording: Bool = false) -> [OracleMethod] {
-        let english = EnglishConversation.requestedMethods(in: question, additive: requiresAdditiveWording, allowFreshScope: true)
-        let clauses = question.components(separatedBy: CharacterSet(charactersIn: "，,。；;！!？?\n"))
+        // Remove quoted instructions before splitting clauses: punctuation
+        // inside a quotation must not expose its contents as a new command.
+        // Apostrophes are deliberately excluded (don't, tomorrow's).
+        let source = question.replacingOccurrences(of: #"“[^”]*”|「[^」]*」|『[^』]*』|\"[^\"]*\""#,
+            with: " ", options: .regularExpression)
+        let english = EnglishConversation.requestedMethods(in: source, additive: requiresAdditiveWording, allowFreshScope: true)
+        let clauses = source.components(separatedBy: CharacterSet(charactersIn: "，,。；;！!？?\n"))
         let additions = #"(?:加上|加个|加一个|加入|再加|增加|补算|补个|补一个|补上|补一份)"#
         let namedMethod = "(?:" + methodNames.map { $0.1 }.joined(separator: "|") + ")"
         let join = #"(?:、|以及|和|与|及|加|配合)"#
@@ -264,7 +269,21 @@ enum ReadingContinuationPolicy {
             + "|" + fields + #".{0,6}(?:是必填|必须填|有必要|有什么用|为什么|必须吗|必填吗)"#
         let definition = method + #"(?:是什么|是什么意思|是干什么的|有什么用|能做什么|能算什么|的原理|的步骤|怎么算|怎么用)"#
         let comparison = method + #"(?:和|与|跟|、)"# + method + #"(?:有何区别|有什么区别|的区别|差别是什么)"#
-        return compact.range(of: preparation + "|" + fieldQuestion + "|" + definition + "|" + comparison,
+        // A topic may stand between the named method and a question about
+        // its inputs or reliability: "用八字看事业需要什么资料" still asks
+        // about preparation, rather than authorizing the calculation.
+        let methodReading = method + calculationModifiers + calculationVerb + #".{0,24}?"#
+        let needsInput = #"(?:之前|以前|前)?(?:还|先)?(?:需要|要|需不需要|要不要|必须)(?:先)?(?:准备|提供|填写|补充|知道)?"#
+        let readingPreparation = methodReading + needsInput
+            + #"(?:(?:什么|哪些|啥|多少)(?:我的)?"# + fields + "|(?:我的)?" + fields + #".{0,5}(?:吗|么|呢)$)"#
+        let reliability = methodReading
+            + #"(?:准不准|准确(?:吗|么)|会准吗|准吗|是否(?:可靠|准确|可信)|可不可靠|可靠(?:吗|么)|可信(?:吗|么)|靠不靠谱|靠谱(?:吗|么)|有没有(?:依据|道理))"#
+        let readingExplanation = methodReading + #"(?:是什么原理|原理是什么|的原理|的依据|的步骤|是什么意思|能看出什么|能说明什么)"#
+        // A conditional method proposal is not an imperative. Keep this
+        // anchored to the method so "假设我...请用八字推算" still qualifies.
+        let conditionalMethod = #"^(?:如果|假如|要是|假设)(?:我|你|我们)?(?:现在|这次|单独|只)?(?:再用|改用|使用|用|按|按照)"# + method
+        return compact.range(of: [preparation, fieldQuestion, definition, comparison, readingPreparation,
+                                 reliability, readingExplanation, conditionalMethod].joined(separator: "|"),
                              options: [.regularExpression, .caseInsensitive]) != nil
     }
 
