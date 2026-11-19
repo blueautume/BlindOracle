@@ -13,6 +13,7 @@
   "local_plugin_count": 10,
   "release_is_signed": true,
   "notes": [
+    "TestFlight 4.1.0 / Build 70: version metadata increased on fix/storekit-independent-login from runtime commit 95d49b9. Seven version and project configuration tests passed. Signed Release archive has zero warnings and passed strict signature, Apple sign-in entitlement, production routing and resource checks. Xcode reported Upload succeeded on 2026-11-19 at 09:20:07 +08:00 using the standard App Store Connect upload and the explicit Build 70. Earlier functional test evidence remains on 3.0.306 / 69. Upload and archive evidence: build/testflight-4.1.0-70/.",
     "StoreKit-independent sign-in 3.0.306 / Build 69: Production start and account restore make zero AppTransaction/probe calls. A suspended unfinished transaction stream does not block account restoration or balance refresh. Explicit review entry uses a Sandbox-only invite with isolated Keychain and device records. The final signed simulator run passed 785 non-live unit tests and seven UI tests. Eleven additional distinct account UI tests passed in the earlier run. An iPhone tab lookup in the legacy usage UI test was corrected and passed in the final run. Seven native local StoreKit tests passed on iOS 27.2. Signed Release archive passed strict signature, entitlement, build metadata and test-resource checks with zero warnings. Sandbox backend da38ea1 passed isolated PostgreSQL 309/309, and a scratch integration with the newer local backend passed 337/337. No Sandbox or Production deployment, App Store Connect upload, physical App Store upgrade, or live reviewer purchase was performed in this batch.",
     "Planning optimization 3.0.305 / Build 68: versioned routing-v2 uses deepseek-v4-pro non-thinking with a 2048-token gateway limit; legacy stages retain their enabled/low/4096 canonical policy. Compact capability/identity context preserves full recent user turns and summaries. Model profileUpdates cannot autofill forms. Local guards preserve explicit methods, exclude quoted/consultative instructions, align apostrophes back to verbatim evidence, keep actual references strict, and direct missing birth/casting facts to the form. Final synthesis/follow-up prompts and quality policy remain unchanged. Final ad-hoc signed simulator regression: 781 non-live unit + 2 UI passed; 32/32 real-model routing scenarios passed after iterative fixes. Five matched empty-profile requests: provider median 9.939 to 2.250 seconds (-77.36%), not a whole-phone timing guarantee. Backend runtime 824614e deployed as 733d38e to Sandbox and Production after isolated PG301/301; configuration/data and backups verified. Final signed Release with zero warnings installed in place and launched on 穷奇 as 3.0.305/68, keeping all nine vault entries with unchanged paths/sizes/modification times before launch. Evidence: build/planning-3.0.305-68/verification.json; report: Documentation/PlanningLatencyReport-3.0.305.md. No store upload or main merge in this batch.",
     "Follow-up concurrency fix 3.0.304 / Build 67: only known managed-quota generation/stage/Sandbox concurrency rejections wait and reuse the same prepared task, stage, body and idempotency key. Waiting remains cancellable and validates account generation plus AI consent before resending. Progress is scoped to the active operation/conversation, including stop, repeated additions, conversation switches and history deletion. The original reproduction now recovers automatically with one new provider generation and no duplicate user message. Final ad-hoc signed iOS 26.5 simulator run passed all 763 non-live unit tests and two existing composer UI tests, including 15 new regression cases. An initial unsigned run failed two pre-existing Keychain storage tests; both passed with signing and again in the final full run, without changing storage logic. Signed Release built with zero warnings and installed normally on 穷奇 as 3.0.304/67, preserving the local vault. The phone build uses the existing owner Sandbox configuration and has no voice-input feature. Server source/config/runtime/data unchanged, so no deployment was needed. No live-provider result or store upload is claimed. Evidence: build/followup-fix-3.0.304-67/verification.json.",
@@ -91,13 +92,16 @@
     "release_archive": "build/storekit-independent-login-3.0.306-69/VerifiedBlindOracle.xcarchive",
     "release_audit": "build/storekit-independent-login-3.0.306-69/release-audit.txt",
     "sandbox_backend_commit": "da38ea1",
-    "sandbox_postgres_results": [309, 337]
+    "sandbox_postgres_results": [
+      309,
+      337
+    ]
   },
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "3.0.306",
-  "build": "69",
+  "version": "4.1.0",
+  "build": "70",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",
