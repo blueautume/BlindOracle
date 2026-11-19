@@ -597,11 +597,174 @@ final class AccountServiceTests: XCTestCase {
             }
             let client = api(); let manager = AccountSessionManager(api: client, vault: MemoryAccountVault(nil))
             let store = try accountStore(api: client, sessions: manager)
-            do { _ = try await store.beginAppleSignIn(); XCTFail("A failed challenge must not start Apple sign-in") }
+            do {
+                _ = try await store.beginAppleSignIn {
+                    XCTFail("A server response must not wait for connectivity or issue another challenge")
+                    return true
+                }
+                XCTFail("A failed challenge must not start Apple sign-in")
+            }
             catch { XCTAssertEqual(error as? AccountAPIError, .server(status: 503, code: "apple_unavailable")) }
             XCTAssertEqual(store.accessState, .signedOut); XCTAssertFalse(store.isBusy)
             XCTAssertEqual(store.message, "The sign-in service is temporarily unavailable. Please try again later.")
         }
+    }
+
+    @MainActor func testOneAppleSignInTapResumesChallengeAfterNetworkPermissionIsGranted() async throws {
+        let firstRequest = expectation(description: "First anonymous challenge")
+        firstRequest.assertForOverFulfill = true
+        AuthURLProtocol.handler = { request in
+            XCTAssertTrue(request.url?.absoluteString.hasSuffix("/auth/apple/challenge/") == true)
+            XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
+            firstRequest.fulfill()
+            throw URLError(.dataNotAllowed)
+        }
+        let client = api()
+        let store = try accountStore(api: client, sessions: AccountSessionManager(api: client, vault: MemoryAccountVault(nil)))
+        let permission = AsyncStream<Bool>.makeStream()
+        defer { permission.continuation.finish() }
+        let waiting = expectation(description: "The tapped sign-in is waiting for permission")
+        waiting.assertForOverFulfill = true
+        let tapped = Task {
+            try await store.beginAppleSignIn {
+                waiting.fulfill()
+                var iterator = permission.stream.makeAsyncIterator()
+                return await iterator.next() ?? false
+            }
+        }
+        await fulfillment(of: [firstRequest, waiting], timeout: 2)
+        XCTAssertTrue(store.isBusy)
+        XCTAssertNil(store.message)
+        await store.restore(force: true)
+        XCTAssertTrue(store.isBusy, "Returning from system authorization must preserve the pending sign-in")
+
+        let freshChallenge = expectation(description: "One new challenge after network authorization")
+        freshChallenge.assertForOverFulfill = true
+        AuthURLProtocol.handler = { request in
+            XCTAssertTrue(request.url?.absoluteString.hasSuffix("/auth/apple/challenge/") == true)
+            freshChallenge.fulfill()
+            return .init(body: #"{"challenge_id":"fresh-challenge","nonce":"abc","expires_in":300}"#)
+        }
+        permission.continuation.yield(true)
+        let attempt = try await tapped.value
+        await fulfillment(of: [freshChallenge], timeout: 2)
+        XCTAssertEqual(attempt.challenge.challengeID, "fresh-challenge")
+        XCTAssertTrue(store.isBusy)
+        XCTAssertNil(store.message)
+        store.cancelAppleSignIn(attempt: attempt)
+    }
+
+    @MainActor func testAppleSignInStopsWhenConnectivityDoesNotBecomeAvailable() async throws {
+        let challenge = expectation(description: "Only the original challenge")
+        challenge.assertForOverFulfill = true
+        AuthURLProtocol.handler = { _ in
+            challenge.fulfill()
+            throw URLError(.notConnectedToInternet)
+        }
+        let client = api()
+        let store = try accountStore(api: client, sessions: AccountSessionManager(api: client, vault: MemoryAccountVault(nil)))
+        var waits = 0
+        do {
+            _ = try await store.beginAppleSignIn {
+                waits += 1
+                return false
+            }
+            XCTFail("Unavailable connectivity must end the attempt")
+        } catch { XCTAssertEqual(error as? AccountAPIError, .unavailable) }
+        await fulfillment(of: [challenge], timeout: 2)
+        XCTAssertEqual(waits, 1)
+        XCTAssertFalse(store.isBusy)
+        XCTAssertEqual(store.message, AccountAPIError.unavailable.localizedDescription)
+    }
+
+    @MainActor func testAppleSignInRetriesChallengeAtMostOnceAfterConnectivityRecovery() async throws {
+        let attempts = expectation(description: "Original challenge and one retry")
+        attempts.expectedFulfillmentCount = 2
+        attempts.assertForOverFulfill = true
+        AuthURLProtocol.handler = { _ in
+            attempts.fulfill()
+            throw URLError(.notConnectedToInternet)
+        }
+        let client = api()
+        let store = try accountStore(api: client, sessions: AccountSessionManager(api: client, vault: MemoryAccountVault(nil)))
+        var waits = 0
+        do {
+            _ = try await store.beginAppleSignIn {
+                waits += 1
+                return true
+            }
+            XCTFail("A failed retry must end the attempt")
+        } catch { XCTAssertEqual(error as? AccountAPIError, .unavailable) }
+        await fulfillment(of: [attempts], timeout: 2)
+        XCTAssertEqual(waits, 1)
+        XCTAssertFalse(store.isBusy)
+    }
+
+    @MainActor func testSupersededAppleSignInDoesNotRetryAfterConnectivityRecovery() async throws {
+        AuthURLProtocol.handler = { _ in throw URLError(.dataNotAllowed) }
+        let client = api()
+        let sessions = AccountSessionManager(api: client, vault: MemoryAccountVault(nil))
+        let store = try accountStore(api: client, sessions: sessions)
+        let replacement = try session(id: "changed-session")
+        do {
+            _ = try await store.beginAppleSignIn {
+                do { try await sessions.install(replacement) }
+                catch {
+                    XCTFail("Fixture session installation failed")
+                    return false
+                }
+                AuthURLProtocol.handler = { _ in
+                    XCTFail("The superseded attempt must not retry")
+                    throw URLError(.badServerResponse)
+                }
+                return true
+            }
+            XCTFail("The superseded attempt must not reach Apple authorization")
+        } catch { XCTAssertEqual(error as? AccountAPIError, .staleSession) }
+        XCTAssertFalse(store.isBusy)
+        let current = await sessions.snapshot()
+        XCTAssertEqual(current, replacement)
+    }
+
+    @MainActor func testCancelledChallengeDoesNotWaitOrDisplayNetworkFailure() async throws {
+        AuthURLProtocol.handler = { _ in throw URLError(.cancelled) }
+        let client = api()
+        let store = try accountStore(api: client, sessions: AccountSessionManager(api: client, vault: MemoryAccountVault(nil)))
+        do {
+            _ = try await store.beginAppleSignIn {
+                XCTFail("Cancellation must not be retried")
+                return true
+            }
+            XCTFail("Cancelled challenge must end the attempt")
+        } catch { XCTAssertTrue(error is CancellationError) }
+        XCTAssertFalse(store.isBusy)
+        XCTAssertNil(store.message)
+    }
+
+    @MainActor func testAppleCodeExchangeNeverReplaysAfterConnectivityFailure() async throws {
+        let challenge = expectation(description: "Initial challenge")
+        let exchange = expectation(description: "One Apple authorization code exchange")
+        exchange.assertForOverFulfill = true
+        AuthURLProtocol.handler = { request in
+            if request.url?.absoluteString.hasSuffix("/auth/apple/challenge/") == true {
+                challenge.fulfill()
+                return .init(body: #"{"challenge_id":"fixture-challenge","nonce":"abc","expires_in":300}"#)
+            }
+            XCTAssertTrue(request.url?.absoluteString.hasSuffix("/auth/apple/") == true)
+            exchange.fulfill()
+            throw URLError(.dataNotAllowed)
+        }
+        let client = api()
+        let store = try accountStore(api: client, sessions: AccountSessionManager(api: client, vault: MemoryAccountVault(nil)))
+        let attempt = try await store.beginAppleSignIn {
+            XCTFail("A successful challenge must continue without connectivity recovery")
+            return true
+        }
+        await store.completeAppleSignIn(attempt: attempt, identityToken: "test-token", authorizationCode: "test-code",
+                                        fullName: nil, appleUserID: "test-identity")
+        await fulfillment(of: [challenge, exchange], timeout: 2)
+        XCTAssertEqual(store.accessState, .signedOut)
+        XCTAssertEqual(store.message, AccountAPIError.unavailable.localizedDescription)
     }
 
     func testClientNetworkFailureRemainsDifferentFromServiceAndAdmissionFailures() async {

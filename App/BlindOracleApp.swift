@@ -5,6 +5,7 @@ import AuthenticationServices
 
 @main struct BlindOracleApp: App {
     @StateObject private var bootstrap = Self.makeLaunchCoordinator()
+    @StateObject private var firstLaunchNetwork = FirstLaunchNetworkWarmup()
     @State private var pendingAppleSignIn = false
 
     private static func makeLaunchCoordinator() -> AppServiceLaunchCoordinator {
@@ -70,19 +71,21 @@ import AuthenticationServices
                 case .ready(let context):
                     #if DEBUG
                     if AppServiceBootstrapPolicy.isUnitTestHost { AccountRestoringView() }
-                    else { ResolvedBlindOracleRoot(context: context, pendingAppleSignIn: $pendingAppleSignIn) }
+                    else { ResolvedBlindOracleRoot(context: context, firstLaunchNetwork: firstLaunchNetwork, pendingAppleSignIn: $pendingAppleSignIn) }
                     #else
-                    ResolvedBlindOracleRoot(context: context, pendingAppleSignIn: $pendingAppleSignIn)
+                    ResolvedBlindOracleRoot(context: context, firstLaunchNetwork: firstLaunchNetwork, pendingAppleSignIn: $pendingAppleSignIn)
                     #endif
                 }
             }
             .preferredColorScheme(.light).tint(InkTheme.cinnabar)
             .task {
+                startFirstLaunchNetworkIfActive()
                 await bootstrap.setApplicationActive(UIApplication.shared.applicationState == .active)
                 await bootstrap.resolve()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                 Task { @MainActor in
+                    startFirstLaunchNetworkIfActive()
                     await bootstrap.setApplicationActive(UIApplication.shared.applicationState == .active)
                 }
             }
@@ -92,6 +95,14 @@ import AuthenticationServices
                 }
             }
         }
+    }
+
+    private func startFirstLaunchNetworkIfActive() {
+        #if DEBUG
+        if AppServiceBootstrapPolicy.isUnitTestHost || ProcessInfo.processInfo.arguments.contains("--ui-testing-local") { return }
+        #endif
+        guard UIApplication.shared.applicationState == .active else { return }
+        firstLaunchNetwork.startIfNeeded()
     }
 }
 
@@ -187,6 +198,7 @@ private struct AppServiceLaunchSurface: View {
 /// Account, task and purchase services capture the same per-process route.
 private struct ResolvedBlindOracleRoot: View {
     let context: AppServiceContext
+    private let firstLaunchNetwork: FirstLaunchNetworkWarmup
     @StateObject private var store: OracleStore
     @StateObject private var account: AccountStore
     @StateObject private var purchases = AccountPurchaseStore()
@@ -196,8 +208,9 @@ private struct ResolvedBlindOracleRoot: View {
     @State private var settingsPresented = false
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppLanguage.preferenceKey) private var preference: AppLanguagePreference = .system
-    init(context: AppServiceContext, pendingAppleSignIn: Binding<Bool>) {
+    init(context: AppServiceContext, firstLaunchNetwork: FirstLaunchNetworkWarmup, pendingAppleSignIn: Binding<Bool>) {
         self.context = context
+        self.firstLaunchNetwork = firstLaunchNetwork
         _pendingAppleSignIn = pendingAppleSignIn
         let vault = LocalVault.forContext(context)
         let oracle = OracleStore(vault: vault)
@@ -220,9 +233,9 @@ private struct ResolvedBlindOracleRoot: View {
                 case .restoring: AccountRestoringView()
                 case .recoveryRequired: AccountRecoveryView()
                 case .signedOut:
-                    AccountGateView(automaticallyStartSignIn: pendingAppleSignIn) {
-                        pendingAppleSignIn = false
-                    }
+                    AccountGateView(automaticallyStartSignIn: pendingAppleSignIn,
+                                    waitForConnectivity: firstLaunchNetwork.waitForSignInNetwork,
+                                    automaticSignInDidStart: { pendingAppleSignIn = false })
                 }
             }
         }

@@ -118,8 +118,8 @@ final class ServiceEnvironmentUITests: XCTestCase {
         // The controlled network check completes without any user retry. Its
         // StoreKit fixture then fails, proving verification resumed on its own.
         XCTAssertTrue(app.buttons["重新验证 App Store"].waitForExistence(timeout: 20))
-        XCTAssertTrue(app.staticTexts["验证代码：env_network"].exists)
-        XCTAssertTrue(app.buttons["复制诊断信息"].exists)
+        XCTAssertTrue(app.staticTexts["验证代码：env_network"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["复制诊断信息"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.tabBars.buttons["数据"].exists)
     }
 

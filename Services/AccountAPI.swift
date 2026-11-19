@@ -228,10 +228,14 @@ enum AccountAPIError: Error, LocalizedError, Equatable {
     }
 }
 
+/// Kept internal to the challenge flow so the account UI can await network access.
+struct AppleSignInChallengeConnectivityError: Error { }
+
 /// Account metadata only. Questions, profiles, answers and provider keys never enter this API.
 actor AccountAPI {
     static var baseURL: URL { ServiceEnvironment.current.baseURL }
     private let session: URLSession
+    private let challengeSession: URLSession
     private let requestBaseURL: URL
     private let appTransactionJWS: String?
     private let sandboxReviewInvite: String?
@@ -243,9 +247,16 @@ actor AccountAPI {
         configuration.timeoutIntervalForRequest = 30
         configuration.timeoutIntervalForResource = 45
         session = URLSession(configuration: configuration)
+        // Only the initial challenge should hold a user action while the OS
+        // resolves connectivity. Keep the behavior of all other requests.
+        let challengeConfiguration = configuration.copy() as! URLSessionConfiguration
+        challengeConfiguration.waitsForConnectivity = true
+        challengeConfiguration.timeoutIntervalForResource = 30
+        challengeSession = URLSession(configuration: challengeConfiguration)
     }
-    func challenge() async throws -> AppleLoginChallenge {
-        try await decode("auth/apple/challenge/", method: "POST", body: [:])
+    func challenge(reportConnectivityFailure: Bool = false) async throws -> AppleLoginChallenge {
+        try await decode("auth/apple/challenge/", method: "POST", body: [:],
+                         requestSession: challengeSession, reportConnectivityFailure: reportConnectivityFailure)
     }
     func signIn(challengeID: String, identityToken: String, authorizationCode: String, fullName: String?) async throws -> AccountTokenResponse {
         var body = ["challenge_id": challengeID, "identity_token": identityToken, "authorization_code": authorizationCode]
@@ -277,12 +288,17 @@ actor AccountAPI {
         _ = try await send("auth/logout/", method: "POST", token: accessToken, body: ["refresh_token": refreshToken])
     }
     func deleteUser(token: String) async throws { _ = try await send("me/", method: "DELETE", token: token) }
-    private func decode<T: Decodable>(_ path: String, method: String = "GET", token: String? = nil, body: [String: String]? = nil) async throws -> T {
-        let data = try await send(path, method: method, token: token, body: body)
+    private func decode<T: Decodable>(_ path: String, method: String = "GET", token: String? = nil,
+                                     body: [String: String]? = nil, requestSession: URLSession? = nil,
+                                     reportConnectivityFailure: Bool = false) async throws -> T {
+        let data = try await send(path, method: method, token: token, body: body, requestSession: requestSession,
+                                  reportConnectivityFailure: reportConnectivityFailure)
         do { return try JSONDecoder().decode(T.self, from: data) }
         catch { throw AccountAPIError.invalidResponse }
     }
-    private func send(_ path: String, method: String, token: String? = nil, body: [String: String]? = nil, headers: [String: String] = [:]) async throws -> Data {
+    private func send(_ path: String, method: String, token: String? = nil, body: [String: String]? = nil,
+                      headers: [String: String] = [:], requestSession: URLSession? = nil,
+                      reportConnectivityFailure: Bool = false) async throws -> Data {
         var request = URLRequest(url: requestBaseURL.appendingPathComponent(path))
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -293,8 +309,17 @@ actor AccountAPI {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
         let data: Data; let response: URLResponse
-        do { (data, response) = try await session.data(for: request) }
+        do { (data, response) = try await (requestSession ?? session).data(for: request) }
         catch is CancellationError { throw CancellationError() }
+        catch let error as URLError where requestSession != nil && error.code == .cancelled { throw CancellationError() }
+        catch let error as URLError where reportConnectivityFailure {
+            switch error.code {
+            case .notConnectedToInternet, .dataNotAllowed, .networkConnectionLost:
+                throw AppleSignInChallengeConnectivityError()
+            default:
+                throw AccountAPIError.unavailable
+            }
+        }
         catch { throw AccountAPIError.unavailable }
         guard let http = response as? HTTPURLResponse, data.count <= 1_000_000 else { throw AccountAPIError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {

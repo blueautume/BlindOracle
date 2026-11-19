@@ -172,7 +172,7 @@ enum AccountAccessState: Equatable {
         user = snapshot?.user
         if snapshot == nil { accessState = .signedOut; canRetrySession = false }
     }
-    func beginAppleSignIn() async throws -> AppleSignInAttempt {
+    func beginAppleSignIn(waitForConnectivity: (@MainActor () async -> Bool)? = nil) async throws -> AppleSignInAttempt {
         guard !deletionCleanupRequired, !localDataVault.requiresAccountDeletionCleanup else { throw AccountAPIError.storage }
         guard !isBusy else { throw AccountAPIError.staleSession }
         #if DEBUG
@@ -188,15 +188,38 @@ enum AccountAccessState: Equatable {
         generation = UUID(); let expected = generation
         isBusy = true; message = nil; user = nil; wallet = nil; usage = nil; accessState = .signedOut
         do {
+            try Task.checkCancellation()
             let sessionGeneration = await sessions.sessionGeneration()
-            let challenge = try await api.challenge()
+            try Task.checkCancellation()
             guard generation == expected else { throw AccountAPIError.staleSession }
+            let challenge: AppleLoginChallenge
+            do {
+                challenge = try await api.challenge(reportConnectivityFailure: waitForConnectivity != nil)
+            } catch is AppleSignInChallengeConnectivityError {
+                try await validatePendingSignIn(generation: expected, sessionGeneration: sessionGeneration)
+                let ready = await waitForConnectivity?() ?? false
+                try await validatePendingSignIn(generation: expected, sessionGeneration: sessionGeneration)
+                guard ready else { throw AccountAPIError.unavailable }
+                // Create a fresh challenge once. The Apple code exchange is never replayed.
+                challenge = try await api.challenge()
+            }
+            try await validatePendingSignIn(generation: expected, sessionGeneration: sessionGeneration)
             guard !challenge.nonce.isEmpty, !challenge.challengeID.isEmpty, challenge.expiresIn > 0 else { throw AccountAPIError.invalidResponse }
             return AppleSignInAttempt(challenge: challenge, generation: expected, sessionGeneration: sessionGeneration)
         } catch {
-            if generation == expected { isBusy = false; message = friendly(error) }
+            if generation == expected {
+                isBusy = false; message = error is CancellationError ? nil : friendly(error)
+            }
             throw error
         }
+    }
+    private func validatePendingSignIn(generation expected: UUID, sessionGeneration: UUID) async throws {
+        let currentSessionGeneration = await sessions.sessionGeneration()
+        try Task.checkCancellation()
+        guard generation == expected, currentSessionGeneration == sessionGeneration else { throw AccountAPIError.staleSession }
+    }
+    func isCurrentAppleSignIn(_ attempt: AppleSignInAttempt) -> Bool {
+        isBusy && generation == attempt.generation
     }
     func completeAppleSignIn(attempt: AppleSignInAttempt, identityToken: String, authorizationCode: String,
                              fullName: String?, appleUserID: String) async {
@@ -218,6 +241,7 @@ enum AccountAccessState: Equatable {
     }
     func cancelAppleSignIn(attempt: AppleSignInAttempt?, message: String? = nil) {
         guard attempt == nil || attempt?.generation == generation else { return }
+        if isBusy { generation = UUID() }
         isBusy = false; self.message = message
     }
     func refreshOverview() async {

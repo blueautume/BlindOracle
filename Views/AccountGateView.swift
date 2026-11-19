@@ -6,18 +6,23 @@ struct AccountGateView: View {
     @StateObject private var apple = AppleAccountSignInCoordinator()
     @State private var didStartAutomatically = false
     var automaticallyStartSignIn = false
+    var waitForConnectivity: (@MainActor () async -> Bool)?
     var automaticSignInDidStart: () -> Void = { }
 
     var body: some View {
         AccountGateLayout(isSigningIn: account.isBusy || apple.isRunning, message: account.message,
-                          startsSignIn: { apple.start(account: account) },
+                          startsSignIn: startSignIn,
                           showsTestBadge: ServiceEnvironment.current.isSandbox)
             .task {
                 guard automaticallyStartSignIn, !didStartAutomatically else { return }
                 didStartAutomatically = true
                 automaticSignInDidStart()
-                apple.start(account: account)
+                startSignIn()
             }
+    }
+
+    private func startSignIn() {
+        apple.start(account: account, waitForConnectivity: waitForConnectivity)
     }
 }
 

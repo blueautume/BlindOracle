@@ -2,13 +2,15 @@
 
 一个以水墨宣纸为视觉语言的原生 SwiftUI iOS 应用。只有「对话」「数据」两个标签。十种方法在设备本地执行，固定的联网 Agent 负责选择适用插件、提出资料与交互需求、整合解读和回答追问。
 
-当前版本：**4.1.0（Build 70）**。
+当前版本：**4.1.1（Build 71）**。
 
 每批修改提交前同时递增补丁版本和 Build，运行一次 `python3 Scripts/version.py` 即可同步版本配置。单一版本源为 `Configuration/Version.json`，工程生成脚本也从这里读取；构建和测试不会自动加版本。`python3 Scripts/version.py --check` 检查工作区同步状态，提交钩子用 `--check-staged` 检查暂存区相对 HEAD 的递增。首次克隆后使用 `git config core.hooksPath .githooks` 启用密钥及版本检查。
 
 ## Apple 登录与账号
 
 3.0.306 起，普通启动直接恢复正式会话或显示 Apple 登录，账号流程不调用商店安装凭据接口。已有会话先完成 Apple 状态与服务器 me/refresh 校验。临时网络或 Keychain 故障保留会话，允许重试。未登录时仍可阅读协议及隐私政策。交易监听与补单独立于账号、余额及 AI 任务恢复。旧版本的商店验证诊断见[历史时序说明](Documentation/LaunchVerificationTiming.md)。
+
+4.1.1 起，应用首次进入前台时独立发送匿名 HTTPS 请求，给系统提前处理联网授权的机会。登录按钮触发的 Apple 挑战可在短时间内等待可用网络，允许联网后继续本次操作。连接等待仅用于取挑战，Apple 授权码提交和购买交付仍走各自的原流程。
 
 「数据」页直接展示账号姓名、Apple 身份与剩余额度百分比，点整张卡片进入账号设置；邮箱仅在 Apple 提供时显示。尚未取得的额度显示占位而非虚构零值。设置页也提供简洁的账号设置入口。原生 Apple 授权前先取得服务器挑战，将 raw nonce 的 SHA-256 设置为 Apple request nonce，使用 challenge ID 绑定 state；服务器验证 Apple identity token 并交换授权码。账号会话独立保存在 ThisDeviceOnly Keychain，刷新采用 single-flight，退出、账号变更和迟到回调不能恢复旧账号状态。
 

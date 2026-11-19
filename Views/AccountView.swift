@@ -1,5 +1,6 @@
 import SwiftUI
 import AuthenticationServices
+import Combine
 import UIKit
 
 struct AccountView: View {
@@ -384,23 +385,48 @@ struct NativeAppleSignInButton: UIViewRepresentable {
     private weak var account: AccountStore?
     private var attempt: AppleSignInAttempt?
     private var controller: ASAuthorizationController?
-    func start(account: AccountStore) {
+    private var activationObserver: AnyCancellable?
+    private var challengeDeadline: ContinuousClock.Instant?
+
+    func start(account: AccountStore, waitForConnectivity: (@MainActor () async -> Bool)? = nil) {
         guard !isRunning else { return }
         isRunning = true; self.account = account
-        Task {
+        Task { [self] in
             do {
-                let attempt = try await account.beginAppleSignIn()
+                let attempt = try await account.beginAppleSignIn(waitForConnectivity: waitForConnectivity)
                 self.attempt = attempt
-                let request = ASAuthorizationAppleIDProvider().createRequest()
-                request.requestedScopes = [.fullName, .email]
-                request.nonce = attempt.challenge.hashedNonce
-                request.state = attempt.challenge.challengeID
-                let controller = ASAuthorizationController(authorizationRequests: [request])
-                self.controller = controller
-                controller.delegate = self; controller.presentationContextProvider = self
-                controller.performRequests()
-            } catch { isRunning = false; controller = nil }
+                challengeDeadline = ContinuousClock.now + .seconds(attempt.challenge.expiresIn)
+                if UIApplication.shared.applicationState != .active {
+                    // The wireless-data prompt can still be dismissing when the challenge arrives.
+                    activationObserver = NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+                        .sink { [weak self] _ in
+                            Task { @MainActor [weak self] in self?.presentAuthorizationWhenActive() }
+                        }
+                }
+                presentAuthorizationWhenActive()
+            } catch { finish() }
         }
+    }
+
+    private func presentAuthorizationWhenActive() {
+        guard let attempt, let challengeDeadline, controller == nil,
+              UIApplication.shared.applicationState == .active else { return }
+        activationObserver = nil
+        self.challengeDeadline = nil
+        guard account?.isCurrentAppleSignIn(attempt) == true else { finish(); return }
+        guard ContinuousClock.now < challengeDeadline else {
+            account?.cancelAppleSignIn(attempt: attempt, message: L10n.text("登录准备已过期，请重试。", "The sign-in request expired. Please try again."))
+            finish()
+            return
+        }
+        let request = ASAuthorizationAppleIDProvider().createRequest()
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = attempt.challenge.hashedNonce
+        request.state = attempt.challenge.challengeID
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        self.controller = controller
+        controller.delegate = self; controller.presentationContextProvider = self
+        controller.performRequests()
     }
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
         UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
@@ -425,5 +451,8 @@ struct NativeAppleSignInButton: UIViewRepresentable {
         account?.cancelAppleSignIn(attempt: attempt, message: cancelled ? nil : L10n.text("Apple 登录未完成，请检查网络或设备上的 Apple 账号后重试。", "Apple sign-in did not complete. Check your connection and Apple account on this device, then try again."))
         finish()
     }
-    private func finish() { isRunning = false; controller = nil; attempt = nil }
+    private func finish() {
+        isRunning = false; controller = nil; attempt = nil
+        activationObserver = nil; challengeDeadline = nil
+    }
 }
