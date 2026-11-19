@@ -12,9 +12,16 @@ final class AccountSessionVault: AccountSessionStorage {
     private let service: String
     private var invalidatedKey: String { service + ".session-invalidated" }
     private let account = "apple-account-session-v1"
-    init(service: String = ServiceEnvironment.current.sessionKeychainService) { self.service = service }
+    init(service: String = AppServiceContextStore.process.requireContext().sessionKeychainService) { self.service = service }
     private var query: [String: Any] {
         [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
+    }
+    func hasStoredSession() throws -> Bool {
+        guard !UserDefaults.standard.bool(forKey: invalidatedKey) else { return false }
+        let status = SecItemCopyMatching(query as CFDictionary, nil)
+        if status == errSecItemNotFound { return false }
+        guard status == errSecSuccess else { throw AccountAPIError.storage }
+        return true
     }
     func load() throws -> AccountSession? {
         guard !UserDefaults.standard.bool(forKey: invalidatedKey) else { return nil }

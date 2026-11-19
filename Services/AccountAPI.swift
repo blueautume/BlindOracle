@@ -210,6 +210,8 @@ enum AccountAPIError: Error, LocalizedError, Equatable {
                 L10n.text("App Store 凭据需要重新验证。请重新打开 App 后再尝试登录；若仍失败，请联系支持。", "Your App Store credentials need to be verified again. Reopen the app and try signing in again, or contact support if it continues.")
             case (403, "sandbox_account_not_allowed"), (403, "sandbox_review_access_disabled"):
                 L10n.text("测试登录暂未开放。请稍后重试或联系支持。", "Test sign-in is not available yet. Try again later or contact support.")
+            case (403, "sandbox_review_invite_invalid"):
+                L10n.text("测试访问凭据已失效。请重新打开 App 后输入有效凭据。", "This test access code is no longer valid. Reopen the app and enter a valid code.")
             case (403, "account_disabled"):
                 L10n.text("此账号已停用，请联系支持。", "This account has been disabled. Please contact support.")
             case (503, "apple_unavailable"), (503, "apple_exchange_unavailable"),
@@ -232,9 +234,11 @@ actor AccountAPI {
     private let session: URLSession
     private let requestBaseURL: URL
     private let appTransactionJWS: String?
+    private let sandboxReviewInvite: String?
     init(configuration: URLSessionConfiguration = .ephemeral, context: AppServiceContext? = nil) {
         let selected = context ?? AppServiceContextStore.process.requireContext()
         requestBaseURL = selected.environment.baseURL; appTransactionJWS = selected.appleLoginProof
+        sandboxReviewInvite = selected.sandboxReviewInvite
         configuration.urlCache = nil; configuration.httpCookieStorage = nil
         configuration.timeoutIntervalForRequest = 30
         configuration.timeoutIntervalForResource = 45
@@ -247,6 +251,7 @@ actor AccountAPI {
         var body = ["challenge_id": challengeID, "identity_token": identityToken, "authorization_code": authorizationCode]
         if let fullName, !fullName.isEmpty { body["full_name"] = String(fullName.prefix(256)) }
         if let appTransactionJWS { body["app_transaction_jws"] = appTransactionJWS }
+        if let sandboxReviewInvite { body["sandbox_review_invite"] = sandboxReviewInvite }
         return try await decode("auth/apple/", method: "POST", body: body)
     }
     func refresh(_ token: String) async throws -> AccountTokenResponse {

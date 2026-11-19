@@ -25,7 +25,12 @@ struct PreparedAIStage: Sendable {
 /// Request snapshots stay on this device with the same file protection as local conversations.
 /// Replays use the original bytes, so a changed timestamp/context cannot turn a retry into a new task.
 actor AIQuotaTaskService {
-    static let shared = AIQuotaTaskService(directory: LocalVault.shared.directory.appendingPathComponent(ServiceEnvironment.current.taskDirectoryName, isDirectory: true))
+    static let shared: AIQuotaTaskService = {
+        let context = AppServiceContextStore.process.requireContext()
+        let directory = LocalVault.forContext(context).directory
+            .appendingPathComponent(context.environment.taskDirectoryName, isDirectory: true)
+        return AIQuotaTaskService(directory: directory, environment: context.environment)
+    }()
     private struct TaskRecord: Codable {
         var ownerID: String
         var admissionToken: String?

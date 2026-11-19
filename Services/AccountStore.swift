@@ -45,8 +45,9 @@ enum AccountAccessState: Equatable {
             message = Self.deletionCleanupNotice
         }
     }
-    static func makeAppStore(localDataErasure: (@MainActor () async throws -> Void)? = nil) -> AccountStore {
-        let store = AccountStore(localDataErasure: localDataErasure)
+    static func makeAppStore(localDataVault: LocalVault = .shared,
+                             localDataErasure: (@MainActor () async throws -> Void)? = nil) -> AccountStore {
+        let store = AccountStore(localDataVault: localDataVault, localDataErasure: localDataErasure)
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-testing-local") {
             store.debugUIFixture = true; store.restored = true

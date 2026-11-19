@@ -200,6 +200,45 @@ import XCTest
         XCTAssertTrue(store.message?.contains("未发现") == true)
     }
 
+    func testUnfinishedStoreKitStreamDoesNotBlockAccountRestorationOrBalance() async throws {
+        let userID = buyer.uuidString
+        RecoveryURLProtocol.handler = { request in
+            switch request.url?.lastPathComponent {
+            case "me":
+                return "{\"id\":\"\(userID)\",\"display_name\":\"测试账号\",\"created_at\":\"2026-11-06\"}"
+            case "wallet":
+                return #"{"quota":{"remaining_percent":52,"is_unlimited":false,"can_start":true}}"#
+            case "summary":
+                return #"{"request_count":1,"input_tokens":25,"output_tokens":25,"confirmed_cost_cny":"0.01","total_tokens":50,"unknown_count":0}"#
+            default:
+                throw URLError(.badServerResponse)
+            }
+        }
+        let started = expectation(description: "StoreKit unfinished stream subscribed")
+        let (events, continuation) = AsyncStream<AccountPurchaseEvent>.makeStream()
+        defer { continuation.finish() }
+        provider.unfinishedOverride = {
+            started.fulfill()
+            return events
+        }
+        let purchases = store()
+        purchases.requestUnfinishedReconciliation()
+        await fulfillment(of: [started], timeout: 2)
+        XCTAssertTrue(purchases.isCheckingPurchases)
+
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let account = AccountStore(api: api, sessions: manager, localDataVault: LocalVault(directory: directory))
+        await account.restore()
+        await account.refreshOverview()
+        XCTAssertTrue(account.canAccessMain)
+        XCTAssertEqual(account.wallet?.quota?.remainingPercent, 52)
+        let token = try await manager.accessToken()
+        XCTAssertEqual(token, "synthetic-access")
+        XCTAssertTrue(purchases.isCheckingPurchases)
+        XCTAssertEqual(provider.scanCount, 1)
+    }
+
     func testUnverifiedStoreKitPurchaseNeverReachesVerificationOrFinishes() async throws {
         let store = store(); await store.loadProducts()
         provider.result = .success(.unverified)

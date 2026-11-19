@@ -19,9 +19,8 @@ final class ServiceEnvironmentTests: XCTestCase {
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "OracleServiceEnvironmentResolution") as? String, "OwnerSandbox")
         #else
         let ownerSandbox = false
-        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "OracleServiceEnvironmentResolution") as? String, "AppleVerified")
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "OracleServiceEnvironmentResolution") as? String, "ProductionWithSandboxReview")
         #endif
-        // Build metadata is not a route authority: an automatic archive can resolve verified Sandbox at runtime.
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "OracleServiceEnvironment") as? String, ownerSandbox ? "Sandbox" : "Production")
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, ownerSandbox ? "瞎子·测试" : "瞎子")
         if let englishInfo = Bundle.main.url(forResource: "InfoPlist", withExtension: "strings", subdirectory: nil, localization: "en"),
@@ -46,6 +45,8 @@ final class ServiceEnvironmentTests: XCTestCase {
         XCTAssertNotEqual(sandbox.serverTaskID(for: logicalID), sandbox.serverTaskID(for: UUID()))
         XCTAssertEqual(production.storeKitEnvironment, "Production")
         XCTAssertEqual(sandbox.storeKitEnvironment, "Sandbox")
+        let review = AppServiceContext(environment: .sandbox, appTransactionJWS: nil, source: .sandboxReview)
+        XCTAssertEqual(review.sessionKeychainService, "com.lihao.BlindOracle.wellecho.account.sandbox.review")
     }
 
     func testSandboxSaveAndInvalidationNeverRemoveTheProductionKeychainSession() throws {
@@ -54,12 +55,15 @@ final class ServiceEnvironmentTests: XCTestCase {
         let sandbox = AccountSessionVault(service: testPrefix + ServiceEnvironment.sandbox.sessionKeychainService)
         defer { try? production.delete(); try? sandbox.delete() }
         let first = try fixtureSession("production"); let second = try fixtureSession("sandbox")
+        XCTAssertFalse(try production.hasStoredSession())
         try production.save(first)
+        XCTAssertTrue(try production.hasStoredSession())
         XCTAssertNil(try sandbox.load(), "A new sandbox installation must require its own Apple sign-in")
         try sandbox.save(second)
         XCTAssertEqual(try production.load(), first)
         XCTAssertEqual(try sandbox.load(), second)
         try sandbox.delete()
+        XCTAssertFalse(try sandbox.hasStoredSession())
         XCTAssertNil(try sandbox.load())
         XCTAssertEqual(try production.load(), first, "Sandbox logout/invalidation must not touch the production session")
         try sandbox.save(second)
@@ -97,6 +101,61 @@ final class ServiceEnvironmentTests: XCTestCase {
         XCTAssertThrowsError(try storage.freeze(AppServiceContext(environment: .sandbox, appTransactionJWS: "fixture-sandbox", source: .appleVerified)))
         XCTAssertThrowsError(try storage.freeze(AppServiceContext(environment: .production, appTransactionJWS: "fixture-late", source: .appleVerified)))
         XCTAssertEqual(storage.snapshot(), original)
+    }
+
+    @MainActor func testProductionRestorationDoesNotStartAnUncooperativeStoreKitReadOrNetworkProbe() async {
+        let provider = DelayedAppTransactionEvidence()
+        let readiness = ScriptedLaunchReadiness([])
+        let storage = AppServiceContextStore()
+        let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: storage,
+            timing: AppServiceLaunchTiming(automaticRequestTimeout: 0.01), readiness: readiness,
+            launchMode: .production(offerAccountChoice: { false }))
+
+        await coordinator.resolve()
+        await coordinator.setApplicationActive(false)
+        await coordinator.setApplicationActive(true)
+        await coordinator.networkDidChange()
+        await coordinator.retryFromUser()
+
+        let expected = AppServiceContext(environment: .production, appTransactionJWS: nil, source: .production)
+        XCTAssertEqual(coordinator.state, .ready(expected))
+        XCTAssertEqual(storage.snapshot(), expected)
+        XCTAssertNil(coordinator.failure)
+        XCTAssertFalse(coordinator.isWaitingForStoreKit)
+        let requests = await provider.requests
+        let probes = await readiness.calls
+        XCTAssertEqual(requests, [])
+        XCTAssertEqual(probes, 0)
+    }
+
+    @MainActor func testAccountChoiceFreezesExactlyOneRouteWithoutStoreKit() async {
+        let invite = String(repeating: "A", count: 43)
+        for useReview in [false, true] {
+            let provider = DelayedAppTransactionEvidence()
+            let storage = AppServiceContextStore()
+            let coordinator = AppServiceLaunchCoordinator(provider: provider, contextStore: storage,
+                launchMode: .production(offerAccountChoice: { true }))
+            await coordinator.resolve()
+            XCTAssertEqual(coordinator.state, .accountSelection)
+            XCTAssertNil(storage.snapshot())
+            coordinator.selectSandboxReview(invite: "invalid")
+            XCTAssertEqual(coordinator.state, .accountSelection)
+
+            if useReview {
+                coordinator.selectSandboxReview(invite: invite)
+                coordinator.selectProduction()
+            } else {
+                coordinator.selectProduction()
+                coordinator.selectSandboxReview(invite: invite)
+            }
+            guard case .ready(let selected) = coordinator.state else { return XCTFail("Expected a selected route") }
+            XCTAssertEqual(selected.environment, useReview ? .sandbox : .production)
+            XCTAssertEqual(selected.sandboxReviewInvite, useReview ? invite : nil)
+            XCTAssertNil(selected.appleLoginProof)
+            XCTAssertEqual(storage.snapshot(), selected)
+            let requests = await provider.requests
+            XCTAssertEqual(requests, [])
+        }
     }
 
     @MainActor func testFailedEnvironmentResolutionShowsRecoveryWithoutFreezingOrReadingAccountStateAndCanRetry() async {
@@ -666,12 +725,15 @@ final class ServiceEnvironmentTests: XCTestCase {
         try await readiness.check()
     }
 
-    func testAppleLoginUsesCapturedRouteAndOnlyAutomaticSandboxSendsVerifiedAppTransactionJWS() async throws {
+    func testAppleLoginUsesCapturedRouteAndOnlySendsItsOwnSandboxCredential() async throws {
         defer { BootstrapURLProtocol.handler = nil }
+        let invite = String(repeating: "A", count: 43)
         let contexts = [
             AppServiceContext(environment: .sandbox, appTransactionJWS: "fixture-sandbox-jws", source: .appleVerified),
             AppServiceContext(environment: .production, appTransactionJWS: "fixture-production-jws", source: .appleVerified),
-            AppServiceContext(environment: .sandbox, appTransactionJWS: nil, source: .ownerSandbox)
+            AppServiceContext(environment: .sandbox, appTransactionJWS: nil, source: .ownerSandbox),
+            AppServiceContext(environment: .sandbox, appTransactionJWS: nil, source: .sandboxReview, reviewInvite: invite),
+            AppServiceContext(environment: .production, appTransactionJWS: nil, source: .sandboxReview, reviewInvite: invite)
         ]
         for context in contexts {
             let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [BootstrapURLProtocol.self]
@@ -680,6 +742,7 @@ final class ServiceEnvironmentTests: XCTestCase {
                 XCTAssertEqual(request.url, context.environment.baseURL.appendingPathComponent("auth/apple/"))
                 let body = try JSONSerialization.jsonObject(with: BootstrapURLProtocol.body(request)) as? [String: String]
                 XCTAssertEqual(body?["app_transaction_jws"], context.appleLoginProof)
+                XCTAssertEqual(body?["sandbox_review_invite"], context.sandboxReviewInvite)
                 XCTAssertEqual(body?["challenge_id"], "fixture-challenge")
                 return Data(#"{"access_token":"fixture-access","refresh_token":"fixture-refresh","expires_in":3600,"user":{"id":"fixture-user","display_name":"Test","created_at":"2026-11-06T00:00:00Z"}}"#.utf8)
             }

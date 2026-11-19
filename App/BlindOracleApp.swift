@@ -4,7 +4,28 @@ import UIKit
 import AuthenticationServices
 
 @main struct BlindOracleApp: App {
-    @StateObject private var bootstrap = AppServiceLaunchCoordinator()
+    @StateObject private var bootstrap = Self.makeLaunchCoordinator()
+    @State private var pendingAppleSignIn = false
+
+    private static func makeLaunchCoordinator() -> AppServiceLaunchCoordinator {
+        #if DEBUG
+        let arguments = ProcessInfo.processInfo.arguments
+        if AppServiceBootstrapPolicy.isProductionLaunchUIFixture {
+            return AppServiceLaunchCoordinator(provider: UnavailableLaunchStoreKitFixture(),
+                                               launchMode: .production(offerAccountChoice: { true }))
+        }
+        if arguments.contains("--ui-testing-local") && arguments.contains(where: { $0.hasPrefix("--ui-testing-service-") }) {
+            return AppServiceLaunchCoordinator()
+        }
+        #endif
+        return AppServiceLaunchCoordinator(launchMode: .production(offerAccountChoice: {
+            let vault = AccountSessionVault(service: ServiceEnvironment.production.sessionKeychainService)
+            // An unreadable Keychain may still contain a formal session. Let the
+            // normal account recovery flow preserve it and report the error.
+            do { return try !vault.hasStoredSession() } catch { return false }
+        }))
+    }
+
     init() {
         #if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
@@ -33,6 +54,13 @@ import AuthenticationServices
                 case .resolving:
                     AppServiceLaunchSurface(isRecovering: false, isWaitingForNetwork: bootstrap.isWaitingForNetwork,
                                             isWaitingForStoreKit: bootstrap.isWaitingForStoreKit) { }
+                case .accountSelection:
+                    AppServiceAccountSelectionView {
+                        pendingAppleSignIn = true
+                        bootstrap.selectProduction()
+                    } chooseSandbox: { invite in
+                        bootstrap.selectSandboxReview(invite: invite)
+                    }
                 case .recoveryRequired:
                     AppServiceLaunchSurface(isRecovering: true, failure: bootstrap.failure, diagnosticText: bootstrap.diagnosticText,
                                             isWaitingForNetwork: bootstrap.isWaitingForNetwork,
@@ -42,9 +70,9 @@ import AuthenticationServices
                 case .ready(let context):
                     #if DEBUG
                     if AppServiceBootstrapPolicy.isUnitTestHost { AccountRestoringView() }
-                    else { ResolvedBlindOracleRoot(context: context) }
+                    else { ResolvedBlindOracleRoot(context: context, pendingAppleSignIn: $pendingAppleSignIn) }
                     #else
-                    ResolvedBlindOracleRoot(context: context)
+                    ResolvedBlindOracleRoot(context: context, pendingAppleSignIn: $pendingAppleSignIn)
                     #endif
                 }
             }
@@ -66,6 +94,15 @@ import AuthenticationServices
         }
     }
 }
+
+#if DEBUG
+private struct UnavailableLaunchStoreKitFixture: AppTransactionEvidenceProviding {
+    func evidence(for request: AppTransactionEvidenceRequest) async throws -> AppTransactionRouteEvidence {
+        try await Task.sleep(for: .seconds(60))
+        throw AppServiceLaunchTimeout()
+    }
+}
+#endif
 
 private struct AppServiceLaunchSurface: View {
     let isRecovering: Bool
@@ -147,22 +184,25 @@ private struct AppServiceLaunchSurface: View {
     }
 }
 
-/// No account/session/task service exists until the outer launcher freezes its route.
+/// Account, task and purchase services capture the same per-process route.
 private struct ResolvedBlindOracleRoot: View {
     let context: AppServiceContext
     @StateObject private var store: OracleStore
     @StateObject private var account: AccountStore
     @StateObject private var purchases = AccountPurchaseStore()
+    @Binding private var pendingAppleSignIn: Bool
     @State private var analysisBackgroundExecution = AnalysisBackgroundExecution()
     @State private var chatDraft = ""
     @State private var settingsPresented = false
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppLanguage.preferenceKey) private var preference: AppLanguagePreference = .system
-    init(context: AppServiceContext) {
+    init(context: AppServiceContext, pendingAppleSignIn: Binding<Bool>) {
         self.context = context
-        let oracle = OracleStore()
+        _pendingAppleSignIn = pendingAppleSignIn
+        let vault = LocalVault.forContext(context)
+        let oracle = OracleStore(vault: vault)
         _store = StateObject(wrappedValue: oracle)
-        _account = StateObject(wrappedValue: AccountStore.makeAppStore(localDataErasure: { [weak oracle] in
+        _account = StateObject(wrappedValue: AccountStore.makeAppStore(localDataVault: vault, localDataErasure: { [weak oracle] in
             guard let oracle else { throw AccountAPIError.storage }
             try await oracle.eraseLocalDataAfterAccountDeletion()
         }))
@@ -179,7 +219,10 @@ private struct ResolvedBlindOracleRoot: View {
                     .sheet(isPresented: $settingsPresented) { OracleSettingsView().id(preference.language) }
                 case .restoring: AccountRestoringView()
                 case .recoveryRequired: AccountRecoveryView()
-                case .signedOut: AccountGateView()
+                case .signedOut:
+                    AccountGateView(automaticallyStartSignIn: pendingAppleSignIn) {
+                        pendingAppleSignIn = false
+                    }
                 }
             }
         }
@@ -193,6 +236,7 @@ private struct ResolvedBlindOracleRoot: View {
         .task {
             if context.source != .debugFixture { purchases.startObserving() }
             await account.restore(); store.refreshCredential()
+            if account.accessState != .signedOut { pendingAppleSignIn = false }
             if account.canAccessMain { await resumeBillingAndTasks() }
         }
         .onChange(of: account.canAccessMain) { _, allowed in
@@ -234,7 +278,7 @@ private struct ResolvedBlindOracleRoot: View {
                     if account.canAccessMain {
                         await account.verifyAppleCredentialState()
                         if account.canAccessMain {
-                            if context.source != .debugFixture { await purchases.resumeUnfinished() }
+                            startPurchaseRecovery()
                             await account.refreshOverview()
                         }
                     } else { await account.restore(force: true) }
@@ -242,9 +286,13 @@ private struct ResolvedBlindOracleRoot: View {
             }
         }
     }
+    private func startPurchaseRecovery() {
+        guard context.source != .debugFixture else { return }
+        purchases.requestUnfinishedReconciliation()
+    }
     private func resumeBillingAndTasks() async {
         guard context.source != .debugFixture else { return }
-        await purchases.resumeUnfinished()
+        startPurchaseRecovery()
         await store.flushQuotaEnds()
         await AIQuotaTaskService.shared.flushPendingEnds()
     }

@@ -94,8 +94,8 @@ final class AccountUITests: XCTestCase {
 
     @MainActor func testUsageContainsQuietAllowanceAndOpensPurchaseDetails() {
         let app = launch(["--ui-testing-reset", "--ui-testing-reading-library"])
-        // iPad's native top tabs are exposed as buttons outside a TabBar.
-        let data = app.buttons.matching(identifier: "dataTab").firstMatch
+        // iPad can expose the identifier on its top tab. The iPhone tab bar exposes its label.
+        let data = app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@", "dataTab", "数据")).firstMatch
         XCTAssertTrue(data.waitForExistence(timeout: 15)); data.tap()
         XCTAssertFalse(element("remainingQuotaPercentage", in: app).exists)
         XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "100%")).firstMatch.exists)

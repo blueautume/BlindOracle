@@ -1,7 +1,7 @@
 import Foundation
 import CryptoKit
 
-/// Selected once from Apple-verified evidence before constructing account or AI services.
+/// Selected once before constructing account, purchase or AI services.
 enum ServiceEnvironment: String, Sendable {
     case production, sandbox
 

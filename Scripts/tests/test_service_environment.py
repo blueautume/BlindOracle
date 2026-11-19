@@ -30,7 +30,7 @@ class ServiceEnvironmentGeneratorTests(unittest.TestCase):
                        capture_output=True, text=True, check=True, env=environment)
         return (self.root / 'BlindOracle.xcodeproj/project.pbxproj').read_text()
 
-    def test_default_and_non_explicit_values_generate_apple_verified_auto_routing(self):
+    def test_default_and_non_explicit_values_generate_production_with_explicit_sandbox_review(self):
         for value in [None, '', 'NO', '1', 'yes']:
             with self.subTest(value=value):
                 project = self.generate(value)
@@ -38,7 +38,7 @@ class ServiceEnvironmentGeneratorTests(unittest.TestCase):
                 self.assertIn('BLINDORACLE_APP_DISPLAY_NAME = "瞎子";', project)
                 self.assertIn('BLINDORACLE_APP_DISPLAY_NAME_EN = "BlindOracle";', project)
                 self.assertIn('ORACLE_SERVICE_ENVIRONMENT = "Production";', project)
-                self.assertIn('ORACLE_SERVICE_ENVIRONMENT_RESOLUTION = "AppleVerified";', project)
+                self.assertIn('ORACLE_SERVICE_ENVIRONMENT_RESOLUTION = "ProductionWithSandboxReview";', project)
                 flags = re.findall(r'SWIFT_ACTIVE_COMPILATION_CONDITIONS = "([^"]*)";', project)
                 self.assertEqual(len(flags), 8)
                 self.assertTrue(all('BLINDORACLE_SANDBOX' not in flag for flag in flags))
@@ -56,6 +56,7 @@ class ServiceEnvironmentGeneratorTests(unittest.TestCase):
         self.assertTrue(all('BLINDORACLE_SANDBOX' in flag for flag in flags))
         restored = self.generate()
         self.assertIn('BLINDORACLE_SANDBOX = "NO";', restored)
+        self.assertIn('ORACLE_SERVICE_ENVIRONMENT_RESOLUTION = "ProductionWithSandboxReview";', restored)
         self.assertNotIn('$(inherited) BLINDORACLE_SANDBOX', restored)
 
 

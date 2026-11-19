@@ -4,11 +4,34 @@ import Combine
 import OSLog
 
 struct AppServiceContext: Sendable, Equatable {
-    enum Source: Sendable, Equatable { case appleVerified, ownerSandbox, debugFixture }
+    enum Source: Sendable, Equatable { case production, sandboxReview, appleVerified, ownerSandbox, debugFixture }
     let environment: ServiceEnvironment
     let appTransactionJWS: String?
     let source: Source
+    private let reviewInvite: String?
     var appleLoginProof: String? { environment == .sandbox && source == .appleVerified ? appTransactionJWS : nil }
+    var sandboxReviewInvite: String? { environment == .sandbox && source == .sandboxReview ? reviewInvite : nil }
+    var sessionKeychainService: String {
+        let service = environment.sessionKeychainService
+        return environment == .sandbox && source == .sandboxReview ? service + ".review" : service
+    }
+
+    init(environment: ServiceEnvironment, appTransactionJWS: String?, source: Source, reviewInvite: String? = nil) {
+        self.environment = environment
+        self.appTransactionJWS = appTransactionJWS
+        self.source = source
+        self.reviewInvite = reviewInvite
+    }
+}
+
+enum AppServiceLaunchMode {
+    case storeVerification
+    case production(offerAccountChoice: @MainActor () -> Bool)
+
+    var usesStoreVerification: Bool {
+        if case .storeVerification = self { return true }
+        return false
+    }
 }
 
 enum AppServiceBootstrapError: Error, Equatable {
@@ -175,6 +198,12 @@ struct StoreKitAppTransactionEvidence: AppTransactionEvidenceProviding {
 }
 
 enum AppServiceBootstrapPolicy {
+    static func isSandboxReviewInvite(_ value: String) -> Bool {
+        value.utf8.count == 43 && value.utf8.allSatisfy {
+            (65...90).contains($0) || (97...122).contains($0) || (48...57).contains($0) || $0 == 45 || $0 == 95
+        }
+    }
+
     static func resolve(_ evidence: AppTransactionRouteEvidence, expectedBundleID: String) throws -> AppServiceContext {
         guard case let .verified(environment, bundleID, jws) = evidence else { throw AppServiceBootstrapError.unverified }
         guard bundleID == expectedBundleID, !expectedBundleID.isEmpty else { throw AppServiceBootstrapError.wrongApplication }
@@ -201,6 +230,7 @@ enum AppServiceBootstrapPolicy {
 
     static var developmentContext: AppServiceContext? {
         #if DEBUG
+        if isProductionLaunchUIFixture { return nil }
         if ProcessInfo.processInfo.arguments.contains("--ui-testing-local") || isUnitTestHost {
             #if BLINDORACLE_SANDBOX
             let environment = ServiceEnvironment.sandbox
@@ -216,6 +246,13 @@ enum AppServiceBootstrapPolicy {
         return nil
         #endif
     }
+
+    #if DEBUG
+    static var isProductionLaunchUIFixture: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        return arguments.contains("--ui-testing-local") && arguments.contains("--ui-testing-production-storekit-unavailable")
+    }
+    #endif
 }
 
 /// The selected route and proof are immutable for the entire process. There is no defaults or metadata fallback.
@@ -318,7 +355,7 @@ private actor AppLaunchCancelledRefreshUIFixture: AppTransactionEvidenceProvidin
 #endif
 
 @MainActor final class AppServiceLaunchCoordinator: ObservableObject {
-    enum State: Equatable { case resolving, recoveryRequired, ready(AppServiceContext) }
+    enum State: Equatable { case resolving, accountSelection, recoveryRequired, ready(AppServiceContext) }
     @Published private(set) var state: State = .resolving
     @Published private(set) var failure: AppServiceLaunchFailure?
     @Published private(set) var diagnosticText = ""
@@ -326,6 +363,7 @@ private actor AppLaunchCancelledRefreshUIFixture: AppTransactionEvidenceProvidin
     @Published private(set) var isWaitingForStoreKit = false
     private let logger = Logger(subsystem: "com.lihao.BlindOracle", category: "AppServiceBootstrap")
     private let provider: any AppTransactionEvidenceProviding
+    private let launchMode: AppServiceLaunchMode
     private let readiness: any AppLaunchNetworkReadinessProviding
     private let contextStore: AppServiceContextStore
     private let bundleID: String
@@ -360,7 +398,9 @@ private actor AppLaunchCancelledRefreshUIFixture: AppTransactionEvidenceProvidin
          contextStore: AppServiceContextStore = .process, bundleID: String = Bundle.main.bundleIdentifier ?? "",
          reporter: (any AppLaunchDiagnosticReporting)? = nil, timing: AppServiceLaunchTiming = .standard,
          metadata: AppLaunchDiagnosticMetadata = .current,
-         readiness: (any AppLaunchNetworkReadinessProviding)? = nil, initiallyActive: Bool? = nil) {
+         readiness: (any AppLaunchNetworkReadinessProviding)? = nil, initiallyActive: Bool? = nil,
+         launchMode: AppServiceLaunchMode = .storeVerification) {
+        self.launchMode = launchMode
         #if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
         let networkFixture = arguments.contains("--ui-testing-local") && arguments.contains("--ui-testing-service-network-recovery")
@@ -374,11 +414,11 @@ private actor AppLaunchCancelledRefreshUIFixture: AppTransactionEvidenceProvidin
             self.timing = AppServiceLaunchTiming(automaticRequestTimeout: 0.1, automaticTotalTimeout: 0.2,
                                                 manualRefreshTimeout: 1, recoveryReadTimeout: 1, retryDelays: [])
         } else { self.provider = provider; self.contextStore = contextStore; self.timing = timing }
-        let live = !fixture && provider is StoreKitAppTransactionEvidence && !AppServiceBootstrapPolicy.isUnitTestHost
+        let live = launchMode.usesStoreVerification && !fixture && provider is StoreKitAppTransactionEvidence && !AppServiceBootstrapPolicy.isUnitTestHost
             && !arguments.contains("--ui-testing-local")
         #else
         self.provider = provider; self.contextStore = contextStore; self.timing = timing
-        let live = provider is StoreKitAppTransactionEvidence
+        let live = launchMode.usesStoreVerification && provider is StoreKitAppTransactionEvidence
         #endif
         self.bundleID = bundleID; self.metadata = metadata
         #if DEBUG
@@ -398,18 +438,46 @@ private actor AppLaunchCancelledRefreshUIFixture: AppTransactionEvidenceProvidin
         }
     }
     func resolve() async {
+        if case .production(let offerAccountChoice) = launchMode {
+            guard state == .resolving else { return }
+            if let selected = contextStore.snapshot() {
+                state = .ready(selected)
+            } else if offerAccountChoice() {
+                state = .accountSelection
+            } else {
+                selectProduction()
+            }
+            return
+        }
         guard cancelledRefreshRecovery == .none else { await performPendingCancellationRead(); return }
         await resolve(for: .current)
     }
+
+    func selectProduction() {
+        guard case .production = launchMode, state == .resolving || state == .accountSelection else { return }
+        freezeSelectedContext(AppServiceContext(environment: .production, appTransactionJWS: nil, source: .production))
+    }
+
+    func selectSandboxReview(invite: String) {
+        guard state == .accountSelection, AppServiceBootstrapPolicy.isSandboxReviewInvite(invite) else { return }
+        freezeSelectedContext(AppServiceContext(environment: .sandbox, appTransactionJWS: nil, source: .sandboxReview, reviewInvite: invite))
+    }
+
+    private func freezeSelectedContext(_ context: AppServiceContext) {
+        let selected = (try? contextStore.freeze(context)) ?? contextStore.requireContext()
+        state = .ready(selected)
+    }
+
     /// The only path that invokes AppTransaction.refresh().
     func retryFromUser() async {
-        guard flight == nil else { return }
+        guard launchMode.usesStoreVerification, flight == nil else { return }
         guard !sdk.isRunning else { isWaitingForStoreKit = true; return }
         recoveryRuns = 0
         cancelledRefreshRecovery = .none
         await resolve(for: .userInitiatedRefresh)
     }
     func setApplicationActive(_ active: Bool) async {
+        guard launchMode.usesStoreVerification else { return }
         let becameActive = active && !applicationActive
         if applicationActive != active {
             if let activeSince { accumulatedActive += ProcessInfo.processInfo.systemUptime - activeSince }

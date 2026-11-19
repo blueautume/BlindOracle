@@ -2,7 +2,22 @@ import Foundation
 
 /// Separate files deliberately keep permanent profiles outside conversation compression.
 final class LocalVault {
+    enum Scope: String {
+        case standard = "BlindOracle"
+        case sandboxReview = "BlindOracle-ReviewSandbox"
+    }
+
     static let shared = LocalVault()
+    static let sandbox = LocalVault(scope: .sandboxReview)
+
+    static func forContext(_ context: AppServiceContext) -> LocalVault {
+        context.source == .sandboxReview ? sandbox : shared
+    }
+
+    static func directory(in applicationSupport: URL, scope: Scope, uiTesting: Bool) -> URL {
+        applicationSupport.appendingPathComponent(scope.rawValue + (uiTesting ? "-UITest" : ""), isDirectory: true)
+    }
+
     let directory: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
@@ -14,14 +29,17 @@ final class LocalVault {
     }
     private var unreadableFiles: Set<String> = []
     private var recoveryCopies: [String: URL] = [:]
-    init(directory: URL? = nil, deletionDefaults: UserDefaults = .standard) {
+    init(directory: URL? = nil, deletionDefaults: UserDefaults = .standard, scope: Scope = .standard) {
         let uiTesting: Bool
         #if DEBUG
         uiTesting = ProcessInfo.processInfo.arguments.contains("--ui-testing-local")
         #else
         uiTesting = false
         #endif
-        self.directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(uiTesting ? "BlindOracle-UITest" : "BlindOracle", isDirectory: true)
+        self.directory = directory ?? Self.directory(
+            in: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0],
+            scope: scope, uiTesting: uiTesting
+        )
         self.deletionDefaults = deletionDefaults
         #if DEBUG
         if uiTesting, ProcessInfo.processInfo.arguments.contains("--ui-testing-reset") { try? FileManager.default.removeItem(at: self.directory) }

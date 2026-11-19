@@ -69,6 +69,11 @@ struct VerifiedAccountPurchase: Sendable {
             }
         }
     }
+    /// Automatic reconciliation is scheduled separately from account and task recovery.
+    func requestUnfinishedReconciliation() {
+        needsReconciliation = true
+        scheduleReconciliationIfNeeded()
+    }
     func resumeUnfinished(userInitiated: Bool = false) async {
         let expectedLocalDataGeneration = localDataGeneration
         guard !isCheckingPurchases, !isPurchasing else {

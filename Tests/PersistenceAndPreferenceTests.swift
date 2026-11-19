@@ -84,6 +84,46 @@ final class PersistenceAndPreferenceTests: XCTestCase {
         XCTAssertFalse(LocalContextPolicy.shouldCompact(messages: messages, summary: ConversationSummary()))
     }
 
+    func testReviewSandboxDeletionAndRestartPreserveProductionVault() throws {
+        let support = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let suite = "localVault.(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            try? FileManager.default.removeItem(at: support)
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let productionDirectory = LocalVault.directory(in: support, scope: .standard, uiTesting: false)
+        let sandboxDirectory = LocalVault.directory(in: support, scope: .sandboxReview, uiTesting: false)
+        XCTAssertEqual(productionDirectory.lastPathComponent, "BlindOracle")
+        XCTAssertNotEqual(productionDirectory, sandboxDirectory)
+        XCTAssertEqual(productionDirectory.deletingLastPathComponent(), sandboxDirectory.deletingLastPathComponent())
+
+        let production = LocalVault(directory: productionDirectory, deletionDefaults: defaults)
+        let sandbox = LocalVault(directory: sandboxDirectory, deletionDefaults: defaults)
+        try production.save(["正式资料"], as: "profiles")
+        try production.save(["正式聊天"], as: ConversationHistory.filename)
+        XCTAssertFalse(sandbox.contains("profiles"))
+        try sandbox.save(["审核资料"], as: "profiles")
+        let productionTasks = productionDirectory.appendingPathComponent(ServiceEnvironment.production.taskDirectoryName, isDirectory: true)
+        let sandboxTasks = sandboxDirectory.appendingPathComponent(ServiceEnvironment.sandbox.taskDirectoryName, isDirectory: true)
+        for tasks in [productionTasks, sandboxTasks] {
+            try FileManager.default.createDirectory(at: tasks, withIntermediateDirectories: true)
+            try Data(tasks.lastPathComponent.utf8).write(to: tasks.appendingPathComponent("snapshot.json"))
+        }
+
+        try sandbox.markAccountDeletionPending()
+        XCTAssertTrue(sandbox.requiresAccountDeletionCleanup)
+        XCTAssertFalse(production.requiresAccountDeletionCleanup)
+
+        let restartedSandbox = LocalVault(directory: sandboxDirectory, deletionDefaults: defaults)
+        XCTAssertFalse(restartedSandbox.requiresAccountDeletionCleanup)
+        XCTAssertFalse(restartedSandbox.contains("profiles"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: sandboxTasks.path))
+        XCTAssertEqual(production.load([String].self, from: "profiles", fallback: []), ["正式资料"])
+        XCTAssertEqual(production.load([String].self, from: ConversationHistory.filename, fallback: []), ["正式聊天"])
+        XCTAssertEqual(try Data(contentsOf: productionTasks.appendingPathComponent("snapshot.json")), Data(productionTasks.lastPathComponent.utf8))
+    }
+
     func testUnreadableDataIsBackedUpOnceBeforeFallbackCanBeSaved() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

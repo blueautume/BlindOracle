@@ -4,9 +4,103 @@ import SwiftUI
 struct AccountGateView: View {
     @EnvironmentObject private var account: AccountStore
     @StateObject private var apple = AppleAccountSignInCoordinator()
+    @State private var didStartAutomatically = false
+    var automaticallyStartSignIn = false
+    var automaticSignInDidStart: () -> Void = { }
+
+    var body: some View {
+        AccountGateLayout(isSigningIn: account.isBusy || apple.isRunning, message: account.message,
+                          startsSignIn: { apple.start(account: account) },
+                          showsTestBadge: ServiceEnvironment.current.isSandbox)
+            .task {
+                guard automaticallyStartSignIn, !didStartAutomatically else { return }
+                didStartAutomatically = true
+                automaticSignInDidStart()
+                apple.start(account: account)
+            }
+    }
+}
+
+/// Lets the user choose a route before restoring an account in either environment.
+struct AppServiceAccountSelectionView: View {
+    let chooseProduction: () -> Void
+    let chooseSandbox: (String) -> Void
+    @State private var showingTestAccess = false
+    @State private var submittedInvite: String?
+
+    var body: some View {
+        AccountGateLayout(isSigningIn: false, message: nil, startsSignIn: chooseProduction,
+                          openTestAccess: { showingTestAccess = true })
+            .sheet(isPresented: $showingTestAccess, onDismiss: {
+                guard let invite = submittedInvite else { return }
+                submittedInvite = nil
+                chooseSandbox(invite)
+            }) {
+                TestAccessSheet { invite in
+                    submittedInvite = invite
+                    showingTestAccess = false
+                }
+            }
+    }
+}
+
+private struct TestAccessSheet: View {
+    let submitInvite: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var invite = ""
+
+    private var trimmedInvite: String { invite.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canSubmitInvite: Bool { AppServiceBootstrapPolicy.isSandboxReviewInvite(trimmedInvite) }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    SecureField(L10n.text("测试邀请码", "Test invitation code"), text: $invite)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .submitLabel(.continue)
+                        .onSubmit(submit)
+                        .accessibilityIdentifier("testAccessInvite")
+                } footer: {
+                    Text(L10n.text("请粘贴开发者提供的完整邀请码。测试账号和额度单独保存。",
+                                   "Paste the full invitation code from the developer. Test accounts and test allowance are kept separate."))
+                }
+                Button(L10n.text("继续", "Continue"), action: submit)
+                    .disabled(!canSubmitInvite)
+                    .accessibilityIdentifier("submitTestAccessInvite")
+            }
+            .navigationTitle(L10n.text("测试访问", "Test Access"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.text("取消", "Cancel")) {
+                        invite = ""
+                        dismiss()
+                    }
+                    .accessibilityIdentifier("cancelTestAccess")
+                }
+            }
+        }
+        .tint(InkTheme.cinnabar)
+    }
+
+    private func submit() {
+        let code = trimmedInvite
+        guard AppServiceBootstrapPolicy.isSandboxReviewInvite(code) else { return }
+        invite = ""
+        submitInvite(code)
+    }
+}
+
+private struct AccountGateLayout: View {
+    let isSigningIn: Bool
+    let message: String?
+    let startsSignIn: () -> Void
+    var openTestAccess: (() -> Void)?
+    var showsTestBadge = false
     @ScaledMetric(relativeTo: .footnote) private var progressHeight = 24
     @ScaledMetric(relativeTo: .footnote) private var messageHeight = 72
-    private var isSigningIn: Bool { account.isBusy || apple.isRunning }
 
     var body: some View {
         NavigationStack {
@@ -18,6 +112,7 @@ struct AccountGateView: View {
                             HStack(spacing: 9) {
                                 RoundedRectangle(cornerRadius: 1).fill(InkTheme.cinnabar).frame(width: 3, height: 16)
                                 Text(L10n.text("瞎子", "BlindOracle")).font(.system(size: 20, weight: .medium, design: .serif))
+                                if showsTestBadge { TestEnvironmentBadge() }
                                 Spacer()
                             }.foregroundStyle(InkTheme.ink)
                             Spacer(minLength: 44)
@@ -33,7 +128,7 @@ struct AccountGateView: View {
                             }
                             Spacer(minLength: 52)
                             VStack(spacing: 12) {
-                                NativeAppleSignInButton { apple.start(account: account) }
+                                NativeAppleSignInButton(action: startsSignIn)
                                     .frame(height: 54).disabled(isSigningIn)
                                     .accessibilityIdentifier("appleSignInButton")
                                 HStack(spacing: 8) {
@@ -45,16 +140,16 @@ struct AccountGateView: View {
                                 .accessibilityHidden(!isSigningIn)
                                 .accessibilityIdentifier("signInProgress")
                                 ScrollView {
-                                    Text(account.message ?? "").font(.footnote).foregroundStyle(InkTheme.cinnabar)
+                                    Text(message ?? "").font(.footnote).foregroundStyle(InkTheme.cinnabar)
                                         .multilineTextAlignment(.center).lineSpacing(4)
                                         .frame(maxWidth: .infinity)
                                         .accessibilityIdentifier("accountMessage")
                                 }
                                 .frame(height: messageHeight)
                                 .scrollBounceBehavior(.basedOnSize)
-                                .opacity(account.message == nil ? 0 : 1)
-                                .accessibilityHidden(account.message == nil)
-                                .allowsHitTesting(account.message != nil)
+                                .opacity(message == nil ? 0 : 1)
+                                .accessibilityHidden(message == nil)
+                                .allowsHitTesting(message != nil)
                             }
                             Spacer(minLength: 32)
                             VStack(spacing: 7) {
@@ -65,6 +160,13 @@ struct AccountGateView: View {
                                     Text("·").foregroundStyle(InkTheme.line)
                                     NavigationLink(L10n.text("隐私政策", "Privacy Policy")) { LegalDocumentView(document: .privacyPolicy) }.accessibilityIdentifier("gatePrivacyPolicy")
                                 }.foregroundStyle(InkTheme.ink)
+                                if let openTestAccess {
+                                    Button(L10n.text("测试访问", "Test Access"), action: openTestAccess)
+                                        .font(.footnote)
+                                        .foregroundStyle(InkTheme.secondary)
+                                        .padding(.top, 8)
+                                        .accessibilityIdentifier("openTestAccess")
+                                }
                             }
                             .font(.caption)
                         }

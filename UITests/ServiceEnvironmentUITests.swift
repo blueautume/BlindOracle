@@ -1,6 +1,61 @@
 import XCTest
 
 final class ServiceEnvironmentUITests: XCTestCase {
+    @MainActor private func launchWithoutStoreKit(_ extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset-language", "-oracle.appLanguage", "zh-Hans",
+                               "--ui-testing-production-storekit-unavailable", "--ui-testing-auth-signed-out"] + extra
+        app.launch()
+        return app
+    }
+
+    @MainActor func testProductionSignInContinuesWhenStoreKitIsUnavailable() {
+        let app = launchWithoutStoreKit(["--ui-testing-auth-progress"])
+        let apple = app.buttons["appleSignInButton"]
+        XCTAssertTrue(apple.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["openTestAccess"].exists)
+        XCTAssertFalse(app.buttons["重新验证 App Store"].exists)
+
+        apple.tap()
+        let progress = app.descendants(matching: .any).matching(identifier: "signInProgress").firstMatch
+        XCTAssertTrue(progress.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["openTestAccess"].exists)
+        XCTAssertFalse(app.staticTexts["测试"].exists)
+        XCTAssertFalse(app.buttons["重新验证 App Store"].exists)
+    }
+
+    @MainActor func testTestAccessCancelKeepsProductionAvailableAndValidInviteSelectsSandbox() {
+        let app = launchWithoutStoreKit()
+        let open = app.buttons["openTestAccess"]
+        guard open.waitForExistence(timeout: 10) else { return XCTFail("Test access should be available before choosing a route.") }
+        open.tap()
+
+        let invite = app.secureTextFields["testAccessInvite"]
+        guard invite.waitForExistence(timeout: 5) else { return XCTFail("The invite should use secure text entry.") }
+        let submit = app.buttons["submitTestAccessInvite"]
+        XCTAssertFalse(submit.isEnabled)
+        invite.tap()
+        invite.typeText("invalid")
+        XCTAssertFalse(submit.isEnabled)
+        app.buttons["cancelTestAccess"].tap()
+
+        XCTAssertTrue(invite.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["appleSignInButton"].isHittable)
+        XCTAssertFalse(app.staticTexts["测试"].exists)
+        open.tap()
+        XCTAssertTrue(invite.waitForExistence(timeout: 5))
+        XCTAssertFalse(submit.isEnabled)
+        invite.tap()
+        invite.typeText(String(repeating: "A", count: 43))
+        XCTAssertTrue(submit.isEnabled, "Cancellation must discard the previous invalid entry.")
+        submit.tap()
+
+        XCTAssertTrue(app.staticTexts["测试"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["appleSignInButton"].isHittable)
+        XCTAssertFalse(open.exists)
+        XCTAssertFalse(app.buttons["重新验证 App Store"].exists)
+    }
+
     @MainActor func testCancelledRefreshContinuesToSignInOnlyAfterVerifiedRead() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset-language", "-oracle.appLanguage", "zh-Hans",

@@ -2,19 +2,13 @@
 
 一个以水墨宣纸为视觉语言的原生 SwiftUI iOS 应用。只有「对话」「数据」两个标签。十种方法在设备本地执行，固定的联网 Agent 负责选择适用插件、提出资料与交互需求、整合解读和回答追问。
 
-当前版本：**3.0.305（Build 68）**。
+当前版本：**3.0.306（Build 69）**。
 
 每批修改提交前同时递增补丁版本和 Build，运行一次 `python3 Scripts/version.py` 即可同步版本配置。单一版本源为 `Configuration/Version.json`，工程生成脚本也从这里读取；构建和测试不会自动加版本。`python3 Scripts/version.py --check` 检查工作区同步状态，提交钩子用 `--check-staged` 检查暂存区相对 HEAD 的递增。首次克隆后使用 `git config core.hooksPath .githooks` 启用密钥及版本检查。
 
 ## Apple 登录与账号
 
-应用启动先验证 StoreKit AppTransaction 并冻结服务环境，再恢复该环境的账号。已有会话在独立的品牌启动画面完成 Apple 状态与服务器 me/refresh 校验，然后直接进入主界面；此过程不挂载登录页。安装凭据验证失败停留品牌恢复页，不降级环境、不自动弹商店认证；3.0.21 起用户点击「重新验证 App Store」才调用 `AppTransaction.refresh()`，可能出现系统商店认证提示，刷新后仍须通过同一签名、应用和环境校验。临时网络故障或 Keychain 暂不可读保留凭据。只有确实没有会话、最终认证失效或用户主动选择重新登录时才显示 Apple 登录页。未登录不能访问聊天、资料或设置，但可阅读协议和隐私政策。
-
-3.0.32 起，启动凭据读取针对暂态错误有限重试并设等待上限；手动认证的暂态失败可补读一次。取消来源和超时分别诊断，恢复页可复制脱敏诊断；故障与恢复事件经独立入口上报管理台「启动验证诊断」，离线限量补报。详见 [启动验证恢复与诊断](Documentation/LaunchVerificationDiagnostics.md)。此优化不默认放行未知环境，不改变现有账号或测试额度规则。
-
-3.0.33 将联网等待与商店验证分开安排，前台或网络恢复后可受控继续验证；底层商店请求真正结束前不发起下一次请求。诊断先保存，待验证结束且应用稳定活跃后补报，避免与联网提示及商店认证并行。详见 [联网恢复与验证时序](Documentation/LaunchVerificationTiming.md)。
-
-3.0.34 在手动商店认证返回取消后，仅补读一次凭据，继续要求完整验证通过才进入账号流程；补读失败或超时就停止，不自动再次触发认证。
+3.0.306 起，普通启动直接恢复正式会话或显示 Apple 登录，账号流程不调用商店安装凭据接口。已有会话先完成 Apple 状态与服务器 me/refresh 校验。临时网络或 Keychain 故障保留会话，允许重试。未登录时仍可阅读协议及隐私政策。交易监听与补单独立于账号、余额及 AI 任务恢复。旧版本的商店验证诊断见[历史时序说明](Documentation/LaunchVerificationTiming.md)。
 
 「数据」页直接展示账号姓名、Apple 身份与剩余额度百分比，点整张卡片进入账号设置；邮箱仅在 Apple 提供时显示。尚未取得的额度显示占位而非虚构零值。设置页也提供简洁的账号设置入口。原生 Apple 授权前先取得服务器挑战，将 raw nonce 的 SHA-256 设置为 Apple request nonce，使用 challenge ID 绑定 state；服务器验证 Apple identity token 并交换授权码。账号会话独立保存在 ThisDeviceOnly Keychain，刷新采用 single-flight，退出、账号变更和迟到回调不能恢复旧账号状态。
 
@@ -28,13 +22,13 @@
 
 沙盒只在「瞎子」标题右侧显示小型「测试」标识，不再占用全局横条；购买前仍保留不真实扣款的提示。
 
-默认发布工程采用 Apple 签名环境自动识别：仅通过验证的 AppTransaction Production/Sandbox 决定全部账号、AI、钱包、Keychain 和任务的环境；进程内不能切换。Sandbox 连接 `https://wellecho.cn/xiazi-sandbox-api/v1/`，正式账本只接受 Production。自动 Sandbox 登录附带 AppTransaction JWS，由服务器独立验签。3.0.301 起，同一下载凭据允许不同的已验证 Apple 登录身份使用，各身份仍有独立账号、钱包和订单；测试调用同时受该安装凭据的共享每日成本、请求数、并发与失败次数限制。不能用客户端环境字段、偏好或发布版启动参数开通测试权限。
+正式构建默认走 Production。送审和受邀测试人员可在没有正式会话的启动登录页选择「测试访问」，填入有效的沙盒邀请，再使用 Apple 登录。凭据只在当前进程内使用，由 Sandbox 后端检验及限制人数；同一进程内固定环境。审核沙盒的 Keychain、资料目录、删除标记、任务和账本独立。具体操作见[发布与购买验证](Documentation/ReviewPurchaseValidation.md)。
 
 3.0.22 起，首次 AI 发送前独立说明问题、人员资料目录、相关上下文与地点数据经 wellecho.cn 交由 DeepSeek 处理，并提供同意、拒绝及撤回入口。拒绝保留输入草稿，仍可查看账号与本机资料；中央请求入口在账号刷新、任务准入及网络发送前校验许可。第三方可能按适用条款留存内容、使用去标识化数据优化服务或训练，具体 API 账户安排尚未核实。正式包包含 `PrivacyInfo.xcprivacy`，按实际 UserDefaults 用途声明 CA92.1，并列出与审核资料一致的数据类型。
 
-开发签名安装可能没有 App Store 下载凭据。仅供既有 owner 测试的 `BLINDORACLE_SANDBOX=YES python3 Scripts/generate_project.py` 保留固定 Sandbox 路径和服务器白名单，名称为「瞎子·测试」。默认发布包名称仍为「瞎子」，选中 Sandbox 后显示「测试环境 · 购买不扣款」。不能用 owner 开发包测试结果替代同一归档的 TestFlight 自动环境验收。
+既有 owner 测试使用 `BLINDORACLE_SANDBOX=YES python3 Scripts/generate_project.py`，固定走 Sandbox 和服务器白名单，名称为「瞎子·测试」。同一正式候选包的测试访问还需单独验证。
 
-App 登录继续使用之前的正常 Apple 账号；Sandbox tester 仅用于系统购买。沙盒只交付 Sandbox 交易，生产只交付 Production 交易，商品价格与币种仍须和服务器配置一致。两套服务器会话、Keychain 失效标记、任务请求快照和结束队列独立；共享本机历史中的逻辑任务也映射为不同服务器任务。安装同一 Bundle ID 的测试包会保留本机资料和生产会话，但沙盒需单独 Apple 登录。沙盒删除只删除测试服务器账号并保留 Apple 授权，不影响正式版本授权。
+App 登录继续使用正常 Apple 账号，Sandbox tester 用于系统购买。沙盒交付 Sandbox 交易，正式交付 Production 交易，两侧都核对价格、环境和账号归属。沙盒删号保留共享 Apple 登录授权。
 
 沙盒构建后运行 `env -u BLINDORACLE_SANDBOX python3 Scripts/generate_project.py` 恢复默认生产工程。准备提交 App Store 的构建须从生产配置生成；不要将测试显示名或沙盒编译条件带入发布包。
 
