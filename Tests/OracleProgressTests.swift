@@ -647,7 +647,7 @@ final class OracleProgressTests: XCTestCase {
         XCTAssertEqual(pending.participantIDs, [li.id])
         XCTAssertNil(pending.baseRunID)
         XCTAssertEqual(store.intakeParticipants.map(\.id), [li.id])
-        XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], save: false, castingProfile: castingSite()))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], castingProfile: castingSite()))
         try await waitUntil { !store.isBusy }
 
         let newRun = try XCTUnwrap(store.runs.last)
@@ -753,7 +753,7 @@ final class OracleProgressTests: XCTestCase {
                 XCTAssertEqual(pending.mandatoryMethods, [.tarot])
                 XCTAssertTrue(store.showIntake)
                 XCTAssertNil(pending.baseRunID)
-                XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], save: false))
+                XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: []))
                 XCTAssertEqual(store.pendingInteraction?.currentRequest?.kind, .tarot)
             }
         }
@@ -771,7 +771,7 @@ final class OracleProgressTests: XCTestCase {
         XCTAssertEqual(store.pendingPlan?.methods, [.tarot])
         XCTAssertEqual(store.pendingPlan?.mandatoryMethods, [.tarot])
         XCTAssertTrue(store.intakeParticipants.isEmpty)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: []))
         XCTAssertEqual(store.pendingInteraction?.currentRequest?.kind, .tarot)
     }
 

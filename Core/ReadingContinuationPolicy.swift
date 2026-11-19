@@ -9,9 +9,9 @@ enum ReadingContinuationPolicy {
         (.astrology, "西方占星|占星|星盘"), (.tarot, "塔罗牌|塔罗|塔羅|tarot")
     ]
     private static let recastPatterns = [
-        #"(?:重算|重起一卦|重抽(?:(?:一次|一组|三张|一下)牌?|牌|(?=(?:吧|吗|呢|好吗|可以吗|谢谢)?$)))"#,
+        #"(?:重算(?:一下|一遍|一次)?|重起一卦|重抽(?:(?:一次|一组|三张|一下)牌?|牌|(?=(?:吧|吗|呢|好吗|可以吗|谢谢)?$)))"#,
         #"(?:重新|重来一次|从头)(?:再)?(?:起卦|算卦|算命|推演|占卜|抽(?:(?:一次|一组|三张|一下)牌?|牌|(?=(?:吧|吗|呢|好吗|可以吗|谢谢)?$))|掷卦|(?:投掷|投|掷)(?:一次|六次)?|六掷(?:成卦)?|算(?:一遍|一次|一下|一卦|算)?)"#,
-        #"(?:再|另外|另)(?:帮我|替我|给我)?(?:算(?:一卦|一次|一下|算)|起(?:一|个|一轮)?卦|占卜(?:一次|一下)?|抽(?:(?:一次|一组|三张)牌?|牌)|(?:投掷|投|掷)(?:一次|六次))"#,
+        #"(?:再|另外|另)(?:帮我|替我|给我)?(?:算(?:一卦|一遍|一次|一下|算)|起(?:一|个|一轮)?卦|占卜(?:一次|一下)?|抽(?:(?:一次|一组|三张)牌?|牌)|(?:投掷|投|掷)(?:一次|六次))"#,
         #"再来(?:一卦|一次占卜|一轮抽牌)"#
     ]
     private static let newQuestionPattern = #"(?:换个新?|换一个新?|另一个|另外一个|另问(?:一件|一桩|个|一个)?|换一件|问(?:个|一个|一件)新)(?:问题|事|事情)"#
@@ -482,7 +482,7 @@ enum ReadingContinuationPolicy {
                     guard let range = Range(match.range, in: compact) else { continue }
                     let prefix = String(compact[..<range.lowerBound].suffix(20))
                     let suffix = String(compact[range.upperBound...].prefix(12))
-                    let negated = prefix.range(of: #"(?:不|别|莫|不要|不用|无需|不必|不想|不需要|不是要|并非要|没让你|没有让你|拒绝).{0,5}$"#, options: .regularExpression) != nil
+                    let negated = prefix.range(of: #"(?:不|(?<![分特性告])别|莫|不要|不用|无需|不必|不想|不需要|不是要|并非要|没让你|没有让你|拒绝).{0,5}$"#, options: .regularExpression) != nil
                     let explainsRequest = prefix.range(of: #"(?:为什么|为何|怎么会|什么时候|什么情况|何时|是否必须|是不是必须|难道|一定要|解释一下).{0,8}$"#, options: .regularExpression) != nil
                         || suffix.range(of: #"^(?:[”\"」』])?(?:是什么意思|的意思|的必要|的区别|的原理|的步骤|有必要吗|没必要|没有必要)"#, options: .regularExpression) != nil
                     if !negated && !explainsRequest { return true }
@@ -494,6 +494,18 @@ enum ReadingContinuationPolicy {
 
     /// A command with no new subject keeps the prior question and participants.
     /// Match the entire message rather than guessing which free text is a new subject.
+    private static let suppliedProfileDetails: String = {
+        let noun = #"(?:出生资料|出生信息|资料|信息)"#
+        return #"(?:(?:我)?(?:现在|刚才)?(?:已经|已)?(?:补充|补齐|更新|填好|填完)(?:好|完)?(?:了)?"#
+            + noun + "?(?:了)?|" + noun + #"(?:已经|已)?(?:补充|补齐|更新|填好|填完)(?:好|完)?(?:了)?)"#
+    }()
+
+    static func isProfileDetailsRecast(_ question: String) -> Bool {
+        let compact = question.filter { !$0.isWhitespace }
+        return compact.range(of: "^" + suppliedProfileDetails, options: .regularExpression) != nil
+            && isBareRecastRequest(question)
+    }
+
     static func isBareRecastRequest(_ question: String) -> Bool {
         if EnglishConversation.isBareRecast(question) { return true }
         if requestsReplacementTarotSpread(question), let remainder = replacementTarotRemainder(question) {
@@ -516,7 +528,7 @@ enum ReadingContinuationPolicy {
         let politePrefix = #"(?:请|请你|麻烦|麻烦你|帮我|替我|给我|我想|我要|我是想|我是要|我需要|能否|可以)"#
         let politeSuffix = #"(?:吧|吗|呢|好吗|可以吗|谢谢)"#
         let command = "(?:" + recastPatterns.joined(separator: "|") + ")"
-        let pattern = "^(?:" + politePrefix + "|" + qualification + ")*" + command
+        let pattern = "^" + suppliedProfileDetails + "?(?:" + politePrefix + "|" + qualification + ")*" + command
             + "(?:" + politeSuffix + "|" + qualification + ")*$"
         return compact.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
     }

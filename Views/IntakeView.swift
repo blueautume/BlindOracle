@@ -16,6 +16,7 @@ struct ProfileFormDraft: Identifiable {
     var birthTimeChoiceChanged = false
     var birthClockEdited = false
     var birthZoneEdited = false
+    var editedFields: Set<OracleField> = []
 
     init(profile: OracleProfile) {
         var editable = profile
@@ -56,9 +57,10 @@ struct ProfileFormDraft: Identifiable {
     }
 
     mutating func setNamePart(_ field: OracleField, to value: String) {
+        editedFields.insert(field)
         if field == .surname { profile.familyName = value }
         else { profile.givenName = value }
-        clearLegacyName()
+        clearStoredName()
         let present = !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         setAvailability(field, present: present, cleared: !present)
         if !profile.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -67,17 +69,29 @@ struct ProfileFormDraft: Identifiable {
     }
 
     mutating func clearLegacyName() {
+        editedFields.formUnion([.surname, .givenName])
+        clearStoredName()
+    }
+
+    private mutating func clearStoredName() {
         profile.name = nil
         profile.displayName = ""
         setAvailability(.name, present: false, cleared: true)
     }
 
+    mutating func setAlias(_ value: String) {
+        editedFields.insert(.name)
+        profile.alias = value
+    }
+
     mutating func setGender(_ value: String) {
+        editedFields.insert(.gender)
         profile.sex = value
         setAvailability(.gender, present: value != "未提供", cleared: value == "未提供")
     }
 
     mutating func setBirthDate(_ value: Date?) {
+        editedFields.insert(.birthDate)
         birthDateChoiceChanged = true
         birthDateKnown = value != nil
         guard let value else { return }
@@ -92,6 +106,7 @@ struct ProfileFormDraft: Identifiable {
     }
 
     mutating func setBirthTime(_ value: Date?) {
+        editedFields.insert(.birthTime)
         birthTimeChoiceChanged = true
         profile.birthTimeKnown = value != nil
         guard let value else { return }
@@ -106,6 +121,7 @@ struct ProfileFormDraft: Identifiable {
     }
 
     mutating func setBirthDistrict(_ district: ChinaDistrict) {
+        editedFields.insert(.birthPlace)
         changeBirthZone(to: district.timeZone)
         profile.birthDistrictCode = district.id
         profile.birthPlace = district.fullName
@@ -114,6 +130,7 @@ struct ProfileFormDraft: Identifiable {
     }
 
     mutating func setCurrentDistrict(_ district: ChinaDistrict) {
+        editedFields.insert(.currentLocation)
         profile.currentDistrictCode = district.id
         profile.currentPlace = district.fullName
         profile.currentLatitude = district.latitude
@@ -128,9 +145,15 @@ struct ProfileFormDraft: Identifiable {
         changeBirthZone(to: located.birthTimeZoneID)
         located.birthDistrictCode = nil
         profile = located
+        editedFields.formUnion([.birthPlace, .birthCoordinates])
+    }
+
+    mutating func setCurrentGPS(_ place: LocalPlace) {
+        if place.apply(to: &profile, purpose: .current) { editedFields.insert(.currentLocation) }
     }
 
     mutating func setBirthCoordinates(latitude: Double?, longitude: Double?) {
+        editedFields.insert(.birthCoordinates)
         profile.birthLatitude = latitude
         profile.birthLongitude = longitude
         let complete = latitude != nil && longitude != nil
@@ -138,6 +161,7 @@ struct ProfileFormDraft: Identifiable {
     }
 
     mutating func clearBirthDistrict() {
+        editedFields.formUnion([.birthPlace, .birthCoordinates])
         changeBirthZone(to: OracleProfile.defaultChinaTimeZoneID)
         profile.birthDistrictCode = nil
         profile.birthPlace = ""
@@ -148,6 +172,7 @@ struct ProfileFormDraft: Identifiable {
     }
 
     mutating func clearCurrentLocation() {
+        editedFields.insert(.currentLocation)
         profile.currentDistrictCode = nil
         profile.currentPlace = ""
         profile.currentLatitude = nil
@@ -168,8 +193,9 @@ struct ProfileFormDraft: Identifiable {
         }
     }
 
-    private mutating func changeBirthZone(to identifier: String) {
+    mutating func changeBirthZone(to identifier: String) {
         guard let zone = TimeZone(identifier: identifier) else { return }
+        editedFields.insert(.birthTimeZone)
         if identifier != profile.birthTimeZoneID {
             let parts = birthCalendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: birthDate)
             var calendar = Calendar(identifier: .gregorian)
@@ -325,20 +351,18 @@ struct ProfileFormDraft: Identifiable {
     }
 }
 
-struct IntakeView: View {
-    let plan: OraclePlan
-    let onConfirm: (OracleProfile, [Int], Bool) -> Void
+struct ProfileEditor: View {
+    let creating: Bool
+    let onSave: (OracleProfile) -> Bool
+    @EnvironmentObject private var store: OracleStore
     @Environment(\.dismiss) private var dismiss
     @State private var draft: ProfileFormDraft
-    @State private var keepProfile = true
     @State private var error: String?
-    private var isEditing: Bool { plan.intent == "编辑基础资料" }
 
-    init(plan: OraclePlan, profile: OracleProfile, onConfirm: @escaping (OracleProfile, [Int], Bool) -> Void) {
-        self.plan = plan; self.onConfirm = onConfirm
+    init(profile: OracleProfile, creating: Bool, onSave: @escaping (OracleProfile) -> Bool) {
+        self.creating = creating; self.onSave = onSave
         _draft = State(initialValue: ProfileFormDraft(profile: profile))
     }
-    static var initialBirthDate: Date { ProfileFormDraft.initialBirthDate }
 
     var body: some View {
         NavigationStack {
@@ -353,29 +377,27 @@ struct IntakeView: View {
                                 Text(L10n.text("不必勉强记起每一件事。", "You can leave the rest blank.")).font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.secondary)
                             }
                         }
-                        if !isEditing {
-                            PaperCard {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    SectionEyebrow(text: L10n.text("此次所问", "Your question"))
-                                    Text(plan.question).font(.system(size: 18, design: .serif)).lineSpacing(7).foregroundStyle(InkTheme.ink)
+                        if !creating {
+                            if store.selfProfileID == draft.id {
+                                Label(L10n.text("本人档案", "Your profile"), systemImage: "person.crop.circle.badge.checkmark")
+                                    .font(.system(size: 13)).foregroundStyle(InkTheme.sage)
+                            } else {
+                                Button { store.setSelfProfile(id: draft.id) } label: {
+                                    Label(L10n.text("设为本人", "Set as your profile"), systemImage: "person.crop.circle")
+                                        .font(.system(size: 13)).foregroundStyle(InkTheme.cinnabar)
                                 }
+                                .buttonStyle(.plain).accessibilityIdentifier("setSelfProfile")
                             }
                         }
-                        ProfileFieldsView(draft: $draft, genderRequired: plan.methods.contains(.ziwei))
-                        if !isEditing {
-                            Toggle(L10n.text("把这份基础资料留在本机", "Save this profile on this device"), isOn: $keepProfile)
-                                .font(.system(size: 13, design: .serif)).tint(InkTheme.sage)
-                        }
+                        ProfileFieldsView(draft: $draft)
                         if let error { Text(error).font(.system(size: 12)).foregroundStyle(InkTheme.cinnabar) }
                         Button(action: confirm) {
-                            HStack { Text(isEditing ? L10n.text("保存基础资料", "Save profile") : L10n.text("确认资料，开始推演", "Confirm and begin")); Image(systemName: "arrow.right") }
+                            HStack { Text(L10n.text("保存基础资料", "Save profile")); Image(systemName: "arrow.right") }
                         }.buttonStyle(InkPrimaryButton()).accessibilityIdentifier("confirmIntake")
-                        Text(isEditing ? L10n.text("基础档案独立保存在本机。", "Your profile is stored on this device.") : L10n.text("问题、所需资料与推演摘要会用于 AI 解读；基础档案保存在本机。", "AI interpretation uses the question, required details, and a reading summary. Your profile stays on this device."))
-                            .font(.system(size: 10)).foregroundStyle(InkTheme.secondary).lineSpacing(4).frame(maxWidth: .infinity, alignment: .center)
                     }.frame(maxWidth: 620).padding(24).frame(maxWidth: .infinity)
                 }.scrollDismissesKeyboard(.interactively).accessibilityIdentifier("profileEditorScroll")
             }
-            .navigationTitle(isEditing ? L10n.text("基础资料", "Profile") : L10n.text("问事笺", "Reading details")).navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(L10n.text("基础资料", "Profile")).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(L10n.text("稍后填写", "Finish later")) { dismiss() }.font(.system(size: 13)).foregroundStyle(InkTheme.secondary) } }
             .toolbarBackground(InkTheme.paper, for: .navigationBar).toolbarBackground(.visible, for: .navigationBar)
         }.presentationDragIndicator(.visible)
@@ -384,8 +406,33 @@ struct IntakeView: View {
     private func confirm() {
         do {
             let profile = try draft.validatedProfile()
-            error = nil; onConfirm(profile, [], keepProfile)
+            if onSave(profile) { dismiss() }
+            else { error = store.notice ?? L10n.text("档案暂未保存，请再试一次。", "Couldn’t save this profile. Please try again.") }
         } catch { self.error = error.localizedDescription }
+    }
+}
+
+private struct BirthTimeZonePicker: View {
+    let onSelect: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var search = ""
+
+    private static let identifiers = ["UTC"] + TimeZone.knownTimeZoneIdentifiers.filter { $0 != "UTC" }
+
+    var body: some View {
+        NavigationStack {
+            List(Self.identifiers.filter { search.isEmpty || $0.localizedCaseInsensitiveContains(search) }, id: \.self) { identifier in
+                Button(identifier) { onSelect(identifier); dismiss() }
+                    .foregroundStyle(InkTheme.ink)
+            }
+            .searchable(text: $search, prompt: L10n.text("搜索时区名称", "Search time zones"))
+            .scrollContentBackground(.hidden).background(InkTheme.paper)
+            .navigationTitle(L10n.text("选择出生地时区", "Choose a birth time zone"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button(L10n.text("取消", "Cancel")) { dismiss() } }
+            }
+        }
     }
 }
 
@@ -404,6 +451,7 @@ private enum BirthDateCalendar: String {
 struct ProfileFieldsView: View {
     @Binding var draft: ProfileFormDraft
     var genderRequired = false
+    var showsBirthTimeZone = false
     @EnvironmentObject private var store: OracleStore
     @StateObject private var currentLocation = LocationService()
     @StateObject private var birthLocation = LocationService()
@@ -463,8 +511,17 @@ struct ProfileFieldsView: View {
     }
 
     private enum ProfilePicker: String, Identifiable {
-        case date, time, birthDistrict, currentDistrict
+        case date, time, birthDistrict, birthTimeZone, currentDistrict
         var id: String { rawValue }
+    }
+
+    static func correctionAnchor(profileID: UUID, field: OracleField) -> String {
+        let section = switch field {
+        case .name, .surname, .givenName: OracleField.name
+        case .birthPlace, .birthCoordinates: OracleField.birthPlace
+        default: field
+        }
+        return "profile-field-\(profileID.uuidString)-\(section.rawValue)"
     }
 
     private var surname: Binding<String> {
@@ -476,7 +533,7 @@ struct ProfileFieldsView: View {
     }
 
     private var alias: Binding<String> {
-        Binding(get: { draft.profile.alias ?? "" }, set: { draft.profile.alias = $0 })
+        Binding(get: { draft.profile.alias ?? "" }, set: { draft.setAlias($0) })
     }
 
     var body: some View {
@@ -499,25 +556,32 @@ struct ProfileFieldsView: View {
                     textRow(L10n.text("代称", "Nickname"), text: alias, contentType: .nickname, id: "profileAlias",
                             placeholder: draft.profile.anonymousCode)
                 }
-            }
+            }.id(Self.correctionAnchor(profileID: draft.id, field: .name))
             PaperCard(bottomPadding: 8) {
                 VStack(alignment: .leading, spacing: 0) {
                     SectionEyebrow(text: L10n.text("出生与所在地", "Birth and location")).padding(.bottom, 8)
-                    genderRow
+                    genderRow.id(Self.correctionAnchor(profileID: draft.id, field: .gender))
                     Divider()
-                    birthDateRow
+                    birthDateRow.id(Self.correctionAnchor(profileID: draft.id, field: .birthDate))
                     Divider()
                     pickerRow(L10n.text("出生时刻", "Birth time"), value: draft.profile.birthTimeKnown ? clockText(isDate: false) : nil,
                               placeholder: L10n.text("选钟表时间", "Choose a time"), id: "profileBirthTime", clearID: "clearProfileBirthTime",
                               action: { picker = .time }, clear: { draft.setBirthTime(nil) })
+                        .id(Self.correctionAnchor(profileID: draft.id, field: .birthTime))
                     Divider()
                     locationRow(L10n.text("出生地", "Birthplace"), value: displayPlace(code: draft.profile.birthDistrictCode, name: draft.profile.birthPlace) ?? (draft.profile.birthLatitude != nil || draft.profile.birthLongitude != nil ? L10n.text("已记录地点", "Location saved") : nil),
                                 id: "profileBirthPlace", gpsID: "useCurrentLocationForBirthPlace", clearID: "clearProfileBirthPlace",
                                 purpose: .birth, selection: .birthDistrict)
+                        .id(Self.correctionAnchor(profileID: draft.id, field: .birthPlace))
+                    if showsBirthTimeZone {
+                        Divider()
+                        birthTimeZoneRow.id(Self.correctionAnchor(profileID: draft.id, field: .birthTimeZone))
+                    }
                     Divider()
                     locationRow(L10n.text("当前所在地", "Current location"), value: displayPlace(code: draft.profile.currentDistrictCode, name: draft.profile.currentPlace) ?? (draft.profile.currentLatitude != nil || draft.profile.currentLongitude != nil ? L10n.text("已定位", "Located") : nil),
                                 id: "profileCurrentPlace", gpsID: "useCurrentLocation", clearID: "clearProfileCurrentPlace",
                                 purpose: .current, selection: .currentDistrict)
+                        .id(Self.correctionAnchor(profileID: draft.id, field: .currentLocation))
                     Divider()
                     baziPreviewRow
                 }
@@ -529,6 +593,8 @@ struct ProfileFieldsView: View {
             switch picker {
             case .birthDistrict:
                 ChinaDistrictPicker(title: L10n.text("选择出生地", "Choose a birthplace")) { selectDistrict($0, purpose: .birth) }
+            case .birthTimeZone:
+                BirthTimeZonePicker { draft.changeBirthZone(to: $0) }
             case .currentDistrict:
                 ChinaDistrictPicker(title: L10n.text("选择当前所在地", "Choose current location")) { selectDistrict($0, purpose: .current) }
             case .date, .time:
@@ -719,6 +785,22 @@ struct ProfileFieldsView: View {
         }
     }
 
+    private var birthTimeZoneRow: some View {
+        let title = L10n.text("出生地时区", "Birth time zone")
+        let value = draft.profile.unknownFields.contains(.birthTimeZone) ? nil : draft.profile.birthTimeZoneID
+        return Button { picker = .birthTimeZone } label: {
+            HStack(spacing: 8) {
+                Text(title).foregroundStyle(InkTheme.ink)
+                Spacer(minLength: 6)
+                pickerValue(value, placeholder: L10n.text("选时区", "Choose a time zone"))
+            }
+            .frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).accessibilityLabel(title)
+        .accessibilityValue(value ?? L10n.text("未填写", "Not entered"))
+        .accessibilityIdentifier("profileBirthTimeZone")
+    }
+
     private func pickerRow(_ title: String, value: String?, placeholder: String, id: String, clearID: String,
                            action: @escaping () -> Void, clear: @escaping () -> Void) -> some View {
         HStack(spacing: 10) {
@@ -869,7 +951,7 @@ struct ProfileFieldsView: View {
         state.wrappedValue.waitingForGPS = false
         switch purpose {
         case .birth: draft.setBirthGPS(place)
-        case .current: place.apply(to: &draft.profile, purpose: .current)
+        case .current: draft.setCurrentGPS(place)
         }
     }
 
@@ -1071,16 +1153,5 @@ private struct BirthLunarWheel: View {
         }
         .pickerStyle(.wheel)
         .labelsHidden()
-    }
-}
-
-struct ProfileEditor: View {
-    let profile: OracleProfile
-    let onSave: (OracleProfile) -> Void
-    @Environment(\.dismiss) private var dismiss
-    var body: some View {
-        IntakeView(plan: OraclePlan(intent: "编辑基础资料", subject: "事件", methods: [], requiredFields: [], note: "", question: "保存档案，往后直接选取。"), profile: profile) { updated, _, _ in
-            onSave(updated); dismiss()
-        }.id(profile.id)
     }
 }

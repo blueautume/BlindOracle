@@ -39,6 +39,80 @@ struct ProfileResolution: Sendable {
 }
 
 enum ProfileDirectory {
+    /// Values are supplied by validated form controls. The directory identity
+    /// and fields outside the user's explicit selection come from the saved record.
+    static func applyingManualEdits(_ fields: Set<OracleField>, from submitted: OracleProfile,
+                                    to saved: OracleProfile) -> OracleProfile? {
+        var result = saved
+        let editable = fields.subtracting([.numbers])
+        let clock: Set<OracleField> = [.birthDate, .birthTime, .birthTimeZone]
+        if !editable.isDisjoint(with: clock) {
+            var patch = ProfileUpdate()
+            var unknown: [OracleField] = []
+            if editable.contains(.birthDate) {
+                if let date = submitted.birthDate, !submitted.unknownFields.contains(.birthDate) {
+                    patch.birthDate = submitted.birthDateText ?? format(date, zone: submitted.birthTimeZoneID, pattern: "yyyy-MM-dd")
+                } else { unknown.append(.birthDate) }
+            }
+            if editable.contains(.birthTime) {
+                if submitted.birthTimeKnown, !submitted.unknownFields.contains(.birthTime),
+                   let value = submitted.birthTimeText ?? submitted.birthDate.map({ format($0, zone: submitted.birthTimeZoneID, pattern: "HH:mm:ss") }) {
+                    patch.birthTime = value
+                } else { unknown.append(.birthTime) }
+            }
+            if editable.contains(.birthTimeZone) {
+                if submitted.unknownFields.contains(.birthTimeZone) { unknown.append(.birthTimeZone) }
+                else { patch.birthTimeZoneID = submitted.birthTimeZoneID }
+            }
+            patch.unknownFields = unknown
+            var issues: [ProfileDirectoryIssue] = []
+            applyFields(patch, to: &result, issues: &issues)
+            guard issues.isEmpty else { return nil }
+        }
+        if editable.contains(.name) { result.alias = submitted.alias }
+        if editable.contains(.surname) { result.familyName = submitted.familyName }
+        if editable.contains(.givenName) { result.givenName = submitted.givenName }
+        let editsLegalName = editable.contains(.surname) || editable.contains(.givenName)
+        if editsLegalName {
+            result.name = result.fullName.isEmpty ? nil : result.fullName
+            result.displayName = result.fullName
+            result.isAnonymousRecord = result.resolvedName.isEmpty ? true : nil
+        }
+        if editable.contains(.gender) { result.sex = submitted.sex }
+        var directFields = editable.subtracting(clock).subtracting([.name])
+        if editsLegalName { directFields.insert(.name) }
+        if editable.contains(.birthPlace) {
+            result.birthPlace = submitted.birthPlace
+            result.birthDistrictCode = submitted.birthDistrictCode
+            directFields.insert(.birthCoordinates)
+        }
+        if directFields.contains(.birthCoordinates) {
+            result.birthLatitude = submitted.birthLatitude
+            result.birthLongitude = submitted.birthLongitude
+        }
+        if editable.contains(.currentLocation) {
+            result.currentPlace = submitted.currentPlace
+            result.currentDistrictCode = submitted.currentDistrictCode
+            result.currentLatitude = submitted.currentLatitude
+            result.currentLongitude = submitted.currentLongitude
+            result.currentTimeZoneID = submitted.currentTimeZoneID
+        }
+        result.unknownFields.subtract(directFields)
+        result.unknownFields.formUnion(submitted.unknownFields.intersection(directFields))
+        if !directFields.isEmpty {
+            var declared = result.declaredUnknownFields ?? saved.unknownFields
+            declared.subtract(directFields)
+            declared.formUnion((submitted.declaredUnknownFields ?? submitted.unknownFields).intersection(directFields))
+            if editsLegalName {
+                if result.fullName.isEmpty { result.unknownFields.insert(.name); declared.insert(.name) }
+                else { result.unknownFields.remove(.name); declared.remove(.name) }
+            }
+            result.declaredUnknownFields = declared
+        }
+        if result != saved { result.updatedAt = Date() }
+        return result
+    }
+
     /// Apply the app's default to an unconfirmed zone for an editable or fresh
     /// calculation snapshot. Preserve the birth clock in the old local zone.
     static func assigningDefaultBirthTimeZone(to profile: OracleProfile) -> OracleProfile {

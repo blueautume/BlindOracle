@@ -255,7 +255,7 @@ final class AllowanceAndPurchaseTests: XCTestCase {
         casting.currentPlace = "上海市黄浦区"
         casting.currentLatitude = 31.2304; casting.currentLongitude = 121.4737
         casting.currentTimeZoneID = "Asia/Shanghai"
-        XCTAssertTrue(store.confirmIntake(profile: OracleProfile(), numbers: [], save: false, castingProfile: casting))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [OracleProfile()], numbers: [], castingProfile: casting))
         await idle(store)
         XCTAssertEqual(store.runs.last?.plan.quotaTaskID, id)
         XCTAssertNotNil(store.runs.last?.completedAt)

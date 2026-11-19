@@ -136,6 +136,7 @@ final class ConversationHistoryTests: XCTestCase {
         store.messages = [message("待删除的当前卷")]
         var saved = store.profile; saved.name = "留存测试人员"
         store.saveProfile(saved)
+        store.checkpoint()
         store.deleteConversation(deletedID)
         XCTAssertNotEqual(store.activeConversationID, deletedID)
         XCTAssertTrue(store.messages.isEmpty)
@@ -206,7 +207,7 @@ final class ConversationHistoryTests: XCTestCase {
         XCTAssertEqual(store.runs.map(\.id), [reading.id])
 
         // A form or card sheet kept alive by SwiftUI cannot submit into the new chat.
-        XCTAssertFalse(store.confirmGroupIntake(profiles: [person], numbers: [], save: false, sessionID: oldFormID))
+        XCTAssertFalse(store.confirmGroupIntake(profiles: [person], numbers: [], sessionID: oldFormID))
         store.completeInteraction(.init(requestID: request.id, tarotDraws: draws, revealedCount: 3), sessionID: session.id)
         XCTAssertTrue(store.messages.isEmpty)
         XCTAssertEqual(store.runs.map(\.id), [reading.id])

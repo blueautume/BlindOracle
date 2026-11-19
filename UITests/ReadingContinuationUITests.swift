@@ -1,6 +1,44 @@
 import XCTest
 
 final class ReadingContinuationUITests: XCTestCase {
+    @MainActor func testProfileCorrectionOpensWithoutAIConsentAndSavesManualDate() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-reading-library",
+            "--ui-testing-reset-language", "-oracle.appLanguage", "zh-Hans", "--ui-testing-ai-consent-required",
+            "--ui-testing-ai-consent-reset", "--ui-testing-ai-consent-suite", UUID().uuidString]
+        app.launch()
+        XCTAssertTrue(app.textFields["questionInput"].waitForExistence(timeout: 15))
+        send("把陈平的生日改成2001年1月1日", in: app)
+
+        let form = app.scrollViews["intakeFormScroll"]
+        XCTAssertTrue(form.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["agreeAIDataSharing"].exists)
+        XCTAssertFalse(form.buttons["addParticipant"].exists)
+        let date = form.buttons["profileBirthDate"]
+        XCTAssertTrue(date.waitForExistence(timeout: 5))
+        XCTAssertEqual(date.value as? String, "1992-06-15")
+        for _ in 0..<4 where !date.isHittable { form.swipeUp() }
+        date.tap()
+
+        let confirmClock = app.buttons["confirmBirthClock"]
+        XCTAssertTrue(confirmClock.waitForExistence(timeout: 5))
+        let year = try XCTUnwrap(app.pickerWheels.allElementsBoundByIndex.first { ($0.value as? String)?.contains("1992") == true })
+        let yearValue = try XCTUnwrap(year.value as? String)
+        year.adjust(toPickerWheelValue: yearValue.replacingOccurrences(of: "1992", with: "1993"))
+        confirmClock.tap()
+        XCTAssertEqual(date.value as? String, "1993-06-15")
+
+        app.buttons["confirmIntake"].tap()
+        XCTAssertTrue(form.waitForNonExistence(timeout: 5))
+        app.tabBars.buttons["数据"].tap()
+        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "profileRow-"))
+        let profile = rows.firstMatch
+        XCTAssertTrue(profile.waitForExistence(timeout: 5))
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertTrue(profile.label.contains("陈平"))
+        XCTAssertTrue(profile.label.contains("1993 年 6 月 15 日"), profile.label)
+    }
+
     @MainActor func testDetailFollowUpUsesSavedReadingWithoutAnotherIntakeAndSurvivesRelaunch() throws {
         let app = launchSavedReading()
         let firstReferences = readingReferenceIDs(in: app)

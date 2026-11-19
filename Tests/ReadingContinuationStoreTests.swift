@@ -220,7 +220,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         XCTAssertEqual(store.pendingPlan?.methods, [.tarot])
         XCTAssertNil(store.pendingPlan?.baseRunID)
         XCTAssertTrue(store.showIntake)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: []))
         XCTAssertEqual(store.pendingInteraction?.currentRequest?.tarotPositions, TarotDeck.positions)
         XCTAssertNil(store.pendingInteraction?.input.tarotDraws)
         XCTAssertNil(store.pendingInteraction?.input.tarotClarificationRounds)
@@ -232,7 +232,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         var store = OracleStore(vault: vault, bootstrapCredential: false)
         store.send("只用塔罗看看我该不该接这份插画合作？")
         try await waitUntilIdle(store)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: []))
         let oldConversation = store.activeConversationID
         let session = try XCTUnwrap(store.pendingInteraction)
         let request = try XCTUnwrap(session.currentRequest)
@@ -249,7 +249,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         XCTAssertEqual(store.pendingPlan?.methods, [.xiaoliuren])
         store.completeInteraction(.init(requestID: request.id, tarotDraws: draws, revealedCount: 3), sessionID: session.id)
         XCTAssertTrue(store.runs.isEmpty)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: castingSite()))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], castingProfile: castingSite()))
         try await waitUntilIdle(store)
         XCTAssertEqual(store.latestRun?.results.map(\.method), [.xiaoliuren])
 
@@ -277,7 +277,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         XCTAssertEqual(store.intakeParticipants.first?.birthTimeText, person.birthTimeText)
         XCTAssertTrue(store.profiles.isEmpty)
         XCTAssertNotEqual(store.intakeSessionID, oldForm)
-        XCTAssertFalse(store.confirmGroupIntake(profiles: [person], numbers: [], save: false, sessionID: oldForm))
+        XCTAssertFalse(store.confirmGroupIntake(profiles: [person], numbers: [], sessionID: oldForm))
 
         var newPerson = OracleProfile(); newPerson.name = "王安"
         store.saveProfile(newPerson)
@@ -325,7 +325,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         try await waitUntilIdle(store)
         XCTAssertNil(store.pendingPlan?.baseRunID)
         XCTAssertEqual(store.intakeParticipants.map(\.id), [other.id])
-        XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: []))
         try await waitUntilIdle(store)
         let second = try XCTUnwrap(store.latestRun)
         XCTAssertEqual(second.results.map(\.participantID), [other.id])
@@ -337,7 +337,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         XCTAssertEqual(store.pendingPlan?.subject, "多人")
         XCTAssertNil(store.pendingPlan?.baseRunID)
         XCTAssertEqual(Set(store.intakeParticipants.map(\.id)), [own.id, other.id])
-        XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: []))
         try await waitUntilIdle(store)
         XCTAssertEqual(Set(store.latestRun?.results.compactMap(\.participantID) ?? []), [own.id, other.id])
         XCTAssertEqual(store.runs.count, 3)
@@ -351,7 +351,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         store.saveProfile(own); store.saveProfile(other); store.selfProfileID = own.id
         store.send("只用八字看看陈平的工作怎么样？我的生日是1990年1月2日。")
         try await waitUntilIdle(store)
-        XCTAssertEqual(store.profiles.first { $0.id == own.id }?.birthDateText, "1990-01-02")
+        XCTAssertEqual(store.profiles.first { $0.id == own.id }?.birthDateText, "1995-03-11")
         XCTAssertEqual(store.profiles.first { $0.id == other.id }?.birthDate, other.birthDate)
         XCTAssertEqual(store.intakeParticipants.map(\.id), [other.id])
         XCTAssertTrue(store.runs.isEmpty)
@@ -374,7 +374,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         store.send("只用小六壬看看我们两人周末坐高铁出行要注意什么？")
         try await waitUntilIdle(store)
         XCTAssertTrue(store.intakeParticipants.isEmpty)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: castingSite()))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], castingProfile: castingSite()))
         try await waitUntilIdle(store)
         let trip = try XCTUnwrap(store.latestRun)
         XCTAssertEqual(trip.results.map(\.method), [.xiaoliuren])
@@ -383,7 +383,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         try await waitUntilIdle(store)
         XCTAssertEqual(store.pendingPlan?.methods, [.meihua])
         XCTAssertNil(store.pendingPlan?.baseRunID)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: castingSite()))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], castingProfile: castingSite()))
         try await waitUntilIdle(store)
         let study = try XCTUnwrap(store.latestRun)
         XCTAssertNotEqual(study.id, trip.id)
@@ -407,7 +407,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
             XCTAssertNil(store.pendingPlan?.baseRunID)
             let people = method == .xingming ? store.intakeParticipants : []
             if method == .xingming { XCTAssertEqual(people.map(\.id), [person.id]) }
-            XCTAssertTrue(store.confirmGroupIntake(profiles: people, numbers: [], save: false, castingProfile: castingSite()))
+            XCTAssertTrue(store.confirmGroupIntake(profiles: people, numbers: [], castingProfile: castingSite()))
             try await waitUntilIdle(store)
             XCTAssertEqual(store.latestRun?.results.map(\.method), [method])
         }
@@ -458,7 +458,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         XCTAssertEqual(store.runs.count, 3)
         store.send("重新抽")
         try await waitUntilIdle(store)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: []))
         XCTAssertEqual(store.pendingInteraction?.currentRequest?.tarotPositions.count, 3)
         XCTAssertNil(store.pendingInteraction?.input.tarotDraws)
         XCTAssertNil(store.pendingInteraction?.input.tarotClarificationRounds)
@@ -525,7 +525,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         XCTAssertEqual(store.pendingPlan?.methods, [.liuyao])
         XCTAssertNil(store.pendingInteraction)
         XCTAssertEqual(store.runs.map(\.id), [original.id])
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: []))
         XCTAssertEqual(store.pendingInteraction?.currentRequest?.kind, .coins)
         XCTAssertTrue(store.pendingInteraction?.input.manualLines.isEmpty ?? false)
         XCTAssertNil(store.pendingPlan)
@@ -589,7 +589,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         XCTAssertEqual(store.pendingPlan?.methods, [.liuyao])
         XCTAssertEqual(store.pendingPlan?.subject, original.plan.subject)
         XCTAssertEqual(store.runs.map(\.id), [original.id])
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: []))
         XCTAssertEqual(store.pendingInteraction?.currentRequest?.kind, .coins)
         XCTAssertEqual(store.pendingInteraction?.input.question, original.input.question)
         XCTAssertTrue(store.pendingInteraction?.input.manualLines.isEmpty ?? false)
@@ -605,13 +605,16 @@ final class ReadingContinuationStoreTests: XCTestCase {
         store.saveProfile(original.input.profile)
         store.send("陈平出生时间为09:30，重新起卦")
         try await waitUntilIdle(store)
-        XCTAssertEqual(store.profiles.first { $0.id == original.input.profile.id }?.birthTimeText, "09:30")
+        XCTAssertEqual(store.profiles.first { $0.id == original.input.profile.id }?.birthTimeText, original.input.profile.birthTimeText)
         XCTAssertTrue(store.showIntake)
         XCTAssertEqual(store.pendingPlan?.question, original.input.question)
         XCTAssertEqual(store.pendingPlan?.methods, [.liuyao])
         XCTAssertEqual(store.pendingPlan?.participantIDs, original.plan.participantIDs)
         XCTAssertNil(store.pendingInteraction)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: store.profiles.filter { original.plan.participantIDs?.contains($0.id) == true }, numbers: [], save: true))
+        let person = try XCTUnwrap(store.intakeParticipants.first)
+        let edited = ProfileDirectory.applying([ProfileUpdate(id: person.id, birthTime: "09:30")], to: [person]).profiles
+        XCTAssertTrue(store.confirmGroupIntake(profiles: edited, numbers: [], editedFields: [person.id: [.birthTime]]))
+        XCTAssertEqual(store.profiles.first { $0.id == person.id }?.birthTimeText, "09:30")
         XCTAssertEqual(store.pendingInteraction?.currentRequest?.kind, .coins)
         XCTAssertEqual(store.pendingInteraction?.input.readingParticipants.first?.birthTimeText, "09:30")
         XCTAssertEqual(try snapshot(store.runs[0].input), try snapshot(original.input))
@@ -620,9 +623,14 @@ final class ReadingContinuationStoreTests: XCTestCase {
     @MainActor func testExplicitProfileCorrectionIsSavedWithoutChangingTheExistingReadingSnapshot() async throws {
         let original = try await fixture(.liuyao)
         let store = try restoredStore(run: original, vault: temporaryVault())
-        _ = store.applyProfileUpdates([ProfileUpdate(name: "陈平", birthDate: "1992-06-15", birthTime: "08:30", birthTimeZoneID: "Asia/Shanghai")])
-        store.send("陈平出生时间为09:30，先不算")
+        let saved = try XCTUnwrap(ProfileDirectory.applying([ProfileUpdate(name: "陈平", birthDate: "1992-06-15", birthTime: "08:30", birthTimeZoneID: "Asia/Shanghai")], to: []).profiles.first)
+        XCTAssertTrue(store.saveProfile(saved, creating: true))
+        store.send("陈平的出生时间改成09:30，先不算")
         try await waitUntilIdle(store)
+        XCTAssertEqual(store.profiles.first { $0.resolvedName == "陈平" }?.birthTimeText, "08:30")
+        let formProfile = try XCTUnwrap(store.intakeParticipants.first)
+        let changed = ProfileDirectory.applying([ProfileUpdate(id: formProfile.id, birthTime: "09:30")], to: [formProfile])
+        XCTAssertTrue(store.confirmGroupIntake(profiles: changed.profiles, numbers: [], editedFields: [formProfile.id: [.birthTime]]))
         XCTAssertEqual(store.profiles.first { $0.resolvedName == "陈平" }?.birthTimeText, "09:30")
         XCTAssertNil(store.pendingInteraction)
         XCTAssertEqual(try snapshot(store.runs[0].input), try snapshot(original.input))
@@ -768,7 +776,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
 
             if let pending = store.pendingPlan {
                 XCTAssertTrue(pending.methods.contains(.tarot), question)
-                XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], save: false), question)
+                XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: []), question)
                 try await waitUntilIdle(store)
             }
             XCTAssertEqual(store.runs.map(\.id), [original.id], question)
@@ -804,7 +812,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
 
             if let pending = store.pendingPlan {
                 XCTAssertTrue(pending.methods.contains(method), question)
-                XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], save: false), question)
+                XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: []), question)
                 try await waitUntilIdle(store)
             }
             let draws: [TarotDraw]
@@ -860,7 +868,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
                 method == .tarot || method == .liuyao ? [method] : [], question)
             let participants = method.usesPersonalProfile ? store.intakeParticipants : []
             if method.usesPersonalProfile { XCTAssertEqual(participants.map(\.id), [person.id], question) }
-            XCTAssertTrue(store.confirmGroupIntake(profiles: participants, numbers: [], save: false, castingProfile: castingSite()), question)
+            XCTAssertTrue(store.confirmGroupIntake(profiles: participants, numbers: [], castingProfile: castingSite()), question)
             try await waitUntilIdle(store)
 
             let draws: [TarotDraw]
@@ -921,6 +929,12 @@ final class ReadingContinuationStoreTests: XCTestCase {
         store.saveProfile(original.input.profile)
         store.send("陈平出生时间为10:30，按新资料看看")
         try await waitUntilIdle(store)
+        XCTAssertTrue(store.showIntake)
+        let person = try XCTUnwrap(store.intakeParticipants.first)
+        XCTAssertEqual(person.birthTimeText, "08:30")
+        let edited = ProfileDirectory.applying([ProfileUpdate(id: person.id, birthTime: "10:30")], to: [person]).profiles
+        XCTAssertTrue(store.confirmGroupIntake(profiles: edited, numbers: [], editedFields: [person.id: [.birthTime]]))
+        try await waitUntilIdle(store)
 
         XCTAssertEqual(store.runs.count, 2)
         let supplemented = try XCTUnwrap(store.runs.last)
@@ -963,7 +977,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
         let people = ProfileDirectory.applying([ProfileUpdate(id: original.input.profile.id, birthDate: "1992-06-15",
             birthTime: "08:30", birthTimeZoneID: "Asia/Shanghai", birthPlace: "上海",
             birthLatitude: 31.2304, birthLongitude: 121.4737)], to: [original.input.profile]).profiles
-        XCTAssertTrue(store.confirmGroupIntake(profiles: people, numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: people, numbers: []))
         try await waitUntilIdle(store)
 
         XCTAssertEqual(store.runs.count, 2)
@@ -1087,7 +1101,7 @@ final class ReadingContinuationStoreTests: XCTestCase {
 
         let numbers = [13, 27, 41]
         defaults.set(MeihuaCastingMode.time.rawValue, forKey: "oracle.casting.meihua")
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: numbers, save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: numbers))
         try await waitUntilIdle(store)
 
         XCTAssertEqual(store.runs.count, 2)

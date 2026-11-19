@@ -465,7 +465,7 @@ final class OracleInteractionTests: XCTestCase {
         store.messages = [ChatMessage(role: .user, content: "抽牌后再看六爻"),
                           ChatMessage(role: .assistant, content: "请确认资料", kind: .intake)]
         store.pendingPlan = plan(methods: [.tarot, .liuyao])
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: []))
         let original = try XCTUnwrap(store.pendingInteraction)
         let draft = OracleInteractionResponse(requestID: "tarot", tarotDraws: Array(draws().prefix(2)))
         store.saveInteractionProgress(draft, sessionID: original.id)
@@ -496,7 +496,7 @@ final class OracleInteractionTests: XCTestCase {
         store.messages = [ChatMessage(role: .user, content: "为这件事抽牌起卦"),
                           ChatMessage(role: .assistant, content: "请确认资料", kind: .intake)]
         store.pendingPlan = plan(methods: [.tarot, .liuyao])
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: []))
         let pending = try XCTUnwrap(store.pendingInteraction)
         let cards = OracleInteractionResponse(requestID: "tarot", tarotDraws: draws(), revealedCount: 3)
         store.completeInteraction(cards, sessionID: pending.id)
@@ -541,7 +541,7 @@ final class OracleInteractionTests: XCTestCase {
         store.runs = [oldRun]
         store.messages = [ChatMessage(role: .user, content: "继续完成这次抽牌")]
         store.pendingPlan = plan(methods: [.tarot])
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: []))
         let pending = try XCTUnwrap(store.pendingInteraction)
         let draft = OracleInteractionResponse(requestID: "tarot", tarotDraws: Array(draws().prefix(2)))
         store.saveInteractionProgress(draft, sessionID: pending.id)

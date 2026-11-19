@@ -103,7 +103,7 @@ final class SolarCastingIntakeTests: XCTestCase {
         XCTAssertTrue(store.runs.isEmpty)
         XCTAssertFalse(store.canConfirmIntake)
         // A denied/failed GPS request therefore cannot silently use an old point.
-        XCTAssertFalse(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertFalse(store.confirmGroupIntake(profiles: [], numbers: []))
         XCTAssertEqual(store.profile.currentLongitude, own.currentLongitude)
     }
 
@@ -178,7 +178,7 @@ final class SolarCastingIntakeTests: XCTestCase {
         XCTAssertNil(saved.currentLongitude)
         XCTAssertTrue(saved.unknownFields.contains(.currentLocation))
         XCTAssertTrue(saved.declaredUnknownFields?.contains(.currentLocation) == true)
-        XCTAssertFalse(restarted.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertFalse(restarted.confirmGroupIntake(profiles: [], numbers: []))
         XCTAssertTrue(restarted.runs.isEmpty)
     }
 
@@ -194,7 +194,7 @@ final class SolarCastingIntakeTests: XCTestCase {
         let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
         store.pendingPlan = plan()
         let casting = place()
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: casting))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], castingProfile: casting))
         try await waitUntilIdle(store)
         let input = try XCTUnwrap(store.runs.last?.input)
         XCTAssertTrue(input.readingParticipants.isEmpty)
@@ -209,7 +209,7 @@ final class SolarCastingIntakeTests: XCTestCase {
         var cleared = CastingLocationDraft(profile: place()); cleared.clear()
         var pending = plan(people: people); pending.castingProfile = cleared.profile
         store.pendingPlan = pending
-        XCTAssertFalse(store.confirmGroupIntake(profiles: people, numbers: [], save: false))
+        XCTAssertFalse(store.confirmGroupIntake(profiles: people, numbers: []))
         XCTAssertTrue(store.runs.isEmpty)
         XCTAssertTrue(store.pendingPlan?.castingProfile?.unknownFields.contains(.currentLocation) == true)
     }
@@ -228,7 +228,7 @@ final class SolarCastingIntakeTests: XCTestCase {
         let people = [person("甲", longitude: 116.4), person("乙", longitude: 87.6)]
         store.pendingPlan = plan(people: people)
         let casting = place("独立起卦地点", longitude: 114.2, zone: "Asia/Hong_Kong")
-        XCTAssertTrue(store.confirmGroupIntake(profiles: people, numbers: [], save: false, castingProfile: casting))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: people, numbers: [], castingProfile: casting))
         try await waitUntilIdle(store)
         let input = try XCTUnwrap(store.runs.last?.input)
         XCTAssertEqual(input.profile.currentLongitude, 114.2)
@@ -241,8 +241,8 @@ final class SolarCastingIntakeTests: XCTestCase {
     @MainActor func testLegacyMeihuaTwoNumberModeNeedsLocationWithoutANewNumberRequest() async throws {
         let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
         store.pendingPlan = plan(.meihua)
-        XCTAssertFalse(store.confirmGroupIntake(profiles: [], numbers: [12, 23], save: false))
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [12, 23], save: false, castingProfile: place()))
+        XCTAssertFalse(store.confirmGroupIntake(profiles: [], numbers: [12, 23]))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [12, 23], castingProfile: place()))
         XCTAssertNil(store.pendingInteraction)
         try await waitUntilIdle(store)
         XCTAssertEqual(store.runs.last?.input.numbers, [12, 23])
@@ -252,7 +252,7 @@ final class SolarCastingIntakeTests: XCTestCase {
     @MainActor func testMeihuaThreeNumbersNeedNoCastingPlace() async throws {
         let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
         store.pendingPlan = plan(.meihua, numbersRequested: true)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [12, 23, 6], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [12, 23, 6]))
         try await waitUntilIdle(store)
         XCTAssertEqual(store.runs.last?.input.numbers, [12, 23, 6])
         XCTAssertNil(store.runs.last?.input.profile.currentLongitude)
@@ -263,7 +263,7 @@ final class SolarCastingIntakeTests: XCTestCase {
         var person = person("甲", longitude: 116.4)
         person.unknownFields.insert(.numbers); person.declaredUnknownFields = [.numbers]
         store.pendingPlan = plan(.meihua, people: [person], numbersRequested: true)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [person], numbers: [12, 23, 6], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [person], numbers: [12, 23, 6]))
         try await waitUntilIdle(store)
         let run = try XCTUnwrap(store.runs.last)
         XCTAssertFalse(run.input.profile.unknownFields.contains(.numbers))
@@ -274,12 +274,12 @@ final class SolarCastingIntakeTests: XCTestCase {
     @MainActor func testMeihuaTimeModeIsSeparateFromThePendingNumberInteraction() async throws {
         let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
         store.pendingPlan = plan(.meihua, numbersRequested: true)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: place()))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], castingProfile: place()))
         XCTAssertEqual(store.pendingInteraction?.currentRequest?.kind, .numbers)
         XCTAssertTrue(store.runs.isEmpty)
         store.cancelPendingReading()
         store.pendingPlan = plan(.meihua)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: place()))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], castingProfile: place()))
         try await waitUntilIdle(store)
         XCTAssertEqual(store.runs.last?.input.numbers, [])
     }
@@ -288,7 +288,7 @@ final class SolarCastingIntakeTests: XCTestCase {
         for numbers in [[12], [0, 23], [12, 0, 6], [12, 23, 1000], [-1, 2]] {
             let store = OracleStore(vault: try temporaryVault(), bootstrapCredential: false)
             store.pendingPlan = plan(.meihua, numbersRequested: true)
-            XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: numbers, save: false, castingProfile: place()), "\(numbers)")
+            XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: numbers, castingProfile: place()), "\(numbers)")
             let session = try XCTUnwrap(store.pendingInteraction)
             XCTAssertEqual(session.currentRequest?.kind, .numbers)
             store.completeInteraction(.init(requestID: "meihua", numbers: numbers), sessionID: session.id)
@@ -318,7 +318,7 @@ final class SolarCastingIntakeTests: XCTestCase {
         var changed = person
         changed.currentPlace = "参与人更新的所在地"; changed.currentLongitude = 87.6
         changed.birthDate = person.birthDate?.addingTimeInterval(3600)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [changed], numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [changed], numbers: []))
         try await waitUntilIdle(store)
         let input = try XCTUnwrap(store.runs.last?.input)
         XCTAssertEqual(input.castingDate, original.input.castingDate)
@@ -332,7 +332,7 @@ final class SolarCastingIntakeTests: XCTestCase {
     @MainActor func testSupplementExplicitPlaceEditChangesLocationWithoutRecastingTimeOrSeed() async throws {
         let (store, original, person) = try supplementStore()
         let edited = place("用户明确修改地点", longitude: 114.2, zone: "Asia/Hong_Kong")
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [person], numbers: [], save: false, castingProfile: edited))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [person], numbers: [], castingProfile: edited))
         try await waitUntilIdle(store)
         let input = try XCTUnwrap(store.runs.last?.input)
         XCTAssertEqual(input.profile.currentPlace, edited.currentPlace)

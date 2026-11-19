@@ -91,14 +91,22 @@ final class DataLibraryUITests: XCTestCase {
         let deletedID = deletedRow.identifier
         let deleteID = deletedID.replacingOccurrences(of: "profileRow-", with: "deleteProfile-")
 
-        // Create a second person through the normal chat path so deleting the
-        // fixture person must not clear the whole directory or its old runs.
-        openChatTab(in: app)
-        let input = app.textFields["questionInput"]
-        XCTAssertTrue(input.waitForExistence(timeout: 10))
-        input.tap(); input.typeText("姓名：李岚，女，出生日期1995-03-11。")
-        app.buttons["sendQuestion"].tap()
-        openDataTab(in: app)
+        // Add a second profile in Data to verify that deleting the fixture
+        // profile leaves the other profile and the fixture's readings intact.
+        let add = app.buttons["addProfile"]
+        for _ in 0..<6 where !add.isHittable { app.swipeUp() }
+        XCTAssertTrue(add.isHittable); add.tap()
+        let editor = app.scrollViews["profileEditorScroll"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        let surname = editor.textFields["profileSurname"]
+        let givenName = editor.textFields["profileGivenName"]
+        XCTAssertTrue(surname.waitForExistence(timeout: 5))
+        surname.tap(); surname.typeText("李")
+        givenName.tap(); givenName.typeText("岚\n")
+        let save = editor.buttons["confirmIntake"]
+        for _ in 0..<8 where !save.isHittable { editor.swipeUp() }
+        XCTAssertTrue(save.isHittable); save.tap()
+        XCTAssertTrue(editor.waitForNonExistence(timeout: 5))
         let remaining = profileRow("李岚", in: app)
         XCTAssertTrue(remaining.waitForExistence(timeout: 15))
         let remainingID = remaining.identifier
@@ -136,10 +144,8 @@ final class DataLibraryUITests: XCTestCase {
         app.buttons[remainingID].tap()
         let alias = app.textFields["profileAlias"]
         XCTAssertTrue(alias.waitForExistence(timeout: 10))
-        let savedName = app.descendants(matching: .any).matching(identifier: "legacyProfileName").firstMatch
-        let nameContents = [savedName.label, savedName.value as? String ?? ""]
-            + savedName.descendants(matching: .staticText).allElementsBoundByIndex.map(\.label)
-        XCTAssertTrue(nameContents.joined(separator: " ").contains("李岚"))
+        XCTAssertEqual(app.textFields["profileSurname"].value as? String, "李")
+        XCTAssertEqual(app.textFields["profileGivenName"].value as? String, "岚")
         XCTAssertTrue(alias.isEnabled)
         app.buttons["稍后填写"].tap()
         XCTAssertTrue(alias.waitForNonExistence(timeout: 5))

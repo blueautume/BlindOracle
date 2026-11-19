@@ -37,6 +37,10 @@ final class FormIntakeUITests: XCTestCase {
         capture("english-career-question-prefilled-birth-details", in: app)
         XCTAssertFalse(app.buttons["castCoins"].exists)
         XCTAssertFalse(app.buttons["shuffleTarot"].exists)
+        app.buttons["cancelPendingIntake"].tap()
+        app.tabBars.buttons["Data"].tap()
+        XCTAssertTrue(app.buttons["addProfile"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "profileRow-")).count, 0)
     }
 
     @MainActor func testEnglishDistrictAndClockCombinationsShowPrefilledBirthDetails() {
@@ -169,10 +173,7 @@ final class FormIntakeUITests: XCTestCase {
 
     @MainActor func testBothParticipantsCanBeEditedInlineBeforeOneConfirmation() throws {
         let app = launchFreshApp()
-        send("姓名：陈平，男，1992年6月15日08:30出生，出生时区Asia/Shanghai；姓名：王安，女，1994年3月12日14:00出生，出生时区Asia/Shanghai", in: app)
-        waitUntilReadyToSend(in: app)
-        XCTAssertFalse(app.scrollViews["intakeFormScroll"].exists)
-        send("陈平和王安的合作关系如何安排？", in: app)
+        send("我们两个人的合作关系如何安排？姓名：陈平，男，1992年6月15日08:30出生，出生时区Asia/Shanghai；姓名：王安，女，1994年3月12日14:00出生，出生时区Asia/Shanghai", in: app)
         XCTAssertTrue(app.scrollViews["intakeFormScroll"].waitForExistence(timeout: 15))
         XCTAssertEqual(app.scrollViews.matching(identifier: "intakeFormScroll").count, 1)
         XCTAssertEqual(app.textFields.matching(identifier: "profileAlias").count, 2)
@@ -198,6 +199,9 @@ final class FormIntakeUITests: XCTestCase {
         completeCoins(in: app)
         let summary = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "这次推演已完成")).firstMatch
         XCTAssertTrue(summary.waitForExistence(timeout: 30))
+        app.tabBars.buttons["数据"].tap()
+        XCTAssertTrue(app.buttons["addProfile"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "profileRow-")).count, 0)
     }
 
     @MainActor private func launchFreshApp() -> XCUIApplication {

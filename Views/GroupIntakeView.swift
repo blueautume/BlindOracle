@@ -7,11 +7,12 @@ struct GroupIntakeView: View {
         let profiles: [OracleProfile]
         let numbers: [Int]
         let castingProfile: OracleProfile
+        let editedFields: [UUID: Set<OracleField>]
     }
 
     let plan: OraclePlan
-    let onDraftChange: (([OracleProfile], [Int], OracleProfile) -> Void)?
-    let onConfirm: ([OracleProfile], [Int], OracleProfile, Bool) -> Bool
+    let onDraftChange: (([OracleProfile], [Int], OracleProfile, [UUID: Set<OracleField>]) -> Void)?
+    let onConfirm: ([OracleProfile], [Int], OracleProfile, [UUID: Set<OracleField>]) -> Bool
     private let draftNumbers: [Int]
     @EnvironmentObject private var store: OracleStore
     @Environment(\.dismiss) private var dismiss
@@ -23,36 +24,33 @@ struct GroupIntakeView: View {
     @State private var locationState = CastingLocationRequestState()
     @State private var locationError: String?
     @State private var choosingCastingLocation = false
-    @State private var keepProfiles = true
     @State private var error: String?
     @State private var validationAttempt = 0
     @State private var submitted = false
     @State private var savedDraft: DraftSnapshot?
 
-    init(plan: OraclePlan, profiles: [OracleProfile], numbers: [Int] = [],
-         onDraftChange: (([OracleProfile], [Int]) -> Void)? = nil,
-         onConfirm: @escaping ([OracleProfile], [Int], Bool) -> Bool) {
-        self.init(plan: plan, profiles: profiles, numbers: numbers, castingProfile: plan.castingProfile,
-                  onDraftChange: onDraftChange.map { callback in { people, values, _ in callback(people, values) } },
-                  onConfirm: { people, values, _, save in onConfirm(people, values, save) })
-    }
-
     init(plan: OraclePlan, profiles: [OracleProfile], numbers: [Int] = [], castingProfile: OracleProfile?,
-         onDraftChange: (([OracleProfile], [Int], OracleProfile) -> Void)? = nil,
-         onConfirm: @escaping ([OracleProfile], [Int], OracleProfile, Bool) -> Bool) {
+         onDraftChange: (([OracleProfile], [Int], OracleProfile, [UUID: Set<OracleField>]) -> Void)? = nil,
+         onConfirm: @escaping ([OracleProfile], [Int], OracleProfile, [UUID: Set<OracleField>]) -> Bool) {
         self.plan = plan; self.onDraftChange = onDraftChange; self.onConfirm = onConfirm
         self.draftNumbers = numbers
         var values: [UUID: ProfileFormDraft] = [:]
         var ids: [UUID] = []
         for profile in profiles where values[profile.id] == nil {
-            values[profile.id] = ProfileFormDraft(profile: profile); ids.append(profile.id)
+            var draft = ProfileFormDraft(profile: profile)
+            draft.editedFields = plan.draftEditedFields?[profile.id] ?? []
+            values[profile.id] = draft
+            ids.append(profile.id)
         }
         _drafts = State(initialValue: values)
         _selectedIDs = State(initialValue: ids)
         _casting = State(initialValue: CastingLocationDraft(profile: castingProfile ?? plan.castingProfile ?? OracleProfile()))
     }
 
+    private var standaloneCorrection: Bool { plan.profileCorrection?.isStandalone == true }
+
     private var minimumCount: Int {
+        if standaloneCorrection { return 1 }
         guard plan.methods.contains(where: \.usesPersonalProfile) else { return 0 }
         return plan.subject == "多人" ? 2 : 1
     }
@@ -68,11 +66,33 @@ struct GroupIntakeView: View {
                                                  castingProfile: casting.profile, numbers: draftNumbers)
     }
     private var needsCastingLocation: Bool {
+        guard !standaloneCorrection else { return false }
         let methods = Set(plan.methods + (plan.mandatoryMethods ?? []) + report.assessments.map(\.method))
         return methods.contains { ReadingPreparationPolicy.requiresCastingLocation(plan: plan, method: $0, numbers: draftNumbers) }
     }
+    private var editedFields: [UUID: Set<OracleField>] {
+        var fields: [UUID: Set<OracleField>] = [:]
+        for id in selectedIDs {
+            if let edits = drafts[id]?.editedFields, !edits.isEmpty { fields[id] = edits }
+        }
+        return fields
+    }
     private var draftSnapshot: DraftSnapshot {
-        DraftSnapshot(profiles: selectedProfiles, numbers: draftNumbers, castingProfile: casting.profile)
+        DraftSnapshot(profiles: selectedProfiles, numbers: draftNumbers, castingProfile: casting.profile,
+                      editedFields: editedFields)
+    }
+
+    private var availableSavedPeople: [OracleProfile] {
+        guard standaloneCorrection, let candidates = plan.profileCorrection?.candidateIDs else { return store.profiles }
+        let ids = Set(candidates)
+        return store.profiles.filter { ids.contains($0.id) }
+    }
+
+    private var correctionScrollTarget: String? {
+        guard let correction = plan.profileCorrection, let field = correction.fields.first else { return nil }
+        let targets = selectedIDs.filter { correction.candidateIDs?.contains($0) ?? true }
+        guard targets.count == 1, let id = targets.first else { return nil }
+        return ProfileFieldsView.correctionAnchor(profileID: id, field: field)
     }
 
     var body: some View {
@@ -87,25 +107,23 @@ struct GroupIntakeView: View {
                                     .accessibilityIdentifier("intakeValidationError")
                                     .id("intakeValidationError")
                             }
-                            questionCard
+                            if !standaloneCorrection { questionCard }
+                            if plan.profileCorrection != nil { correctionCard }
                             if needsCastingLocation { castingLocationCard }
-                            if !store.profiles.isEmpty { savedPeople }
+                            if !availableSavedPeople.isEmpty { savedPeople }
                             selectedPeople
-                            Button(action: addPerson) {
-                                Label(L10n.text("新增一位人员", "Add a person"), systemImage: "person.badge.plus")
-                                    .font(.system(size: 14, design: .serif)).frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(17).foregroundStyle(InkTheme.cinnabar)
-                                    .background(.white.opacity(0.45), in: RoundedRectangle(cornerRadius: 13))
-                                    .overlay(RoundedRectangle(cornerRadius: 13).stroke(InkTheme.line, lineWidth: 0.7))
-                            }.buttonStyle(.plain).accessibilityIdentifier("addParticipant")
-                            preparationCard
-                            if !selectedIDs.isEmpty {
-                                Toggle(L10n.text("把这些人员资料留在本机", "Save these profiles on this device"), isOn: $keepProfiles)
-                                    .font(.system(size: 13, design: .serif)).tint(InkTheme.sage)
-                                    .accessibilityIdentifier("saveParticipantProfiles")
+                            if !standaloneCorrection {
+                                Button(action: addPerson) {
+                                    Label(L10n.text("添加临时人员", "Add a person for this reading"), systemImage: "person.badge.plus")
+                                        .font(.system(size: 14, design: .serif)).frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(17).foregroundStyle(InkTheme.cinnabar)
+                                        .background(.white.opacity(0.45), in: RoundedRectangle(cornerRadius: 13))
+                                        .overlay(RoundedRectangle(cornerRadius: 13).stroke(InkTheme.line, lineWidth: 0.7))
+                                }.buttonStyle(.plain).accessibilityIdentifier("addParticipant")
+                                preparationCard
+                                Text(L10n.text("确认后会保存对已有档案的修改。临时人员仅用于本次问事。", "Confirmation saves your edits to existing profiles. Temporary participants are for this reading only."))
+                                    .font(.system(size: 11)).lineSpacing(4).foregroundStyle(InkTheme.secondary)
                             }
-                            Text(L10n.text("每人的资料分别保存、分别推演。确认后，抽牌或投掷会接着进行。", "Each person’s details are saved and used separately. After you confirm, you can draw cards or cast if needed."))
-                                .font(.system(size: 10)).lineSpacing(4).foregroundStyle(InkTheme.secondary)
                         }.padding(24).frame(maxWidth: 760).frame(maxWidth: .infinity)
                     }.scrollDismissesKeyboard(.interactively).accessibilityIdentifier("intakeFormScroll")
                     .onChange(of: validationAttempt) { _, _ in
@@ -113,12 +131,15 @@ struct GroupIntakeView: View {
                             withAnimation { scroll.scrollTo("intakeValidationError", anchor: .top) }
                         }
                     }
+                    .onChange(of: correctionScrollTarget, initial: true) { _, target in
+                        if let target { withAnimation { scroll.scrollTo(target, anchor: .center) } }
+                    }
                 }
             }
             .navigationTitle(L10n.text("问事资料", "Reading details")).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.text("取消本次问事", "Cancel reading"), role: .cancel) {
+                    Button(standaloneCorrection ? L10n.text("取消", "Cancel") : L10n.text("取消本次问事", "Cancel reading"), role: .cancel) {
                         cancelCastingLocation()
                         submitted = true
                         store.cancelPendingReading()
@@ -135,7 +156,7 @@ struct GroupIntakeView: View {
             }
             .toolbarBackground(InkTheme.paper, for: .navigationBar).toolbarBackground(.visible, for: .navigationBar)
             .onAppear {
-                if selectedIDs.isEmpty && store.profiles.isEmpty {
+                if !standaloneCorrection && selectedIDs.isEmpty && store.profiles.isEmpty {
                     for _ in 0..<minimumCount { addPerson() }
                 }
                 requestAutomaticCastingLocation()
@@ -179,7 +200,7 @@ struct GroupIntakeView: View {
         let snapshot = draftSnapshot
         guard savedDraft != snapshot else { return }
         savedDraft = snapshot
-        onDraftChange(snapshot.profiles, snapshot.numbers, snapshot.castingProfile)
+        onDraftChange(snapshot.profiles, snapshot.numbers, snapshot.castingProfile, snapshot.editedFields)
     }
 
     private var hasCastingLocation: Bool {
@@ -258,6 +279,21 @@ struct GroupIntakeView: View {
         }
     }
 
+    private var correctionCard: some View {
+        let fields = (plan.profileCorrection?.fields ?? []).map(\.title).joined(separator: L10n.text("、", ", "))
+        return PaperCard {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionEyebrow(text: L10n.text("要修改的资料", "Details to update"))
+                Text(fields).font(.system(size: 17, design: .serif)).foregroundStyle(InkTheme.ink)
+                Text(standaloneCorrection && availableSavedPeople.isEmpty
+                     ? L10n.text("请在「数据 → 留存资料」核对或新增档案。", "Find or add the profile in Data → Saved profiles.")
+                     : L10n.text("请在表单中修改。确认后，改动会保存到你选中的已有档案。", "Edit the fields in the form. Confirm to save changes to the selected profile."))
+                    .font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
+            }
+        }
+        .accessibilityIdentifier("profileCorrectionFields")
+    }
+
     private var castingLocationCard: some View {
         let place = ChinaDistrictCatalog.shared.displayName(for: casting.profile.currentDistrictCode, canonical: casting.profile.currentPlace)
         let coordinates = TrueSolarClock.castingCoordinates(profile: casting.profile)
@@ -323,20 +359,28 @@ struct GroupIntakeView: View {
     private var savedPeople: some View {
         PaperCard {
             VStack(alignment: .leading, spacing: 15) {
-                SectionEyebrow(text: L10n.text("选取留存人员 · 可多选", "Choose saved profiles"))
-                ForEach(store.profiles) { stored in
+                SectionEyebrow(text: standaloneCorrection
+                    ? L10n.text("选择要修改的档案", "Choose a profile to edit")
+                    : L10n.text("选取留存人员 · 可多选", "Choose saved profiles"))
+                ForEach(availableSavedPeople) { stored in
                     let profile = drafts[stored.id]?.profile ?? stored
                     let selected = selectedIDs.contains(stored.id)
+                    let sameName = availableSavedPeople.contains { $0.id != stored.id && $0.participantLabel == stored.participantLabel }
+                    let summary = sameName ? savedProfileSummary(stored, showCode: true) : nil
                     Button { toggle(stored) } label: {
                         HStack(spacing: 12) {
                             Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                                 .font(.system(size: 19)).foregroundStyle(selected ? InkTheme.sage : InkTheme.line)
-                            Text(title(profile)).font(.system(size: 15, design: .serif)).foregroundStyle(InkTheme.ink)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(title(profile)).font(.system(size: 15, design: .serif)).foregroundStyle(InkTheme.ink)
+                                if let summary { Text(summary).font(.system(size: 11)).foregroundStyle(InkTheme.secondary) }
+                            }
                             Spacer()
                             Text(selected ? L10n.text("已选", "Selected") : L10n.text("选取", "Select")).font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                         }.contentShape(Rectangle())
                     }.buttonStyle(.plain)
-                        .accessibilityLabel([title(profile), selected ? L10n.text("已选", "Selected") : L10n.text("未选", "Not selected")]
+                        .accessibilityLabel([title(profile), summary, selected ? L10n.text("已选", "Selected") : L10n.text("未选", "Not selected")]
+                            .compactMap { $0 }
                             .joined(separator: L10n.text("，", ", ")))
                         .accessibilityIdentifier("selectProfile-\(stored.id.uuidString)")
                 }
@@ -347,12 +391,14 @@ struct GroupIntakeView: View {
     private var selectedPeople: some View {
         VStack(alignment: .leading, spacing: 24) {
             HStack {
-                SectionEyebrow(text: L10n.text("本次人员", "People in this reading"))
+                SectionEyebrow(text: standaloneCorrection ? L10n.text("所选档案", "Selected profile") : L10n.text("本次人员", "People in this reading"))
                 Spacer()
                 Text(L10n.text("已选 \(selectedIDs.count) 人", "Selected: \(selectedIDs.count)")).font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
             }
             if selectedIDs.isEmpty {
-                Text(minimumCount == 0 ? L10n.text("此次可以只看事情本身，也可选取人员资料。", "You can read for the question alone or include someone’s profile.") : L10n.text("请从上方选取人员，或新增后直接填写。", "Choose a profile above or add a person."))
+                Text(standaloneCorrection ? L10n.text("请先选择一份已有档案。", "Choose an existing profile first.")
+                     : minimumCount == 0 ? L10n.text("此次可以只看事情本身，也可选取人员资料。", "You can read for the question alone or include someone’s profile.")
+                     : L10n.text("请选取已有档案，或添加临时人员。", "Choose a saved profile or add a temporary participant."))
                     .font(.system(size: 13, design: .serif)).lineSpacing(5).foregroundStyle(InkTheme.secondary)
             }
             ForEach(selectedIDs, id: \.self) { id in
@@ -366,7 +412,9 @@ struct GroupIntakeView: View {
                             .accessibilityLabel(L10n.text("移除\(title(drafts[id]?.profile))", "Remove \(title(drafts[id]?.profile))"))
                             .accessibilityIdentifier("removeParticipant-\(id.uuidString)")
                     }
-                    ProfileFieldsView(draft: binding(for: id), genderRequired: plan.methods.contains(.ziwei))
+                    ProfileFieldsView(draft: binding(for: id), genderRequired: plan.methods.contains(.ziwei),
+                                      showsBirthTimeZone: plan.profileCorrection?.fields.contains(.birthTimeZone) == true
+                                      && (plan.profileCorrection?.candidateIDs?.contains(id) ?? true))
                 }.accessibilityElement(children: .contain).accessibilityIdentifier("participantForm-\(id.uuidString)")
             }
         }.accessibilityElement(children: .contain).accessibilityIdentifier("selectedParticipants")
@@ -436,7 +484,8 @@ struct GroupIntakeView: View {
         if selectedIDs.contains(profile.id) { selectedIDs.removeAll { $0 == profile.id } }
         else {
             if drafts[profile.id] == nil { drafts[profile.id] = ProfileFormDraft(profile: profile) }
-            selectedIDs.append(profile.id)
+            if standaloneCorrection { selectedIDs = [profile.id] }
+            else { selectedIDs.append(profile.id) }
         }
     }
 
@@ -445,7 +494,9 @@ struct GroupIntakeView: View {
         var people: [OracleProfile] = []
         var errors: [String] = []
         let requiredCount = minimumCount
-        if selectedIDs.count < requiredCount {
+        if standaloneCorrection && selectedIDs.count != 1 {
+            errors.append(L10n.text("请选择一份要修改的已有档案。", "Choose one saved profile to edit."))
+        } else if selectedIDs.count < requiredCount {
             errors.append(requiredCount > 1 ? L10n.text("请选好至少两位人员。", "Choose at least two people.") : L10n.text("请选择或新增这次要看的人员。", "Choose or add a person for this reading."))
         }
         for id in selectedIDs {
@@ -457,9 +508,9 @@ struct GroupIntakeView: View {
             catch { errors.append(title(draft.profile) + L10n.text("：", ": ") + error.localizedDescription) }
         }
         let numbers = draftNumbers
-        let review = ReadingPreparationPolicy.evaluate(plan: plan, participants: people, descriptors: store.registry.descriptors,
-                                                       castingProfile: casting.profile, numbers: numbers)
-        if !review.canProceed {
+        let review = standaloneCorrection ? nil : ReadingPreparationPolicy.evaluate(
+            plan: plan, participants: people, descriptors: store.registry.descriptors, castingProfile: casting.profile, numbers: numbers)
+        if let review, !review.canProceed {
             let blocked = review.assessments.filter { (plan.mandatoryMethods ?? []).contains($0.method) && !$0.canExecute }
             errors += blocked.map { assessment in
                 let reasons = assessment.blocking.map(\.reason) + [assessment.unavailableReason].compactMap { $0 }
@@ -470,7 +521,7 @@ struct GroupIntakeView: View {
         }
         guard errors.isEmpty else { error = errors.joined(separator: "\n"); return }
         error = nil
-        if onConfirm(people, plan.methods.contains(.meihua) ? numbers : [], casting.profile, keepProfiles) {
+        if onConfirm(people, plan.methods.contains(.meihua) ? numbers : [], casting.profile, editedFields) {
             cancelCastingLocation()
             submitted = true
         } else {

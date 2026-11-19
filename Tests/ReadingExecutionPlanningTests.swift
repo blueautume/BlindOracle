@@ -196,7 +196,7 @@ final class ReadingExecutionPlanningTests: XCTestCase {
             XCTAssertEqual(Set(plan.mandatoryMethods ?? []), Set(expected), question)
             XCTAssertTrue(store.runs.isEmpty, "An explicit method request must still await user confirmation")
             if expected == [.ziwei] {
-                XCTAssertFalse(store.confirmGroupIntake(profiles: [], numbers: [], save: false),
+                XCTAssertFalse(store.confirmGroupIntake(profiles: [], numbers: []),
                     "Missing birth facts must not silently downgrade the mandated method")
                 XCTAssertEqual(store.pendingPlan?.methods, [.ziwei])
                 XCTAssertTrue(store.runs.isEmpty)

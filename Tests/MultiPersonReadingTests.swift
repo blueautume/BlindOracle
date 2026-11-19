@@ -284,8 +284,8 @@ final class MultiPersonReadingTests: XCTestCase {
         let vault = try temporaryVault()
         let store = OracleStore(vault: vault, bootstrapCredential: false)
         let first = person("张三"), second = person("李四")
-        store.saveProfile(first)
-        store.saveProfile(second)
+        store.saveProfile(first, creating: true)
+        store.saveProfile(second, creating: true)
         let savedSecond = try XCTUnwrap(store.profiles.first { $0.id == second.id })
         var selfPlan = plan()
         selfPlan.subject = "本人"; selfPlan.participantIDs = nil
@@ -293,9 +293,10 @@ final class MultiPersonReadingTests: XCTestCase {
         XCTAssertEqual(store.defaultParticipants(for: plan(people: [second])).map(\.id), [second.id])
         let request = input(people: [first, second])
         store.runs = [OracleRun(input: request, plan: plan(people: [first, second]))]
+        store.checkpoint()
         var updated = first
         updated.birthPlace = "上海"
-        store.saveProfile(updated)
+        store.saveProfile(updated, creating: false)
         XCTAssertEqual(store.profiles.filter { $0.resolvedName == "张三" }.map(\.id), [first.id])
         XCTAssertEqual(store.profiles.first { $0.id == second.id }, savedSecond)
         XCTAssertEqual(store.runs.first?.input.participants?.first?.birthPlace, "北京")
@@ -306,25 +307,41 @@ final class MultiPersonReadingTests: XCTestCase {
         XCTAssertEqual(restarted.runs.first?.input.participants?.first?.birthPlace, "北京")
     }
 
-    @MainActor func testLocalChatCollectsTwoPeopleThenUpdatesOnlyNamedPersonAcrossRelaunch() async throws {
+    @MainActor func testChatLeavesTwoNewPeopleUnarchivedAndManualCorrectionUpdatesOnlySelectedProfile() async throws {
         let vault = try temporaryVault()
         let store = OracleStore(vault: vault, bootstrapCredential: false)
         store.send("张三，男，1995年1月2日出生；李四，女，1996年3月4日出生")
         try await waitUntilIdle(store)
+        XCTAssertTrue(store.profiles.isEmpty)
+        XCTAssertTrue(vault.load([OracleProfile].self, from: "profiles", fallback: []).isEmpty)
+        store.saveProfile(person("张三"), creating: true)
+        var li = person("李四", birth: "1996-03-04T14:00:00+08:00")
+        li.sex = "女"
+        store.saveProfile(li, creating: true)
         let first = try XCTUnwrap(store.profiles.first { $0.resolvedName == "张三" })
         let second = try XCTUnwrap(store.profiles.first { $0.resolvedName == "李四" })
         XCTAssertNotEqual(first.id, second.id)
         XCTAssertNotEqual(first.birthDate, second.birthDate)
-        store.send("张三出生时间08:30，出生地北京")
+        store.send("更正张三的出生时间和出生地。")
         try await waitUntilIdle(store)
+        let prefilled = try XCTUnwrap(store.intakeParticipants.first)
+        XCTAssertEqual(prefilled.id, first.id)
+        XCTAssertEqual(prefilled.birthDate, first.birthDate)
+        XCTAssertEqual(prefilled.birthPlace, "北京")
+        var draft = ProfileFormDraft(profile: prefilled)
+        draft.setBirthTime(try XCTUnwrap(ISO8601DateFormatter().date(from: "1995-01-02T08:30:00+08:00")))
+        draft.profile.birthPlace = "广州"
+        draft.setBirthCoordinates(latitude: 23.13, longitude: 113.26)
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [try draft.validatedProfile()], numbers: [],
+                                               editedFields: [first.id: [.birthTime, .birthPlace]], sessionID: store.intakeSessionID))
         let updated = try XCTUnwrap(store.profiles.first { $0.id == first.id })
         XCTAssertEqual(updated.birthTimeText, "08:30")
-        XCTAssertEqual(updated.birthPlace, "北京")
+        XCTAssertEqual(updated.birthPlace, "广州")
         XCTAssertEqual(store.profiles.first { $0.id == second.id }, second)
         XCTAssertEqual(store.profiles.filter { $0.resolvedName == "张三" }.count, 1)
         let restarted = OracleStore(vault: vault, bootstrapCredential: false)
         XCTAssertEqual(restarted.profiles.first { $0.id == first.id }?.birthTimeText, "08:30")
-        XCTAssertEqual(restarted.profiles.first { $0.id == first.id }?.birthPlace, "北京")
+        XCTAssertEqual(restarted.profiles.first { $0.id == first.id }?.birthPlace, "广州")
         let restoredSecond = try XCTUnwrap(restarted.profiles.first { $0.id == second.id })
         XCTAssertEqual(restoredSecond.resolvedName, second.resolvedName)
         XCTAssertEqual(restoredSecond.birthDate, second.birthDate)
@@ -339,8 +356,8 @@ final class MultiPersonReadingTests: XCTestCase {
         let first = person("张三")
         var second = person("张三", birth: "2001-03-04T14:00:00+08:00")
         second.birthPlace = "上海"
-        store.saveProfile(first)
-        store.saveProfile(second)
+        store.saveProfile(first, creating: true)
+        store.saveProfile(second, creating: true)
         let before = store.profiles.filter { $0.resolvedName == "张三" }
         XCTAssertEqual(Set(before.map(\.id)), [first.id, second.id])
         store.send("张三出生地广州")
@@ -349,22 +366,23 @@ final class MultiPersonReadingTests: XCTestCase {
         XCTAssertEqual(after, before)
 
         let previousSelf = person("李四")
-        store.saveProfile(previousSelf)
-        store.selfProfileID = previousSelf.id
+        store.saveProfile(previousSelf, creating: true)
+        store.setSelfProfile(id: previousSelf.id)
         store.send("我是张三")
         try await waitUntilIdle(store)
-        XCTAssertNil(store.selfProfileID)
+        XCTAssertEqual(store.selfProfileID, previousSelf.id)
         var selfPlan = plan()
         selfPlan.subject = "本人"; selfPlan.participantIDs = nil
-        XCTAssertTrue(store.defaultParticipants(for: selfPlan).isEmpty)
+        XCTAssertEqual(store.defaultParticipants(for: selfPlan).map(\.id), [previousSelf.id])
     }
 
     @MainActor func testSelfAndNewPersonStatementsCannotOverwritePendingOtherPersonsBirthDate() async throws {
         let vault = try temporaryVault()
         let store = OracleStore(vault: vault, bootstrapCredential: false)
         let selected = person("张三"), own = person("李四", birth: "1996-03-04T14:00:00+08:00")
-        store.saveProfile(selected); store.saveProfile(own)
-        store.selfProfileID = own.id
+        store.saveProfile(selected, creating: true)
+        store.saveProfile(own, creating: true)
+        store.setSelfProfile(id: own.id)
         var pending = plan(people: [selected])
         pending.subject = "他人"
         let selfStatement = "我的生日是1991年2月3日"
@@ -372,8 +390,7 @@ final class MultiPersonReadingTests: XCTestCase {
         store.send(selfStatement)
         try await waitUntilIdle(store)
         XCTAssertEqual(store.profiles.first { $0.id == selected.id }?.birthDate, selected.birthDate)
-        XCTAssertEqual(store.profiles.first { $0.id == own.id }?.birthDateText, "1991-02-03")
-        let updatedOwnDate = store.profiles.first { $0.id == own.id }?.birthDate
+        XCTAssertEqual(store.profiles.first { $0.id == own.id }?.birthDate, own.birthDate)
 
         let wronglyAssigned = ProfileUpdate(id: selected.id, name: selected.resolvedName, birthDate: "1991-02-03")
         XCTAssertTrue(ProfileDirectory.groundedUpdates([wronglyAssigned], in: selfStatement,
@@ -388,14 +405,15 @@ final class MultiPersonReadingTests: XCTestCase {
         store.send(newPersonStatement)
         try await waitUntilIdle(store)
         XCTAssertEqual(store.profiles.first { $0.id == selected.id }?.birthDate, selected.birthDate)
-        XCTAssertEqual(store.profiles.first { $0.id == own.id }?.birthDate, updatedOwnDate)
+        XCTAssertEqual(store.profiles.first { $0.id == own.id }?.birthDate, own.birthDate)
         XCTAssertTrue(ProfileDirectory.groundedUpdates([ProfileUpdate(birthDate: "2000-01-01")], in: newPersonStatement,
                                                        profiles: store.profiles, contextIDs: []).isEmpty)
         store.pendingPlan = pending
         store.send("出生日期1992年4月5日")
         try await waitUntilIdle(store)
-        XCTAssertEqual(store.profiles.first { $0.id == selected.id }?.birthDateText, "1992-04-05")
-        XCTAssertEqual(store.profiles.first { $0.id == own.id }?.birthDate, updatedOwnDate)
+        XCTAssertEqual(store.profiles.first { $0.id == selected.id }?.birthDate, selected.birthDate)
+        XCTAssertEqual(store.profiles.first { $0.id == own.id }?.birthDate, own.birthDate)
+        XCTAssertEqual(store.intakeParticipants.first?.birthDate, selected.birthDate)
     }
 
     @MainActor func testGroupTarotWithoutTwoParticipantsOpensUnifiedFormBeforeInteraction() async throws {
@@ -418,18 +436,20 @@ final class MultiPersonReadingTests: XCTestCase {
         let store = OracleStore(vault: vault, bootstrapCredential: false)
         let first = person("张三"), second = person("李四")
         store.pendingPlan = plan(people: [first, second])
-        store.confirmGroupIntake(profiles: [first, first], numbers: [], save: false)
+        store.confirmGroupIntake(profiles: [first, first], numbers: [])
         XCTAssertTrue(store.runs.isEmpty)
         XCTAssertNotNil(store.pendingPlan)
         var unnamed = second
         unnamed.name = ""; unnamed.familyName = ""; unnamed.givenName = ""; unnamed.displayName = ""
-        store.confirmGroupIntake(profiles: [first, unnamed], numbers: [], save: false)
+        store.confirmGroupIntake(profiles: [first, unnamed], numbers: [])
         try await waitUntilIdle(store)
         let run = try XCTUnwrap(store.runs.first)
         XCTAssertEqual(run.input.participants?.map(\.id), [first.id, second.id])
         XCTAssertEqual(run.input.participants?.last?.participantLabel, unnamed.anonymousCode)
         XCTAssertEqual(run.input.relationship, "合作")
         XCTAssertEqual(Set(run.results.compactMap(\.participantID)), [first.id, second.id])
+        XCTAssertTrue(store.profiles.isEmpty)
+        XCTAssertTrue(vault.load([OracleProfile].self, from: "profiles", fallback: []).isEmpty)
     }
 
     func testAIPayloadIncludesEachPersonsSameMethodEvidenceWithoutMerging() async throws {

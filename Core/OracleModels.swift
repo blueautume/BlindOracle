@@ -204,6 +204,13 @@ struct ConversationUnderstanding: Codable, Sendable {
     var execution: ReadingExecutionIntent? = nil
 }
 
+struct ProfileCorrectionIntake: Codable, Sendable {
+    let fields: [OracleField]
+    /// Nil leaves the choice of an existing profile to the user.
+    let candidateIDs: [UUID]?
+    let isStandalone: Bool
+}
+
 struct OraclePlan: Codable, Sendable {
     var quotaTaskID: UUID? = nil
     var intent: String
@@ -231,6 +238,8 @@ struct OraclePlan: Codable, Sendable {
     var collectionDeclined: Bool? = nil
     /// Unsubmitted form drafts are independent of the permanent people directory.
     var draftParticipants: [OracleProfile]? = nil
+    var draftEditedFields: [UUID: Set<OracleField>]? = nil
+    var profileCorrection: ProfileCorrectionIntake? = nil
     var draftNumbers: [Int]? = nil
     /// The casting place belongs to the question, independently of its people.
     var castingProfile: OracleProfile? = nil
@@ -260,9 +269,12 @@ struct ChatMessage: Codable, Identifiable, Sendable {
     /// The question the planner understood. The transcript still displays content.
     var resolvedQuestion: String? = nil
     var referenceMessageID: UUID? = nil
+    /// A proposed correction belongs to the local form. Later AI requests use
+    /// the confirmed profile snapshot through their normal inputs.
+    var localProfileCorrection: Bool? = nil
 
     var isConversationTurn: Bool {
-        guard role != .system, kind == .text || kind == .reading,
+        guard localProfileCorrection != true, role != .system, kind == .text || kind == .reading,
               !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
         // Confirmations in existing archives were stored as ordinary user text.
         return role != .user || ![

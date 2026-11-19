@@ -3,12 +3,12 @@ import XCTest
 final class SavedProfileReuseUITests: XCTestCase {
     @MainActor func testSavedSoleProfilePrefillsNewQuestionWithoutAskingForKnownBirthInformationAgain() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-reading-library",
+            "--ui-testing-reset-language", "-oracle.appLanguage", "zh-Hans"]
         app.launch()
         XCTAssertTrue(app.buttons["sendQuestion"].waitForExistence(timeout: 15))
-        send("姓名：陈平，男，1992年6月15日08:30出生，出生时区Asia/Shanghai，出生地甘肃省武威市民勤县", in: app)
-        waitUntilReadyToSend(in: app)
         XCTAssertFalse(app.scrollViews["intakeFormScroll"].exists)
+        app.buttons["newConversationButton"].tap()
 
         // This question deliberately omits both the name and a self pronoun.
         // The sole saved person should be offered with the original facts.
@@ -37,7 +37,7 @@ final class SavedProfileReuseUITests: XCTestCase {
         XCTAssertTrue(hasSavedTime, "Time picker contents: " + timeContents)
         let birthPlace = app.buttons["profileBirthPlace"]
         reveal(birthPlace, in: app)
-        XCTAssertEqual(birthPlace.value as? String, "甘肃省武威市民勤县")
+        XCTAssertEqual(birthPlace.value as? String, "未填写")
         XCTAssertFalse(app.buttons["profileBirthTimeZone"].exists)
         capture("saved-profile-prefills-unqualified-fortune-question", in: app)
 

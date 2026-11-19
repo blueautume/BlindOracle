@@ -104,7 +104,7 @@ final class LiveIntegrationTests: XCTestCase {
         if let pending = store.pendingPlan {
             XCTAssertTrue(pending.methods.contains(.tarot))
             XCTAssertTrue(Set(pending.methods).isSubset(of: [.meihua, .tarot]))
-            XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false,
+            XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [],
                 sessionID: store.intakeSessionID))
             try await waitForLiveTarot(store, stage: "DeepSeek screenshot Tarot intake")
         }
@@ -306,7 +306,7 @@ final class LiveIntegrationTests: XCTestCase {
         XCTAssertEqual(initialPlan.action, "intake")
         XCTAssertEqual(initialPlan.methods, [.tarot])
         try await assertLiveTarotResponse(store, stage: "initial plan")
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false, sessionID: store.intakeSessionID))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], sessionID: store.intakeSessionID))
         let initialCards = try confirmLiveTarotCards(["major-11", "pentacles-02", "swords-02"], in: store)
         try await waitForLiveTarot(store, stage: "three cards")
         let first = try await liveTarotStage(store, expected: initialCards, stage: "three cards")
@@ -451,7 +451,7 @@ final class LiveIntegrationTests: XCTestCase {
         XCTAssertNil(plan.baseRunID)
         try await assertLiveTarotResponse(store, stage: "\(name) initial plan", since: initialRequest)
         let synthesisRequest = Date()
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false, sessionID: store.intakeSessionID))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], sessionID: store.intakeSessionID))
         if method == .tarot {
             _ = try confirmLiveTarotCards(["cups-02", "pentacles-06", "swords-04"], in: store)
         } else if method == .liuyao {

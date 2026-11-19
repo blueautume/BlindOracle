@@ -58,7 +58,7 @@ struct CastingLocationDraft: Equatable, Sendable {
 }
 
 @MainActor final class OracleStore: ObservableObject {
-    @Published var profiles: [OracleProfile]
+    @Published private(set) var profiles: [OracleProfile]
     @Published var selfProfileID: UUID?
     @Published var messages: [ChatMessage]
     @Published var runs: [OracleRun]
@@ -210,7 +210,6 @@ struct CastingLocationDraft: Equatable, Sendable {
         syncActivities()
         captureCurrentConversation()
         do {
-            try vault.save(profiles, as: "profiles")
             try vault.save(selfProfileID, as: "self-profile-id")
             try vault.save(runs, as: "readings")
             let history = OracleConversationArchive(activeConversationID: activeConversationID, conversations: conversations)
@@ -225,16 +224,44 @@ struct CastingLocationDraft: Equatable, Sendable {
             return true
         } catch { notice = L10n.text("本次资料暂未写入磁盘，请检查设备可用空间。", "Could not save these details. Check your available storage."); return false }
     }
-    func saveProfile(_ value: OracleProfile) {
+    @discardableResult func saveProfile(_ value: OracleProfile, creating: Bool) -> Bool {
+        let index = profiles.firstIndex(where: { $0.id == value.id })
+        guard creating == (index == nil) else {
+            notice = L10n.text("这份档案已变动，请回到留存资料重新打开。", "This profile has changed. Reopen it from Saved profiles.")
+            return false
+        }
         var copy = ProfileDirectory.assigningDefaultBirthTimeZone(to: value)
         copy.updatedAt = Date()
         copy.isAnonymousRecord = copy.resolvedName.isEmpty ? true : nil
-        if let index = profiles.firstIndex(where: { $0.id == copy.id }) { profiles[index] = copy }
-        else { profiles.append(copy) }
-        persist()
+        var updated = profiles
+        if let index { updated[index] = copy }
+        else { updated.append(copy) }
+        return writeProfileDirectory(updated)
+    }
+    @discardableResult func setSelfProfile(id: UUID) -> Bool {
+        guard profiles.contains(where: { $0.id == id }) else { return false }
+        do {
+            try vault.save(Optional(id), as: "self-profile-id")
+            selfProfileID = id
+            return true
+        } catch {
+            notice = L10n.text("暂未能保存本人设置。", "Couldn’t save the profile for yourself.")
+            return false
+        }
+    }
+    private func writeProfileDirectory(_ updated: [OracleProfile]) -> Bool {
+        do {
+            try vault.save(updated, as: "profiles")
+            profiles = updated
+            return true
+        } catch {
+            notice = L10n.text("暂未能保存人员档案，请重试。", "Couldn’t save the profiles. Try again.")
+            return false
+        }
     }
     func deleteProfile(id: UUID) {
-        profiles.removeAll { $0.id == id }
+        let remaining = profiles.filter { $0.id != id }
+        guard remaining.count != profiles.count, writeProfileDirectory(remaining) else { return }
         if selfProfileID == id { selfProfileID = nil }
         persist()
     }
@@ -311,34 +338,16 @@ struct CastingLocationDraft: Equatable, Sendable {
         }
         return result
     }
-    @discardableResult func applyProfileUpdates(_ updates: [ProfileUpdate]) -> ProfileMergeResult {
-        let result = ProfileDirectory.applying(updates, to: profiles)
-        profiles = result.profiles
-        if var drafts = pendingPlan?.draftParticipants {
-            for var update in updates {
-                let matches = profiles.filter { $0.id == update.id || (update.id == nil && $0.resolvedName == update.name) }
-                guard matches.count == 1, let id = matches.first?.id,
-                      result.appliedIDs.contains(id), drafts.contains(where: { $0.id == id }) else { continue }
-                update.id = id
-                drafts = ProfileDirectory.applying([update], to: drafts).profiles
-            }
-            pendingPlan?.draftParticipants = drafts
-        }
-        if !result.issues.isEmpty { notice = result.issues.map(\.message).joined(separator: "\n") }
-        persist()
-        return result
-    }
-    private func localPeoplePlan(question: String, collectedIDs: [UUID]) -> OraclePlan {
+    private func localPeoplePlan(question: String) -> OraclePlan {
         var plan = registry.localPlan(question: question, profile: profile)
-        let statement = !collectedIDs.isEmpty || !ProfileDirectory.parseExplicitUpdates(in: question, profiles: profiles).isEmpty
+        let statement = ProfileFactPolicy.allowsPersistence(in: question)
+            && !ProfileDirectory.parseExplicitUpdates(in: question, profiles: profiles).isEmpty
         let asks = AIPlanRouting.isConcreteReadingQuestion(question) || ["？", "?", "看看", "算卦", "问卦", "如何", "怎样", "适合", "关系", "友情", "姻缘", "婚姻", "合作", "运势", "建议", "合不合", "感情"]
             .contains(where: question.contains)
         let deferReading = ["不要算", "先不算", "暂不算", "不需要解读"].contains(where: question.contains)
             || EnglishConversation.matches(question, #"\b(?:no reading yet|do not read|don['’]t calculate|just save)\b"#)
         if statement && (!asks || deferReading) {
             plan.action = "collect"; plan.methods = []; plan.requiredFields = []; plan.interactions = []
-            let names = collectedIDs.compactMap { id in profiles.first(where: { $0.id == id })?.resolvedName }
-            plan.note = names.isEmpty ? (notice ?? L10n.text("请明确需要补充哪位的资料。", "Whose details would you like to add?")) : L10n.text("已分别记下\(names.joined(separator: "、"))的资料。可以继续补充，或告诉我这次想问的事。", "I saved the details for \(names.joined(separator: ", ")). You can add more or tell me what you would like to ask.")
             return plan
         }
         let target = ReadingContinuationPolicy.participantIntent(in: question, profiles: profiles)
@@ -354,8 +363,7 @@ struct CastingLocationDraft: Equatable, Sendable {
         }
         return plan
     }
-    func resolveParticipants(in plan: inout OraclePlan, question: String, allowPersistentCreation: Bool? = nil) {
-        let mayCreate = allowPersistentCreation ?? ProfileFactPolicy.allowsPersistence(in: question)
+    func resolveParticipants(in plan: inout OraclePlan, question: String) {
         let target = ReadingContinuationPolicy.participantIntent(in: question, profiles: profiles)
         let excluded = Set(target.excludedNames)
         plan.participantNames = plan.participantNames?.filter { !excluded.contains($0) }
@@ -389,12 +397,6 @@ struct CastingLocationDraft: Equatable, Sendable {
         let hasExplicitIDs = !(plan.participantIDs ?? []).isEmpty
         var seenNames = Set<String>()
         let requestedNames = (plan.participantNames ?? []).filter { seenNames.insert($0).inserted }
-        let newNames = requestedNames.filter { name in
-            !["我", "本人", "他人", "朋友", "对象"].contains(name)
-                && !profiles.contains(where: { $0.resolvedName == name || $0.participantLabel == name })
-                && ProfileDirectory.isAffirmativeParticipantReference(name, in: question, profiles: profiles)
-        }
-        if mayCreate, !newNames.isEmpty { _ = applyProfileUpdates(newNames.map { ProfileUpdate(name: $0) }) }
         let validIDs = Set(profiles.map(\.id))
         if let ids = plan.participantIDs {
             var seen = Set<UUID>()
@@ -666,6 +668,7 @@ struct CastingLocationDraft: Equatable, Sendable {
     }
 
     var canConfirmIntake: Bool {
+        if pendingPlan?.profileCorrection?.isStandalone == true { return !isBusy && intakeParticipants.count == 1 }
         guard let report = intakePreparationReport(for: intakeParticipants), !isBusy else { return false }
         return report.canProceed
     }
@@ -677,10 +680,12 @@ struct CastingLocationDraft: Equatable, Sendable {
         intakeError = nil; showIntake = true; showInteraction = false; phase = .awaitingIntake
     }
 
-    func saveIntakeDraft(profiles: [OracleProfile], numbers: [Int], castingProfile: OracleProfile? = nil, sessionID: UUID) {
+    func saveIntakeDraft(profiles: [OracleProfile], numbers: [Int], castingProfile: OracleProfile? = nil,
+                         editedFields: [UUID: Set<OracleField>] = [:], sessionID: UUID) {
         guard sessionID == intakeSessionID, var plan = pendingPlan, !isBusy else { return }
         initializeCastingProfile(in: &plan)
         plan.draftParticipants = profiles
+        plan.draftEditedFields = editedFields
         plan.draftNumbers = numbers
         if let castingProfile { plan.castingProfile = CastingLocationDraft(profile: castingProfile).profile }
         pendingPlan = plan
@@ -750,7 +755,7 @@ struct CastingLocationDraft: Equatable, Sendable {
         }
         if !requiresPlace { plan.requiredFields.removeAll { $0 == .currentLocation } }
         initializeCastingProfile(in: &plan)
-        plan.quotaTaskID = quotaTaskID ?? proposed.quotaTaskID ?? UUID()
+        plan.quotaTaskID = plan.profileCorrection?.isStandalone == true ? nil : quotaTaskID ?? proposed.quotaTaskID ?? UUID()
         quotaTaskID = plan.quotaTaskID
         // Legacy field-by-field preparations reopen as one complete form.
         plan.preparationStage = .collecting
@@ -785,6 +790,13 @@ struct CastingLocationDraft: Equatable, Sendable {
         if let drafts = plan.draftParticipants {
             return drafts.map { draft in
                 guard let saved = profiles.first(where: { $0.id == draft.id }) else { return draft }
+                if let editedFields = plan.draftEditedFields {
+                    let fields = editedFields[draft.id] ?? []
+                    if var merged = ProfileDirectory.applyingManualEdits(fields, from: draft, to: saved) {
+                        merged.updatedAt = max(draft.updatedAt, saved.updatedAt)
+                        return merged
+                    }
+                }
                 return ProfileDirectory.restoringKnownFields(in: draft, from: saved)
             }
         }
@@ -1194,6 +1206,26 @@ struct CastingLocationDraft: Equatable, Sendable {
             messages.append(ChatMessage(role: .assistant, content: prompt))
             persist(); return
         }
+        if let request = profileEditRequest(for: text) {
+            presentProfileCorrection(request, text: text)
+            return
+        }
+        if let pending = pendingPlan, ProfileFactPolicy.allowsPersistence(in: text),
+           text.range(of: #"^(?:出生(?:日期|时间|地|时区)|生日|性别|时辰|姓氏|姓名|名字|date of birth|birth(?:day| date| time| ?place)|time zone|gender|sex)\s*[:：是为]?\s*[^，,。；;！？!?\n\r]+[。.!！]*$"#,
+                      options: [.regularExpression, .caseInsensitive]) != nil {
+            messages.append(ChatMessage(role: .user, content: text, localProfileCorrection: true))
+            prepareConversation(pending, clarification: L10n.text("请在问事单里选择对应的人，手动填写资料。", "Choose the person and enter their details in the form."))
+            return
+        }
+        if pendingInteraction == nil, ReadingContinuationPolicy.isProfileDetailsRecast(text) {
+            let draft = pendingPlan.flatMap { $0.profileCorrection?.isStandalone == true ? nil : $0 }
+            if let fresh = draft ?? latestRun.map({ recastPlan(from: $0, wording: text) }) {
+                beginActivitySession()
+                messages.append(ChatMessage(role: .user, content: text))
+                prepareConversation(fresh)
+                return
+            }
+        }
         if (pendingInteraction != nil || pendingPlan != nil), ReadingContinuationPolicy.explicitlyChangesScope(text, profiles: profiles) {
             newConversation()
             messages.append(ChatMessage(role: .assistant, content: L10n.text("上一问的操作进度已保存，可以从历史继续。", "Your progress is saved. You can resume that reading from History."), kind: .notice))
@@ -1239,13 +1271,134 @@ struct CastingLocationDraft: Equatable, Sendable {
             || EnglishConversation.matches(text, #"^(?:that['’]s (?:wrong|not right)|not correct|i need to make a correction|i need to change something)[.!]?$"#) {
             plan.preparationStage = .collecting; plan.reviewedParticipants = nil
             messages.append(ChatMessage(role: .user, content: text))
-            prepareConversation(plan, clarification: L10n.text("是哪一位的哪项信息需要更正？直接告诉我正确内容，我会重新整理给你核对。", "Whose details should I correct, and what should they be? I’ll update them for you to review."))
+            prepareConversation(plan, clarification: L10n.text("请在问事单里选择对应的人，手动更正资料。", "Choose the person and edit their details in the form."))
             return
         }
         if pendingPlan == nil, activities.last?.status == .waiting { finishActivity() }
         let message = ChatMessage(role: .user, content: text)
         messages.append(message)
         planQuestion(message)
+    }
+
+    func canPresentProfileCorrection(_ question: String) -> Bool {
+        let text = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.count <= 6000 && profileEditRequest(for: text) != nil
+    }
+
+    private func profileEditRequest(for text: String) -> ProfileEditRequest? {
+        let draft = pendingPlan?.draftParticipants ?? []
+        let saved = Set(profiles.map(\.id))
+        return ProfileEditRequest.recognize(text, profiles: profiles + draft.filter { !saved.contains($0.id) },
+                                            selfProfileID: selfProfileID)
+    }
+
+    private func participantsForRecast(from run: OracleRun) -> [OracleProfile] {
+        run.input.readingParticipants.map { original in
+            guard let saved = profiles.first(where: { $0.id == original.id }) else { return original }
+            return saved.updatedAt >= original.updatedAt ? saved : ProfileDirectory.restoringKnownFields(in: original, from: saved)
+        }
+    }
+
+    private func recastPlan(from run: OracleRun, wording: String) -> OraclePlan {
+        var plan = OraclePlan(intent: run.plan.intent, subject: run.input.subject, methods: run.plan.methods,
+                              requiredFields: run.plan.requiredFields, note: "", question: run.input.question)
+        plan.action = "intake"
+        plan.draftParticipants = participantsForRecast(from: run)
+        plan.participantIDs = plan.draftParticipants?.map(\.id)
+        plan.participantNames = plan.draftParticipants?.map(\.participantLabel)
+        plan.relationship = run.input.relationship
+        plan.mandatoryMethods = run.plan.mandatoryMethods
+        plan.collectionDeclined = run.plan.collectionDeclined
+        enforceRequestedMethods(&plan, text: wording)
+        captureCastingPreferences(in: &plan)
+        return plan
+    }
+
+    private func presentProfileCorrection(_ request: ProfileEditRequest, text: String) {
+        let previous = pendingPlan
+        let currentPeople = previous.map(initialIntakeParticipants) ?? []
+        let candidateIDs: [UUID]?
+        switch request.target {
+        case .selfProfile: candidateIDs = selfProfileID.map { [$0] }
+        case .profiles(let ids): candidateIDs = ids
+        case .unspecified:
+            candidateIDs = request.acceptsCurrentParticipant && currentPeople.count == 1 ? [currentPeople[0].id] : nil
+        }
+        let candidate = candidateIDs.flatMap { ids in
+            guard ids.count == 1 else { return nil as OracleProfile? }
+            return currentPeople.first(where: { $0.id == ids[0] }) ?? profiles.first(where: { $0.id == ids[0] })
+        }
+        let priorRun = activeReplyRun ?? latestRun
+        var reading: OraclePlan?
+        if let candidate, let previous, previous.profileCorrection?.isStandalone != true,
+           currentPeople.contains(where: { $0.id == candidate.id }) {
+            reading = previous
+        } else if let candidate, let tail = request.readingQuestion, pendingInteraction == nil {
+            let recast = ReadingContinuationPolicy.isBareRecastRequest(tail)
+            let refresh = ProfileEditRequest.usesUpdatedDetails(tail)
+            if recast || refresh, let priorRun,
+               priorRun.input.readingParticipants.contains(where: { $0.id == candidate.id }) {
+                var plan = recastPlan(from: priorRun, wording: tail)
+                if refresh {
+                    plan.action = "supplement"
+                    plan.baseRunID = priorRun.id
+                    plan.castingProfile = CastingLocationDraft(profile: priorRun.input.profile).profile
+                    plan.draftNumbers = priorRun.input.numbers
+                    captureCastingPreferences(in: &plan, base: priorRun)
+                }
+                reading = plan
+            } else if !recast, !refresh {
+                var plan = localPeoplePlan(question: tail)
+                plan.draftParticipants = [candidate]
+                plan.participantIDs = [candidate.id]
+                plan.participantNames = [candidate.participantLabel]
+                captureCastingPreferences(in: &plan)
+                if !plan.methods.isEmpty { reading = plan }
+            }
+        }
+        let standalone = reading == nil
+        if pendingInteraction != nil || (standalone && previous != nil && previous?.profileCorrection?.isStandalone != true) {
+            newConversation()
+        }
+        beginActivitySession()
+        notice = nil
+        var plan = reading ?? OraclePlan(intent: L10n.text("更正已有档案", "Edit a saved profile"),
+                                         subject: candidate?.id == selfProfileID ? "本人" : "他人",
+                                         methods: [], requiredFields: [], note: "",
+                                         question: L10n.text("更正已有档案", "Edit a saved profile"))
+        if standalone { plan.draftParticipants = candidate.map { [$0] } ?? [] }
+        plan.profileCorrection = ProfileCorrectionIntake(fields: request.fields, candidateIDs: candidateIDs, isStandalone: standalone)
+        messages.append(ChatMessage(role: .user, content: text, localProfileCorrection: true))
+        let prompt = L10n.text("请在问事单里手动更正。点「确认并继续」会保存对已有档案的修改。",
+                               "Edit the details in the form. Confirm and continue to save your changes to the existing profile.")
+        prepareConversation(plan, clarification: prompt)
+    }
+
+    private func explainManualProfileEntry() {
+        messages.append(ChatMessage(role: .assistant, content: L10n.text(
+            "你可以在「数据 → 留存资料」新增或编辑档案。只用于这次问事的人，可以在问事单里手动添加。",
+            "Add or edit saved profiles under Data → Saved profiles. To include someone once, add them in the reading form.")))
+        activityMessageID = messages.last?.id
+        progress(L10n.text("人员档案由你管理", "You manage your profiles"), state: .completed)
+        showIntake = false
+        finishOperation()
+    }
+
+    private func prefillTemporaryPeople(in plan: inout OraclePlan, from text: String) {
+        guard plan.draftParticipants == nil, plan.methods.contains(where: \.usesPersonalProfile),
+              ProfileFactPolicy.allowsPersistence(in: text), !ReadingContinuationPolicy.isBareRecastRequest(text) else { return }
+        let updates = ProfileDirectory.parseExplicitUpdates(in: text, profiles: profiles).filter { update in
+            guard update.id == nil, let name = update.name,
+                  selfProfileID == nil || ProfileDirectory.explicitSelfName(in: text, profiles: profiles) != name,
+                  !profiles.contains(where: { $0.resolvedName == name || $0.participantLabel == name }) else { return false }
+            return update.birthDate != nil || update.birthTime != nil || update.birthPlace != nil
+                || update.birthTimeZoneID != nil || update.sex != nil
+        }
+        guard !updates.isEmpty else { return }
+        let temporary = ProfileDirectory.applying(updates, to: []).profiles
+        let selected = defaultParticipants(for: plan) + temporary
+        if selected.count > 1 { plan.subject = "多人" }
+        plan.draftParticipants = selected
     }
 
     private func planQuestion(_ message: ChatMessage) {
@@ -1290,53 +1443,12 @@ struct CastingLocationDraft: Equatable, Sendable {
                     || (target.isGroup && previous.subject != "多人")
             } ?? false
             let keepsPendingScope = scope == .none && !changesPendingPeople
-            // Deciding to calculate a hypothetical case is separate from
-            // asserting that its personal details are true permanent records.
-            let mayPersistProfileFacts = ProfileFactPolicy.allowsPersistence(in: text)
             let scopedPending = keepsPendingScope ? previousPlan : nil
-            var answer = scopedPending.map { ConversationalIntake.answer(text, plan: $0, profiles: self.profiles) } ?? IntakeAnswer()
-            let pendingContextIDs = scopedPending?.requestedProfileID.map { [$0] } ?? scopedPending?.participantIDs ?? selfProfileID.map { [$0] } ?? []
-            let ownFacts = mayPersistProfileFacts
-                ? ProfileDirectory.explicitSelfUpdates(in: text, profiles: profiles, selfProfileID: selfProfileID) : []
-            let refersToSelf = target.includesSelf || ProfileDirectory.hasExplicitSelfFacts(in: text)
-            let refersToOther = target.refersToOther || EnglishConversation.refersToOtherProfile(text) || text.range(of: #"(?:^|[，,。；;])\s*(?:他|她)(?:的|出生|生日)"#, options: .regularExpression) != nil
-            let introducesOtherPerson = ["另外", "另一个", "另一位", "其他人", "别人", "他人", "朋友", "同事", "同学", "家人", "亲戚", "对象", "伴侣", "对方", "父亲", "母亲", "爸爸", "妈妈", "孩子", "儿子", "女儿", "男友", "女友", "丈夫", "妻子", "老公", "老婆"]
-                .contains(where: text.contains) || EnglishConversation.introducesOtherPerson(text)
-            let contextIDs: [UUID]
-            if introducesOtherPerson || (refersToSelf && refersToOther) { contextIDs = [] }
-            else if refersToSelf { contextIDs = selfProfileID.map { [$0] } ?? [] }
-            else if refersToOther, pendingContextIDs.count == 1, pendingContextIDs.first == selfProfileID { contextIDs = [] }
-            else { contextIDs = pendingContextIDs }
-            if let requested = scopedPending?.requestedProfileID, !contextIDs.contains(requested),
-               let person = profiles.first(where: { $0.id == requested }),
-               !ProfileDirectory.referencedNames(in: text, profiles: profiles).contains(person.resolvedName) {
-                answer = IntakeAnswer()
-            }
-            var explicitUpdates = ProfileDirectory.parseExplicitUpdates(in: text, profiles: profiles)
-            explicitUpdates += ownFacts
-            if EnglishConversation.isLunarDate(text) { for index in explicitUpdates.indices { explicitUpdates[index].birthDate = nil } }
-            if answer.clarification == nil { explicitUpdates += answer.updates }
-            else { explicitUpdates = [] }
-            if answer.clarification == nil, explicitUpdates.isEmpty, contextIDs.count == 1,
-               (["出生", "生日", "性别", "时区"].contains(where: text.contains)
-                   || EnglishConversation.matches(text, #"\b(?:born|birth(?:day| date| time|place)?|sex|gender|time zone)\b"#)),
-               let selected = profiles.first(where: { $0.id == contextIDs[0] }),
-               !selected.resolvedName.isEmpty,
-               !refersToSelf || selected.id == selfProfileID,
-               !refersToOther || selected.id != selfProfileID,
-               !introducesOtherPerson,
-               !profiles.contains(where: { $0.id != selected.id && !$0.resolvedName.isEmpty && text.contains($0.resolvedName) }),
-               (pendingPlan != nil || !["他", "她", "朋友"].contains(where: text.contains)) {
-                explicitUpdates = ProfileDirectory.parseExplicitUpdates(in: "姓名：\(selected.resolvedName)，\(text)", profiles: profiles)
-            }
-            if !mayPersistProfileFacts { explicitUpdates = [] }
-            let collected = applyProfileUpdates(explicitUpdates)
-            if mayPersistProfileFacts, let name = ProfileDirectory.explicitSelfName(in: text, profiles: profiles) {
-                let own = ProfileDirectory.resolve(names: [name], in: profiles)
-                selfProfileID = own.ids.count == 1 ? own.ids[0] : nil
-                persist()
-            }
-            var plan = localPeoplePlan(question: text, collectedIDs: collected.appliedIDs)
+            let answer = scopedPending.map { ConversationalIntake.answer(text, plan: $0, profiles: self.profiles) } ?? IntakeAnswer()
+            let mentionsProfileFacts = ProfileFactPolicy.allowsPersistence(in: text)
+                && (!ProfileDirectory.parseExplicitUpdates(in: text, profiles: profiles).isEmpty
+                    || ProfileDirectory.hasExplicitSelfFacts(in: text))
+            var plan = localPeoplePlan(question: text)
             if var pending = previousPlan, pending.subject != "多人" {
                 let matches = resolveSavedPeople([text]).ids
                 if matches.count == 1, let person = profiles.first(where: { $0.id == matches.first }) {
@@ -1345,27 +1457,10 @@ struct CastingLocationDraft: Equatable, Sendable {
                     prepareConversation(pending); return
                 }
             }
-            let clauses = text.components(separatedBy: CharacterSet(charactersIn: "，,。；;\n")).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            let recastWithProfileUpdate = !explicitUpdates.isEmpty
-                && clauses.contains(where: ReadingContinuationPolicy.isBareRecastRequest)
-                && clauses.allSatisfy { ReadingContinuationPolicy.isBareRecastRequest($0)
-                    || (!ProfileDirectory.parseExplicitUpdates(in: $0, profiles: self.profiles).isEmpty && !$0.contains("？") && !$0.contains("?")) }
             if usesTestAgent, previousPlan == nil, let original = base,
-               ReadingContinuationPolicy.isBareRecastRequest(text) || recastWithProfileUpdate {
-                // A bare recast changes the draw, not the question being asked.
-                plan = OraclePlan(intent: original.plan.intent, subject: original.input.subject,
-                                  methods: original.plan.methods, requiredFields: original.plan.requiredFields,
-                                  note: L10n.text("按原问题重新推演，请先核对这次资料。", "Review the details before starting a new reading for the same question."),
-                                  question: references.first?.resolvedQuestion ?? original.input.question)
-                plan.action = "intake"; plan.interactions = original.plan.interactions
-                plan.participantIDs = original.input.readingParticipants.map(\.id)
-                plan.participantNames = original.input.readingParticipants.map(\.participantLabel)
-                plan.relationship = original.input.relationship
-                plan.mandatoryMethods = original.plan.mandatoryMethods
-                plan.collectionDeclined = original.plan.collectionDeclined
-                enforceRequestedMethods(&plan, text: text)
-                captureCastingPreferences(in: &plan)
-                prepareConversation(plan); return
+               ReadingContinuationPolicy.isBareRecastRequest(text) {
+                let fresh = recastPlan(from: original, wording: text)
+                prepareConversation(fresh); return
             }
             let methodChange = ReadingContinuationPolicy.bareMethodChange(in: text)
             let additionalMethods = methodChange.isEmpty ? ReadingContinuationPolicy.requestedAdditionalMethods(in: text) : methodChange
@@ -1447,27 +1542,10 @@ struct CastingLocationDraft: Equatable, Sendable {
                 case "clarify":
                     clarifyReadingExecution(plan.action == "clarify" ? plan.note : nil)
                 case "collect":
-                    let grounded = mayPersistProfileFacts ? ProfileDirectory.groundedUpdates(plan.profileUpdates ?? [], in: text,
-                                                                      profiles: profiles, contextIDs: contextIDs) : []
-                    let extracted = applyProfileUpdates(grounded)
-                    let changed = Set(collected.appliedIDs + extracted.appliedIDs)
-                    let names = profiles.filter { changed.contains($0.id) }.map(\.resolvedName).sorted()
-                    let issues = collected.issues + extracted.issues
-                    let note = !issues.isEmpty ? issues.map(\.message).joined(separator: "\n")
-                        : names.isEmpty
-                            ? L10n.text("请写下需要留存或更正的人员和资料。", "Tell me whose details to save or correct.")
-                            : L10n.text("已分别记下\(names.joined(separator: "、"))的资料。", "Saved the details for \(names.joined(separator: ", ")).")
-                    messages.append(ChatMessage(role: .assistant, content: note))
-                    activityMessageID = messages.last?.id
-                    showIntake = false
-                    progress(names.isEmpty ? L10n.text("等待明确人员资料", "Waiting for profile details") : L10n.text("资料已分别留存", "Profiles saved"), state: names.isEmpty ? .waiting : .completed)
-                    finishOperation()
+                    explainManualProfileEntry()
                 case "supplement":
                     guard let base else { clarifyReadingExecution(nil); return }
-                    let grounded = mayPersistProfileFacts ? ProfileDirectory.groundedUpdates(plan.profileUpdates ?? [], in: text,
-                                                                      profiles: profiles, contextIDs: contextIDs) : []
-                    _ = applyProfileUpdates(grounded)
-                    resolveParticipants(in: &plan, question: text, allowPersistentCreation: mayPersistProfileFacts)
+                    resolveParticipants(in: &plan, question: text)
                     plan.action = "supplement"
                     if !prepareSupplement(plan, base: base, question: effectiveQuestion ?? text) {
                         await answerFollowUp(text, history: history, operation: id, run: base,
@@ -1495,9 +1573,7 @@ struct CastingLocationDraft: Equatable, Sendable {
                         plan.subject = source.input.subject
                         plan.participantIDs = source.input.readingParticipants.map(\.id)
                         plan.participantNames = source.input.readingParticipants.map(\.participantLabel)
-                        plan.draftParticipants = source.input.readingParticipants.map { original in
-                            self.profiles.first(where: { $0.id == original.id }) ?? original
-                        }
+                        plan.draftParticipants = participantsForRecast(from: source)
                         plan.relationship = plan.relationship ?? source.input.relationship
                     } else { plan.draftParticipants = nil }
                     // A short redraw command refers to the selected turn's
@@ -1514,8 +1590,9 @@ struct CastingLocationDraft: Equatable, Sendable {
                     plan.reviewedParticipants = nil; plan.omittedMethods = nil; plan.preparationNotes = nil
                     plan.tarotClarification = nil
                     let freshQuestion = plan.question
-                    resolveParticipants(in: &plan, question: freshQuestion, allowPersistentCreation: mayPersistProfileFacts)
+                    resolveParticipants(in: &plan, question: freshQuestion)
                     enforceRequestedMethods(&plan, text: text)
+                    prefillTemporaryPeople(in: &plan, from: text)
                     // A changed pending question is a new logical AI task, not
                     // permission to reuse the old task's bound final stage.
                     let replacedTask = previousPlan?.quotaTaskID.flatMap { $0 == self.quotaTaskID ? $0 : nil }
@@ -1540,6 +1617,9 @@ struct CastingLocationDraft: Equatable, Sendable {
                 fresh.castingProfile = nil; fresh.draftNumbers = nil; fresh.interactions = nil
                 fresh.reviewedParticipants = nil; fresh.omittedMethods = nil; fresh.preparationNotes = nil
                 fresh.tarotClarification = nil
+                if previousPlan == nil, let original = base ?? currentRun {
+                    fresh.draftParticipants = participantsForRecast(from: original)
+                }
                 enforceRequestedMethods(&fresh, text: text, keepsPendingScope: keepsPendingScope)
                 captureCastingPreferences(in: &fresh)
                 prepareConversation(fresh)
@@ -1560,12 +1640,9 @@ struct CastingLocationDraft: Equatable, Sendable {
             // A verified continuation can answer directly even if the planner
             // proposed a fresh form. Profile corrections and method requests still
             // go through the existing calculation and reuse checks below.
-            var grounded = mayPersistProfileFacts && answer.clarification == nil ? ProfileDirectory.groundedUpdates(plan.profileUpdates ?? [], in: text, profiles: profiles,
-                                                                                           contextIDs: contextIDs) : []
-            if EnglishConversation.isLunarDate(text) { for index in grounded.indices { grounded[index].birthDate = nil } }
             let isContextualReply = previousPlan == nil && plan.understanding?.relation == .continuation
                 && effectiveQuestion != nil && !requestsFreshReading && additionalMethods.isEmpty
-                && explicitUpdates.isEmpty && grounded.isEmpty
+                && !mentionsProfileFacts
                 && (base.map { self.calculationInputsAreCurrent(for: $0) } ?? true)
                 && (plan.action == "reply" || plan.action == "intake")
             if isContextualReply {
@@ -1576,28 +1653,20 @@ struct CastingLocationDraft: Equatable, Sendable {
             }
             let contextualPlan = plan.understanding != nil && previousPlan == nil
             if AIPlanRouting.shouldOpenFormForProfileRequest(action: plan.action, note: plan.note, question: text, hasPendingQuestion: previousPlan != nil) {
-                let updates = plan.profileUpdates
-                plan = AIPlanRouting.isConcreteReadingQuestion(text) ? localPeoplePlan(question: text, collectedIDs: collected.appliedIDs) : previousPlan ?? plan
-                plan.action = "intake"; plan.profileUpdates = updates
+                plan = AIPlanRouting.isConcreteReadingQuestion(text) ? localPeoplePlan(question: text) : previousPlan ?? plan
+                plan.action = "intake"
             }
-            let extracted = applyProfileUpdates(grounded)
-            let changedIDs = Array(Set(collected.appliedIDs + extracted.appliedIDs))
             if contextualPlan, plan.understanding?.relation == .changedConditions {
-                let updatedParticipants = base?.input.readingParticipants.contains { changedIDs.contains($0.id) } == true
-                if !updatedParticipants {
-                    // A change to the underlying situation cannot be treated as
-                    // the same cast simply because plugin inputs look identical.
-                    if plan.action == "supplement" { plan.action = "intake" }
-                    base = nil
-                    plan.baseRunID = nil
-                    plan.followUpQuestion = nil
-                }
+                if plan.action == "supplement" { plan.action = "intake" }
+                base = nil
+                plan.baseRunID = nil
+                plan.followUpQuestion = nil
             }
             let requestsReading = changesPendingPeople || !additionalMethods.isEmpty
                 || (scope == .explicit && !methodsMentioned(in: text, positiveRequestsOnly: true).isEmpty)
             if !contextualPlan, !keepsPendingScope, plan.action != "collect", plan.action != "clarify",
                plan.action != "reply" || requestsReading {
-                let local = localPeoplePlan(question: text, collectedIDs: changedIDs)
+                let local = localPeoplePlan(question: text)
                 if plan.action == "reply" || plan.action == "supplement" { plan = local }
                 plan.action = "intake"; plan.question = text
                 plan.baseRunID = nil; plan.followUpQuestion = nil; plan.resumesPendingQuestion = false
@@ -1606,7 +1675,7 @@ struct CastingLocationDraft: Equatable, Sendable {
                     plan.participantNames = plan.participantNames?.filter { text.contains($0) }
                 }
             }
-            resolveParticipants(in: &plan, question: text, allowPersistentCreation: mayPersistProfileFacts)
+            resolveParticipants(in: &plan, question: text)
             if base != nil, !additionalMethods.isEmpty,
                extendsExistingReading || sameQuestionReference || plan.understanding?.relation == .continuation,
                plan.action != "clarify", plan.action != "collect" {
@@ -1680,14 +1749,8 @@ struct CastingLocationDraft: Equatable, Sendable {
                 return
             }
             if keepsPendingScope, var previous = previousPlan, plan.understanding?.relation != .ambiguous,
-               plan.resumesPendingQuestion == true || (!asksNewQuestion && (!changedIDs.isEmpty || !answer.updates.isEmpty || answer.clarification != nil || answer.declinedName || !(previous.requestedFields ?? []).isEmpty || ConversationalIntake.isUnknown(text) || ConversationalIntake.isConfirmation(text))) {
-                if previous.requestedFields?.contains(.name) == true, !changedIDs.isEmpty {
-                    var ids = previous.participantIDs ?? []
-                    for id in changedIDs where !ids.contains(id) { ids.append(id) }
-                    previous.participantIDs = ids
-                    previous.participantNames = ids.compactMap { id in self.profiles.first(where: { $0.id == id })?.resolvedName }
-                    if previous.subject == "本人", ids.count == 1, selfProfileID == nil { selfProfileID = ids[0] }
-                } else if plan.resumesPendingQuestion == true, let ids = plan.participantIDs, !ids.isEmpty {
+               plan.resumesPendingQuestion == true || (!asksNewQuestion && (mentionsProfileFacts || !answer.updates.isEmpty || answer.clarification != nil || answer.declinedName || !(previous.requestedFields ?? []).isEmpty || ConversationalIntake.isUnknown(text) || ConversationalIntake.isConfirmation(text))) {
+                if plan.resumesPendingQuestion == true, let ids = plan.participantIDs, !ids.isEmpty {
                     previous.participantIDs = ids; previous.participantNames = plan.participantNames
                 }
                 if answer.declinedName { previous.collectionDeclined = true }
@@ -1696,26 +1759,8 @@ struct CastingLocationDraft: Equatable, Sendable {
                 return
             }
             if plan.action == "collect" {
-                if plan.resumesPendingQuestion == true, var pending = pendingPlan {
-                    pending.participantIDs = plan.participantIDs ?? pending.participantIDs
-                    pending.participantNames = pending.participantIDs?.compactMap { id in self.profiles.first(where: { $0.id == id })?.resolvedName }
-                    pending.relationship = plan.relationship ?? pending.relationship
-                    pendingPlan = pending
-                }
-                let names = changedIDs.compactMap { id in self.profiles.first(where: { $0.id == id })?.resolvedName }.sorted()
-                let issues = collected.issues + extracted.issues
-                let note: String
-                if !issues.isEmpty { note = issues.map(\.message).joined(separator: "\n") }
-                else if names.isEmpty { note = L10n.text("请写下需要留存或补充的姓名和已知资料；未明确的内容先保留原样。", "Enter the name and details you’d like to save or update. You can leave the rest as it is.") }
-                else { note = L10n.text("已分别记下\(names.joined(separator: "、"))的资料。问卦时会自动带入，不需要重复填写已知信息。", "I saved the details for \(names.joined(separator: ", ")). They’ll be available in future readings.") }
-                messages.append(ChatMessage(role: .assistant, content: note))
-                activityMessageID = messages.last?.id
-                progress(names.isEmpty ? L10n.text("等待明确人员资料", "Waiting for profile details") : L10n.text("资料已按姓名分别留存", "Profiles saved by name"), state: names.isEmpty ? .waiting : .completed)
-                showIntake = false; finishOperation(); return
-            }
-            if !changedIDs.isEmpty {
-                let names = changedIDs.compactMap { id in self.profiles.first(where: { $0.id == id })?.resolvedName }.sorted()
-                messages.append(ChatMessage(role: .assistant, content: L10n.text("已按姓名更新留存资料：\(names.joined(separator: "、"))。", "Updated profiles for \(names.joined(separator: ", "))."), kind: .notice))
+                explainManualProfileEntry()
+                return
             }
             if plan.action == "reply" {
                 if let parent = pendingPlan?.quotaTaskID, parent == quotaTaskID { quotaTaskID = UUID(); persist() }
@@ -1735,6 +1780,7 @@ struct CastingLocationDraft: Equatable, Sendable {
             let requirements = registry.descriptors.filter { plan.methods.contains($0.method) }.flatMap(\.requiredFields)
             plan.requiredFields = Array(Set(plan.requiredFields + requirements))
             captureCastingPreferences(in: &plan)
+            prefillTemporaryPeople(in: &plan, from: text)
             prepareConversation(plan)
         }
     }
@@ -1845,12 +1891,9 @@ struct CastingLocationDraft: Equatable, Sendable {
         #endif
     }
 
-    @discardableResult func confirmIntake(profile submittedProfile: OracleProfile, numbers: [Int], save: Bool,
-                                        castingProfile: OracleProfile? = nil) -> Bool {
-        confirmGroupIntake(profiles: [submittedProfile], numbers: numbers, save: save, castingProfile: castingProfile)
-    }
-    @discardableResult func confirmGroupIntake(profiles submittedProfiles: [OracleProfile], numbers submittedNumbers: [Int], save: Bool,
-                                               castingProfile: OracleProfile? = nil, sessionID: UUID? = nil) -> Bool {
+    @discardableResult func confirmGroupIntake(profiles submittedProfiles: [OracleProfile], numbers submittedNumbers: [Int],
+                                               castingProfile: OracleProfile? = nil, editedFields: [UUID: Set<OracleField>] = [:],
+                                               sessionID: UUID? = nil) -> Bool {
         guard var plan = pendingPlan, !isBusy,
               sessionID == nil || sessionID == intakeSessionID else { return false }
         if discardMissingSupplement() { persist(); return false }
@@ -1860,11 +1903,49 @@ struct CastingLocationDraft: Equatable, Sendable {
         initializeCastingProfile(in: &plan)
         if let castingProfile { plan.castingProfile = CastingLocationDraft(profile: castingProfile).profile }
         var seen = Set<UUID>()
-        let participants = submittedProfiles.filter { seen.insert($0.id).inserted }
+        var participants = submittedProfiles.filter { seen.insert($0.id).inserted }
             .map(ProfileDirectory.assigningDefaultBirthTimeZone(to:))
         let numbers = castingNumbers(for: plan, supplied: submittedNumbers)
         plan.draftParticipants = participants; plan.draftNumbers = numbers
+        plan.draftEditedFields = editedFields
         pendingPlan = plan
+        let standalone = plan.profileCorrection?.isStandalone == true
+        if standalone {
+            let selected = participants.first
+            let allowed = plan.profileCorrection?.candidateIDs
+            guard participants.count == 1, let selected, profiles.contains(where: { $0.id == selected.id }),
+                  allowed?.contains(selected.id) ?? true else {
+                intakeError = L10n.text("请先选中要更正的已有档案。", "Choose the saved profile you want to edit.")
+                return false
+            }
+        }
+        var directory = profiles
+        for index in participants.indices {
+            let person = participants[index]
+            guard let fields = editedFields[person.id], !fields.isEmpty,
+                  let savedIndex = directory.firstIndex(where: { $0.id == person.id }) else { continue }
+            guard let revised = ProfileDirectory.applyingManualEdits(fields, from: person, to: directory[savedIndex]) else {
+                intakeError = L10n.text("修改后的出生资料无法保存，请核对日期、时间和时区。", "Check the date, time and time zone before saving these birth details.")
+                return false
+            }
+            directory[savedIndex] = revised
+            participants[index] = revised
+        }
+        if standalone {
+            let changed = directory != profiles
+            guard !changed || writeProfileDirectory(directory) else { intakeError = notice; return false }
+            let message = changed
+                ? L10n.text("已确认并保存档案资料。", "Saved the confirmed profile details.")
+                : L10n.text("已核对档案资料。", "Reviewed the profile details.")
+            if let id = pendingIntakeMessageID, let index = messages.firstIndex(where: { $0.id == id }) {
+                messages[index].kind = .notice
+                messages[index].content = message
+            }
+            pendingPlan = nil; showIntake = false; intakeError = nil; notice = nil
+            progress(message, state: .completed)
+            finishOperation()
+            return true
+        }
         var issues: [String] = []
         if plan.subject == "多人", plan.methods.contains(where: \.usesPersonalProfile), participants.count < 2 {
             issues.append(L10n.text("请至少添加两位参与人。每位的资料都可以留空。", "Add at least two participants. You can leave their details blank."))
@@ -1892,6 +1973,7 @@ struct CastingLocationDraft: Equatable, Sendable {
             intakeError = issues.filter { seenIssues.insert($0).inserted }.joined(separator: "\n")
             notice = intakeError; showIntake = true; phase = .awaitingIntake; persist(); return false
         }
+        guard directory == profiles || writeProfileDirectory(directory) else { intakeError = notice; return false }
         intakeError = nil; notice = nil
         plan.participantIDs = participants.map(\.id)
         plan.participantNames = participants.map(\.participantLabel)
@@ -1902,8 +1984,8 @@ struct CastingLocationDraft: Equatable, Sendable {
         plan.omittedMethods = report.omissions
         plan.preparationNotes = preparationNotes(report)
         plan.reviewedParticipants = participants; plan.preparationStage = .confirming
-        plan.draftParticipants = nil; plan.draftNumbers = nil
-        if save { for person in participants { saveProfile(person) } }
+        plan.draftParticipants = nil; plan.draftNumbers = nil; plan.draftEditedFields = nil
+        plan.profileCorrection = nil
         messages.append(ChatMessage(role: .user, content: L10n.text("已核对问事资料，开始推演。", "I’ve reviewed the details. Start the reading.")))
         let legacyStyle = ["蓍草", "大衍"].contains { plan.question.contains($0) }
             || EnglishConversation.matches(plan.question, #"\byarrow(?: stalks?)?\b"#) ? "yarrow" : "coins"
@@ -2368,7 +2450,7 @@ struct CastingLocationDraft: Equatable, Sendable {
     private func seedReadingLibraryPreview() {
         guard !vault.contains("reading-library-fixture") else { return }
         let people = ProfileDirectory.applying([ProfileUpdate(name: "陈平", birthDate: "1992-06-15", birthTime: "08:30", birthTimeZoneID: "Asia/Shanghai")], to: []).profiles
-        profiles = people
+        guard writeProfileDirectory(people) else { return }
         runs = (1...10).map { index in
             let question = "推演删除测试\(index)"
             let input = OracleInput(question: question, profile: people[0], castingDate: Date(timeIntervalSince1970: 1_700_000_000 + Double(index) * 60), participants: people)

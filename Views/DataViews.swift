@@ -1,10 +1,16 @@
 import SwiftUI
 
 struct DataLibraryView: View {
+    private struct EditingProfile: Identifiable {
+        let profile: OracleProfile
+        let creating: Bool
+        var id: UUID { profile.id }
+    }
+
     @EnvironmentObject private var store: OracleStore
     @EnvironmentObject private var account: AccountStore
     @Binding var settingsPresented: Bool
-    @State private var editingProfile: OracleProfile?
+    @State private var editingProfile: EditingProfile?
     @State private var accountDetailsPresented = false
 
     var body: some View {
@@ -64,12 +70,18 @@ struct DataLibraryView: View {
                                 .listRowSeparator(.hidden)
                         }
                         ForEach(store.profiles) { profile in
-                            Button { editingProfile = profile } label: {
+                            let sameName = store.profiles.contains { $0.id != profile.id && $0.participantLabel == profile.participantLabel }
+                            Button { editingProfile = EditingProfile(profile: profile, creating: false) } label: {
                                 HStack(spacing: 12) {
                                     Image(systemName: "person.text.rectangle").font(.system(size: 21, weight: .light)).frame(width: 30).foregroundStyle(InkTheme.cinnabar)
                                     VStack(alignment: .leading, spacing: 5) {
-                                        Text(profileTitle(profile)).font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.ink)
-                                        Text(profileSummary(profile)).font(.system(size: 12)).foregroundStyle(InkTheme.secondary).lineLimit(2)
+                                        HStack(spacing: 8) {
+                                            Text(profile.participantLabel).font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.ink)
+                                            if store.selfProfileID == profile.id {
+                                                Text(L10n.text("本人", "You")).font(.system(size: 11)).foregroundStyle(InkTheme.sage)
+                                            }
+                                        }
+                                        Text(savedProfileSummary(profile, showCode: sameName)).font(.system(size: 12)).foregroundStyle(InkTheme.secondary).lineLimit(2)
                                     }
                                     Spacer(minLength: 0)
                                 }
@@ -93,7 +105,7 @@ struct DataLibraryView: View {
                         HStack {
                             SectionEyebrow(text: L10n.text("留存资料", "Saved profiles"))
                             Spacer()
-                            Button { editingProfile = OracleProfile() } label: { Image(systemName: "plus").font(.system(size: 14)) }
+                            Button { editingProfile = EditingProfile(profile: OracleProfile(), creating: true) } label: { Image(systemName: "plus").font(.system(size: 14)) }
                                 .tint(InkTheme.cinnabar).accessibilityLabel(L10n.text("新增人员资料", "Add profile")).accessibilityIdentifier("addProfile")
                         }
                         .textCase(nil)
@@ -153,9 +165,9 @@ struct DataLibraryView: View {
                 await account.refreshOverview()
             }
             .refreshable { await account.refreshOverview() }
-            .sheet(isPresented: Binding(get: { editingProfile != nil }, set: { if !$0 { editingProfile = nil } })) {
-                if let profile = editingProfile {
-                    ProfileEditor(profile: profile) { updated in store.saveProfile(updated); editingProfile = nil }
+            .sheet(item: $editingProfile) { editor in
+                ProfileEditor(profile: editor.profile, creating: editor.creating) { updated in
+                    store.saveProfile(updated, creating: editor.creating)
                 }
             }
         }.tint(InkTheme.cinnabar)
@@ -419,11 +431,11 @@ private struct LocalNoticeView: View {
     }
 }
 
-private func profileTitle(_ profile: OracleProfile) -> String {
-    profile.participantLabel
-}
-private func profileSummary(_ profile: OracleProfile) -> String {
-    guard let date = profile.birthDate, !profile.unknownFields.contains(.birthDate) else { return L10n.text("出生资料待补充 · 可随时修改", "Birth details missing · Edit anytime") }
+func savedProfileSummary(_ profile: OracleProfile, showCode: Bool) -> String {
+    let code = showCode ? L10n.text(" · 档案 \(profile.anonymousCode)", " · Profile \(profile.anonymousCode)") : ""
+    guard let date = profile.birthDate, !profile.unknownFields.contains(.birthDate) else {
+        return L10n.text("出生资料待补充", "Birth details missing") + code
+    }
     let formatter = DateFormatter()
     formatter.locale = AppLanguage.current.locale
     formatter.timeZone = TimeZone(identifier: profile.birthTimeZoneID)
@@ -433,5 +445,5 @@ private func profileSummary(_ profile: OracleProfile) -> String {
         ? L10n.text("出生地待补充", "Birthplace missing")
         : ChinaDistrictCatalog.shared.displayName(for: profile.birthDistrictCode, canonical: profile.birthPlace)
     let unknown = !profile.birthTimeKnown ? L10n.text(" · 时辰未定", " · Birth time unknown") : ""
-    return "\(formatter.string(from: date)) · \(place)\(unknown)"
+    return "\(formatter.string(from: date)) · \(place)\(unknown)\(code)"
 }

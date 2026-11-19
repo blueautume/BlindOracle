@@ -66,7 +66,7 @@ final class MeihuaWorkflowTests: XCTestCase {
         XCTAssertFalse(OracleInteractionPolicy.requests(for: pending).contains { $0.kind == .numbers })
         XCTAssertTrue(ReadingPreparationPolicy.requiresCastingLocation(plan: pending, method: .meihua, numbers: []))
 
-        XCTAssertTrue(sut.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: site()))
+        XCTAssertTrue(sut.confirmGroupIntake(profiles: [], numbers: [], castingProfile: site()))
         try await waitUntilIdle(sut)
         let run = try XCTUnwrap(sut.runs.first)
         XCTAssertEqual(run.plan.meihuaCastingMode, .time)
@@ -86,7 +86,7 @@ final class MeihuaWorkflowTests: XCTestCase {
             let pending = try XCTUnwrap(sut.pendingPlan)
             XCTAssertEqual(pending.meihuaCastingMode, mode)
             defaults.set(MeihuaCastingMode.time.rawValue, forKey: "oracle.casting.meihua")
-            XCTAssertTrue(sut.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: site()))
+            XCTAssertTrue(sut.confirmGroupIntake(profiles: [], numbers: [], castingProfile: site()))
             let session = try XCTUnwrap(sut.pendingInteraction)
             let request = try XCTUnwrap(session.currentRequest)
             XCTAssertEqual(request.requiredNumberCount, numbers.count)
@@ -119,7 +119,7 @@ final class MeihuaWorkflowTests: XCTestCase {
 
         let restarted = OracleStore(vault: vault, bootstrapCredential: false, castingDefaults: defaults)
         XCTAssertEqual(restarted.pendingPlan?.meihuaCastingMode, .twoNumbers)
-        XCTAssertTrue(restarted.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: site()))
+        XCTAssertTrue(restarted.confirmGroupIntake(profiles: [], numbers: [], castingProfile: site()))
         XCTAssertEqual(restarted.pendingInteraction?.currentRequest?.requiredNumberCount, 2)
         restarted.cancelPendingReading()
     }
@@ -134,7 +134,7 @@ final class MeihuaWorkflowTests: XCTestCase {
             try await waitUntilIdle(sut)
             XCTAssertEqual(sut.pendingPlan?.liuyaoCastingMode, mode)
             defaults.set(LiuyaoCastingMode.coins.rawValue, forKey: "oracle.casting.liuyao")
-            XCTAssertTrue(sut.confirmGroupIntake(profiles: [], numbers: [], save: false))
+            XCTAssertTrue(sut.confirmGroupIntake(profiles: [], numbers: []))
             let session = try XCTUnwrap(sut.pendingInteraction)
             XCTAssertEqual(session.plan.liuyaoCastingMode, mode)
             XCTAssertEqual(session.currentRequest?.liuyaoCastingMode, mode)
@@ -148,7 +148,7 @@ final class MeihuaWorkflowTests: XCTestCase {
         let sut = OracleStore(vault: try vault(), bootstrapCredential: false, castingDefaults: defaults)
         sut.send("只用梅花看看这次出行如何安排")
         try await waitUntilIdle(sut)
-        XCTAssertTrue(sut.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: site()))
+        XCTAssertTrue(sut.confirmGroupIntake(profiles: [], numbers: [], castingProfile: site()))
         let session = try XCTUnwrap(sut.pendingInteraction)
         sut.completeInteraction(.init(requestID: "meihua", numbers: [17, 29]), sessionID: session.id)
         try await waitUntilIdle(sut)
@@ -196,7 +196,7 @@ final class MeihuaWorkflowTests: XCTestCase {
     @MainActor func testConfirmingDetailsStartsNumberSelectionAndOnlyCompleteNumbersStartCalculation() async throws {
         let store = try store(pending: plan())
         XCTAssertTrue(store.canConfirmIntake)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: []))
         let session = try XCTUnwrap(store.pendingInteraction)
         XCTAssertEqual(session.currentRequest?.kind, .numbers)
         XCTAssertTrue(session.input.numbers.isEmpty)
@@ -241,10 +241,10 @@ final class MeihuaWorkflowTests: XCTestCase {
         XCTAssertFalse(report.canProceed)
 
         let store = try store(pending: pending)
-        XCTAssertFalse(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertFalse(store.confirmGroupIntake(profiles: [], numbers: []))
         XCTAssertNil(store.pendingInteraction)
         XCTAssertTrue(store.runs.isEmpty)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: site()))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], castingProfile: site()))
         XCTAssertEqual(store.pendingInteraction?.currentRequest?.kind, .numbers)
         XCTAssertEqual(store.pendingInteraction?.input.profile.currentLongitude, site().currentLongitude)
         XCTAssertTrue(store.runs.isEmpty)
@@ -254,14 +254,14 @@ final class MeihuaWorkflowTests: XCTestCase {
     @MainActor func testIncompleteAndInvalidOldValuesMoveToTheInteractionForCorrection() throws {
         for values in [[12], [12, 23], [0, 23, 6], [12, 23, 1000]] {
             let store = try store(pending: plan())
-            XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: values, save: false), "\(values)")
+            XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: values), "\(values)")
             XCTAssertEqual(store.pendingInteraction?.currentRequest?.kind, .numbers, "\(values)")
             XCTAssertEqual(store.pendingInteraction?.input.numbers, values, "\(values)")
             XCTAssertTrue(store.runs.isEmpty, "\(values)")
             store.cancelPendingReading()
         }
         let legacy = try store(pending: plan(requestedNumbers: false))
-        XCTAssertTrue(legacy.confirmGroupIntake(profiles: [], numbers: [0, 23, 6], save: false))
+        XCTAssertTrue(legacy.confirmGroupIntake(profiles: [], numbers: [0, 23, 6]))
         XCTAssertEqual(legacy.pendingInteraction?.currentRequest?.kind, .numbers)
         XCTAssertTrue(legacy.runs.isEmpty)
         legacy.cancelPendingReading()
@@ -270,7 +270,7 @@ final class MeihuaWorkflowTests: XCTestCase {
     @MainActor func testPartiallyEditedNumberSlotsSurviveRestartWithoutChangingTheCastSnapshot() throws {
         let vault = try vault()
         let store = try store(pending: plan(), vault: vault)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: []))
         let original = try XCTUnwrap(store.pendingInteraction)
         let draft = OracleInteractionResponse(requestID: "meihua", numberTexts: ["8", "", "6"])
         store.saveInteractionProgress(draft, sessionID: original.id)
@@ -304,7 +304,7 @@ final class MeihuaWorkflowTests: XCTestCase {
             pending.action = "supplement"; pending.baseRunID = original.id; pending.followUpQuestion = "把原结论展开"
             pending.castingProfile = input.profile
             store.pendingPlan = pending
-            XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: numbers, save: false))
+            XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: numbers))
             XCTAssertNil(store.pendingInteraction, "\(numbers)")
             try await waitUntilIdle(store)
             let supplemented = try XCTUnwrap(store.runs.last)

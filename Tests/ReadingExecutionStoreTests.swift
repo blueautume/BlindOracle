@@ -50,7 +50,7 @@ import XCTest
         let before = Date()
         fixture.store.send(raw)
         try await waitUntilIdle(fixture.store)
-        XCTAssertTrue(fixture.store.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: castingSite()))
+        XCTAssertTrue(fixture.store.confirmGroupIntake(profiles: [], numbers: [], castingProfile: castingSite()))
         try await waitUntilIdle(fixture.store)
         let fresh = try XCTUnwrap(fixture.store.runs.last)
         XCTAssertEqual(fixture.store.runs.count, 2)
@@ -73,7 +73,7 @@ import XCTest
             try await waitUntilIdle(fixture.store)
             let pending = try XCTUnwrap(fixture.store.pendingPlan)
             XCTAssertNil(pending.baseRunID)
-            XCTAssertTrue(fixture.store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+            XCTAssertTrue(fixture.store.confirmGroupIntake(profiles: [], numbers: []))
             let session = try XCTUnwrap(fixture.store.pendingInteraction)
             XCTAssertEqual(session.currentRequest?.kind, method == .tarot ? .tarot : .coins)
             XCTAssertNotEqual(session.input.seed, fixture.original.input.seed)
@@ -168,7 +168,7 @@ import XCTest
         let raw = "换成林舟，计算他的课程安排"
         let fixture = try makeFixture(raw: raw, expanded: "林舟今天的课程安排如何？", relation: .changedParticipants,
                                       operation: "calculate", coverage: "changed", person: other)
-        fixture.store.saveProfile(other)
+        fixture.store.saveProfile(other, creating: true)
         fixture.store.send(raw)
         try await waitUntilIdle(fixture.store)
         let pending = try XCTUnwrap(fixture.store.pendingPlan)
@@ -263,8 +263,9 @@ import XCTest
             let updates: [[String: Any]] = [["id": chen.id.uuidString, "name": "陈平", "birthDate": "1990-01-02"]]
             let fixture = try makeFixture(raw: raw, expanded: raw, relation: .newQuestion, operation: operation,
                 coverage: "changed", methods: [.xiaoliuren], plannedProfileUpdates: updates, failPlanning: offline)
-            fixture.store.saveProfile(own); fixture.store.saveProfile(chen)
-            fixture.store.selfProfileID = own.id; fixture.store.checkpoint()
+            fixture.store.saveProfile(own, creating: true)
+            fixture.store.saveProfile(chen, creating: true)
+            fixture.store.setSelfProfile(id: own.id)
             let expected = fixture.store.profiles
             // Preserve separate exact baselines: in-memory Date precision is
             // higher than LocalVault's ISO-8601 representation. Every field in
@@ -295,22 +296,34 @@ import XCTest
         XCTAssertTrue(fixture.store.showIntake)
     }
 
-    func testRealProfileCorrectionStillPersistsWithoutChangingSelfBinding() async throws {
+    func testConfirmedManualCorrectionPersistsWithoutChangingSelfBindingOrStartingAReading() async throws {
         var own = OracleProfile(); own.name = "原本人"
         var chen = OracleProfile(); chen.name = "陈平"
         chen.birthDate = Date(timeIntervalSince1970: 788_918_400); chen.birthDateText = "1995-01-01"
-        let raw = "陈平，出生日期更正为1990-01-02，是真实资料，请保存。"
+        let raw = "陈平的出生日期更正为1990-01-02，请保存。"
         let fixture = try makeFixture(raw: raw, expanded: raw, relation: .newQuestion, operation: "collect",
             coverage: "existing", plannedProfileUpdates: [["id": chen.id.uuidString, "name": "陈平", "birthDate": "1990-01-02"]])
-        fixture.store.saveProfile(own); fixture.store.saveProfile(chen)
-        fixture.store.selfProfileID = own.id; fixture.store.checkpoint()
+        fixture.store.saveProfile(own, creating: true)
+        fixture.store.saveProfile(chen, creating: true)
+        fixture.store.setSelfProfile(id: own.id)
         XCTAssertTrue(ProfileFactPolicy.allowsPersistence(in: raw))
         fixture.store.send(raw)
         try await waitUntilIdle(fixture.store)
-        XCTAssertEqual(fixture.store.profiles.first { $0.id == chen.id }?.birthDateText, "1990-01-02")
-        XCTAssertEqual(fixture.vault.load([OracleProfile].self, from: "profiles", fallback: []).first { $0.id == chen.id }?.birthDateText, "1990-01-02")
+        let prefilled = try XCTUnwrap(fixture.store.intakeParticipants.first)
+        XCTAssertEqual(prefilled.id, chen.id)
+        XCTAssertEqual(prefilled.birthDateText, "1995-01-01")
+        XCTAssertEqual(fixture.store.profiles.first { $0.id == chen.id }?.birthDateText, "1995-01-01")
+
+        var draft = ProfileFormDraft(profile: prefilled)
+        draft.setBirthDate(try XCTUnwrap(ISO8601DateFormatter().date(from: "1992-06-15T12:00:00+08:00")))
+        XCTAssertTrue(fixture.store.confirmGroupIntake(profiles: [try draft.validatedProfile()], numbers: [],
+                                                       editedFields: [chen.id: [.birthDate]], sessionID: fixture.store.intakeSessionID))
+        XCTAssertEqual(fixture.store.profiles.first { $0.id == chen.id }?.birthDateText, "1992-06-15")
+        XCTAssertEqual(fixture.vault.load([OracleProfile].self, from: "profiles", fallback: []).first { $0.id == chen.id }?.birthDateText, "1992-06-15")
         XCTAssertEqual(fixture.store.selfProfileID, own.id)
         XCTAssertNil(fixture.store.pendingPlan)
+        XCTAssertEqual(fixture.store.runs.map(\.id), [fixture.original.id])
+        XCTAssertTrue(ExecutionStoreURLProtocol.accepts(for: fixture.key).isEmpty)
     }
 
     func testAffirmativeCalculationClauseSurvivesGreetingConsultationAndPendingCancellation() async throws {
@@ -346,7 +359,7 @@ import XCTest
             current.birthDateText = "1996-01-01"
             let fixture = try makeFixture(raw: "重新起卦", expanded: "今天的课程安排如何？", method: .tarot,
                 operation: "recast", coverage: "existing", originalParticipants: [archived])
-            if hasCurrentProfile { fixture.store.saveProfile(current) }
+            if hasCurrentProfile { fixture.store.saveProfile(current, creating: true) }
             fixture.store.send("重新起卦")
             try await waitUntilIdle(fixture.store)
             let expected = hasCurrentProfile ? current : archived
@@ -354,9 +367,10 @@ import XCTest
             XCTAssertEqual(fixture.store.intakeParticipants.map(\.id), [archived.id], branch)
             XCTAssertEqual(fixture.store.intakeParticipants.first?.birthDate, expected.birthDate, branch)
             XCTAssertEqual(fixture.store.intakeParticipants.first?.birthDateText, expected.birthDateText, branch)
-            XCTAssertTrue(fixture.store.confirmGroupIntake(profiles: fixture.store.intakeParticipants, numbers: [], save: true))
+            XCTAssertTrue(fixture.store.confirmGroupIntake(profiles: fixture.store.intakeParticipants, numbers: []))
             XCTAssertEqual(fixture.store.pendingInteraction?.input.readingParticipants.first?.birthDate, expected.birthDate)
-            XCTAssertEqual(fixture.store.profiles.first { $0.id == archived.id }?.birthDateText, expected.birthDateText)
+            XCTAssertEqual(fixture.store.profiles.first { $0.id == archived.id }?.birthDateText,
+                           hasCurrentProfile ? current.birthDateText : nil)
             XCTAssertEqual(fixture.store.runs.first?.input.readingParticipants.first?.birthDate, archived.birthDate)
             XCTAssertEqual(fixture.store.runs.first?.input.readingParticipants.first?.birthDateText, archived.birthDateText)
             XCTAssertEqual(fixture.store.runs.map(\.id), [fixture.original.id])

@@ -125,7 +125,7 @@ final class ExperienceRegressionTests: XCTestCase {
             XCTAssertEqual(pending.methods, [.meihua])
             XCTAssertTrue(pending.question.contains("合作"))
             XCTAssertFalse(pending.question.contains("同一件事"))
-            XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], save: false, castingProfile: castingSite()))
+            XCTAssertTrue(store.confirmGroupIntake(profiles: store.intakeParticipants, numbers: [], castingProfile: castingSite()))
             try await wait(store)
         }
         XCTAssertNil(store.pendingInteraction)
@@ -148,6 +148,12 @@ final class ExperienceRegressionTests: XCTestCase {
 
         store.send("我不知道几点出生，之前那个八点半不准。")
         try await wait(store)
+        XCTAssertTrue(store.showIntake)
+        let existing = try XCTUnwrap(store.intakeParticipants.first)
+        XCTAssertEqual(existing.birthTimeText, "08:30")
+        let edited = ProfileDirectory.applying([ProfileUpdate(id: existing.id, birthTimeKnown: false, unknownFields: [.birthTime])],
+                                                to: [existing]).profiles
+        XCTAssertTrue(store.confirmGroupIntake(profiles: edited, numbers: [], editedFields: [existing.id: [.birthTime]]))
 
         let updated = try XCTUnwrap(store.profiles.first { $0.id == person.id })
         XCTAssertFalse(updated.birthTimeKnown)
@@ -324,7 +330,7 @@ final class ExperienceRegressionTests: XCTestCase {
         XCTAssertEqual(store.pendingPlan?.question, question)
         XCTAssertEqual(store.pendingPlan?.methods, [.tarot])
         XCTAssertNotEqual(store.intakeSessionID, previousReview)
-        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: [], save: false))
+        XCTAssertTrue(store.confirmGroupIntake(profiles: [], numbers: []))
         let session = try XCTUnwrap(store.pendingInteraction)
         XCTAssertEqual(session.currentRequest?.kind, .tarot)
         XCTAssertNil(session.input.tarotDraws)

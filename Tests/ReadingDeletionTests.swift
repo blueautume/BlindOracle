@@ -29,7 +29,7 @@ final class ReadingDeletionTests: XCTestCase {
         casting.currentPlace = "北京市朝阳区"
         casting.currentLatitude = 39.9; casting.currentLongitude = 116.4
         casting.currentTimeZoneID = "Asia/Shanghai"
-        store.confirmGroupIntake(profiles: [], numbers: [], save: false, castingProfile: casting)
+        store.confirmGroupIntake(profiles: [], numbers: [], castingProfile: casting)
         XCTAssertEqual(store.phase, .calculating)
         XCTAssertNil(store.pendingInteraction)
         return try XCTUnwrap(store.runs.last?.id)
