@@ -1,6 +1,24 @@
 import XCTest
 
 final class ReadingContinuationUITests: XCTestCase {
+    @MainActor func testUnspecifiedWorkQuestionOpensIntakeWithTwoRelevantMethods() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-reset-language",
+                               "-oracle.appLanguage", "zh-Hans"]
+        app.launch()
+        XCTAssertTrue(app.textFields["questionInput"].waitForExistence(timeout: 15))
+        send("最近的工作，该进还是该守？", in: app)
+
+        let form = app.scrollViews["intakeFormScroll"]
+        XCTAssertTrue(form.waitForExistence(timeout: 12))
+        let methods = form.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "本次方法")).firstMatch
+        XCTAssertEqual(methods.label, "本次方法：六爻、塔罗牌")
+        XCTAssertFalse(app.staticTexts["你希望用哪种方法推演这次问题？"].exists)
+        XCTAssertFalse(app.buttons["castCoins"].exists)
+        app.buttons["confirmIntake"].tap()
+        XCTAssertTrue(app.buttons["castCoins"].waitForExistence(timeout: 8))
+    }
+
     @MainActor func testProfileCorrectionOpensWithoutAIConsentAndSavesManualDate() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-reading-library",

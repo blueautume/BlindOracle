@@ -173,7 +173,7 @@ final class AIServiceTests: XCTestCase {
         XCTAssertEqual(AIPlanRouting.normalizedAction("execute_arbitrary_code"), "intake")
         XCTAssertTrue(AIPlanRouting.selectedMethods(action: "reply", requested: ["bazi"], available: available).isEmpty)
         XCTAssertTrue(AIPlanRouting.selectedMethods(action: "clarify", requested: [], available: available).isEmpty)
-        XCTAssertEqual(AIPlanRouting.selectedMethods(action: "intake", requested: ["not_a_plugin"], available: [.meihua]), [.meihua])
+        XCTAssertTrue(AIPlanRouting.selectedMethods(action: "intake", requested: ["not_a_plugin"], available: [.meihua]).isEmpty)
         XCTAssertEqual(AIPlanRouting.selectedMethods(action: "intake", requested: ["bazi", "bazi", "unknown"], available: available), [.bazi])
         for action in ["reply", "clarify"] {
             XCTAssertTrue(AIPlanRouting.selectedMethods(action: action, requested: ["tarot", "meihua", "bazi"], available: available).isEmpty)

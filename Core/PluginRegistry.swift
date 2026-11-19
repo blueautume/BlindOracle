@@ -85,20 +85,19 @@ struct PluginRegistry: Sendable {
         }
         return results
     }
-    func localPlan(question: String, profile: OracleProfile) -> OraclePlan {
-        let englishMethods = EnglishConversation.requestedMethods(in: question, additive: false)
+    func localPlan(question: String, profile _: OracleProfile) -> OraclePlan {
         let personal = EnglishConversation.matches(question, #"\b(?:my|myself|my own|career|job|love life|marriage)\b"#) || ["我", "自己", "本人", "运势", "财运", "性格", "事业", "感情", "婚", "工作", "名字", "命"].contains { question.contains($0) }
         let other = ReadingContinuationPolicy.participantIntent(in: question, profiles: []).refersToOther || ["朋友", "家人", "孩子", "他", "她", "对象", "父亲", "母亲"].contains { question.contains($0) }
         let naming = EnglishConversation.matches(question, #"\b(?:name analysis|rename|choose a name|five[ -]grid)\b"#) || ["姓名", "名字", "改名", "取名"].contains { question.contains($0) }
-        let tarotRequested = EnglishConversation.methods(in: question).contains(.tarot) || question.contains("塔罗") || question.contains("塔羅")
-        var methods: [OracleMethod] = tarotRequested ? [.tarot] : [.liuyao, .meihua, .qimen, .xiaoliuren]
-        if !tarotRequested, personal || other { methods += [.bazi, .ziwei, .chenggu, .astrology] }
-        if !tarotRequested, naming || (!profile.familyName.isEmpty && !profile.givenName.isEmpty && personal) { methods.append(.xingming) }
-        if !englishMethods.isEmpty { methods = englishMethods }
+        let available = Set(descriptors.map(\.method)).subtracting(ReadingContinuationPolicy.excludedCalculationMethods(in: question))
+        let requested = ReadingContinuationPolicy.requestedCalculationMethods(in: question)
+        let methods = requested.isEmpty
+            ? AutomaticReadingMethods.select(question: question, available: available)
+            : requested.filter { available.contains($0) }
         let fields = Array(Set(methods.flatMap { plugin($0)?.descriptor.requiredFields ?? [] })).sorted { $0.rawValue < $1.rawValue }
         var plan = OraclePlan(intent: naming ? L10n.text("姓名与个人问题", "Name and personal question") : personal || other ? L10n.text("个人问题", "Personal question") : L10n.text("具体问事", "Specific question"), subject: other ? "他人" : "本人", methods: methods, requiredFields: fields,
                           note: L10n.text("已按这次问题备好问事笺。能确定的写下，不确定的也可以注明。", "The reading form is ready. Enter the details you know and mark anything you’re unsure about."), question: question)
-        if !tarotRequested, methods.contains(.meihua), ["报数", "数字", "留数"].contains(where: question.contains)
+        if methods.contains(.meihua), ["报数", "数字", "留数"].contains(where: question.contains)
             || EnglishConversation.matches(question, #"\b(?:three numbers|use numbers|provide numbers)\b"#) {
             plan.interactions = [.init(method: .meihua, kind: .numbers)]
         }

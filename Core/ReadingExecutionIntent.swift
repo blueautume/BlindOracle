@@ -55,9 +55,8 @@ enum ReadingExecutionPolicy {
             // A positive instruction about a cited reading outranks a mistaken
             // answer label. A standalone ordinary question keeps its answer
             // route; merely mentioning a method or a date is not a command.
-            if understanding?.relation != .newQuestion,
-               !isNonExecutingRequest(rawQuestion) {
-                if isExplicitCalculationCommand(rawQuestion) { return "intake" }
+            if !isNonExecutingRequest(rawQuestion) {
+                if understanding?.relation != .newQuestion, isExplicitCalculationCommand(rawQuestion) { return "intake" }
                 if !ReadingContinuationPolicy.requestedCalculationMethods(in: rawQuestion).isEmpty {
                     return execution.coverage == .changed || !hasRelatedRun ? "intake" : "supplement"
                 }
@@ -97,11 +96,19 @@ enum ReadingExecutionPolicy {
         let consult = #"^\s*(?:那|请|能否|我想知道|想知道|我想问|我问的是|请问)?(?:为什么|为何|怎么|怎样|如何|什么叫|解释|讲讲|说明|需不需要|是否需要|有没有必要).*"# + verbs
         let hypothetical = #"^\s*(?:如果|假如|假设|比如|例如|他说|她说|别人说|原话是)"#
         let english = #"^\s*(?:please\s+)?(?:why\b|how\b|what (?:does|is)\b|explain\b|do not\b|don['’]t\b|no need to\b|without\b|if\b|suppose\b|he said\b|she said\b)"#
-        return clauses(unquoted(text)).contains {
-            $0.range(of: deny, options: .regularExpression) != nil
-                || $0.range(of: consult, options: .regularExpression) != nil
-                || $0.range(of: hypothetical, options: .regularExpression) != nil
-                || $0.range(of: english, options: [.regularExpression, .caseInsensitive]) != nil
+        return clauses(unquoted(text)).contains { clause in
+            let englishMethod = !EnglishConversation.methods(in: clause, positiveOnly: false).isEmpty
+            // Excluding Tarot is a constraint on methods. A practical "how
+            // should I..." about the situation may still be a reading.
+            let onlyExcludesMethods = englishMethod && EnglishConversation.matches(clause,
+                #"^\s*(?:please\s+)?(?:(?:don['’]t|do not|never)\s+(?:use|include|choose|add)\s+|(?:skip|avoid|without|no)\s+)"#)
+            let asksForActionAdvice = !englishMethod && EnglishConversation.matches(clause,
+                #"^\s*(?:please\s+)?how (?:should|can) (?:i|we)\b"#)
+            return clause.range(of: deny, options: .regularExpression) != nil
+                || clause.range(of: consult, options: .regularExpression) != nil
+                || clause.range(of: hypothetical, options: .regularExpression) != nil
+                || (!onlyExcludesMethods && !asksForActionAdvice
+                    && clause.range(of: english, options: [.regularExpression, .caseInsensitive]) != nil)
         }
     }
 

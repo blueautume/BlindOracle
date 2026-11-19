@@ -31,7 +31,9 @@ import XCTest
             try await waitUntilIdle(fixture.store)
             let pending = try XCTUnwrap(fixture.store.pendingPlan, raw)
             XCTAssertEqual(pending.question, expanded, raw)
-            XCTAssertEqual(pending.methods, fixture.original.plan.methods, raw)
+            let expected: Set<OracleMethod> = raw == "Then calculate for next weekend"
+                ? [.liuyao, .tarot] : Set(fixture.original.plan.methods)
+            XCTAssertEqual(Set(pending.methods), expected, raw)
             XCTAssertNil(pending.baseRunID, raw)
             XCTAssertTrue(pending.castingProfile?.currentPlace.isEmpty == true, raw)
             XCTAssertNil(pending.castingProfile?.currentLongitude, raw)

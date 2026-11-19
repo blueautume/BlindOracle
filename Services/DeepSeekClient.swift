@@ -234,12 +234,27 @@ actor DeepSeekClient {
         case .continuation, .changedConditions: relatedRun = referencedRun
         case .newQuestion, .changedParticipants, .ambiguous: relatedRun = nil
         }
-        let available = Set(plugins.map(\.method))
+        let available = Set(plugins.map(\.method)).subtracting(ReadingContinuationPolicy.excludedCalculationMethods(in: question))
         let proposedAction = AIPlanRouting.normalizedAction(payload.action)
+        let explicit = ReadingContinuationPolicy.requestedCalculationMethods(in: question)
+        let selectableExplicit = explicit.filter { available.contains($0) }
         var executionAction = ReadingExecutionPolicy.validatedAction(understanding: understanding, rawQuestion: question,
                                                                     proposedAction: proposedAction, hasRelatedRun: relatedRun != nil)
+        if executionAction == "clarify", understanding?.relation == .newQuestion,
+           AIPlanRouting.asksForMethodSelection(payload.note),
+           !ReadingExecutionPolicy.isNonExecutingRequest(question),
+           !ReadingContinuationPolicy.isMethodConsultation(question),
+           var intent = understanding?.execution,
+           intent.operation == .clarify || intent.operation == .calculate,
+           !AutomaticReadingMethods.select(question: question, available: available).isEmpty {
+            // A method-selection question from the planner can be recovered
+            // when the user's own question already identifies a reading.
+            intent.operation = .calculate; intent.coverage = .changed
+            understanding?.execution = intent
+            executionAction = "intake"
+        }
         if executionAction == "clarify", understanding?.relation != .ambiguous,
-           !ReadingContinuationPolicy.requestedCalculationMethods(in: question).isEmpty,
+           !explicit.isEmpty,
            AIPlanRouting.shouldOpenFormForProfileRequest(action: proposedAction, note: payload.note,
                question: question, hasPendingQuestion: pendingPlan != nil),
            var intent = understanding?.execution {
@@ -272,27 +287,62 @@ actor DeepSeekClient {
         let allowsPendingResume = understanding?.execution == nil || understanding?.execution?.operation == .collect
         var resume = mayResume && allowsPendingResume && payload.resumePending == true && pendingPlan != nil
         var requestedMethods = resume ? pendingPlan!.methods.map(\.rawValue) : payload.methods ?? []
-        var needsMethodClarification = false
-        if executionAction != nil, ["intake", "supplement"].contains(action),
-           !requestedMethods.compactMap(OracleMethod.init(rawValue:)).contains(where: { available.contains($0) }) {
-            // A missing method in the new protocol must never silently expand
-            // into the legacy four-method intake fallback. Explicit selection
-            // and the cited reading provide bounded, relevant recovery paths.
-            let explicit = ReadingContinuationPolicy.requestedCalculationMethods(in: question).filter { available.contains($0) }
+        var selectionFailure: String?
+        var usedAutomaticSelection = false
+        if ["intake", "supplement"].contains(action) {
+            let proposed = AIPlanRouting.selectedMethods(action: action, requested: requestedMethods, available: available)
             let inherited = (referencedRun ?? relatedRun).map { run in
                 unique(run.plan.methods + run.results.filter { [.complete, .partial].contains($0.status) }.map(\.method))
                     .filter { available.contains($0) }
             } ?? []
             let pendingMethods = pendingReferenceMatches
                 ? (pendingPlan?.methods ?? []).filter { available.contains($0) } : []
-            let fallback = !explicit.isEmpty ? explicit : !inherited.isEmpty ? inherited : pendingMethods
-            requestedMethods = fallback.map(\.rawValue)
-            if requestedMethods.isEmpty {
-                needsMethodClarification = true
+            let inheritedMethods = inherited.isEmpty ? pendingMethods : inherited
+            let bareRecast = understanding?.execution?.operation == .recast
+                && ReadingContinuationPolicy.isBareRecastRequest(question)
+            let preserveSelection = resume || (bareRecast && !inheritedMethods.isEmpty)
+            let onlyRetained = relatedRun.flatMap { run -> [OracleMethod]? in
+                guard action == "supplement", understanding?.relation == .continuation,
+                      !AIPlanRouting.requestsCombinedMethods(question),
+                      question.range(of: #"再(?:加|补)(?:一|两|几)(?:种|个)方法|\b(?:add|try) (?:one |an?)?other method\b"#,
+                                     options: [.regularExpression, .caseInsensitive]) == nil else { return nil }
+                let original = run.input.question
+                guard AIPlanRouting.limitsMethods(original) else { return nil }
+                let selected = ReadingContinuationPolicy.requestedCalculationMethods(in: original).filter { available.contains($0) }
+                return selected.isEmpty ? nil : selected
+            }
+            let methods: [OracleMethod]
+            if !explicit.isEmpty {
+                if selectableExplicit.count != explicit.count {
+                    methods = []
+                    selectionFailure = L10n.text("这次指定的方法暂不可用。", "A method you requested is currently unavailable.", language: language)
+                } else if AIPlanRouting.requestsCombinedMethods(question) {
+                    let ranked = AutomaticReadingMethods.select(question: question, proposed: proposed, available: available)
+                    methods = unique(selectableExplicit + ranked)
+                    usedAutomaticSelection = true
+                } else {
+                    methods = selectableExplicit
+                }
+            } else if let onlyRetained {
+                methods = onlyRetained
+            } else if preserveSelection {
+                methods = bareRecast ? inheritedMethods : proposed
+            } else if executionAction != nil || proposed.isEmpty {
+                let scope = citedReference != nil ? understanding?.resolvedQuestion ?? question : question
+                let direct = AutomaticReadingMethods.select(question: question, available: available)
+                let ranked = AutomaticReadingMethods.select(question: direct.isEmpty ? scope : question,
+                                                            proposed: proposed, available: available)
+                usedAutomaticSelection = !ranked.isEmpty
+                // Only a validated reference can lend its prior methods; a
+                // new topic never borrows the latest reading as a default.
+                methods = ranked.isEmpty ? inheritedMethods : ranked
+            } else {
+                methods = proposed
+            }
+            requestedMethods = methods.map(\.rawValue)
+            if methods.isEmpty {
+                selectionFailure = selectionFailure ?? L10n.text("你这次最想判断的是哪件事？", "What specific situation would you like to look at?", language: language)
                 action = "clarify"; resume = false
-                // Store applies the same execution policy again. Preserve the
-                // fail-closed result instead of allowing that pass to reinstate
-                // an intake with no supported method.
                 understanding = ConversationUnderstanding(relation: .ambiguous, resolvedQuestion: question, referenceMessageID: nil)
             }
         }
@@ -306,8 +356,10 @@ actor DeepSeekClient {
         let permitted = Set(plugins.filter { methodSet.contains($0.method) }.flatMap { $0.requiredFields + $0.optionalFields })
         let fields = unique(derived + requested.filter { permitted.contains($0) })
         let note: String
-        if needsMethodClarification {
-            note = L10n.text("你希望用哪种方法推演这次问题？", "Which method would you like to use for this reading?", language: language)
+        if let selectionFailure {
+            note = selectionFailure
+        } else if ["intake", "supplement"].contains(action), AIPlanRouting.asksForMethodSelection(payload.note) {
+            note = L10n.text("请先核对这次问事的资料。", "Review the details for this reading.", language: language)
         } else if suppressRoutingDetails && (proposedAction != "clarify" || payload.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
             note = L10n.text("你想接着问的是哪件事，还是换个新问题？", "Which earlier topic did you mean, or is this a new question?", language: language)
         } else {
@@ -328,15 +380,15 @@ actor DeepSeekClient {
         plan.participantNames = suppressRoutingDetails ? nil : payload.participantNames?.map { String($0.prefix(80)) }
         plan.relationship = suppressRoutingDetails ? nil : payload.relationship.map { String($0.prefix(80)) }
         plan.resumesPendingQuestion = resume
-        plan.mandatoryMethods = suppressRoutingDetails ? nil : payload.mandatoryMethods?.compactMap(OracleMethod.init(rawValue:)).filter { available.contains($0) }
+        plan.mandatoryMethods = suppressRoutingDetails || usedAutomaticSelection ? nil : payload.mandatoryMethods?
+            .compactMap(OracleMethod.init(rawValue:)).filter { methodSet.contains($0) }
         if ["intake", "supplement"].contains(action), !suppressRoutingDetails {
             // Preserve an explicit user requirement even when a valid model
             // plan omits its optional mandatoryMethods field. The same positive
             // request parser excludes consultations, negations and quotations.
-            let explicit = ReadingContinuationPolicy.requestedCalculationMethods(in: question)
-                .filter { methods.contains($0) }
-            if !explicit.isEmpty {
-                plan.mandatoryMethods = unique((plan.mandatoryMethods ?? []) + explicit)
+            let mandatoryExplicit = selectableExplicit.filter { methodSet.contains($0) }
+            if !mandatoryExplicit.isEmpty {
+                plan.mandatoryMethods = unique((plan.mandatoryMethods ?? []) + mandatoryExplicit)
             }
             if understanding?.execution?.operation == .recast {
                 plan.mandatoryMethods = unique((plan.mandatoryMethods ?? []) + methods)
@@ -1187,6 +1239,25 @@ actor DeepSeekClient {
 }
 
 enum AIPlanRouting {
+    static func limitsMethods(_ question: String) -> Bool {
+        question.range(of: #"(?:只|仅)(?:要|用|看|算|按|采用)"#, options: .regularExpression) != nil
+            || EnglishConversation.matches(question, #"\b(?:only|just)\b"#)
+    }
+
+    static func requestsCombinedMethods(_ question: String) -> Bool {
+        (["混合", "结合", "综合", "配合"].contains(where: question.contains)
+            || EnglishConversation.matches(question, #"\b(?:combine|mix|combined|mixed)\b"#))
+            && (question.range(of: #"其他方法|其它方法|别的方法|多种方法|所有方法|多法"#, options: .regularExpression) != nil
+                || EnglishConversation.matches(question, #"\b(?:other|multiple|all) methods\b"#))
+    }
+
+    static func asksForMethodSelection(_ note: String) -> Bool {
+        guard note.range(of: #"哪件事|哪个问题|哪一?位|哪个人|谁的|\bwhich (?:person|topic|question)\b"#,
+                         options: [.regularExpression, .caseInsensitive]) == nil else { return false }
+        return note.range(of: #"哪(?:一|几)?(?:种|个)方法|选(?:择|一下)?推演方法|\b(?:which|what) (?:reading |divination )?methods?\b"#,
+                          options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
     static func isConcreteReadingQuestion(_ text: String) -> Bool {
         ["财运", "运势", "事业", "工作", "感情", "婚姻", "恋爱", "姻缘", "合作", "友情", "出行", "计划", "选择", "算卦", "问卦", "算命", "起卦", "塔罗", "六爻", "八字", "紫微"].contains(where: text.contains)
             || !EnglishConversation.requestedMethods(in: text, additive: false).isEmpty
@@ -1217,11 +1288,8 @@ enum AIPlanRouting {
         let action = normalizedAction(action)
         guard ["intake", "supplement"].contains(action) else { return [] }
         var seen = Set<OracleMethod>()
-        let valid = requested.compactMap(OracleMethod.init(rawValue:))
+        return requested.compactMap(OracleMethod.init(rawValue:))
             .filter { available.contains($0) && seen.insert($0).inserted }
-        if !valid.isEmpty { return valid }
-        guard action == "intake" else { return [] }
-        return [.meihua, .liuyao, .qimen, .xiaoliuren].filter { available.contains($0) }
     }
 }
 

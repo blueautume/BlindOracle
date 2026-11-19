@@ -356,10 +356,6 @@ struct CastingLocationDraft: Equatable, Sendable {
             let relationships = [("友情", "Friendship"), ("姻缘", "Romance"), ("婚姻", "Marriage"), ("合作", "Collaboration"), ("恋爱", "Relationship"), ("家庭", "Family")]
             let relationship = relationships.first { question.contains($0.0) || question.localizedCaseInsensitiveContains($0.1) }
             plan.relationship = L10n.text(relationship?.0 ?? "关系", relationship?.1 ?? "Relationship")
-            if !plan.methods.contains(.tarot) && !plan.methods.contains(where: \.usesPersonalProfile) {
-                plan.methods += [.bazi, .ziwei, .astrology]
-                plan.requiredFields = Array(Set(plan.methods.flatMap { registry.plugin($0)?.descriptor.requiredFields ?? [] }))
-            }
         }
         return plan
     }
@@ -873,11 +869,11 @@ struct CastingLocationDraft: Equatable, Sendable {
         plan.castingProfile = CastingLocationDraft(profile: base.input.profile).profile
         plan.action = "supplement"; plan.subject = base.input.subject
         plan.relationship = proposed.relationship ?? base.input.relationship
-        let available = base.results.filter { $0.status == .complete || $0.status == .partial }.map(\.method)
-        let requested = ReadingContinuationPolicy.requestedCalculationMethods(in: question)
-        let selectsOnlyMethods = !requested.isEmpty && (
-            question.range(of: #"(?:只|仅)(?:要|用|看|算|按|采用)"#, options: .regularExpression) != nil
-                || EnglishConversation.matches(question, #"\b(?:only|just)\b"#))
+        let methodWording = proposed.followUpQuestion ?? question
+        let excluded = ReadingContinuationPolicy.excludedCalculationMethods(in: methodWording)
+        let available = base.results.filter { ($0.status == .complete || $0.status == .partial) && !excluded.contains($0.method) }.map(\.method)
+        let requested = ReadingContinuationPolicy.requestedCalculationMethods(in: methodWording)
+        let selectsOnlyMethods = !requested.isEmpty && AIPlanRouting.limitsMethods(methodWording)
         let methods = Set(selectsOnlyMethods ? requested : available + proposed.methods)
         plan.methods = OracleMethod.allCases.filter { methods.contains($0) }
         if selectsOnlyMethods {
@@ -993,10 +989,7 @@ struct CastingLocationDraft: Equatable, Sendable {
         // A direct request must survive an incomplete model plan, including
         // methods that need a new draw or additional personal details.
         if !calculations.isEmpty {
-            let mixed = (["混合", "结合", "综合", "配合"].contains(where: text.contains)
-                || EnglishConversation.matches(text, #"\b(?:combine|mix|combined|mixed)\b"#))
-                && (text.range(of: #"其他方法|别的方法|多种方法|所有方法|多法"#, options: .regularExpression) != nil
-                    || EnglishConversation.matches(text, #"\b(?:other|multiple|all) methods\b"#))
+            let mixed = AIPlanRouting.requestsCombinedMethods(text)
             let addingToPending = keepsPendingScope && pendingPlan != nil && !revision && !only
                 && !ReadingContinuationPolicy.requestedAdditionalMethods(in: text, requiresAdditiveWording: true).isEmpty
             let retained = mixed ? plan.methods : addingToPending ? pendingPlan?.methods ?? [] : []
@@ -1554,7 +1547,7 @@ struct CastingLocationDraft: Equatable, Sendable {
                 case "intake":
                     let source = referencedRun ?? base ?? (plan.understanding == nil ? currentRun : nil)
                     let requested = ReadingContinuationPolicy.requestedCalculationMethods(in: text)
-                    if !requested.isEmpty { plan.methods = requested }
+                    if !requested.isEmpty, !AIPlanRouting.requestsCombinedMethods(text) { plan.methods = requested }
                     if plan.methods.isEmpty { plan.methods = source?.plan.methods ?? previousPlan?.methods ?? [] }
                     plan.methods = plan.methods.filter { self.registry.plugin($0) != nil }
                     guard !plan.methods.isEmpty else { clarifyReadingExecution(nil); return }
@@ -1772,6 +1765,10 @@ struct CastingLocationDraft: Equatable, Sendable {
                 activityMessageID = messages.last?.id
                 progress(L10n.text("等待你补充确认所问事项", "Waiting for you to clarify the question"), state: .waiting)
                 finishOperation(); return
+            }
+            guard !plan.methods.isEmpty else {
+                clarifyReadingExecution(L10n.text("你这次最想判断的是哪件事？", "What specific situation would you like to look at?"))
+                return
             }
             // A union of declared requirements prevents a model from bypassing local validation.
             if let effectiveQuestion, plan.baseRunID == nil, plan.resumesPendingQuestion != true {
@@ -2451,11 +2448,18 @@ struct CastingLocationDraft: Equatable, Sendable {
         guard !vault.contains("reading-library-fixture") else { return }
         let people = ProfileDirectory.applying([ProfileUpdate(name: "陈平", birthDate: "1992-06-15", birthTime: "08:30", birthTimeZoneID: "Asia/Shanghai")], to: []).profiles
         guard writeProfileDirectory(people) else { return }
+        var casting = people[0]
+        casting.currentPlace = "北京市东城区"
+        casting.currentLatitude = 39.93; casting.currentLongitude = 116.42
+        casting.unknownFields.remove(.currentLocation)
+        casting.declaredUnknownFields?.remove(.currentLocation)
+        let fixtureVersion = XiaoliurenPlugin().descriptor.version
         runs = (1...10).map { index in
             let question = "推演删除测试\(index)"
-            let input = OracleInput(question: question, profile: people[0], castingDate: Date(timeIntervalSince1970: 1_700_000_000 + Double(index) * 60), participants: people)
+            let input = OracleInput(question: question, profile: casting, castingDate: Date(timeIntervalSince1970: 1_700_000_000 + Double(index) * 60), participants: people)
             let plan = OraclePlan(intent: "删除记录验收", subject: "事件", methods: [.xiaoliuren], requiredFields: [], note: "", question: question)
-            var run = OracleRun(input: input, plan: plan, results: [OracleResult(method: .xiaoliuren, headline: "本地测试记录\(index)", rows: [.init("测试编号", "\(index)")])])
+            var run = OracleRun(input: input, plan: plan, results: [OracleResult(method: .xiaoliuren, version: fixtureVersion,
+                headline: "本地测试记录\(index)", rows: [.init("测试编号", "\(index)")])])
             run.synthesis = ReadingSynthesis(text: "第\(index)份测试解读。")
             if index == 10, ProcessInfo.processInfo.arguments.contains("--ui-testing-archived-conflicts") {
                 run.synthesis?.archivedConflictDetails = "原记录分歧：一处倾向先推进，另一处倾向先核对条件。"

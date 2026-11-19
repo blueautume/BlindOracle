@@ -20,14 +20,50 @@ final class ReadingExecutionPlanningTests: XCTestCase {
             XCTAssertEqual(Set(plan.mandatoryMethods ?? []), Set(methods), question)
         }
 
-        // The decoder must report a genuinely wrong model selection. Product
-        // enforcement is separately exercised through the actual Store below.
+        // The decoder protects an explicit user choice before the Store
+        // recomputes the fields and interactions.
         let question = "请用紫微斗数看我的职业发展。"
         let wrongSelection = try await planned(question: question,
             payload: payload(question: question, action: "intake", methods: ["xiaoliuren"],
                 relation: "newQuestion", execution: execution("calculate", "changed", question)))
-        XCTAssertEqual(wrongSelection.methods, [.xiaoliuren])
-        XCTAssertTrue((wrongSelection.mandatoryMethods ?? []).isEmpty)
+        XCTAssertEqual(wrongSelection.methods, [.ziwei])
+        XCTAssertEqual(wrongSelection.mandatoryMethods, [.ziwei])
+    }
+
+    func testClearQuestionRecoversFromPlannerAskingTheUserToChooseAMethod() async throws {
+        let question = "最近的工作，该进还是该守？"
+        var proposal = payload(question: question, action: "clarify", methods: [],
+                               relation: "newQuestion", execution: execution("clarify", "unknown", question))
+        proposal["note"] = "你希望用哪种方法推演这次问题？"
+        let plan = try await planned(question: question, payload: proposal)
+        XCTAssertEqual(plan.action, "intake")
+        XCTAssertEqual(Set(plan.methods), [.liuyao, .tarot])
+        XCTAssertTrue((plan.mandatoryMethods ?? []).isEmpty)
+        XCTAssertNotEqual(plan.note, proposal["note"] as? String)
+    }
+
+    func testExplicitMethodRecoversANewQuestionMislabeledAsAnAnswer() async throws {
+        let question = "只用六爻推算我该不该接这个项目。"
+        let plan = try await planned(question: question,
+            payload: payload(question: question, action: "reply", methods: ["tarot"],
+                             relation: "newQuestion", execution: execution("answer", "changed", question)))
+        XCTAssertEqual(plan.action, "intake")
+        XCTAssertEqual(plan.methods, [.liuyao])
+        XCTAssertEqual(plan.mandatoryMethods, [.liuyao])
+    }
+
+    func testBroadSelectionCanCarryEveryRelevantMethodThroughTheDecoder() async throws {
+        let question = """
+        看未来五年事业的方向；也看我目前处在什么人生阶段；
+        这份合作该不该接；近期项目进展如何；什么时候提出方案最合适；
+        分析这个笔名是否合适；我也想看骨重与传统命诗。
+        """
+        let plan = try await planned(question: question,
+            payload: payload(question: question, action: "intake", methods: ["tarot"],
+                             relation: "newQuestion", execution: execution("calculate", "changed", question)))
+        XCTAssertEqual(plan.action, "intake")
+        XCTAssertEqual(Set(plan.methods), Set(OracleMethod.allCases))
+        XCTAssertTrue((plan.mandatoryMethods ?? []).isEmpty)
     }
 
     func testQuotedMethodNamesDoNotBecomeMandatoryForAnExplanation() async throws {

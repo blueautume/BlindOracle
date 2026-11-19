@@ -16,7 +16,7 @@ enum ReadingContinuationPolicy {
     ]
     private static let newQuestionPattern = #"(?:换个新?|换一个新?|另一个|另外一个|另问(?:一件|一桩|个|一个)?|换一件|问(?:个|一个|一件)新)(?:问题|事|事情)"#
     private static let personSwitch = #"(?:换(?:个|一个|一位|位|成另一个|成另一位|成别的|成其他)人|(?:换成|改看|改问|改算)(?:(?:我自己|本人|我|他|她|别人|其他人|另一个人|另一位)(?=$|[的呢吧了])|我(?:的)?(?:同事|同学|朋友|对象|家人|爸爸|妈妈)))"#
-    private static let calculationVerb = #"(?:计算|测算|推算|算(?:一下|一次|一遍|一算|算)?|看(?:看|一下|一看)?|排盘(?:分析)?|推演(?:一下)?|试试看|试试|试一下|试一试|尝试|分析(?:一下)?|解读(?:一下)?|参考(?:一下)?|测(?:一测|一下|测)|占卜|起(?:一|个|一轮)?卦|抽(?:(?:一次|一组|三张)牌?|牌))"#
+    private static let calculationVerb = #"(?:计算|测算|推算|算(?:一下|一次|一遍|一算|算)?|看(?:看|一下|一看)?|排盘(?:分析)?|推演(?:一下)?|试试看|试试|试一下|试一试|尝试|分析(?:一下)?|解读(?:一下)?|参考(?:一下)?|测(?:一测|一下|测)|占卜|起(?:一|个|一轮)?卦|抽(?:(?:一次|一组|三张)牌?|牌)|报数)"#
     private static let calculationModifiers = #"(?:再|也|来|帮我|替我|给我|仔细|好好|认真|补充)*"#
 
     enum ScopeChange: Equatable { case none, explicit, inferred }
@@ -172,8 +172,7 @@ enum ReadingContinuationPolicy {
         // Remove quoted instructions before splitting clauses: punctuation
         // inside a quotation must not expose its contents as a new command.
         // Apostrophes are deliberately excluded (don't, tomorrow's).
-        let source = question.replacingOccurrences(of: #"“[^”]*”|「[^」]*」|『[^』]*』|\"[^\"]*\""#,
-            with: " ", options: .regularExpression)
+        let source = methodWording(in: question)
         let english = EnglishConversation.requestedMethods(in: source, additive: requiresAdditiveWording, allowFreshScope: true)
         let clauses = source.components(separatedBy: CharacterSet(charactersIn: "，,。；;！!？?\n"))
         let additions = #"(?:加上|加个|加一个|加入|再加|增加|补算|补个|补一个|补上|补一份)"#
@@ -232,6 +231,25 @@ enum ReadingContinuationPolicy {
             }
         }
         return OracleMethod.allCases.filter { requested.contains($0) || english.contains($0) }
+    }
+
+    static func excludedCalculationMethods(in question: String) -> Set<OracleMethod> {
+        let source = methodWording(in: question)
+        let clauses = source.components(separatedBy: CharacterSet(charactersIn: "，,。；;！!？?\n"))
+        var excluded: Set<OracleMethod> = []
+        for clause in clauses where !isMethodConsultationClause(clause) {
+            excluded.formUnion(declinedMethods(in: clause.filter { !$0.isWhitespace }))
+            if EnglishConversation.matches(clause, #"\b(?:without|skip|avoid|except|don['’]t|do not|no|not|never|instead of|rather than)\b"#) {
+                excluded.formUnion(Set(EnglishConversation.methods(in: clause, positiveOnly: false))
+                    .subtracting(EnglishConversation.methods(in: clause)))
+            }
+        }
+        return excluded.subtracting(requestedCalculationMethods(in: question))
+    }
+
+    private static func methodWording(in question: String) -> String {
+        question.replacingOccurrences(of: #"“[^”]*”|「[^」]*」|『[^』]*』|\"[^\"]*\""#,
+                                      with: " ", options: .regularExpression)
     }
 
     private static func declinedMethods(in clause: String) -> Set<OracleMethod> {
