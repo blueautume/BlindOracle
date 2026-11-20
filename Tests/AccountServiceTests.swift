@@ -9,6 +9,27 @@ final class AccountServiceTests: XCTestCase {
         return AccountAPI(configuration: configuration)
     }
     override func tearDown() { AuthURLProtocol.handler = nil; super.tearDown() }
+    func testGiftPushInstallationSendsExplicitNullToDisableDelivery() async throws {
+        let installation = try XCTUnwrap(UUID(uuidString: "AA896DD9-E7D6-4CA5-A070-510093C28F6A"))
+        AuthURLProtocol.handler = { request in
+            XCTAssertTrue(request.url?.absoluteString.hasSuffix("/xiazi-api/v1/push/installation/") == true)
+            XCTAssertEqual(request.httpMethod, "PUT")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer fixture-access")
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: AuthURLProtocol.body(request)) as? [String: Any])
+            XCTAssertEqual(body["installation_id"] as? String, installation.uuidString.lowercased())
+            XCTAssertTrue(body["device_token"] is NSNull)
+            XCTAssertEqual(body["apns_environment"] as? String, "production")
+            XCTAssertEqual(body["language"] as? String, "en")
+            return .init(status: 204, body: "")
+        }
+        let context = AppServiceContext(environment: .production, appTransactionJWS: nil, source: .debugFixture)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AuthURLProtocol.self]
+        let api = AccountAPI(configuration: configuration, context: context)
+        let registration = GiftPushRegistration(installationID: installation, deviceToken: nil,
+                                                 apnsEnvironment: "production", language: .english)
+        try await api.syncGiftPushInstallation(registration, token: "fixture-access")
+    }
     private func session(expired: Bool = false, id: String = "fixture-user") throws -> AccountSession {
         let response = AccountTokenResponse(accessToken: "fixture-access", refreshToken: "fixture-refresh", expiresIn: expired ? 1 : 3600,
             user: AccountUser(id: id, displayName: "测试账号", email: nil, createdAt: "2026-11-06T00:00:00Z"))

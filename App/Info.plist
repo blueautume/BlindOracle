@@ -8,6 +8,8 @@
     <string>$(ORACLE_SERVICE_ENVIRONMENT)</string>
     <key>OracleServiceEnvironmentResolution</key>
     <string>$(ORACLE_SERVICE_ENVIRONMENT_RESOLUTION)</string>
+    <key>OracleAPNsEnvironment</key>
+    <string>$(ORACLE_APNS_ENVIRONMENT)</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>$(PRODUCT_BUNDLE_IDENTIFIER).analysis.*</string>

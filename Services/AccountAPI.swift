@@ -287,6 +287,9 @@ actor AccountAPI {
     func logout(accessToken: String, refreshToken: String) async throws {
         _ = try await send("auth/logout/", method: "POST", token: accessToken, body: ["refresh_token": refreshToken])
     }
+    func syncGiftPushInstallation(_ registration: GiftPushRegistration, token: String) async throws {
+        _ = try await send("push/installation/", method: "PUT", token: token, body: registration)
+    }
     func deleteUser(token: String) async throws { _ = try await send("me/", method: "DELETE", token: token) }
     private func decode<T: Decodable>(_ path: String, method: String = "GET", token: String? = nil,
                                      body: [String: String]? = nil, requestSession: URLSession? = nil,
@@ -296,7 +299,7 @@ actor AccountAPI {
         do { return try JSONDecoder().decode(T.self, from: data) }
         catch { throw AccountAPIError.invalidResponse }
     }
-    private func send(_ path: String, method: String, token: String? = nil, body: [String: String]? = nil,
+    private func send(_ path: String, method: String, token: String? = nil, body: (any Encodable)? = nil,
                       headers: [String: String] = [:], requestSession: URLSession? = nil,
                       reportConnectivityFailure: Bool = false) async throws -> Data {
         var request = URLRequest(url: requestBaseURL.appendingPathComponent(path))

@@ -282,6 +282,20 @@ enum AccountAccessState: Equatable {
         async let consumption = api.usage(token: token)
         return try await (person, balance, consumption)
     }
+    func syncGiftPushInstallation(_ registration: GiftPushRegistration, accountID: UUID) async throws {
+        let expected = generation
+        let context = await sessions.context()
+        guard generation == expected, canAccessMain, let cached = context.session,
+              UUID(uuidString: cached.user.id) == accountID else { throw AccountAPIError.staleSession }
+        var token = try await sessions.accessToken(expectedGeneration: context.generation)
+        guard generation == expected, canAccessMain else { throw AccountAPIError.staleSession }
+        do { try await api.syncGiftPushInstallation(registration, token: token) }
+        catch AccountAPIError.unauthorized {
+            token = try await sessions.refreshAfterRejection(of: token, expectedGeneration: context.generation)
+            guard generation == expected, canAccessMain else { throw AccountAPIError.staleSession }
+            try await api.syncGiftPushInstallation(registration, token: token)
+        }
+    }
     func logout() async {
         guard !deletionCleanupRequired else { return }
         #if DEBUG

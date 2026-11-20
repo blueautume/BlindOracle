@@ -4,6 +4,7 @@ import UIKit
 import AuthenticationServices
 
 @main struct BlindOracleApp: App {
+    @UIApplicationDelegateAdaptor(GiftPushCoordinator.self) private var giftPush
     @StateObject private var bootstrap = Self.makeLaunchCoordinator()
     @StateObject private var firstLaunchNetwork = FirstLaunchNetworkWarmup()
     @State private var pendingAppleSignIn = false
@@ -71,9 +72,9 @@ import AuthenticationServices
                 case .ready(let context):
                     #if DEBUG
                     if AppServiceBootstrapPolicy.isUnitTestHost { AccountRestoringView() }
-                    else { ResolvedBlindOracleRoot(context: context, firstLaunchNetwork: firstLaunchNetwork, pendingAppleSignIn: $pendingAppleSignIn) }
+                    else { ResolvedBlindOracleRoot(context: context, firstLaunchNetwork: firstLaunchNetwork, giftPush: giftPush, pendingAppleSignIn: $pendingAppleSignIn) }
                     #else
-                    ResolvedBlindOracleRoot(context: context, firstLaunchNetwork: firstLaunchNetwork, pendingAppleSignIn: $pendingAppleSignIn)
+                    ResolvedBlindOracleRoot(context: context, firstLaunchNetwork: firstLaunchNetwork, giftPush: giftPush, pendingAppleSignIn: $pendingAppleSignIn)
                     #endif
                 }
             }
@@ -197,8 +198,15 @@ private struct AppServiceLaunchSurface: View {
 
 /// Account, task and purchase services capture the same per-process route.
 private struct ResolvedBlindOracleRoot: View {
+    private struct GiftPushRefresh: Equatable {
+        let accountID: String?
+        let isActive: Bool
+        let language: AppLanguage
+    }
+
     let context: AppServiceContext
     private let firstLaunchNetwork: FirstLaunchNetworkWarmup
+    @ObservedObject private var giftPush: GiftPushCoordinator
     @StateObject private var store: OracleStore
     @StateObject private var account: AccountStore
     @StateObject private var purchases = AccountPurchaseStore()
@@ -208,9 +216,11 @@ private struct ResolvedBlindOracleRoot: View {
     @State private var settingsPresented = false
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppLanguage.preferenceKey) private var preference: AppLanguagePreference = .system
-    init(context: AppServiceContext, firstLaunchNetwork: FirstLaunchNetworkWarmup, pendingAppleSignIn: Binding<Bool>) {
+    init(context: AppServiceContext, firstLaunchNetwork: FirstLaunchNetworkWarmup,
+         giftPush: GiftPushCoordinator, pendingAppleSignIn: Binding<Bool>) {
         self.context = context
         self.firstLaunchNetwork = firstLaunchNetwork
+        self.giftPush = giftPush
         _pendingAppleSignIn = pendingAppleSignIn
         let vault = LocalVault.forContext(context)
         let oracle = OracleStore(vault: vault)
@@ -225,6 +235,7 @@ private struct ResolvedBlindOracleRoot: View {
             Group {
                 switch account.accessState {
                 case .authenticated:
+                    if giftPush.showsExplanation { giftPushExplanation }
                     TabView(selection: $store.selectedTab) {
                         ChatView(draft: $chatDraft).tabItem { Label(L10n.ui("tab.chat", language: preference.language), systemImage: "bubble.left.and.bubble.right") }.tag(0)
                         DataLibraryView(settingsPresented: $settingsPresented).tabItem { Label(L10n.ui("tab.data", language: preference.language), systemImage: "books.vertical").accessibilityIdentifier("dataTab") }.tag(1)
@@ -252,13 +263,26 @@ private struct ResolvedBlindOracleRoot: View {
             if account.accessState != .signedOut { pendingAppleSignIn = false }
             if account.canAccessMain { await resumeBillingAndTasks() }
         }
+        .task(id: GiftPushRefresh(accountID: account.canAccessMain ? account.user?.id : nil,
+                                  isActive: scenePhase == .active, language: preference.language)) {
+            guard context.source != .debugFixture, scenePhase == .active else { return }
+            await giftPush.refresh(account: account, language: preference.language)
+        }
         .onChange(of: account.canAccessMain) { _, allowed in
             if !allowed { settingsPresented = false }
-            else { Task { await resumeBillingAndTasks() } }
+            else {
+                openGiftPushIfReady()
+                Task { await resumeBillingAndTasks() }
+            }
         }
+        .onChange(of: account.accessState) { _, state in
+            if state == .signedOut, context.source != .debugFixture { giftPush.signedOut() }
+        }
+        .onChange(of: giftPush.openedAccountID, initial: true) { _, _ in openGiftPushIfReady() }
         .onChange(of: store.historyResetID) { _, _ in chatDraft = ""; settingsPresented = false }
         .onChange(of: account.deletionResetID) { _, _ in
             chatDraft = ""; settingsPresented = false
+            if context.source != .debugFixture { giftPush.signedOut() }
             purchases.clearDeletedAccountData()
         }
         .onReceive(NotificationCenter.default.publisher(for: .accountBalanceChanged).receive(on: RunLoop.main)) { _ in
@@ -298,6 +322,40 @@ private struct ResolvedBlindOracleRoot: View {
                 }
             }
         }
+    }
+    private var giftPushExplanation: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(L10n.text("赠送额度到账时，瞎子会发一条通知。是否开启通知都不影响额度到账。",
+                           "BlindOracle can notify you when gifted credits arrive. Your choice won’t affect which credits you receive."))
+                .font(.subheadline)
+                .foregroundStyle(InkTheme.ink)
+            HStack {
+                Button(L10n.text("继续", "Continue")) {
+                    Task { await giftPush.requestAuthorization(account: account, language: preference.language) }
+                }
+                .font(.subheadline.weight(.semibold))
+                .frame(minHeight: 44)
+                Spacer()
+                Button {
+                    giftPush.dismissExplanation()
+                } label: {
+                    Image(systemName: "xmark")
+                        .foregroundStyle(InkTheme.secondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .accessibilityLabel(L10n.text("关闭说明", "Dismiss explanation"))
+            }
+        }
+        .padding(.top, 10)
+        .padding(.horizontal, 24)
+        .background(InkTheme.wash)
+        .onAppear { giftPush.explanationAppeared() }
+    }
+    private func openGiftPushIfReady() {
+        guard account.canAccessMain, giftPush.consumeOpen(for: account.user?.id) else { return }
+        settingsPresented = false
+        store.selectedTab = 0
+        Task { await account.refreshOverview() }
     }
     private func startPurchaseRecovery() {
         guard context.source != .debugFixture else { return }

@@ -39,6 +39,8 @@ class ServiceEnvironmentGeneratorTests(unittest.TestCase):
                 self.assertIn('BLINDORACLE_APP_DISPLAY_NAME_EN = "BlindOracle";', project)
                 self.assertIn('ORACLE_SERVICE_ENVIRONMENT = "Production";', project)
                 self.assertIn('ORACLE_SERVICE_ENVIRONMENT_RESOLUTION = "ProductionWithSandboxReview";', project)
+                self.assertIn('ORACLE_APNS_ENVIRONMENT = "development";', project)
+                self.assertIn('ORACLE_APNS_ENVIRONMENT = "production";', project)
                 flags = re.findall(r'SWIFT_ACTIVE_COMPILATION_CONDITIONS = "([^"]*)";', project)
                 self.assertEqual(len(flags), 8)
                 self.assertTrue(all('BLINDORACLE_SANDBOX' not in flag for flag in flags))
@@ -48,6 +50,8 @@ class ServiceEnvironmentGeneratorTests(unittest.TestCase):
         self.assertIn('BLINDORACLE_SANDBOX = "YES";', project)
         self.assertIn('ORACLE_SERVICE_ENVIRONMENT = "Sandbox";', project)
         self.assertIn('ORACLE_SERVICE_ENVIRONMENT_RESOLUTION = "OwnerSandbox";', project)
+        self.assertIn('ORACLE_APNS_ENVIRONMENT = "development";', project)
+        self.assertIn('ORACLE_APNS_ENVIRONMENT = "production";', project)
         self.assertIn('BLINDORACLE_APP_DISPLAY_NAME_EN = "BlindOracle·Test";', project)
         # The project serializer may escape non-ASCII strings; decode them before checking the display name.
         self.assertIn('BLINDORACLE_APP_DISPLAY_NAME = ' + json.dumps('瞎子·测试', ensure_ascii=False) + ';', project)

@@ -103,6 +103,13 @@ enum LegalDocument {
                 )
             ),
             LegalSection(
+                title: L10n.text("赠送额度到账通知", "Gifted credit notifications"),
+                text: L10n.text(
+                    "开启通知后，服务器将设备的 Apple 推送令牌、安装标识和通知语言与账号关联，通过 Apple 推送服务发送赠送额度到账通知。你可以在 iOS 设置中关闭通知，额度仍会照常到账。",
+                    "If you enable notifications, our server associates your Apple push token, installation identifier and notification language with your account to send gifted credit notifications through Apple Push Notification service. You can turn off notifications in iOS Settings and still receive gifted credits."
+                )
+            ),
+            LegalSection(
                 title: L10n.text("三、联网 AI 会接收什么", "3. Information sent to online AI"),
                 text: L10n.text(
                     "联网 AI 的数据使用许可独立于 Apple 登录。首次向第三方 AI 发送前，应用会单独说明接收方、发送范围和用途，由你选择「同意并继续」或「暂不使用 AI」。不同意会保留草稿，仍可使用账号和本机资料。你可以随时在对话页右上角的「AI 数据使用」入口撤回许可，阻止后续发送；撤回不会自动撤销已发出的数据或进行中的任务，也不保证免扣已发生的用量。\n\n应用通过内置的 AI 解读服务处理联网请求。提交问题后，规划请求就可能发送问事原文、相关对话与摘要、当前资料、已保存人员的姓名或称呼及资料可用情况索引、待填表单和相关历史推演信息；这可能发生在问事单最终确认之前。\n\n生成解读和追问回复时，会按功能发送相关人员的资料快照（可能含姓名、出生资料、地点和坐标）、推演结果、牌面或爻值及上下文。整理长对话摘要也会发送需归纳的旧对话。切换到其他应用后，已经启动的分析可能继续。\n\n停止回答会停止本机继续接收和展示当前回答，但服务器可能继续完成已启动的任务，并按可核实的实际用量结算；停止接收不保证取消处理或免扣额度，已经发出的内容也无法收回。可恢复的完整回答会临时缓存，读取同一份缓存回答不会再次调用 AI 或重复扣费。未提交的问题和未确认发送的新消息不会发起新的解读请求。",

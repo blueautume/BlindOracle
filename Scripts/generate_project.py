@@ -19,6 +19,8 @@ def configs(key, settings):
     configs=[]
     for configuration in ['Debug', 'Release']:
         s=dict(settings)
+        if key == 'appconfig':
+            s['ORACLE_APNS_ENVIRONMENT']=q('development' if configuration == 'Debug' else 'production')
         s['SWIFT_OPTIMIZATION_LEVEL']=q('-Onone' if configuration == 'Debug' else '-O')
         s['DEBUG_INFORMATION_FORMAT']=q('dwarf' if configuration == 'Debug' else 'dwarf-with-dsym')
         s['SWIFT_ACTIVE_COMPILATION_CONDITIONS']=q('$(inherited)' + (' BLINDORACLE_SANDBOX' if SANDBOX else ''))
@@ -120,7 +122,8 @@ for label,folder,product,ui in [('BlindOracleTests','Tests',testproduct,False),(
 main=add('main',obj(isa='PBXGroup',children=array([sourcegroup,resourcegroup]+testgroups+[products]),sourceTree=q('<group>')))
 # No App Intents or Shortcuts are declared; skip their unused metadata task.
 projectconfig=configs('projectconfig',dict(CLANG_ENABLE_MODULES='YES',CLANG_WARN_DOCUMENTATION_COMMENTS='NO',GCC_WARN_INHIBIT_ALL_WARNINGS='NO',LM_SKIP_METADATA_EXTRACTION='YES'))
-project=add('project',obj(isa='PBXProject',attributes=obj(BuildIndependentTargetsInParallel='YES',LastUpgradeCheck=2710),buildConfigurationList=projectconfig,compatibilityVersion=q('Xcode 14.0'),developmentRegion=q('zh-Hans'),hasScannedForEncodings=0,knownRegions=array([q('zh-Hans'),q('en'),q('Base')]),mainGroup=main,productRefGroup=products,projectDirPath=q(''),projectRoot=q(''),targets=array(targets)))
+target_attributes = obj(**{apptarget: obj(SystemCapabilities=obj(**{'com.apple.Push': obj(enabled=1)}))})
+project=add('project',obj(isa='PBXProject',attributes=obj(BuildIndependentTargetsInParallel='YES',LastUpgradeCheck=2710,TargetAttributes=target_attributes),buildConfigurationList=projectconfig,compatibilityVersion=q('Xcode 14.0'),developmentRegion=q('zh-Hans'),hasScannedForEncodings=0,knownRegions=array([q('zh-Hans'),q('en'),q('Base')]),mainGroup=main,productRefGroup=products,projectDirPath=q(''),projectRoot=q(''),targets=array(targets)))
 directory=ROOT/'BlindOracle.xcodeproj';directory.mkdir(exist_ok=True)
 (directory/'project.pbxproj').write_text('// !$*UTF8*$!\n{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {\n'+''.join(k+' = '+v+';\n' for k,v in objects.items())+'}; rootObject = '+project+'; }\n')
 schemes=directory/'xcshareddata/xcschemes';schemes.mkdir(parents=True,exist_ok=True)

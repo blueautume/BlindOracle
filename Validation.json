@@ -13,6 +13,7 @@
   "local_plugin_count": 10,
   "release_is_signed": true,
   "notes": [
+    "Gift arrival push 4.1.6 / Build 76: the exported distribution IPA passed signature, Production APNs, production backend routing, version and bundled resource checks. App Store Connect accepted the upload on 2026-11-20 and assigned the processed build to the blind internal TestFlight group. The user confirmed on a physical device with a production test account that a custom gift arrival notification was delivered and tapping it opened the question page. Release evidence is in build/testflight-4.1.6-76/.",
     "First-launch network permission 4.1.1 / Build 71: 795 non-live unit tests, seven simulator UI regressions, seven local StoreKit tests and seven version/service configuration tests passed. A simulated denied connection followed by permission grant continued the same Apple sign-in tap. The signed Release archive retained explicit production or invited Sandbox routing and passed strict signature, entitlement and resource checks. The first-install iOS wireless-data prompt was not reproduced on physical hardware.",
     "TestFlight 4.1.0 / Build 70: version metadata increased on fix/storekit-independent-login from runtime commit 95d49b9. Seven version and project configuration tests passed. Signed Release archive has zero warnings and passed strict signature, Apple sign-in entitlement, production routing and resource checks. Xcode reported Upload succeeded on 2026-11-19 at 09:20:07 +08:00 using the standard App Store Connect upload and the explicit Build 70. Earlier functional test evidence remains on 3.0.306 / 69. Upload and archive evidence: build/testflight-4.1.0-70/.",
     "StoreKit-independent sign-in 3.0.306 / Build 69: Production start and account restore make zero AppTransaction/probe calls. A suspended unfinished transaction stream does not block account restoration or balance refresh. Explicit review entry uses a Sandbox-only invite with isolated Keychain and device records. The final signed simulator run passed 785 non-live unit tests and seven UI tests. Eleven additional distinct account UI tests passed in the earlier run. An iPhone tab lookup in the legacy usage UI test was corrected and passed in the final run. Seven native local StoreKit tests passed on iOS 27.2. Signed Release archive passed strict signature, entitlement, build metadata and test-resource checks with zero warnings. Sandbox backend da38ea1 passed isolated PostgreSQL 309/309, and a scratch integration with the newer local backend passed 337/337. No Sandbox or Production deployment, App Store Connect upload, physical App Store upgrade, or live reviewer purchase was performed in this batch.",
@@ -139,8 +140,8 @@
   "history_migration_tests_passed": 9,
   "history_deletion_ui_result": "build-interactions/legacy-ui-final.xcresult",
   "history_reference_ui_result": "build-interactions/legacy-ui-final.xcresult",
-  "version": "4.1.5",
-  "build": "75",
+  "version": "4.1.6",
+  "build": "76",
   "developer_configuration_tests_passed": 9,
   "staged_secret_scan_passed": true,
   "legacy_ui_result": "build-interactions/legacy-ui-final.xcresult",
