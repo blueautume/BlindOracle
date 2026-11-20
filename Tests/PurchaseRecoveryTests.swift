@@ -1,4 +1,6 @@
 import XCTest
+import SwiftUI
+import UIKit
 @testable import BlindOracle
 
 @MainActor final class PurchaseRecoveryTests: XCTestCase {
@@ -89,6 +91,58 @@ import XCTest
         XCTAssertNil(store.message)
         await store.purchase(try XCTUnwrap(store.products.first))
         XCTAssertEqual(provider.purchaseCount, 2)
+    }
+
+    func testTopUpSheetDismissesAfterCreditAndCanReopen() async throws {
+        useRegionalCatalog()
+        let purchases = store()
+        let presentation = RecoveryTopUpPresentation()
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previousKeyWindow = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        window.frame = scene.coordinateSpace.bounds
+        window.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.normal.rawValue + 1)
+        let host = UIHostingController(rootView: RecoveryTopUpHost(presentation: presentation)
+            .environmentObject(AccountStore(api: api, sessions: manager))
+            .environmentObject(purchases))
+        window.rootViewController = host
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+            previousKeyWindow?.makeKey()
+        }
+        window.makeKeyAndVisible()
+        presentation.isPresented = true
+        await waitFor { host.presentedViewController != nil && self.provider.scanCount == 1 && !purchases.isCheckingPurchases }
+        let offer = try XCTUnwrap(purchases.products.first)
+
+        provider.result = .cancelled
+        await purchases.purchase(offer)
+        XCTAssertNil(purchases.lastCreditedTransactionID)
+        XCTAssertTrue(presentation.isPresented)
+
+        let refundedID = "sheet-refunded"
+        let refund = confirmation(refundedID, status: "refunded")
+        provider.result = .success(event(id: refundedID))
+        RecoveryURLProtocol.handler = { _ in refund }
+        await purchases.purchase(offer)
+        XCTAssertEqual(metrics.finishCount, 1)
+        XCTAssertNil(purchases.lastCreditedTransactionID)
+        XCTAssertTrue(presentation.isPresented)
+
+        let creditedID = "sheet-credited"
+        let credit = confirmation(creditedID)
+        provider.result = .success(event(id: creditedID))
+        RecoveryURLProtocol.handler = { _ in credit }
+        await purchases.purchase(offer)
+        XCTAssertEqual(purchases.lastCreditedTransactionID, creditedID)
+        await waitFor { !presentation.isPresented && host.presentedViewController == nil }
+
+        useRegionalCatalog()
+        presentation.isPresented = true
+        await waitFor { host.presentedViewController != nil && self.provider.scanCount == 2 && !purchases.isCheckingPurchases }
+        XCTAssertTrue(presentation.isPresented)
+        XCTAssertEqual(metrics.finishCount, 2)
     }
 
     func testPendingDoesNotCreditUntilVerifiedStoreKitUpdate() async throws {
@@ -594,6 +648,20 @@ import XCTest
             try? await Task.sleep(nanoseconds: 10_000_000)
         }
         XCTFail("Expected purchase recovery did not complete")
+    }
+}
+
+@MainActor private final class RecoveryTopUpPresentation: ObservableObject {
+    @Published var isPresented = false
+}
+
+@MainActor private struct RecoveryTopUpHost: View {
+    @ObservedObject var presentation: RecoveryTopUpPresentation
+
+    var body: some View {
+        Color.clear.sheet(isPresented: $presentation.isPresented) {
+            NavigationStack { AccountTopUpView() }
+        }
     }
 }
 

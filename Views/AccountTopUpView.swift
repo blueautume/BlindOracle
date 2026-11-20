@@ -90,7 +90,12 @@ struct AccountTopUpView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { purchaseFooter }
-        .task { await purchases.loadProducts(); await purchases.resumeUnfinished() }
+        .onChange(of: purchases.lastCreditedTransactionID) { _, _ in dismiss() }
+        .task {
+            await purchases.loadProducts()
+            guard !Task.isCancelled else { return }
+            purchases.requestUnfinishedReconciliation()
+        }
     }
 
     private func offerDetails(_ product: AccountPurchaseProduct) -> some View {

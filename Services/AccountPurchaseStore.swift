@@ -20,6 +20,7 @@ struct VerifiedAccountPurchase: Sendable {
     @Published private(set) var isCheckingPurchases = false
     @Published private(set) var hasUnresolvedPurchase = false
     @Published private(set) var message: String?
+    @Published private(set) var lastCreditedTransactionID: String?
     private let api: AccountAPI
     private let sessions: AccountSessionManager
     private let environment: ServiceEnvironment
@@ -290,9 +291,12 @@ struct VerifiedAccountPurchase: Sendable {
             unresolvedByAccount[userID]?.remove(record.transactionID)
             guard expectedLocalDataGeneration == localDataGeneration, await sessions.sessionGeneration() == context.generation else { return }
             hasUnresolvedPurchase = hasUnresolved(for: userID)
-            message = confirmation.status == "credited"
-                ? L10n.text("额度已补充。", "Your allowance has been replenished.")
-                : L10n.text("此购买已退款，未补充额度。", "This purchase was refunded; no allowance was added.")
+            if confirmation.status == "credited" {
+                message = L10n.text("额度已补充。", "Your allowance has been replenished.")
+                lastCreditedTransactionID = record.transactionID
+            } else {
+                message = L10n.text("此购买已退款，未补充额度。", "This purchase was refunded; no allowance was added.")
+            }
             NotificationCenter.default.post(name: .accountBalanceChanged, object: nil)
         } catch {
             guard expectedLocalDataGeneration == localDataGeneration, await sessions.sessionGeneration() == context.generation else { return }
