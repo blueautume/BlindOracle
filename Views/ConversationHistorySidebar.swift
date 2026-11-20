@@ -13,6 +13,7 @@ struct HistoryMenuIcon: View {
 struct ConversationHistoryOverlay: View {
     @Binding var isPresented: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var deletionCandidate: OracleConversation?
 
     var body: some View {
         GeometryReader { geometry in
@@ -22,11 +23,12 @@ struct ConversationHistoryOverlay: View {
                         Color.black.opacity(0.22).ignoresSafeArea(.container)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(L10n.text("关闭历史侧栏", "Close history sidebar"))
+                    .accessibilityLabel(deletionCandidate == nil ? L10n.text("关闭历史侧栏", "Close history sidebar") : L10n.text("取消删除", "Cancel deletion"))
                     .transition(.opacity)
                 }
                 if isPresented {
-                    ConversationHistorySidebar(close: close)
+                    ConversationHistorySidebar(deletionCandidate: $deletionCandidate,
+                                               bottomSafeArea: geometry.safeAreaInsets.bottom, close: close)
                         .frame(width: min(geometry.size.width * 0.84, 360), height: geometry.size.height, alignment: .top)
                         .background { InkTheme.paper.ignoresSafeArea(.container, edges: [.top, .bottom, .leading]) }
                         .shadow(color: .black.opacity(0.12), radius: 20, x: 6)
@@ -38,16 +40,27 @@ struct ConversationHistoryOverlay: View {
         }
         .allowsHitTesting(isPresented)
         .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.9), value: isPresented)
+        .onChange(of: isPresented) { _, presented in
+            if !presented { deletionCandidate = nil }
+        }
     }
 
-    private func close() { isPresented = false }
+    private func close() {
+        if deletionCandidate != nil { deletionCandidate = nil }
+        else { isPresented = false }
+    }
 }
 
 private struct ConversationHistorySidebar: View {
+    @Binding var deletionCandidate: OracleConversation?
+    let bottomSafeArea: CGFloat
     let close: () -> Void
     @EnvironmentObject private var store: OracleStore
-    @State private var deletionCandidate: OracleConversation?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AccessibilityFocusState(for: .voiceOver) private var deletionTitleFocused: Bool
     @State private var showClearHistory = false
+
+    private var deletionAnimation: Animation? { reduceMotion ? nil : .easeInOut(duration: 0.24) }
 
     private var history: [OracleConversation] {
         store.conversations.filter { !$0.isEmpty }.sorted {
@@ -74,15 +87,17 @@ private struct ConversationHistorySidebar: View {
             .padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 22)
             Divider().overlay(InkTheme.line.opacity(0.6)).padding(.horizontal, 22)
 
-            if history.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(L10n.text("往日问事，都会留在这里。", "Your past conversations will appear here.")).font(.system(size: 16, design: .serif))
-                    Text(L10n.text("开始一段对话后，就可以随时回来。", "Once you start a conversation, you can return to it at any time."))
-                        .font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
-                }.padding(24)
-                Spacer()
-            } else {
-                ScrollView {
+            ScrollView {
+                if history.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(L10n.text("往日问事，都会留在这里。", "Your past conversations will appear here.")).font(.system(size: 16, design: .serif))
+                        Text(L10n.text("开始一段对话后，就可以随时回来。", "Once you start a conversation, you can return to it at any time."))
+                            .font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
+                    }
+                    .padding(24)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .transition(.opacity)
+                } else {
                     LazyVStack(alignment: .leading, spacing: 26) {
                         ForEach(groups, id: \.0) { section, conversations in
                             VStack(alignment: .leading, spacing: 8) {
@@ -90,12 +105,17 @@ private struct ConversationHistorySidebar: View {
                                     .foregroundStyle(InkTheme.secondary).padding(.horizontal, 14).padding(.bottom, 3)
                                 ForEach(conversations) { conversation in
                                     historyRow(conversation)
+                                        .transition(.opacity)
                                 }
                             }
                         }
-                    }.padding(.horizontal, 10).padding(.top, 24).padding(.bottom, 28)
+                    }
+                    .padding(.horizontal, 10).padding(.top, 24).padding(.bottom, 28)
+                    .transition(.opacity)
                 }
             }
+            .scrollDisabled(history.isEmpty)
+            .animation(deletionAnimation, value: deletionCandidate?.id)
             Button(role: .destructive) { showClearHistory = true } label: {
                 Label(L10n.text("清除全部历史", "Clear all history"), systemImage: "trash")
                     .font(.system(size: 14, design: .serif))
@@ -115,16 +135,30 @@ private struct ConversationHistorySidebar: View {
         .simultaneousGesture(DragGesture().onEnded { value in
             if value.translation.width < -60 && abs(value.translation.width) > abs(value.translation.height) * 1.3 { close() }
         })
+        .accessibilityHidden(deletionCandidate != nil)
+        .allowsHitTesting(deletionCandidate == nil)
+        .overlay(alignment: .bottom) {
+            ZStack(alignment: .bottom) {
+                if let candidate = deletionCandidate {
+                    Button(action: close) { Color.clear.contentShape(Rectangle()) }
+                        .buttonStyle(.plain)
+                        .accessibilityHidden(true)
+                    deletionCard(for: candidate)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 12 + bottomSafeArea)
+                        .transition(.move(edge: .bottom))
+                        .zIndex(1)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .clipped()
+            .ignoresSafeArea(.container, edges: .bottom)
+            .allowsHitTesting(deletionCandidate != nil)
+            .animation(deletionAnimation, value: deletionCandidate?.id)
+        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("conversationHistorySidebar")
         .accessibilityAction(.escape) { close() }
-        .confirmationDialog(L10n.text("删除这段对话？", "Delete this conversation?"), isPresented: Binding(get: { deletionCandidate != nil }, set: { if !$0 { deletionCandidate = nil } }), titleVisibility: .visible) {
-            Button(L10n.text("删除对话", "Delete conversation"), role: .destructive) {
-                if let candidate = deletionCandidate { store.deleteConversation(candidate.id) }
-                deletionCandidate = nil
-            }.accessibilityIdentifier("confirmDeleteConversation")
-            Button(L10n.text("取消", "Cancel"), role: .cancel) { deletionCandidate = nil }
-        } message: { Text(L10n.text("这段聊天会从历史中移除，基础资料与独立推演记录仍保留。", "This chat will be removed from history. Your profiles and saved readings will be kept.")) }
         .alert(L10n.text("清除全部历史？", "Clear all history?"), isPresented: $showClearHistory) {
             Button(L10n.text("清除全部历史", "Clear all history"), role: .destructive) {
                 deletionCandidate = nil
@@ -138,12 +172,65 @@ private struct ConversationHistorySidebar: View {
         }
     }
 
+    private func deletionCard(for candidate: OracleConversation) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L10n.text("删除这段对话？", "Delete this conversation?"))
+                .font(.headline)
+                .foregroundStyle(InkTheme.ink)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityFocused($deletionTitleFocused)
+            Text(candidate.title)
+                .font(.subheadline)
+                .foregroundStyle(InkTheme.ink)
+                .lineLimit(2)
+            Text(L10n.text("人物资料和已保存的推演记录会保留。", "Your profiles and saved readings will be kept."))
+                .font(.footnote)
+                .foregroundStyle(InkTheme.secondary)
+
+            HStack(spacing: 8) {
+                Button(action: close) {
+                    Text(L10n.text("取消", "Cancel"))
+                        .foregroundStyle(InkTheme.ink)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(InkTheme.wash, in: RoundedRectangle(cornerRadius: 10))
+                        .contentShape(Rectangle())
+                }
+                .accessibilityIdentifier("cancelDeleteConversation")
+                Button(role: .destructive) {
+                    store.deleteConversation(candidate.id)
+                    deletionCandidate = nil
+                } label: {
+                    Text(L10n.text("删除", "Delete"))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(InkTheme.cinnabar, in: RoundedRectangle(cornerRadius: 10))
+                        .contentShape(Rectangle())
+                }
+                .accessibilityIdentifier("confirmDeleteConversation")
+            }
+            .font(.subheadline.weight(.medium))
+            .buttonStyle(.plain)
+            .padding(.top, 4)
+        }
+        .padding(16)
+        .background(InkTheme.paper, in: RoundedRectangle(cornerRadius: 16))
+        .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(InkTheme.line, lineWidth: 1) }
+        .shadow(color: .black.opacity(0.14), radius: 12, y: 4)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("conversationDeletionCard")
+        .onAppear { deletionTitleFocused = true }
+    }
+
     private func historyRow(_ conversation: OracleConversation) -> some View {
         let active = conversation.id == store.activeConversationID
-        return Button {
+        let isDeletionTarget = conversation.id == deletionCandidate?.id
+        let open = {
+            guard deletionCandidate == nil else { return }
             store.openConversation(conversation.id)
             close()
-        } label: {
+        }
+        let requestDeletion = { deletionCandidate = conversation }
+        return Button(action: open) {
             HStack(alignment: .center, spacing: 10) {
                 VStack(alignment: .leading, spacing: 7) {
                     Text(conversation.title).font(.system(size: 15, design: .serif)).lineLimit(1)
@@ -156,17 +243,28 @@ private struct ConversationHistorySidebar: View {
             }
             .padding(.horizontal, 14).padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(active ? InkTheme.wash : .clear, in: RoundedRectangle(cornerRadius: 12))
+            .background(active || isDeletionTarget ? InkTheme.wash : .clear, in: RoundedRectangle(cornerRadius: 12))
+            .overlay {
+                if isDeletionTarget {
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(InkTheme.cinnabar.opacity(0.45), lineWidth: 1)
+                        .allowsHitTesting(false)
+                }
+            }
             .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(conversation.title)
         .accessibilityIdentifier("historyRow-\(conversation.id.uuidString)")
         .accessibilityValue(active ? L10n.text("当前对话", "Current conversation") : "")
-        .contextMenu {
-            Button(role: .destructive) { deletionCandidate = conversation } label: {
-                Label(L10n.text("删除对话", "Delete conversation"), systemImage: "trash")
-            }.accessibilityIdentifier("deleteConversation")
-        }
+        .highPriorityGesture(
+            LongPressGesture().exclusively(before: TapGesture()).onEnded { gesture in
+                switch gesture {
+                case .first: requestDeletion()
+                case .second: open()
+                }
+            }
+        )
+        .accessibilityAction(named: Text(L10n.text("删除对话", "Delete conversation")), requestDeletion)
     }
 }

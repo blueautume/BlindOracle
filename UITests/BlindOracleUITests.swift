@@ -304,7 +304,7 @@ final class BlindOracleUITests: XCTestCase {
 
     @MainActor func testHistoryRestoresPendingIntakeAndDeletionSurvivesRestart() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "-oracle.appLanguage", "zh-Hans"]
         app.launch()
         let question = "明天适合推进这个计划吗？"
         let input = app.textFields["questionInput"]
@@ -321,16 +321,35 @@ final class BlindOracleUITests: XCTestCase {
         XCTAssertTrue(app.buttons["confirmIntake"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts[question].exists)
         app.terminate()
-        app.launchArguments = ["--ui-testing-local"]
+        app.launchArguments = ["--ui-testing-local", "-oracle.appLanguage", "zh-Hans"]
         app.launch()
         XCTAssertTrue(app.buttons["confirmIntake"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts[question].exists)
         cancelForm(in: app)
         app.buttons["historyButton"].tap()
         let restored = historyRow(in: app, titled: question)
-        XCTAssertTrue(restored.waitForExistence(timeout: 10)); restored.press(forDuration: 1.2)
-        XCTAssertTrue(app.buttons["deleteConversation"].firstMatch.waitForExistence(timeout: 10)); app.buttons["deleteConversation"].firstMatch.tap()
-        XCTAssertTrue(app.buttons["confirmDeleteConversation"].firstMatch.waitForExistence(timeout: 10)); app.buttons["confirmDeleteConversation"].firstMatch.tap()
+        XCTAssertTrue(restored.waitForExistence(timeout: 10))
+        XCTAssertEqual(restored.value as? String, "当前对话")
+        let restoredID = restored.identifier
+        let restoredFrame = restored.frame
+        let drawer = app.descendants(matching: .any).matching(identifier: "conversationHistorySidebar").firstMatch
+        let deletionCard = app.descendants(matching: .any).matching(identifier: "conversationDeletionCard").firstMatch
+
+        restored.press(forDuration: 1.2)
+        XCTAssertTrue(deletionCard.waitForExistence(timeout: 5))
+        app.buttons["cancelDeleteConversation"].tap()
+        XCTAssertTrue(deletionCard.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(drawer.exists)
+        XCTAssertTrue(restored.isHittable)
+        XCTAssertEqual(restored.identifier, restoredID)
+        XCTAssertEqual(restored.value as? String, "当前对话")
+        XCTAssertEqual(restored.frame.minX, restoredFrame.minX, accuracy: 1)
+        XCTAssertEqual(restored.frame.minY, restoredFrame.minY, accuracy: 1)
+
+        restored.press(forDuration: 1.2)
+        XCTAssertTrue(deletionCard.waitForExistence(timeout: 5))
+        app.buttons["confirmDeleteConversation"].tap()
+        XCTAssertTrue(deletionCard.waitForNonExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["往日问事，都会留在这里。"].waitForExistence(timeout: 10))
         app.buttons["closeHistory"].firstMatch.tap()
         app.terminate(); app.launch()
