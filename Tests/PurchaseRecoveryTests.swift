@@ -33,9 +33,9 @@ import XCTest
             user: AccountUser(id: id.uuidString, displayName: "购买恢复测试", email: nil, createdAt: "2026-11-06")), appleUserID: nil)
     }
 
-    private func offer(currency: String = "CNY", price: Decimal = 6, consumable: Bool = true) -> AccountPurchaseProduct {
+    private func offer(id: String? = nil, currency: String = "CNY", price: Decimal = 6, consumable: Bool = true) -> AccountPurchaseProduct {
         let amount = String(format: "%.2f", NSDecimalNumber(decimal: price).doubleValue)
-        return .init(id: productID, displayPrice: (currency == "USD" ? "$" : "¥") + amount,
+        return .init(id: id ?? productID, displayPrice: (currency == "USD" ? "$" : "¥") + amount,
                      price: price, currency: currency, isConsumable: consumable)
     }
 
@@ -343,6 +343,56 @@ import XCTest
         XCTAssertEqual(provider.purchaseCount, 2)
     }
 
+    func testSixMillionPackCanBePurchasedInChinaAndIsOmittedFromUSCatalog() async throws {
+        let largeProductID = "com.lihao.BlindOracle.quota.6m"
+        let catalog = """
+        {"products":[
+            {"product_id":"\(largeProductID)","name":"600 万点额度包","credits":6000000,
+             "currency":"CNY","price_milliunits":30000,
+             "prices":[{"storefront":"CHN","currency":"CNY","price_milliunits":30000}]},
+            {"product_id":"\(productID)","name":"补充额度","credits":1000000,"currency":"CNY","price_milliunits":6000,
+             "prices":[{"storefront":"CHN","currency":"CNY","price_milliunits":6000},
+                       {"storefront":"USA","currency":"USD","price_milliunits":990}]}
+        ]}
+        """
+        let transactionID = "six-million-purchase"
+        let reply = confirmation(transactionID)
+        let metrics = metrics
+        RecoveryURLProtocol.handler = { request in
+            if request.url?.absoluteString.hasSuffix("/products/") == true { return catalog }
+            guard request.httpMethod == "POST", request.url?.absoluteString.hasSuffix("/purchases/apple/verify/") == true else {
+                throw URLError(.badServerResponse)
+            }
+            metrics.verified()
+            return reply
+        }
+
+        provider.offers = [offer(id: largeProductID, price: 30), offer()]
+        let purchases = store()
+        await purchases.loadProducts()
+        XCTAssertEqual(purchases.products.map(\.id), [productID, largeProductID])
+        XCTAssertEqual(purchases.products.map(\.displayPrice), ["¥6.00", "¥30.00"])
+        XCTAssertEqual(purchases.products.map(\.allowanceTokens), [1_000_000, 6_000_000])
+
+        let largeOffer = try XCTUnwrap(purchases.products.last)
+        provider.result = .success(event(id: transactionID))
+        await purchases.purchase(largeOffer)
+        XCTAssertEqual(provider.purchasedProductIDs, [largeProductID])
+        XCTAssertEqual(metrics.verifyCount, 1)
+        XCTAssertEqual(metrics.finishCount, 1)
+        XCTAssertFalse(purchases.hasUnresolvedPurchase)
+
+        provider.storefront = "USA"
+        provider.offers = [offer(id: largeProductID, currency: "USD", price: Decimal(499) / 100),
+                           offer(currency: "USD", price: Decimal(99) / 100)]
+        await purchases.loadProducts()
+        XCTAssertEqual(purchases.products.map(\.id), [productID])
+        XCTAssertEqual(purchases.products.first?.displayPrice, "$0.99")
+        XCTAssertEqual(purchases.products.first?.allowanceTokens, 1_000_000)
+        await purchases.purchase(largeOffer)
+        XCTAssertEqual(provider.purchasedProductIDs, [largeProductID])
+    }
+
     func testUSQuoteDoesNotDependOnCatalogPriceOrderingOrInterfaceLanguage() async throws {
         provider.storefront = "USA"
         provider.offers = [offer(currency: "USD", price: Decimal(99) / 100)]
@@ -552,7 +602,8 @@ import XCTest
     var offers: [AccountPurchaseProduct] = []
     var result: AccountPurchaseResult = .cancelled
     var pending: [AccountPurchaseEvent] = []
-    var purchaseCount = 0
+    private(set) var purchasedProductIDs: [String] = []
+    var purchaseCount: Int { purchasedProductIDs.count }
     var productLookupCount = 0
     var storefrontReadCount = 0
     var storefrontObservationCount = 0
@@ -575,7 +626,7 @@ import XCTest
         return snapshot
     }
     func purchase(productID: String, accountToken: UUID) async throws -> AccountPurchaseResult {
-        purchaseCount += 1
+        purchasedProductIDs.append(productID)
         try await beforePurchaseReturns?()
         return result
     }

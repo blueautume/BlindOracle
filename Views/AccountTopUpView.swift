@@ -100,7 +100,10 @@ struct AccountTopUpView: View {
                     Picker(L10n.text("选择补充包", "Choose a top-up"), selection: Binding(
                         get: { selectedProduct?.id ?? "" }, set: { selectedProductID = $0 })) {
                         ForEach(purchases.products) { offer in
-                            Text(offer.displayPrice).tag(offer.id)
+                            let amount = offer.allowanceTokens?.formatted(
+                                .number.notation(.compactName).locale(AppLanguage.current.locale))
+                            let label = amount.map { "\($0) · \(offer.displayPrice)" } ?? offer.displayPrice
+                            Text(label).tag(offer.id)
                         }
                     }.pickerStyle(.segmented).disabled(purchaseInProgress)
                 }
