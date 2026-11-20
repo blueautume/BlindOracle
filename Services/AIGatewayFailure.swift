@@ -52,7 +52,7 @@ enum AIGatewayFailure {
         case .request:
             return L10n.text("这次请求暂时无法处理，请重新打开 App 后重试。已填写的资料会保留。", "This request couldn’t be processed. Reopen the app and retry. Your entered details are saved.")
         case .context:
-            return L10n.text("这段对话较长，请开始新对话后再试。已有记录会保留。", "This conversation is too long. Start a new conversation and try again. Your existing records are saved.")
+            return L10n.text("本次问题或附带资料过长，请缩短问题或分段发送。已有记录会保留。", "This question or its supporting details are too long. Shorten the question or send it in parts. Your existing records are saved.")
         case .update:
             return L10n.text("请先更新 App，再继续使用解读服务。", "Update the app before continuing to use the reading service.")
         case .conflict:

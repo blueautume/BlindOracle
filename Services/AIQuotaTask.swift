@@ -23,7 +23,7 @@ struct PreparedAIStage: Sendable {
 }
 
 /// Request snapshots stay on this device with the same file protection as local conversations.
-/// Replays use the original bytes, so a changed timestamp/context cannot turn a retry into a new task.
+/// Replays use the original bytes once a request could have reached the gateway.
 actor AIQuotaTaskService {
     static let shared: AIQuotaTaskService = {
         let context = AppServiceContextStore.process.requireContext()
@@ -52,23 +52,31 @@ actor AIQuotaTaskService {
     init(directory: URL, api: AccountAPI = AccountAPI(), sessions: AccountSessionManager = .shared, environment: ServiceEnvironment = .current) {
         self.directory = directory; self.api = api; self.sessions = sessions; self.environment = environment
     }
-    func prepare(stage: AIQuotaStage, body: Data, purpose: String) async throws -> PreparedAIStage {
+    func prepare(stage: AIQuotaStage, body: @autoclosure @Sendable () throws -> Data,
+                 purpose: String) async throws -> PreparedAIStage {
         let expectedDeletionGeneration = deletionGeneration
         let context = await sessions.context()
-        guard expectedDeletionGeneration == deletionGeneration else { throw CancellationError() }
+        guard expectedDeletionGeneration == deletionGeneration, !Task.isCancelled else { throw CancellationError() }
         guard let user = context.session?.user else { throw AccountAPIError.unauthorized }
         let taskFile = url(stage.taskID, "task")
         var record = try load(TaskRecord.self, taskFile) ?? TaskRecord(ownerID: user.id, conversationID: stage.conversationID, serviceEnvironment: environment.rawValue, logicalTaskID: stage.taskID)
         guard matchesEnvironment(record), record.ownerID == user.id, record.endStatus == nil,
               record.logicalTaskID == nil || record.logicalTaskID == stage.taskID else { throw AccountAPIError.staleSession }
         record.serviceEnvironment = environment.rawValue; record.logicalTaskID = stage.taskID
-        // Persist ownership before the first network call; a restarted request must not adopt another user.
-        try save(record, taskFile)
         let stageFile = url(stage.taskID, "stage-" + Self.digest(stage.stageID))
         let cached = try load(StageRecord.self, stageFile)
         guard cached == nil || cached?.purpose == purpose else { throw DeepSeekError.http(409) }
-        let snapshot = cached ?? StageRecord(body: body, purpose: purpose)
-        if cached == nil { try save(snapshot, stageFile) }
+        var replacement: StageRecord?
+        if var cached, cached.body.count > AIGatewayRequestBudget.maximumRequestBytes, !cached.needsRepair {
+            // This body could not pass the proxy to bind a stage. Rebuild from its original inputs.
+            cached.body = try AIGatewayRequestBudget.rebuildOversizedSnapshot(cached.body, purpose: purpose)
+            replacement = cached
+        } else if cached == nil {
+            replacement = StageRecord(body: try body(), purpose: purpose)
+        }
+        // Persist ownership and the snapshot before contacting the server.
+        try save(record, taskFile)
+        if let replacement { try save(replacement, stageFile) }
         var access = try await sessions.accessToken(expectedGeneration: context.generation)
         let admission: AITaskAdmission
         let serverID = environment.serverTaskID(for: stage.taskID)
@@ -84,9 +92,13 @@ actor AIQuotaTaskService {
         guard admission.taskID == serverID, !admission.admissionToken.isEmpty,
               await sessions.sessionGeneration() == context.generation else { throw AccountAPIError.staleSession }
         guard expectedDeletionGeneration == deletionGeneration, !Task.isCancelled else { throw CancellationError() }
-        guard let latest = try load(TaskRecord.self, taskFile), latest.endStatus == nil else { throw CancellationError() }
-        record.admissionToken = admission.admissionToken
-        try save(record, taskFile)
+        guard var latest = try load(TaskRecord.self, taskFile), latest.endStatus == nil,
+              let snapshot = try load(StageRecord.self, stageFile), snapshot.purpose == purpose else { throw CancellationError() }
+        guard matchesEnvironment(latest), latest.ownerID == user.id, latest.logicalTaskID == stage.taskID else {
+            throw AccountAPIError.staleSession
+        }
+        latest.admissionToken = admission.admissionToken
+        try save(latest, taskFile)
         return PreparedAIStage(body: snapshot.body, taskID: serverID, stageID: stage.stageID,
             admissionToken: admission.admissionToken, needsRepair: snapshot.needsRepair)
     }

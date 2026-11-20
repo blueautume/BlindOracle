@@ -148,6 +148,51 @@ final class AllowanceAndPurchaseTests: XCTestCase {
         await restarted.end(stage.taskID, status: "completed")
         XCTAssertFalse(FileManager.default.fileExists(atPath: folder.appendingPathComponent(ServiceEnvironment.current.serverTaskID(for: stage.taskID).uuidString.lowercased()).path))
     }
+    func testFreshBodyPreparationFailureDoesNotCreateATaskOrRequestAdmission() async throws {
+        enum FixtureError: Error { case rejectedBody }
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let client = api(); let manager = AccountSessionManager(api: client, vault: PurchaseVault(try session()))
+        let service = AIQuotaTaskService(directory: folder, api: client, sessions: manager)
+        let stage = AIQuotaStage(taskID: UUID(), stageID: "answer")
+        let rejectedBody: @Sendable () throws -> Data = { throw FixtureError.rejectedBody }
+        AllowanceURLProtocol.handler = { _ in
+            XCTFail("A failed local body must not request admission")
+            return .init(status: 500, body: "{}")
+        }
+
+        do {
+            _ = try await service.prepare(stage: stage, body: try rejectedBody(), purpose: "follow_up")
+            XCTFail("Expected the local body preparation error")
+        } catch FixtureError.rejectedBody { }
+
+        let containsTask = await service.containsTask(stage.taskID)
+        XCTAssertFalse(containsTask)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path))
+    }
+    func testAdmissionReturnsRepairFlagUpdatedWhileAwaitingServer() async throws {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let client = api(); let manager = AccountSessionManager(api: client, vault: PurchaseVault(try session()))
+        let service = AIQuotaTaskService(directory: folder, api: client, sessions: manager)
+        let stage = AIQuotaStage(taskID: UUID(), stageID: "answer")
+        let serverID = ServiceEnvironment.current.serverTaskID(for: stage.taskID)
+        let started = expectation(description: "Task admission requested")
+        let sendResponse = DispatchSemaphore(value: 0)
+        defer { sendResponse.signal() }
+        AllowanceURLProtocol.handler = { _ in
+            started.fulfill()
+            guard sendResponse.wait(timeout: .now() + 5) == .success else { throw URLError(.timedOut) }
+            return .init(body: "{\"task_id\":\"" + serverID.uuidString + "\",\"state\":\"open\",\"admission_token\":\"fixture-admission\"}")
+        }
+        let original = Data("original snapshot".utf8)
+        let admission = Task { try await service.prepare(stage: stage, body: original, purpose: "follow_up") }
+        await fulfillment(of: [started], timeout: 2)
+        try await service.markRepair(stage, needed: true)
+        sendResponse.signal()
+
+        let prepared = try await admission.value
+        XCTAssertEqual(prepared.body, original)
+        XCTAssertTrue(prepared.needsRepair)
+    }
     func testTaskCannotBeAdoptedByAnotherAccount() async throws {
         let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
         let client = api(); let manager = AccountSessionManager(api: client, vault: PurchaseVault(try session()))

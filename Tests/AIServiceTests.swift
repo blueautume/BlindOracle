@@ -381,26 +381,66 @@ final class AIServiceTests: XCTestCase {
         let client = DeepSeekClient(accessToken: key, sessionConfiguration: configuration)
         let fact = ChatMessage(role: .user, content: "real-user-fact: meeting is confirmed for Tuesday")
         let choice = ChatMessage(role: .user, content: "retired-choice-must-not-be-summarized", kind: .choice)
-        let messages = [choice, fact] + (0..<60).map { index in
+        let oversized = ChatMessage(role: .user, content: "oversized-turn-original" + String(repeating: "旧\0", count: 20_000))
+        let oversizedReply = ChatMessage(role: .assistant, content: "oversized-turn-reply")
+        let messages = [choice, oversized, oversizedReply, fact] + (0..<60).map { index in
             ChatMessage(role: index.isMultiple(of: 2) ? .user : .assistant,
-                        content: "正常记录\(index)" + String(repeating: "实", count: 600))
+                        content: "正常记录\(index)" + String(repeating: "实\0", count: 600))
         }
-        let previous = ConversationSummary(text: "previous-real-fact: budget is still unconfirmed")
-        let summary = try await ContextCompressor.compact(messages: messages, summary: previous, using: client)
+        let previous = ConversationSummary(text: "previous-real-fact: budget is still unconfirmed" + String(repeating: "\0旧", count: 70_000))
+        let batch = try XCTUnwrap(ContextCompressor.batch(messages: messages, summary: previous))
+        XCTAssertLessThanOrEqual(batch.previous.utf8.count, 8 * 1024)
+        XCTAssertLessThanOrEqual(batch.transcript.utf8.count, 48 * 1024)
+        let summary = try await ContextCompressor.compact(batch, using: client)
         await fulfillment(of: [inspected], timeout: 3)
         XCTAssertEqual(summary?.text, "真实事项已保留，待核对预算。")
-        XCTAssertTrue(summary?.coveredMessageIDs.contains(fact.id) == true)
+        XCTAssertEqual(summary?.coveredMessageIDs, batch.messageIDs)
+        XCTAssertTrue(batch.messageIDs.contains(fact.id))
+        XCTAssertFalse(batch.messageIDs.contains(choice.id))
+        XCTAssertFalse(batch.messageIDs.contains(oversized.id))
+        XCTAssertFalse(batch.messageIDs.contains(oversizedReply.id))
+        XCTAssertTrue(Set(batch.messageIDs).isDisjoint(with: messages.suffix(16).map(\.id)))
         XCTAssertEqual(messages[0].content, choice.content)
+        XCTAssertEqual(messages[1].content, oversized.content)
     }
 
     func testCompressionIsInfrequentAndThresholdBased() {
         let short = (0..<60).map { _ in ChatMessage(role: .user, content: "短消息") }
         XCTAssertFalse(ContextCompressor.shouldCompress(messages: short, summary: ConversationSummary()))
-        let long = (0..<60).map { _ in ChatMessage(role: .user, content: String(repeating: "字", count: 1200)) }
+        let long = (0..<60).map { _ in ChatMessage(role: .user, content: String(repeating: "字", count: 900)) }
         XCTAssertTrue(ContextCompressor.shouldCompress(messages: long, summary: ConversationSummary()))
         var recent = ConversationSummary()
         recent.lastCompressedMessageCount = 50
         XCTAssertFalse(ContextCompressor.shouldCompress(messages: long, summary: recent))
+    }
+
+    func testShortUncoveredMessagesTriggerAStableBoundedBatch() throws {
+        let messages = (0..<120).map { index in
+            ChatMessage(role: index.isMultiple(of: 2) ? .user : .assistant, content: "ok")
+        }
+        let previous = ConversationSummary(lastCompressedMessageCount: 119)
+        let batch = try XCTUnwrap(ContextCompressor.batch(messages: messages, summary: previous, language: .english))
+        XCTAssertEqual(batch.messageIDs, Array(messages.prefix(96).map(\.id)))
+        XCTAssertEqual(batch.stageID, ContextCompressor.batch(messages: messages, summary: previous, language: .english)?.stageID)
+        XCTAssertNotEqual(batch.stageID, ContextCompressor.batch(messages: messages, summary: previous, language: .simplifiedChinese)?.stageID)
+        var distinct = messages
+        distinct[0].id = UUID()
+        XCTAssertNotEqual(batch.stageID, ContextCompressor.batch(messages: distinct, summary: previous, language: .english)?.stageID)
+        var covered = previous
+        covered.coveredMessageIDs = [messages[0].id]
+        XCTAssertNil(ContextCompressor.batch(messages: messages, summary: covered))
+    }
+
+    func testBytePressurePreservesTheWholeRecentTurnAcrossTheCut() throws {
+        var messages = (0..<41).map { index in
+            ChatMessage(role: index.isMultiple(of: 2) ? .user : .assistant, content: "turn \(index)")
+        }
+        messages[40].content = String(repeating: "字\0", count: 50_000)
+        let previous = ConversationSummary(lastCompressedMessageCount: messages.count)
+        let batch = try XCTUnwrap(ContextCompressor.batch(messages: messages, summary: previous))
+        XCTAssertEqual(batch.messageIDs, Array(messages.prefix(24).map(\.id)))
+        XCTAssertFalse(batch.transcript.contains("turn 24"))
+        XCTAssertFalse(batch.transcript.contains("turn 25"))
     }
 }
 
@@ -757,9 +797,13 @@ private final class ChoiceFreeSummaryURLProtocol: URLProtocol, @unchecked Sendab
         do {
             let key = request.value(forHTTPHeaderField: "Authorization") ?? ""
             let inspected = try XCTUnwrap(Self.lock.withLock { Self.inspections[key] })
-            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: requestData()) as? [String: Any])
+            let data = try requestData()
+            XCTAssertLessThan(data.count, 1024 * 1024)
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
             XCTAssertEqual(body["stream"] as? Bool, false)
             let turns = try XCTUnwrap(body["messages"] as? [[String: String]])
+            XCTAssertEqual(turns.count, 2)
+            XCTAssertLessThan(turns.compactMap { $0["content"] }.reduce(0) { $0 + $1.utf8.count }, 262_144)
             let system = try XCTUnwrap(turns.first?["content"])
             XCTAssertTrue(system.contains("真实事实"))
             XCTAssertTrue(system.contains("现实决定"))
@@ -769,6 +813,8 @@ private final class ChoiceFreeSummaryURLProtocol: URLProtocol, @unchecked Sendab
             XCTAssertTrue(transcript.contains("real-user-fact: meeting is confirmed for Tuesday"))
             XCTAssertTrue(transcript.contains("previous-real-fact: budget is still unconfirmed"))
             XCTAssertFalse(transcript.contains("retired-choice-must-not-be-summarized"))
+            XCTAssertFalse(transcript.contains("oversized-turn-original"))
+            XCTAssertFalse(transcript.contains("oversized-turn-reply"))
             inspected.fulfill()
 
             let payload = try JSONSerialization.data(withJSONObject: [

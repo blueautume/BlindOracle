@@ -296,6 +296,34 @@ final class OracleProgressTests: XCTestCase {
         XCTAssertFalse(store.activities.contains { $0.text == "整理此前对话与已确认资料" })
     }
 
+    @MainActor func testLongConversationStillAnswersWhenSummarizationFails() async throws {
+        let older = (0..<180).map { index in
+            ChatMessage(role: index.isMultiple(of: 2) ? .user : .assistant, content: "此前的短消息 \(index)")
+        }
+        let recentQuestion = ChatMessage(role: .user, content: "感情呢，今天")
+        let recentAnswer = ChatMessage(role: .assistant, content: "今天可以观察对方是否主动联系。")
+        let conversation = OracleConversation(messages: older + [recentQuestion, recentAnswer])
+        let expanded = "再看看这周的感情走向。"
+        let reply = "这周继续看双方有没有主动推进联系。"
+        let client = scriptedClient([
+            .networkError,
+            .plan(try mistakenIntake(continuing: recentAnswer, expanded: expanded), requiringReference: recentAnswer.id),
+            .checkedReply(reply, questionIncludes: [expanded], priorTurn: recentQuestion.content,
+                          includesEvidence: nil, excludesEvidence: older[0].content)
+        ])
+        let store = try routedStore(conversation: conversation, runs: [], client: client, vault: temporaryVault())
+        defer { if store.isBusy { store.stop() } }
+
+        store.send("再看看这周")
+        try await waitUntil { !store.isBusy }
+
+        XCTAssertEqual(store.activeConversationID, conversation.id)
+        XCTAssertEqual(store.messages.prefix(conversation.messages.count).map { $0.id }, conversation.messages.map { $0.id })
+        XCTAssertEqual(store.messages.last?.content, reply)
+        XCTAssertTrue(store.summary.coveredMessageIDs.isEmpty)
+        XCTAssertNil(store.notice)
+    }
+
     @MainActor func testSendingWhileWritingKeepsThePartialReplyAndAnswersTheNewQuestion() async throws {
         let partial = "Here is the first part."
         let newReply = "You're welcome."

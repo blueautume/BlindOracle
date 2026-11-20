@@ -1413,7 +1413,7 @@ struct CastingLocationDraft: Equatable, Sendable {
         let replyLanguage = EnglishConversation.replyLanguage(in: text) ?? AppLanguage.current
         task = Task { [weak self] in
             guard let self else { return }
-            await prepareContext(operation: id, language: replyLanguage)
+            if !isPlanningRetry { await prepareContext(operation: id, language: replyLanguage) }
             guard operationID == id, !Task.isCancelled else { return }
             let transcript = Array(messages.prefix { $0.id != questionID })
             let history = ContextCompressor.history(messages: transcript, summary: summary, language: replyLanguage)
@@ -1869,12 +1869,12 @@ struct CastingLocationDraft: Equatable, Sendable {
 
     private func prepareContext(operation: UUID, language: AppLanguage) async {
         guard operationID == operation, !Task.isCancelled else { return }
-        guard ContextCompressor.shouldCompress(messages: messages, summary: summary) else { return }
+        guard let batch = ContextCompressor.batch(messages: messages, summary: summary, language: language) else { return }
         progress(L10n.text("整理此前对话与已确认资料", "Reviewing earlier messages and confirmed details"))
         if !usesTestAgent {
             do {
-                let newSummary = try await AIQuotaTaskScope.$stage.withValue(quotaStage("summary:" + (activityMessageID ?? activeConversationID).uuidString.lowercased()), operation: {
-                    try await ContextCompressor.compact(messages: self.messages, summary: self.summary, using: self.client, language: language)
+                let newSummary = try await AIQuotaTaskScope.$stage.withValue(quotaStage(batch.stageID), operation: {
+                    try await ContextCompressor.compact(batch, using: self.client)
                 })
                 if let newSummary {
                     guard operationID == operation, !Task.isCancelled else { return }

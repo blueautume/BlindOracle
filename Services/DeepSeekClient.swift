@@ -616,7 +616,7 @@ actor DeepSeekClient {
         var body: [String: Any] = [
             "model": DeepSeekConfiguration.defaultModel,
             "purpose": purpose,
-            "messages": messages.map { ["role": $0.role, "content": $0.content] },
+            "messages": AIGatewayRequestBudget.wireMessages(messages),
             "stream": streaming,
             "max_tokens": max(DeepSeekConfiguration.outputTokenBudget, maxTokens),
             "reasoning_effort": DeepSeekConfiguration.reasoningEffort,
@@ -632,6 +632,12 @@ actor DeepSeekClient {
         }
         if jsonMode { body["response_format"] = ["type": "json_object"] }
         return body
+    }
+
+    private static func encodedRequestBody(_ messages: [AIConversationTurn], jsonMode: Bool,
+                                           streaming: Bool, maxTokens: Int, purpose: String) throws -> Data {
+        try AIGatewayRequestBudget.encode(messages, body: requestBody([], jsonMode: jsonMode,
+            streaming: streaming, maxTokens: maxTokens, purpose: purpose))
     }
 
     private func request(_ messages: [AIConversationTurn], jsonMode: Bool, streaming: Bool,
@@ -650,19 +656,23 @@ actor DeepSeekClient {
         request.setValue(requestID, forHTTPHeaderField: "Idempotency-Key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(streaming ? "text/event-stream" : "application/json", forHTTPHeaderField: "Accept")
-        let proposedBody = try JSONSerialization.data(withJSONObject: Self.requestBody(messages,
-            jsonMode: jsonMode, streaming: streaming, maxTokens: maxTokens, purpose: purpose))
         if manageQuota {
             let stage = AIQuotaTaskScope.stage ?? AIQuotaStage(taskID: UUID(uuidString: requestID) ?? UUID(), stageID: purpose)
             let prepared: PreparedAIStage
-            do { prepared = try await quotaTasks.prepare(stage: stage, body: proposedBody, purpose: purpose) }
+            do {
+                prepared = try await quotaTasks.prepare(stage: stage, body: Self.encodedRequestBody(messages,
+                    jsonMode: jsonMode, streaming: streaming, maxTokens: maxTokens, purpose: purpose), purpose: purpose)
+            }
             catch AccountAPIError.server(let status, let code) { throw AIGatewayFailure.error(status: status, code: code) }
             request.httpBody = prepared.body
             request.setValue(prepared.taskID.uuidString.lowercased(), forHTTPHeaderField: "X-Task-ID")
             request.setValue(prepared.stageID, forHTTPHeaderField: "X-Stage-ID")
             request.setValue(prepared.admissionToken, forHTTPHeaderField: "X-Task-Token")
             if prepared.needsRepair { request.setValue("1", forHTTPHeaderField: "X-Stage-Repair") }
-        } else { request.httpBody = proposedBody }
+        } else {
+            request.httpBody = try Self.encodedRequestBody(messages, jsonMode: jsonMode,
+                streaming: streaming, maxTokens: maxTokens, purpose: purpose)
+        }
         return request
     }
 

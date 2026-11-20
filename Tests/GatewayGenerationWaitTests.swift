@@ -1,3 +1,4 @@
+import CryptoKit
 import XCTest
 @testable import BlindOracle
 
@@ -39,6 +40,136 @@ import XCTest
         XCTAssertFalse(text.contains("generation_in_progress"))
         assertOnePreparedRequest(harness.server.snapshot)
         XCTAssertEqual(journal.waits, [true, false])
+    }
+
+    func testTenThousandMessageFollowUpFitsTheGatewayAndRetainsCurrentContext() async throws {
+        let harness = try await WaitHarness.make(mode: .ready)
+        defer { harness.dispose() }
+        let stage = AIQuotaStage(taskID: UUID(), stageID: "answer")
+        let summary = "Previous conversation summary (profile records are stored separately):\nAn agreed date."
+        let history = [AIConversationTurn(role: "assistant", content: summary)] + (0..<5_000).flatMap { index in
+            [AIConversationTurn(role: "user", content: "Earlier question \(index)"),
+             AIConversationTurn(role: "assistant", content: "Earlier answer \(index)")]
+        }
+
+        let reply = try await harness.followUp(stage: stage, question: "Continue with the earlier subject.",
+            history: history, resolvedQuestion: "What does the saved conclusion mean?", citedQuestion: "The cited original question.")
+        XCTAssertEqual(reply, "Received. Continuing.")
+
+        let snapshot = harness.server.snapshot
+        let attempt = try XCTUnwrap(snapshot.attempts.first)
+        let messages = try assertRequestFitsGateway(attempt.body)
+        XCTAssertEqual(snapshot.attempts.count, 1)
+        XCTAssertEqual(snapshot.admissions, 1)
+        XCTAssertEqual(attempt.stageID, stage.stageID)
+        XCTAssertEqual(messages.first?.role, "system")
+        XCTAssertEqual(messages.last?.role, "user")
+        let current = try XCTUnwrap(messages.last?.content)
+        XCTAssertTrue(current.contains("Continue with the earlier subject."))
+        XCTAssertTrue(current.contains("The cited original question."))
+        XCTAssertEqual(messages.dropFirst().first?.content, summary)
+        let retainedHistory = Array(messages.dropFirst(2).dropLast())
+        XCTAssertEqual(retainedHistory.first?.role, "user")
+        XCTAssertEqual(retainedHistory.last?.content, "Earlier answer 4999")
+        XCTAssertTrue(retainedHistory.enumerated().allSatisfy { index, message in
+            message.role == (index.isMultiple(of: 2) ? "user" : "assistant")
+        })
+        XCTAssertFalse(retainedHistory.contains { $0.content == "Earlier question 0" })
+    }
+
+    func testFollowUpUsesActualUTF8AndEscapedJSONBudgets() async throws {
+        let largeHistoryItems = [
+            String(repeating: "问🧪", count: 40_000),
+            String(repeating: "\u{0001}", count: 180_000)
+        ]
+        XCTAssertGreaterThan(largeHistoryItems[0].utf8.count, 262_144)
+        XCTAssertLessThan(largeHistoryItems[1].utf8.count, 262_144)
+        let encodedEscapes = try JSONSerialization.data(withJSONObject: ["content": largeHistoryItems[1]])
+        XCTAssertGreaterThan(encodedEscapes.count, 1_048_576)
+
+        for item in largeHistoryItems {
+            let harness = try await WaitHarness.make(mode: .ready)
+            defer { harness.dispose() }
+            let oldTurn = [AIConversationTurn(role: "user", content: "Old question with a huge answer."),
+                           AIConversationTurn(role: "assistant", content: item)]
+            let recentTurn = [AIConversationTurn(role: "user", content: "Recent question"),
+                              AIConversationTurn(role: "assistant", content: "Recent answer")]
+            let stage = AIQuotaStage(taskID: UUID(), stageID: "answer")
+            let reply = try await harness.followUp(stage: stage, question: "Current question", history: oldTurn + recentTurn)
+            XCTAssertEqual(reply, "Received. Continuing.")
+            let attempt = try XCTUnwrap(harness.server.snapshot.attempts.first)
+            let sent = try assertRequestFitsGateway(attempt.body)
+            XCTAssertEqual(sent.dropFirst().map(\.content), ["Recent question", "Recent answer", "Current question"])
+        }
+    }
+
+    func testOversizedCurrentQuestionStopsBeforeAdmission() async throws {
+        let harness = try await WaitHarness.make(mode: .ready)
+        defer { harness.dispose() }
+        let stage = AIQuotaStage(taskID: UUID(), stageID: "answer")
+        let question = String(repeating: "问", count: 90_000)
+        do {
+            _ = try await harness.followUp(stage: stage, question: question, history: [])
+            XCTFail("The request cannot make the current question fit by removing history")
+        } catch {
+            assertGateway(error, status: 413, code: "context_too_large")
+        }
+        XCTAssertEqual(harness.server.snapshot.admissions, 0)
+        XCTAssertTrue(harness.server.snapshot.attempts.isEmpty)
+    }
+
+    func testCompatibleSavedRequestReplaysOriginalBytesAfterUpgrade() async throws {
+        let harness = try await WaitHarness.make(mode: .ready)
+        defer { harness.dispose() }
+        let stage = AIQuotaStage(taskID: UUID(), stageID: "answer")
+        let olderMessages = (0..<160).map { index in
+            AIConversationTurn(role: index.isMultiple(of: 2) ? "user" : "assistant", content: "Stored message \(index)")
+        }
+        let original = try legacyFollowUpBody(history: olderMessages)
+        XCTAssertLessThan(original.count, 1_048_576)
+        try harness.seedLegacySnapshot(body: original, stage: stage, purpose: "follow_up")
+
+        // Reopening a saved step must work even when the newly assembled
+        // candidate could not be sent as a fresh request.
+        let reply = try await harness.followUp(stage: stage, question: String(repeating: "问", count: 90_000), history: [])
+        XCTAssertEqual(reply, "Received. Continuing.")
+        let attempt = try XCTUnwrap(harness.server.snapshot.attempts.first)
+        XCTAssertEqual(attempt.body, original)
+        XCTAssertEqual(attempt.taskID, harness.serverTaskID(for: stage))
+        XCTAssertEqual(attempt.stageID, stage.stageID)
+    }
+
+    func testSavedRequestThatCouldNotReachGatewayRebuildsFromOriginalOnSameStage() async throws {
+        let harness = try await WaitHarness.make(mode: .ready)
+        defer { harness.dispose() }
+        let stage = AIQuotaStage(taskID: UUID(), stageID: "answer")
+        let body = try legacyFollowUpBody(history: [
+            AIConversationTurn(role: "user", content: "Old optional detail"),
+            AIConversationTurn(role: "assistant", content: String(repeating: "\u{0001}", count: 180_000)),
+            AIConversationTurn(role: "user", content: "Recent original question"),
+            AIConversationTurn(role: "assistant", content: "Recent original answer")
+        ])
+        XCTAssertGreaterThan(body.count, 1_048_576)
+        try harness.seedLegacySnapshot(body: body, stage: stage, purpose: "follow_up")
+
+        let first = try await harness.followUp(stage: stage, question: "A later draft", history: [])
+        let replay = try await harness.followUp(stage: stage, question: "Another later draft", history: [])
+        XCTAssertEqual(first, "Received. Continuing.")
+        XCTAssertEqual(replay, first)
+        let attempts = harness.server.snapshot.attempts
+        XCTAssertEqual(attempts.count, 2)
+        let sent = try XCTUnwrap(attempts.first)
+        XCTAssertTrue(attempts.allSatisfy { $0.stageID == stage.stageID && $0.taskID == harness.serverTaskID(for: stage) })
+        XCTAssertTrue(attempts.allSatisfy { $0.body == sent.body }, "The rebuilt snapshot must be stored before retry")
+        let messages = try assertRequestFitsGateway(sent.body)
+        XCTAssertEqual(messages.first?.content, "Original system instructions")
+        XCTAssertEqual(messages.last?.content, "Original current question")
+        XCTAssertTrue(messages.contains { $0.content == "Recent original answer" })
+        XCTAssertFalse(messages.contains { $0.content == "Old optional detail" })
+        let options = try XCTUnwrap(JSONSerialization.jsonObject(with: sent.body) as? [String: Any])
+        XCTAssertEqual(options["purpose"] as? String, "follow_up")
+        XCTAssertEqual(options["stream"] as? Bool, true)
+        XCTAssertEqual(options["max_tokens"] as? Int, 3_499)
     }
 
     func testOtherLimitsAndNetworkTimeoutsDoNotAutomaticallyRetry() async throws {
@@ -172,6 +303,30 @@ import XCTest
         }
     }
 
+    private func assertRequestFitsGateway(_ body: Data, file: StaticString = #filePath, line: UInt = #line) throws -> [AIConversationTurn] {
+        struct Payload: Decodable {
+            let messages: [AIConversationTurn]
+        }
+        let messages = try JSONDecoder().decode(Payload.self, from: body).messages
+        XCTAssertLessThanOrEqual(body.count, 1_048_576, file: file, line: line)
+        XCTAssertLessThanOrEqual(messages.count, 160, file: file, line: line)
+        XCTAssertLessThanOrEqual(messages.reduce(0) { $0 + $1.content.utf8.count }, 262_144, file: file, line: line)
+        return messages
+    }
+
+    private func legacyFollowUpBody(history: [AIConversationTurn]) throws -> Data {
+        let messages = [AIConversationTurn(role: "system", content: "Original system instructions")] + history
+            + [AIConversationTurn(role: "user", content: "Original current question")]
+        return try JSONSerialization.data(withJSONObject: [
+            "model": DeepSeekConfiguration.defaultModel,
+            "purpose": "follow_up",
+            "messages": messages.map { ["role": $0.role, "content": $0.content] },
+            "stream": true,
+            "max_tokens": 3_499,
+            "thinking": ["type": "enabled"]
+        ], options: [.sortedKeys, .prettyPrinted])
+    }
+
     private func assertOnePreparedRequest(_ snapshot: WaitServer.Snapshot,
                                           file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertGreaterThanOrEqual(snapshot.attempts.count, 2, file: file, line: line)
@@ -206,6 +361,7 @@ import XCTest
 }
 
 @MainActor private struct WaitHarness {
+    private static let userID = "synthetic-wait-user"
     let key: String
     let directory: URL
     let defaults: UserDefaults
@@ -213,6 +369,7 @@ import XCTest
     let sessions: AccountSessionManager
     let consent: AIDataSharingConsentStore
     let client: DeepSeekClient
+    let environment: ServiceEnvironment
 
     static func make(mode: WaitServer.Mode, timeout: Duration = .seconds(2),
                      delay: Duration = .milliseconds(10), keepSuccessfulStreamOpen: Bool = false) async throws -> WaitHarness {
@@ -224,18 +381,19 @@ import XCTest
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [WaitURLProtocol.self]
         let api = AccountAPI(configuration: configuration)
+        let environment = ServiceEnvironment.current
         let saved = try AccountSession(response: .init(accessToken: key, refreshToken: "synthetic-refresh",
-            expiresIn: 3600, user: .init(id: "synthetic-wait-user", displayName: "Synthetic", email: nil,
+            expiresIn: 3600, user: .init(id: userID, displayName: "Synthetic", email: nil,
                 createdAt: "2026-11-16T00:00:00Z")), appleUserID: nil)
         let sessions = AccountSessionManager(api: api, vault: WaitMemoryVault(saved))
-        let quota = AIQuotaTaskService(directory: directory, api: api, sessions: sessions)
+        let quota = AIQuotaTaskService(directory: directory, api: api, sessions: sessions, environment: environment)
         let consent = AIDataSharingConsentStore(defaults: defaults)
         await consent.grant()
         let client = DeepSeekClient(accountSessions: sessions, quotaTasks: quota,
             sessionConfiguration: configuration, dataSharingConsent: consent,
             generationWaitPolicy: .init(timeout: timeout, initialDelay: delay, maximumDelay: delay))
         return WaitHarness(key: key, directory: directory, defaults: defaults, server: server,
-            sessions: sessions, consent: consent, client: client)
+            sessions: sessions, consent: consent, client: client, environment: environment)
     }
 
     func stage(journal: WaitJournal) -> AIQuotaStage {
@@ -245,6 +403,33 @@ import XCTest
 
     func checkConnection(journal: WaitJournal) async throws -> AIConnectionReport {
         try await AIQuotaTaskScope.$stage.withValue(stage(journal: journal)) { try await client.checkConnection() }
+    }
+
+    func followUp(stage: AIQuotaStage, question: String, history: [AIConversationTurn],
+                  resolvedQuestion: String? = nil, citedQuestion: String? = nil) async throws -> String {
+        try await AIQuotaTaskScope.$stage.withValue(stage) {
+            try await client.followUp(question: question, run: nil, profile: OracleProfile(), history: history,
+                resolvedQuestion: resolvedQuestion, citedQuestion: citedQuestion, language: .english) { _ in }
+        }
+    }
+
+    func serverTaskID(for stage: AIQuotaStage) -> String {
+        environment.serverTaskID(for: stage.taskID).uuidString.lowercased()
+    }
+
+    func seedLegacySnapshot(body: Data, stage: AIQuotaStage, purpose: String) throws {
+        let folder = directory.appendingPathComponent(serverTaskID(for: stage))
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let task = try JSONSerialization.data(withJSONObject: [
+            "ownerID": Self.userID, "admissionToken": "synthetic-legacy-admission",
+            "serviceEnvironment": environment.rawValue, "logicalTaskID": stage.taskID.uuidString
+        ])
+        try task.write(to: folder.appendingPathComponent("task.json"))
+        let digest = SHA256.hash(data: Data(stage.stageID.utf8)).map { String(format: "%02x", $0) }.joined()
+        let snapshot = try JSONSerialization.data(withJSONObject: [
+            "body": body.base64EncodedString(), "purpose": purpose, "needsRepair": false
+        ])
+        try snapshot.write(to: folder.appendingPathComponent("stage-" + digest + ".json"))
     }
 
     func dispose() {
@@ -275,7 +460,7 @@ private final class WaitMemoryVault: AccountSessionStorage {
 private enum WaitFixtureError: Error { case timedOut, unexpectedRequest }
 
 private final class WaitServer: @unchecked Sendable {
-    enum Mode { case busy(Int, String), rejected(Int, String), networkFailure(URLError.Code) }
+    enum Mode { case ready, busy(Int, String), rejected(Int, String), networkFailure(URLError.Code) }
     struct Attempt: Equatable {
         var body: Data
         var taskID: String
