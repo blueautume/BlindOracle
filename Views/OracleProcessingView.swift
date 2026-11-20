@@ -68,7 +68,7 @@ struct OracleProcessingView: View {
                     }
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("progressSteps")
-                    .transition(reduceMotion ? .identity : .opacity.combined(with: .move(edge: .top)))
+                    .transition(ProgressStepsTransition())
                 }
             }
             .padding(.vertical, 14).padding(.horizontal, 15)
@@ -81,7 +81,8 @@ struct OracleProcessingView: View {
     }
 
     private func toggleExpansion() {
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) { expanded.toggle() }
+        let duration = expanded ? 0.22 : 0.32
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: duration)) { expanded.toggle() }
         onExpansionChanged(expanded)
     }
 
@@ -170,5 +171,35 @@ struct OracleProcessingView: View {
                 .foregroundStyle(status == .completed ? InkTheme.sage : status == .failed ? InkTheme.cinnabar : InkTheme.secondary)
                 .accessibilityLabel(statusTitle(status))
         }
+    }
+}
+
+private struct ProgressStepsTransition: Transition {
+    func body(content: Content, phase: TransitionPhase) -> some View {
+        ProgressStepsLayout(visibleFraction: phase.isIdentity ? 1 : 0) {
+            content
+        }
+        .clipped()
+    }
+}
+
+private struct ProgressStepsLayout: Layout {
+    var visibleFraction: CGFloat
+
+    var animatableData: CGFloat {
+        get { visibleFraction }
+        set { visibleFraction = newValue }
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let steps = subviews.first else { return .zero }
+        let size = steps.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        return CGSize(width: size.width, height: size.height * visibleFraction)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        // The timeline keeps its natural height while the clipping boundary animates.
+        subviews.first?.place(at: bounds.origin, anchor: .topLeading,
+                              proposal: ProposedViewSize(width: bounds.width, height: nil))
     }
 }

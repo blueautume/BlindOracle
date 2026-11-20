@@ -37,20 +37,10 @@ struct ChatView: View {
                                     messageView(message).id(message.id)
                                 }
                                 if !store.activities.isEmpty {
-                                    OracleProcessingView(activities: store.activities, isBusy: store.isBusy, onExpansionChanged: { expanded in
+                                    OracleProcessingView(activities: store.activities, isBusy: store.isBusy) { expanded in
                                         inspectingActivities = expanded
-                                        if !expanded { followsLatest = true }
-                                        let sessionID = store.activitySessionID
-                                        Task { @MainActor in
-                                            await Task.yield()
-                                            guard store.activitySessionID == sessionID, inspectingActivities == expanded, selectedReading == nil else { return }
-                                            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
-                                                if expanded { proxy.scrollTo(sessionID, anchor: .top) }
-                                                else { proxy.scrollTo("bottom", anchor: .bottom) }
-                                            }
-                                        }
-                                    })
-                                        .id(store.activitySessionID)
+                                    }
+                                    .id(store.activitySessionID)
                                 }
                                 ForEach(store.messages.dropFirst(activityInsertionIndex)) { message in
                                     messageView(message).id(message.id)

@@ -42,6 +42,34 @@ final class ChatProgressUITests: XCTestCase {
         capture("progress-completed", in: app)
     }
 
+    @MainActor func testCompletedProgressKeepsItsPositionWhenToggled() {
+        let app = launchProgressFixture(paused: false)
+        let title = app.buttons["progressToggle"]
+        let finished = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "解读已完成"), object: title)
+        XCTAssertEqual(XCTWaiter.wait(for: [finished], timeout: 25), .completed)
+
+        let header = app.buttons["progressHeaderToggle"]
+        reveal(header, in: app)
+        let collapsedY = header.frame.minY
+        let answer = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "接下来可以先稳住手头的安排")).firstMatch
+        XCTAssertTrue(answer.isHittable)
+        let answerY = answer.frame.minY
+
+        header.tap()
+        XCTAssertEqual(header.value as? String, "已展开")
+        XCTAssertEqual(header.frame.minY, collapsedY, accuracy: 2)
+        XCTAssertTrue(progressRows(in: app).firstMatch.isHittable)
+
+        reveal(header, in: app)
+        header.tap()
+        XCTAssertEqual(header.value as? String, "已折叠")
+        let answerRestored = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            answer.isHittable && abs(answer.frame.minY - answerY) <= 2
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [answerRestored], timeout: 5), .completed)
+        XCTAssertEqual(header.frame.minY, collapsedY, accuracy: 2)
+    }
+
     @MainActor func testScrollingKeepsTranscriptAboveOpaqueComposer() {
         let app = launchProgressFixture(paused: true)
         let toggle = app.buttons["progressToggle"]
