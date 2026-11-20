@@ -213,6 +213,7 @@ private struct ResolvedBlindOracleRoot: View {
     @Binding private var pendingAppleSignIn: Bool
     @State private var analysisBackgroundExecution = AnalysisBackgroundExecution()
     @State private var chatDraft = ""
+    @State private var showHistory = false
     @State private var settingsPresented = false
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppLanguage.preferenceKey) private var preference: AppLanguagePreference = .system
@@ -237,7 +238,8 @@ private struct ResolvedBlindOracleRoot: View {
                 case .authenticated:
                     if giftPush.showsExplanation { giftPushExplanation }
                     TabView(selection: $store.selectedTab) {
-                        ChatView(draft: $chatDraft).tabItem { Label(L10n.ui("tab.chat", language: preference.language), systemImage: "bubble.left.and.bubble.right") }.tag(0)
+                        ChatView(draft: $chatDraft, showHistory: $showHistory)
+                            .tabItem { Label(L10n.ui("tab.chat", language: preference.language), systemImage: "bubble.left.and.bubble.right") }.tag(0)
                         DataLibraryView(settingsPresented: $settingsPresented).tabItem { Label(L10n.ui("tab.data", language: preference.language), systemImage: "books.vertical").accessibilityIdentifier("dataTab") }.tag(1)
                     }
                     .sheet(isPresented: $settingsPresented) { OracleSettingsView().id(preference.language) }
@@ -248,6 +250,13 @@ private struct ResolvedBlindOracleRoot: View {
                                     waitForConnectivity: firstLaunchNetwork.waitForSignInNetwork,
                                     automaticSignInDidStart: { pendingAppleSignIn = false })
                 }
+            }
+        }
+        .accessibilityHidden(showHistory)
+        .allowsHitTesting(!showHistory)
+        .overlay {
+            if account.canAccessMain {
+                ConversationHistoryOverlay(isPresented: $showHistory)
             }
         }
         // Refresh values from view helpers and stores while retaining the app's store.
@@ -269,7 +278,10 @@ private struct ResolvedBlindOracleRoot: View {
             await giftPush.refresh(account: account, language: preference.language)
         }
         .onChange(of: account.canAccessMain) { _, allowed in
-            if !allowed { settingsPresented = false }
+            if !allowed {
+                settingsPresented = false
+                showHistory = false
+            }
             else {
                 openGiftPushIfReady()
                 Task { await resumeBillingAndTasks() }
@@ -279,7 +291,14 @@ private struct ResolvedBlindOracleRoot: View {
             if state == .signedOut, context.source != .debugFixture { giftPush.signedOut() }
         }
         .onChange(of: giftPush.openedAccountID, initial: true) { _, _ in openGiftPushIfReady() }
-        .onChange(of: store.historyResetID) { _, _ in chatDraft = ""; settingsPresented = false }
+        .onChange(of: store.selectedTab) { _, tab in
+            if tab != 0 { showHistory = false }
+        }
+        .onChange(of: store.historyResetID) { _, _ in
+            chatDraft = ""
+            settingsPresented = false
+            showHistory = false
+        }
         .onChange(of: account.deletionResetID) { _, _ in
             chatDraft = ""; settingsPresented = false
             if context.source != .debugFixture { giftPush.signedOut() }

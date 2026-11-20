@@ -236,6 +236,72 @@ final class BlindOracleUITests: XCTestCase {
         XCTAssertTrue(app.buttons["localMethodsDirectory"].exists)
     }
 
+    @MainActor func testHistoryDrawerCoversTabsAndRestoresTheirPositions() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "-oracle.appLanguage", "zh-Hans"]
+        app.launch()
+
+        let history = app.buttons["historyButton"]
+        let drawer = app.descendants(matching: .any).matching(identifier: "conversationHistorySidebar").firstMatch
+        let close = app.buttons["closeHistory"]
+        let composer = app.descendants(matching: .any).matching(identifier: "chatComposerPanel").firstMatch
+        let tabBar = app.tabBars.firstMatch
+        let chat = tabBar.buttons["对话"]
+        let data = tabBar.buttons["数据"]
+        XCTAssertTrue(history.waitForExistence(timeout: 15))
+        XCTAssertTrue(composer.exists)
+        XCTAssertTrue(chat.isHittable)
+        XCTAssertTrue(data.isHittable)
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        let composerFrame = composer.frame
+        let tabBarFrame = tabBar.frame
+        let chatFrame = chat.frame
+        let dataFrame = data.frame
+
+        func assertSameFrame(_ actual: CGRect, _ expected: CGRect, file: StaticString = #filePath, line: UInt = #line) {
+            XCTAssertEqual(actual.minX, expected.minX, accuracy: 1, file: file, line: line)
+            XCTAssertEqual(actual.minY, expected.minY, accuracy: 1, file: file, line: line)
+            XCTAssertEqual(actual.width, expected.width, accuracy: 1, file: file, line: line)
+            XCTAssertEqual(actual.height, expected.height, accuracy: 1, file: file, line: line)
+        }
+
+        func assertChatLayoutRestored(file: StaticString = #filePath, line: UInt = #line) {
+            XCTAssertTrue(drawer.waitForNonExistence(timeout: 5), file: file, line: line)
+            XCTAssertTrue(chat.isHittable, file: file, line: line)
+            XCTAssertTrue(data.isHittable, file: file, line: line)
+            assertSameFrame(tabBar.frame, tabBarFrame, file: file, line: line)
+            assertSameFrame(chat.frame, chatFrame, file: file, line: line)
+            assertSameFrame(data.frame, dataFrame, file: file, line: line)
+            XCTAssertTrue(composer.waitForExistence(timeout: 5), file: file, line: line)
+            assertSameFrame(composer.frame, composerFrame, file: file, line: line)
+        }
+
+        history.tap()
+        XCTAssertTrue(drawer.waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(drawer.frame.maxY, tabBarFrame.minY)
+        XCTAssertFalse(chat.isHittable)
+        XCTAssertFalse(data.isHittable)
+        close.tap()
+        assertChatLayoutRestored()
+
+        history.tap()
+        XCTAssertTrue(drawer.waitForExistence(timeout: 5))
+        let appFrame = app.frame
+        let scrimWidth = appFrame.maxX - drawer.frame.maxX
+        guard scrimWidth > 0 else { return XCTFail("Expected a scrim to the right of the history drawer.") }
+        let scrimAtTabHeight = app.coordinate(withNormalizedOffset: .zero).withOffset(
+            CGVector(dx: appFrame.width - scrimWidth / 2, dy: dataFrame.midY - appFrame.minY)
+        )
+        scrimAtTabHeight.tap()
+        assertChatLayoutRestored()
+
+        data.tap()
+        XCTAssertTrue(app.buttons["addProfile"].waitForExistence(timeout: 5))
+        chat.tap()
+        XCTAssertTrue(history.waitForExistence(timeout: 5))
+        assertChatLayoutRestored()
+    }
+
     @MainActor func testHistoryRestoresPendingIntakeAndDeletionSurvivesRestart() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset"]

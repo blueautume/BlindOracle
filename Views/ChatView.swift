@@ -4,7 +4,7 @@ struct ChatView: View {
     @EnvironmentObject private var store: OracleStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var draft: String
-    @State private var showHistory = false
+    @Binding var showHistory: Bool
     @State private var topUpPresented = false
     @State private var aiConsentPresented = false
     @State private var pendingConsentSubmission = false
@@ -105,7 +105,7 @@ struct ChatView: View {
                     }
                     .onChange(of: store.historyResetID) { _, _ in
                         draft = ""; selectedReading = nil; inspectingActivities = false
-                        composing = false; showHistory = false
+                        composing = false
                         followsLatest = true
                     }
                   }
@@ -118,7 +118,7 @@ struct ChatView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         composing = false
-                        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) { showHistory.toggle() }
+                        showHistory = true
                     } label: { HistoryMenuIcon().foregroundStyle(InkTheme.ink) }
                     .accessibilityLabel(L10n.text("历史", "History"))
                     .accessibilityIdentifier("historyButton")
@@ -160,7 +160,7 @@ struct ChatView: View {
             .toolbarBackground(InkTheme.paper, for: .navigationBar).toolbarBackground(.visible, for: .navigationBar)
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: Binding(get: {
-                (store.showIntake || store.showInteraction) && !showHistory && selectedReading == nil
+                store.selectedTab == 0 && (store.showIntake || store.showInteraction) && !showHistory && selectedReading == nil
             }, set: { presented in
                 if !presented { store.showIntake = false; store.showInteraction = false }
             })) {
@@ -199,15 +199,7 @@ struct ChatView: View {
                 ReadingResultsSheet(runID: reference.id)
             }
         }
-        .toolbar(showHistory ? .hidden : .visible, for: .tabBar)
         .onChange(of: store.selectedTab) { _, _ in composing = false }
-        .accessibilityHidden(showHistory)
-        .overlay {
-            if showHistory {
-                ConversationHistorySidebar(isPresented: $showHistory)
-                    .transition(.opacity)
-            }
-        }
     }
 
     private var activityInsertionIndex: Int {

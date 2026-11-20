@@ -10,8 +10,41 @@ struct HistoryMenuIcon: View {
     }
 }
 
-struct ConversationHistorySidebar: View {
+struct ConversationHistoryOverlay: View {
     @Binding var isPresented: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .topLeading) {
+                if isPresented {
+                    Button(action: close) {
+                        Color.black.opacity(0.22).ignoresSafeArea(.container)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.text("关闭历史侧栏", "Close history sidebar"))
+                    .transition(.opacity)
+                }
+                if isPresented {
+                    ConversationHistorySidebar(close: close)
+                        .frame(width: min(geometry.size.width * 0.84, 360), height: geometry.size.height, alignment: .top)
+                        .background { InkTheme.paper.ignoresSafeArea(.container, edges: [.top, .bottom, .leading]) }
+                        .shadow(color: .black.opacity(0.12), radius: 20, x: 6)
+                        .transition(.move(edge: .leading))
+                        .zIndex(1)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .allowsHitTesting(isPresented)
+        .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.9), value: isPresented)
+    }
+
+    private func close() { isPresented = false }
+}
+
+private struct ConversationHistorySidebar: View {
+    let close: () -> Void
     @EnvironmentObject private var store: OracleStore
     @State private var deletionCandidate: OracleConversation?
     @State private var showClearHistory = false
@@ -30,68 +63,58 @@ struct ConversationHistorySidebar: View {
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .topLeading) {
-                Button(action: close) { Color.black.opacity(0.22).ignoresSafeArea() }
-                    .buttonStyle(.plain).accessibilityLabel(L10n.text("关闭历史侧栏", "Close history sidebar"))
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        Text(L10n.text("历史对话", "Conversation history")).font(.system(size: 23, weight: .medium, design: .serif)).tracking(2)
-                        Spacer()
-                        Button(action: close) { Image(systemName: "xmark").font(.system(size: 14)).frame(width: 38, height: 38) }
-                            .accessibilityLabel(L10n.text("关闭历史", "Close history")).accessibilityIdentifier("closeHistory")
-                    }
-                    .foregroundStyle(InkTheme.ink)
-                    .padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 22)
-                    Divider().overlay(InkTheme.line.opacity(0.6)).padding(.horizontal, 22)
-
-                    if history.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(L10n.text("往日问事，都会留在这里。", "Your past conversations will appear here.")).font(.system(size: 16, design: .serif))
-                            Text(L10n.text("开始一段对话后，就可以随时回来。", "Once you start a conversation, you can return to it at any time."))
-                                .font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
-                        }.padding(24)
-                        Spacer()
-                    } else {
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 26) {
-                                ForEach(groups, id: \.0) { section, conversations in
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text(section).font(.system(size: 11, weight: .medium)).tracking(2)
-                                            .foregroundStyle(InkTheme.secondary).padding(.horizontal, 14).padding(.bottom, 3)
-                                        ForEach(conversations) { conversation in
-                                            historyRow(conversation)
-                                        }
-                                    }
-                                }
-                            }.padding(.horizontal, 10).padding(.top, 24).padding(.bottom, 28)
-                        }
-                    }
-                    Button(role: .destructive) { showClearHistory = true } label: {
-                        Label(L10n.text("清除全部历史", "Clear all history"), systemImage: "trash")
-                            .font(.system(size: 14, design: .serif))
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(InkTheme.cinnabar)
-                    .disabled(history.isEmpty)
-                    .padding(.horizontal, 24).padding(.top, 8)
-                    .accessibilityIdentifier("clearConversationHistory")
-                    Text(L10n.text("长按一段对话，可将它删除。", "Touch and hold a conversation to delete it."))
-                        .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
-                        .padding(.horizontal, 24).padding(.top, 14)
-                        .padding(.bottom, max(geometry.safeAreaInsets.bottom, 18))
-                }
-                .frame(width: min(geometry.size.width * 0.84, 360), height: geometry.size.height, alignment: .top)
-                .background { InkTheme.paper.ignoresSafeArea() }
-                .shadow(color: .black.opacity(0.12), radius: 20, x: 6)
-                .transition(.move(edge: .leading))
-                .simultaneousGesture(DragGesture().onEnded { value in
-                    if value.translation.width < -60 && abs(value.translation.width) > abs(value.translation.height) * 1.3 { close() }
-                })
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(L10n.text("历史对话", "Conversation history")).font(.system(size: 23, weight: .medium, design: .serif)).tracking(2)
+                Spacer()
+                Button(action: close) { Image(systemName: "xmark").font(.system(size: 14)).frame(width: 38, height: 38) }
+                    .accessibilityLabel(L10n.text("关闭历史", "Close history")).accessibilityIdentifier("closeHistory")
             }
+            .foregroundStyle(InkTheme.ink)
+            .padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 22)
+            Divider().overlay(InkTheme.line.opacity(0.6)).padding(.horizontal, 22)
+
+            if history.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(L10n.text("往日问事，都会留在这里。", "Your past conversations will appear here.")).font(.system(size: 16, design: .serif))
+                    Text(L10n.text("开始一段对话后，就可以随时回来。", "Once you start a conversation, you can return to it at any time."))
+                        .font(.system(size: 12)).foregroundStyle(InkTheme.secondary)
+                }.padding(24)
+                Spacer()
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 26) {
+                        ForEach(groups, id: \.0) { section, conversations in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(section).font(.system(size: 11, weight: .medium)).tracking(2)
+                                    .foregroundStyle(InkTheme.secondary).padding(.horizontal, 14).padding(.bottom, 3)
+                                ForEach(conversations) { conversation in
+                                    historyRow(conversation)
+                                }
+                            }
+                        }
+                    }.padding(.horizontal, 10).padding(.top, 24).padding(.bottom, 28)
+                }
+            }
+            Button(role: .destructive) { showClearHistory = true } label: {
+                Label(L10n.text("清除全部历史", "Clear all history"), systemImage: "trash")
+                    .font(.system(size: 14, design: .serif))
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(InkTheme.cinnabar)
+            .disabled(history.isEmpty)
+            .padding(.horizontal, 24).padding(.top, 8)
+            .accessibilityIdentifier("clearConversationHistory")
+            Text(L10n.text("长按一段对话，可将它删除。", "Touch and hold a conversation to delete it."))
+                .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
+                .padding(.horizontal, 24).padding(.top, 14)
+                .padding(.bottom, 18)
         }
+        .simultaneousGesture(DragGesture().onEnded { value in
+            if value.translation.width < -60 && abs(value.translation.width) > abs(value.translation.height) * 1.3 { close() }
+        })
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("conversationHistorySidebar")
         .accessibilityAction(.escape) { close() }
@@ -146,6 +169,4 @@ struct ConversationHistorySidebar: View {
             }.accessibilityIdentifier("deleteConversation")
         }
     }
-
-    private func close() { withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) { isPresented = false } }
 }
