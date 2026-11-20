@@ -11,6 +11,7 @@ final class BlindOracleUITests: XCTestCase {
             XCTAssertTrue(scroll.waitForExistence(timeout: 10))
             XCTAssertTrue(app.buttons["appLanguagePicker"].exists)
             XCTAssertTrue(app.buttons["oracleVoiceStylePicker"].exists)
+            XCTAssertFalse(app.staticTexts["oracleVoiceStyleDetail"].exists)
             let removedIDs = ["aiProviderPicker", "settingsAIConnectionStatus", "restoreProConnection",
                               "checkAIConnection", "connectionCheckReport", "connectionCheckFeedback", "backupExportFeedback"]
             let removedLabels = ["解读模型", "AI provider", "模型 ID", "Model ID", "输入 API 密钥", "Enter API key",
@@ -40,9 +41,9 @@ final class BlindOracleUITests: XCTestCase {
         app.launch()
         openSettings(in: app)
 
-        let detail = app.staticTexts["oracleVoiceStyleDetail"]
-        XCTAssertTrue(detail.waitForExistence(timeout: 5))
-        XCTAssertEqual(detail.label, "直给判断，带一点冷幽默。")
+        let picker = app.buttons["oracleVoiceStylePicker"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        XCTAssertEqual(picker.value as? String, "冷面直断")
     }
 
     @MainActor func testZiweiMarksChartSexRequiredWhileBaziAllowsItToBeUnknown() {
@@ -77,38 +78,32 @@ final class BlindOracleUITests: XCTestCase {
         app.launch()
         openSettings(in: app)
 
-        let styles = [
-            (title: "经典", detail: "平实稳重，结论之后细讲盘面依据。"),
-            (title: "冷面直断", detail: "直给判断，带一点冷幽默。"),
-            (title: "温和参谋", detail: "温和给建议，帮你看清下一步。"),
-            (title: "江湖说书", detail: "用一个鲜活的比喻说清眼前的局。")
-        ]
+        let styles = ["经典", "冷面直断", "温和参谋", "江湖说书"]
         let picker = app.buttons["oracleVoiceStylePicker"]
-        let detail = app.staticTexts["oracleVoiceStyleDetail"]
         XCTAssertTrue(picker.waitForExistence(timeout: 5))
-        XCTAssertTrue(detail.waitForExistence(timeout: 5))
-        let initialStyle = try XCTUnwrap(styles.first { $0.detail == detail.label })
-        let newStyle = try XCTUnwrap(styles.reversed().first { $0.title != initialStyle.title })
+        let initialStyle = try XCTUnwrap(picker.value as? String)
+        XCTAssertTrue(styles.contains(initialStyle))
+        let newStyle = try XCTUnwrap(styles.last { $0 != initialStyle })
 
         picker.tap()
         for style in styles {
-            XCTAssertTrue(app.buttons[style.title].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons[style].waitForExistence(timeout: 5))
         }
-        app.buttons[newStyle.title].tap()
+        app.buttons[newStyle].tap()
         defer {
             if picker.exists {
                 picker.tap()
-                let initialChoice = app.buttons[initialStyle.title]
+                let initialChoice = app.buttons[initialStyle]
                 if initialChoice.waitForExistence(timeout: 5) { initialChoice.tap() }
             }
         }
-        XCTAssertEqual(detail.label, newStyle.detail)
+        XCTAssertEqual(picker.value as? String, newStyle)
 
         app.terminate()
         app.launch()
         openSettings(in: app)
-        XCTAssertTrue(detail.waitForExistence(timeout: 5))
-        XCTAssertEqual(detail.label, newStyle.detail)
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        XCTAssertEqual(picker.value as? String, newStyle)
     }
 
     @MainActor func testSettingsLegalDocumentsScrollAndReturnInChineseAndEnglish() {
@@ -119,6 +114,21 @@ final class BlindOracleUITests: XCTestCase {
             openSettings(in: app)
             let settings = app.scrollViews["settingsScroll"]
             XCTAssertTrue(settings.waitForExistence(timeout: 10))
+            let footer = settings.descendants(matching: .any).matching(identifier: "settingsAboutFooter").firstMatch
+            let style = settings.buttons["oracleVoiceStylePicker"]
+            XCTAssertTrue(footer.waitForExistence(timeout: 5), language)
+            XCTAssertTrue(style.exists, language)
+            XCTAssertGreaterThan(footer.frame.minY, style.frame.maxY, language)
+            XCTAssertLessThanOrEqual(footer.frame.maxY, settings.frame.maxY + 1, language)
+            XCTAssertGreaterThan(footer.frame.maxY, settings.frame.maxY - settings.frame.height * 0.14, language)
+            for id in ["userAgreementLink", "privacyPolicyLink", "thirdPartyLicensesLink"] {
+                XCTAssertTrue(footer.buttons[id].isHittable, "\(language) \(id)")
+            }
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "settings-footer-\(language)"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+
             let documents = [
                 (id: "userAgreementLink", title: language == "en" ? "User Agreement" : "用户协议"),
                 (id: "privacyPolicyLink", title: language == "en" ? "Privacy Policy" : "隐私政策")

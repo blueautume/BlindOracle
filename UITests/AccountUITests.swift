@@ -68,7 +68,9 @@ final class AccountUITests: XCTestCase {
         let entry = app.buttons["accountEntry"]
         XCTAssertTrue(entry.waitForExistence(timeout: 5)); entry.tap()
         XCTAssertTrue(app.buttons["logoutAccount"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["本机资料独立保存"].exists)
+        XCTAssertTrue(app.staticTexts["人员资料、聊天与推演保存在当前设备，不随账号自动同步。"].exists)
+        XCTAssertFalse(app.staticTexts["本机资料独立保存"].exists)
+        XCTAssertFalse(app.staticTexts["发起在线解读时，所需问题、上下文与资料将经过账号服务器转交 AI 服务。"].exists)
         XCTAssertTrue(app.buttons["deleteAccount"].exists)
         XCTAssertFalse(element("remainingQuotaPercentage", in: app).exists)
         XCTAssertFalse(app.staticTexts["可用额度"].exists)

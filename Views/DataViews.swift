@@ -316,74 +316,98 @@ struct OracleSettingsView: View {
         NavigationStack {
             ZStack {
                 PaperBackground()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        PaperCard {
-                            NavigationLink { AccountView() } label: {
-                                HStack {
-                                    Label(L10n.text("账号设置", "Account settings"), systemImage: "person.crop.circle")
-                                    Spacer()
-                                    if let user = account.user {
-                                        Text(user.presentationName).font(.footnote).foregroundStyle(InkTheme.secondary).lineLimit(1)
+                GeometryReader { geometry in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 24) {
+                            PaperCard {
+                                NavigationLink { AccountView() } label: {
+                                    HStack {
+                                        Label(L10n.text("账号设置", "Account settings"), systemImage: "person.crop.circle")
+                                        Spacer()
+                                        if let user = account.user {
+                                            Text(user.presentationName).font(.footnote).foregroundStyle(InkTheme.secondary).lineLimit(1)
+                                        }
+                                        Image(systemName: "chevron.right").font(.caption)
                                     }
-                                    Image(systemName: "chevron.right").font(.caption)
-                                }.font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.ink)
-                            }.accessibilityIdentifier("settingsAccountEntry")
-                        }
-                        PaperCard {
-                            VStack(alignment: .leading, spacing: 12) {
-                                AppLanguageSettingsRow()
-                                Divider().overlay(InkTheme.line)
-                                OracleVoiceSettingsRow()
+                                    .font(.system(size: 16, design: .serif))
+                                    .foregroundStyle(InkTheme.ink)
+                                }
+                                .accessibilityIdentifier("settingsAccountEntry")
                             }
-                        }
-                        VStack(spacing: 9) {
-                            OracleMark(size: 38)
-                            Text(L10n.text("瞎子", "BlindOracle")).font(.system(size: 15, design: .serif)).foregroundStyle(InkTheme.ink)
-                            Text(L10n.text("版本 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")（\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—")）", "Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"))"))
-                                .font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
-                            Text(L10n.text("慢听一问，静观其变。", "Take your time and see what changes."))
-                                .font(.system(size: 12, design: .serif)).foregroundStyle(InkTheme.secondary)
-                            Text(L10n.text("传统文化与自我梳理，解读不作事实保证。", "For exploring traditions and reflecting on your own life. Readings don’t establish facts."))
-                                .font(.system(size: 11)).foregroundStyle(InkTheme.secondary.opacity(0.8)).padding(.top, 4)
-                        }.frame(maxWidth: .infinity).padding(.vertical, 12)
-                        HStack(spacing: 16) {
-                            NavigationLink {
-                                LegalDocumentView(document: .userAgreement)
-                            } label: {
-                                Text(L10n.text("用户协议", "User Agreement"))
-                                    .padding(.vertical, 12)
+                            PaperCard {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    AppLanguageSettingsRow()
+                                    Divider().overlay(InkTheme.line)
+                                    OracleVoiceSettingsRow()
+                                }
                             }
-                            .accessibilityIdentifier("userAgreementLink")
-                            Text("·").accessibilityHidden(true)
-                            NavigationLink {
-                                LegalDocumentView(document: .privacyPolicy)
-                            } label: {
-                                Text(L10n.text("隐私政策", "Privacy Policy"))
-                                    .padding(.vertical, 12)
-                            }
-                            .accessibilityIdentifier("privacyPolicyLink")
+                            Spacer(minLength: 12)
+                            aboutFooter
                         }
-                        .font(.system(.footnote, design: .serif))
-                        .foregroundStyle(InkTheme.secondary)
-                        .tint(InkTheme.secondary)
+                        .padding(22)
+                        .frame(maxWidth: 760, minHeight: geometry.size.height, alignment: .top)
                         .frame(maxWidth: .infinity)
-                        NavigationLink { LocalNoticeView() } label: {
-                            Text(L10n.text("第三方资料与许可", "Third-party sources and licenses"))
-                                .padding(.vertical, 8)
-                        }
-                        .font(.system(.footnote, design: .serif))
-                        .foregroundStyle(InkTheme.secondary)
-                        .tint(InkTheme.secondary)
-                        .frame(maxWidth: .infinity)
-                        .accessibilityIdentifier("thirdPartyLicensesLink")
-                    }.padding(22).frame(maxWidth: 760).frame(maxWidth: .infinity)
+                    }
+                    .accessibilityIdentifier("settingsScroll")
                 }
-                .accessibilityIdentifier("settingsScroll")
             }
             .navigationTitle(L10n.text("设置", "Settings")).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(L10n.text("完成", "Done")) { dismiss() }.tint(InkTheme.cinnabar) } }
         }.tint(InkTheme.cinnabar)
+    }
+
+    private var aboutFooter: some View {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+
+        return VStack(spacing: 0) {
+            OracleMark(size: 38)
+            Text(L10n.text("瞎子", "BlindOracle"))
+                .font(.system(.headline, design: .serif))
+                .foregroundStyle(InkTheme.ink)
+                .padding(.top, 8)
+            Text(L10n.text("版本 \(version)（\(build)）", "Version \(version) (\(build))"))
+                .font(.caption2)
+                .monospacedDigit()
+                .padding(.top, 3)
+            Text(L10n.text("解读不做事实保证", "Readings don’t establish facts"))
+                .font(.caption)
+                .padding(.top, 12)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 18) { legalLinks }
+                    .fixedSize(horizontal: true, vertical: false)
+                VStack(spacing: 0) { legalLinks }
+            }
+            .font(.system(.footnote, design: .serif))
+            .buttonStyle(.plain)
+            .padding(.top, 4)
+        }
+        .foregroundStyle(InkTheme.secondary)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("settingsAboutFooter")
+    }
+
+    @ViewBuilder private var legalLinks: some View {
+        NavigationLink { LegalDocumentView(document: .userAgreement) } label: {
+            Text(L10n.text("用户协议", "User Agreement"))
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityIdentifier("userAgreementLink")
+        NavigationLink { LegalDocumentView(document: .privacyPolicy) } label: {
+            Text(L10n.text("隐私政策", "Privacy Policy"))
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityIdentifier("privacyPolicyLink")
+        NavigationLink { LocalNoticeView() } label: {
+            Text(L10n.text("资料与许可", "Sources & Licenses"))
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityIdentifier("thirdPartyLicensesLink")
     }
 }
 
@@ -392,26 +416,20 @@ private struct OracleVoiceSettingsRow: View {
 
     var body: some View {
         let label = L10n.text("解读口吻", "Reading style")
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(label).font(.system(size: 15, design: .serif))
-                    .accessibilityHidden(true)
-                Spacer()
-                Picker(label, selection: $style) {
-                    ForEach(OracleVoiceStyle.allCases) { option in
-                        Text(option.title).tag(option)
-                    }
+        HStack {
+            Text(label).font(.system(size: 15, design: .serif))
+                .accessibilityHidden(true)
+            Spacer()
+            Picker(label, selection: $style) {
+                ForEach(OracleVoiceStyle.allCases) { option in
+                    Text(option.title).tag(option)
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .tint(InkTheme.cinnabar)
-                .accessibilityLabel(label)
-                .accessibilityIdentifier("oracleVoiceStylePicker")
             }
-            Text(style.detail)
-                .font(.footnote)
-                .foregroundStyle(InkTheme.secondary)
-                .accessibilityIdentifier("oracleVoiceStyleDetail")
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .accessibilityLabel(label)
+            .accessibilityValue(style.title)
+            .accessibilityIdentifier("oracleVoiceStylePicker")
         }
     }
 }

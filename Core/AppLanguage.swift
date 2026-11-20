@@ -71,15 +71,6 @@ enum OracleVoiceStyle: String, CaseIterable, Identifiable, Sendable {
         case .storyteller: L10n.text("江湖说书", "Folk Storyteller", language: language)
         }
     }
-
-    var detail: String {
-        switch self {
-        case .classic: L10n.text("平实稳重，结论之后细讲盘面依据。", "Measured and plainspoken, with the reasoning behind the answer.")
-        case .deadpan: L10n.text("直给判断，带一点冷幽默。", "A straight answer with a touch of dry humor.")
-        case .warm: L10n.text("温和给建议，帮你看清下一步。", "Gentle, practical guidance on what to do next.")
-        case .storyteller: L10n.text("用一个鲜活的比喻说清眼前的局。", "A vivid image that makes the situation easier to read.")
-        }
-    }
 }
 
 enum L10n {

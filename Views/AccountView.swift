@@ -40,14 +40,9 @@ struct AccountView: View {
                         Text(message).font(.subheadline).foregroundStyle(InkTheme.cinnabar).lineSpacing(4)
                             .accessibilityIdentifier("accountMessage")
                     }
-                    VStack(alignment: .leading, spacing: 10) {
-                            Label(L10n.text("本机资料独立保存", "Local records stay on this device"), systemImage: "iphone")
-                                .font(.system(size: 16, design: .serif)).foregroundStyle(InkTheme.ink)
-                            Text(L10n.text("人员资料、聊天与推演保存在当前设备，不随账号自动同步。退出或切换账号会保留本机记录；永久注销账号将清除本机记录。共享设备前，请先清理需要删除的资料。", "Profiles, chats and readings are stored on this device and are not automatically synced with your account. Signing out or switching accounts keeps local records; permanently deleting your account clears them. Remove relevant records before sharing this device."))
-                                .font(.footnote).foregroundStyle(InkTheme.secondary).lineSpacing(4)
-                            Text(L10n.text("发起在线解读时，所需问题、上下文与资料将经过账号服务器转交 AI 服务。", "When you request an online reading, the required question, context and profile details pass through the account server to the AI service."))
-                                .font(.footnote).foregroundStyle(InkTheme.secondary).lineSpacing(4)
-                    }.padding(.horizontal, 4)
+                    Text(L10n.text("人员资料、聊天与推演保存在当前设备，不随账号自动同步。", "Profiles, chats and readings are stored on this device and are not automatically synced with your account."))
+                        .font(.footnote).foregroundStyle(InkTheme.secondary).lineSpacing(4)
+                        .padding(.horizontal, 4)
                     if account.user != nil {
                         Button { confirmLogout = true } label: {
                             Text(L10n.text("退出登录", "Sign out"))
