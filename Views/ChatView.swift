@@ -5,6 +5,7 @@ struct ChatView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var draft: String
     @Binding var showHistory: Bool
+    @Binding var isRestoringChat: Bool
     @State private var topUpPresented = false
     @State private var aiConsentPresented = false
     @State private var pendingConsentSubmission = false
@@ -63,6 +64,22 @@ struct ChatView: View {
                                     .background(InkTheme.wash.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
                             }
                             Color.clear.frame(height: 1).id("bottom")
+                                .onGeometryChange(for: Bool?.self) { geometry in
+                                    guard let viewport = geometry.bounds(of: .scrollView), viewport.height > 0 else { return nil }
+                                    let marker = geometry.frame(in: .scrollView)
+                                    return marker.minY >= -1 && marker.maxY <= viewport.height + 1
+                                } action: { bottomIsVisible in
+                                    guard isRestoringChat, let bottomIsVisible else { return }
+                                    if bottomIsVisible {
+                                        isRestoringChat = false
+                                    } else {
+                                        // Position the transcript after layout, while the launch cover is still visible.
+                                        Task { @MainActor in
+                                            guard isRestoringChat else { return }
+                                            proxy.scrollTo("bottom", anchor: .bottom)
+                                        }
+                                    }
+                                }
                         }.frame(maxWidth: 720).padding(.horizontal, 24).padding(.bottom, 18).frame(maxWidth: .infinity)
                             .accessibilityHidden(showHistory)
                     }
@@ -76,9 +93,11 @@ struct ChatView: View {
                     })
                     .accessibilityIdentifier("chatTranscript")
                     .onAppear {
+                        guard !isRestoringChat else { return }
                         Task { @MainActor in
                             await Task.yield()
-                            guard followsLatest, selectedReading == nil else { return }
+                            guard followsLatest, !inspectingActivities,
+                                  selectedReading == nil, !showHistory else { return }
                             proxy.scrollTo("bottom", anchor: .bottom)
                         }
                     }

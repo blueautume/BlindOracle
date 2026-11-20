@@ -215,7 +215,9 @@ private struct ResolvedBlindOracleRoot: View {
     @State private var chatDraft = ""
     @State private var showHistory = false
     @State private var settingsPresented = false
+    @State private var isRestoringChat: Bool
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(AppLanguage.preferenceKey) private var preference: AppLanguagePreference = .system
     init(context: AppServiceContext, firstLaunchNetwork: FirstLaunchNetworkWarmup,
          giftPush: GiftPushCoordinator, pendingAppleSignIn: Binding<Bool>) {
@@ -226,6 +228,7 @@ private struct ResolvedBlindOracleRoot: View {
         let vault = LocalVault.forContext(context)
         let oracle = OracleStore(vault: vault)
         _store = StateObject(wrappedValue: oracle)
+        _isRestoringChat = State(initialValue: !oracle.messages.isEmpty)
         _account = StateObject(wrappedValue: AccountStore.makeAppStore(localDataVault: vault, localDataErasure: { [weak oracle] in
             guard let oracle else { throw AccountAPIError.storage }
             try await oracle.eraseLocalDataAfterAccountDeletion()
@@ -238,7 +241,7 @@ private struct ResolvedBlindOracleRoot: View {
                 case .authenticated:
                     if giftPush.showsExplanation { giftPushExplanation }
                     TabView(selection: $store.selectedTab) {
-                        ChatView(draft: $chatDraft, showHistory: $showHistory)
+                        ChatView(draft: $chatDraft, showHistory: $showHistory, isRestoringChat: $isRestoringChat)
                             .tabItem { Label(L10n.ui("tab.chat", language: preference.language), systemImage: "bubble.left.and.bubble.right") }.tag(0)
                         DataLibraryView(settingsPresented: $settingsPresented).tabItem { Label(L10n.ui("tab.data", language: preference.language), systemImage: "books.vertical").accessibilityIdentifier("dataTab") }.tag(1)
                     }
@@ -252,12 +255,22 @@ private struct ResolvedBlindOracleRoot: View {
                 }
             }
         }
-        .accessibilityHidden(showHistory)
-        .allowsHitTesting(!showHistory)
+        .accessibilityHidden(showHistory || showsChatRestoration)
+        .allowsHitTesting(!showHistory && !showsChatRestoration)
         .overlay {
             if account.canAccessMain {
                 ConversationHistoryOverlay(isPresented: $showHistory)
             }
+        }
+        .overlay {
+            ZStack {
+                if showsChatRestoration {
+                    AccountRestoringView(progressLabel: L10n.text("正在恢复对话", "Restoring your conversation"))
+                        .transition(.opacity)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isRestoringChat)
         }
         // Refresh values from view helpers and stores while retaining the app's store.
         .id(preference.language)
@@ -342,6 +355,10 @@ private struct ResolvedBlindOracleRoot: View {
             }
         }
     }
+    private var showsChatRestoration: Bool {
+        isRestoringChat && account.canAccessMain && store.selectedTab == 0
+    }
+
     private var giftPushExplanation: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(L10n.text("赠送额度到账时，瞎子会发一条通知。是否开启通知都不影响额度到账。",

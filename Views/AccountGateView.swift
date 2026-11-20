@@ -186,6 +186,8 @@ private struct AccountGateLayout: View {
 
 /// Returning users see a quiet launch surface, never a sign-in form.
 struct AccountRestoringView: View {
+    var progressLabel = L10n.text("正在恢复账号", "Restoring your account")
+
     var body: some View {
         ZStack {
             PaperBackground()
@@ -196,7 +198,7 @@ struct AccountRestoringView: View {
                     TestEnvironmentBadge()
                 }
                 ProgressView().controlSize(.small).tint(InkTheme.secondary).padding(.top, 12)
-                    .accessibilityLabel(L10n.text("正在恢复账号", "Restoring your account"))
+                    .accessibilityLabel(progressLabel)
             }.padding(.bottom, 30)
         }.accessibilityIdentifier("accountLaunchScreen")
     }
