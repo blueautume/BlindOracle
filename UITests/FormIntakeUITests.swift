@@ -204,10 +204,42 @@ final class FormIntakeUITests: XCTestCase {
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "profileRow-")).count, 0)
     }
 
-    @MainActor private func launchFreshApp() -> XCUIApplication {
+    @MainActor func testSelectingSavedPersonKeepsCastingLocationAfterFallbackEnds() {
+        continueAfterFailure = false
+        let app = launchFreshApp(extraArguments: ["--ui-testing-reading-library"])
+        app.buttons["newConversationButton"].tap()
+        send("我现阶段处在什么个人周期？", in: app)
+
+        let person = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "selectProfile-")).firstMatch
+        let place = app.buttons["castingLocationButton"]
+        let summary = element("castingLocationSummary", in: app)
+        let fallback = element("intakeFallbackNotice", in: app)
+        XCTAssertTrue(person.waitForExistence(timeout: 15))
+        XCTAssertEqual(person.label, "陈平，已选")
+        XCTAssertFalse(place.exists)
+
+        reveal(person, in: app)
+        person.tap()
+        XCTAssertTrue(summary.waitForExistence(timeout: 10))
+        XCTAssertTrue(fallback.exists)
+        XCTAssertEqual(person.label, "陈平，未选")
+        let placeLabel = place.label
+        let summaryLabel = summary.label
+        XCTAssertTrue(summaryLabel.contains("116.2211"), summaryLabel)
+
+        reveal(person, in: app)
+        person.tap()
+        XCTAssertEqual(person.label, "陈平，已选")
+        XCTAssertFalse(fallback.exists)
+        XCTAssertTrue(place.exists)
+        XCTAssertEqual(place.label, placeLabel)
+        XCTAssertEqual(summary.label, summaryLabel)
+    }
+
+    @MainActor private func launchFreshApp(extraArguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing-local", "--ui-testing-reset", "--ui-testing-location-fixture",
-                               "--ui-testing-reset-language", "-oracle.appLanguage", "zh-Hans"]
+                               "--ui-testing-reset-language", "-oracle.appLanguage", "zh-Hans"] + extraArguments
         app.launch()
         XCTAssertTrue(app.buttons["sendQuestion"].waitForExistence(timeout: 15))
         return app

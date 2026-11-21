@@ -239,7 +239,6 @@ private struct ResolvedBlindOracleRoot: View {
             Group {
                 switch account.accessState {
                 case .authenticated:
-                    if giftPush.showsExplanation { giftPushExplanation }
                     TabView(selection: $store.selectedTab) {
                         ChatView(draft: $chatDraft, showHistory: $showHistory, isRestoringChat: $isRestoringChat)
                             .tabItem { Label(L10n.ui("tab.chat", language: preference.language), systemImage: "bubble.left.and.bubble.right") }.tag(0)
@@ -359,34 +358,6 @@ private struct ResolvedBlindOracleRoot: View {
         isRestoringChat && account.canAccessMain && store.selectedTab == 0
     }
 
-    private var giftPushExplanation: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(L10n.text("赠送额度到账时，瞎子会发一条通知。是否开启通知都不影响额度到账。",
-                           "BlindOracle can notify you when gifted credits arrive. Your choice won’t affect which credits you receive."))
-                .font(.subheadline)
-                .foregroundStyle(InkTheme.ink)
-            HStack {
-                Button(L10n.text("继续", "Continue")) {
-                    Task { await giftPush.requestAuthorization(account: account, language: preference.language) }
-                }
-                .font(.subheadline.weight(.semibold))
-                .frame(minHeight: 44)
-                Spacer()
-                Button {
-                    giftPush.dismissExplanation()
-                } label: {
-                    Image(systemName: "xmark")
-                        .foregroundStyle(InkTheme.secondary)
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-                .accessibilityLabel(L10n.text("关闭说明", "Dismiss explanation"))
-            }
-        }
-        .padding(.top, 10)
-        .padding(.horizontal, 24)
-        .background(InkTheme.wash)
-        .onAppear { giftPush.explanationAppeared() }
-    }
     private func openGiftPushIfReady() {
         guard account.canAccessMain, giftPush.consumeOpen(for: account.user?.id) else { return }
         settingsPresented = false

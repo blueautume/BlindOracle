@@ -20,6 +20,7 @@ struct GroupIntakeView: View {
     @State private var drafts: [UUID: ProfileFormDraft]
     @State private var selectedIDs: [UUID]
     @State private var casting: CastingLocationDraft
+    @State private var hasShownCastingLocation = false
     @StateObject private var castingLocation = LocationService()
     @State private var locationState = CastingLocationRequestState()
     @State private var locationError: String?
@@ -70,6 +71,11 @@ struct GroupIntakeView: View {
         let methods = Set(plan.methods + (plan.mandatoryMethods ?? []) + report.assessments.map(\.method))
         return methods.contains { ReadingPreparationPolicy.requiresCastingLocation(plan: plan, method: $0, numbers: draftNumbers) }
     }
+    private var showsCastingLocation: Bool {
+        // Selecting a person can remove the fallback method. Keep the location
+        // card in place once it has appeared in this form.
+        hasShownCastingLocation || needsCastingLocation
+    }
     private var editedFields: [UUID: Set<OracleField>] {
         var fields: [UUID: Set<OracleField>] = [:]
         for id in selectedIDs {
@@ -109,7 +115,7 @@ struct GroupIntakeView: View {
                             }
                             if !standaloneCorrection { questionCard }
                             if plan.profileCorrection != nil { correctionCard }
-                            if needsCastingLocation { castingLocationCard }
+                            if showsCastingLocation { castingLocationCard }
                             if !availableSavedPeople.isEmpty { savedPeople }
                             selectedPeople
                             if !standaloneCorrection {
@@ -151,7 +157,7 @@ struct GroupIntakeView: View {
                     Button(L10n.text("确认并继续", "Confirm and continue"), action: confirm)
                         .font(.system(size: 14, weight: .semibold)).foregroundStyle(InkTheme.cinnabar)
                         .accessibilityIdentifier("confirmIntake")
-                        .disabled(store.isBusy || locationState.isWaiting)
+                        .disabled(store.isBusy || (locationState.isWaiting && needsCastingLocation))
                 }
             }
             .toolbarBackground(InkTheme.paper, for: .navigationBar).toolbarBackground(.visible, for: .navigationBar)
@@ -159,11 +165,11 @@ struct GroupIntakeView: View {
                 if !standaloneCorrection && selectedIDs.isEmpty && store.profiles.isEmpty {
                     for _ in 0..<minimumCount { addPerson() }
                 }
-                requestAutomaticCastingLocation()
             }
-            .onChange(of: needsCastingLocation) { _, required in
-                if required { requestAutomaticCastingLocation() }
-                else { cancelCastingLocation() }
+            .onChange(of: needsCastingLocation, initial: true) { _, required in
+                guard required else { return }
+                hasShownCastingLocation = true
+                requestAutomaticCastingLocation()
             }
             .onReceive(castingLocation.$place, perform: receiveCastingLocation)
             .onReceive(castingLocation.$message, perform: receiveCastingLocationError)
@@ -223,7 +229,7 @@ struct GroupIntakeView: View {
     private func requestCurrentCastingLocation() {
         cancelCastingLocation()
         guard !submitted, !choosingCastingLocation,
-              locationState.beginManual(needsLocation: needsCastingLocation) != nil else { return }
+              locationState.beginManual(needsLocation: showsCastingLocation) != nil else { return }
         castingLocation.request()
     }
 
@@ -234,7 +240,7 @@ struct GroupIntakeView: View {
     }
 
     private func receiveCastingLocation(_ place: LocalPlace?) {
-        guard !submitted, needsCastingLocation, !choosingCastingLocation,
+        guard !submitted, showsCastingLocation, !choosingCastingLocation,
               let requestID = locationState.requestID, let place,
               locationState.finish(requestID: requestID) else { return }
         castingLocation.cancel()
@@ -340,7 +346,7 @@ struct GroupIntakeView: View {
                     if casting.profile.currentDistrictCode != nil {
                         Text(TrueSolarClock.coordinateLimitation).font(.system(size: 11)).foregroundStyle(InkTheme.secondary)
                     }
-                } else if !locationState.isWaiting {
+                } else if needsCastingLocation && !locationState.isWaiting {
                     Text(L10n.text("请使用当前位置或手动选择地点后继续。", "Use your current location or choose a place manually to continue."))
                         .font(.system(size: 12)).foregroundStyle(InkTheme.cinnabar)
                         .accessibilityIdentifier("castingLocationRequired")

@@ -27,10 +27,8 @@ struct GiftPushRegistration: Encodable {
 
 @MainActor
 final class GiftPushCoordinator: NSObject, ObservableObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-    @Published private(set) var showsExplanation = false
     @Published private(set) var openedAccountID: UUID?
 
-    private let explanationShownKey = "oracle.giftPush.explanationShown"
     private let center = UNUserNotificationCenter.current()
     private weak var activeAccount: AccountStore?
     private var activeAccountID: UUID?
@@ -61,41 +59,33 @@ final class GiftPushCoordinator: NSObject, ObservableObject, UIApplicationDelega
         case .authorized, .provisional, .ephemeral:
             acceptsNotifications = true
             lastDisabledAccountID = nil
-            dismissExplanation()
             UIApplication.shared.registerForRemoteNotifications()
         case .notDetermined:
             acceptsNotifications = false
             if lastDisabledAccountID != accountID { setRegistration(token: nil) }
-            if !UserDefaults.standard.bool(forKey: explanationShownKey), !isRequestingAuthorization {
-                showsExplanation = true
+            if !isRequestingAuthorization {
+                // The system prompt can make the scene inactive and cancel its refresh task.
+                Task { await requestAuthorization() }
             }
         default:
-            dismissExplanation()
             acceptsNotifications = false
             disableDeliveryOnDevice()
             if lastDisabledAccountID != accountID { setRegistration(token: nil) }
         }
     }
 
-    func explanationAppeared() {
-        UserDefaults.standard.set(true, forKey: explanationShownKey)
-    }
-
-    func dismissExplanation() {
-        showsExplanation = false
-    }
-
-    func requestAuthorization(account: AccountStore, language: AppLanguage) async {
-        guard !isRequestingAuthorization, account.canAccessMain else { return }
+    private func requestAuthorization() async {
+        guard !isRequestingAuthorization, activeAccount?.canAccessMain == true,
+              UIApplication.shared.applicationState == .active else { return }
         isRequestingAuthorization = true
-        dismissExplanation()
+        defer { isRequestingAuthorization = false }
         _ = try? await center.requestAuthorization(options: [.alert, .sound])
-        isRequestingAuthorization = false
-        await refresh(account: account, language: language)
+        if let account = activeAccount {
+            await refresh(account: account, language: language)
+        }
     }
 
     func signedOut() {
-        dismissExplanation()
         acceptsNotifications = false
         activeAccount = nil
         activeAccountID = nil
