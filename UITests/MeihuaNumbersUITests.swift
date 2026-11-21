@@ -75,7 +75,12 @@ final class MeihuaNumbersUITests: XCTestCase {
         XCTAssertTrue(confirm.exists); XCTAssertFalse(confirm.isEnabled)
 
         let generate = app.buttons["generateNumbers"]
-        XCTAssertTrue(generate.waitForExistence(timeout: 5)); generate.tap()
+        XCTAssertTrue(generate.waitForExistence(timeout: 5))
+        // Use the outer number cards to tap the background on either side of the label.
+        let edge = english ? fields[2] : fields[0]
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        origin.withOffset(CGVector(dx: edge.frame.midX - app.frame.minX,
+                                   dy: generate.frame.midY - app.frame.minY)).tap()
         let generated = try fields.map { field -> String in
             let value = try XCTUnwrap(field.value as? String)
             let number = try XCTUnwrap(Int(value))

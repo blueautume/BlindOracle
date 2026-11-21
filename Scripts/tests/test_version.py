@@ -100,6 +100,14 @@ class VersionTests(unittest.TestCase):
         self.git('add', *VERSION_FILES)
         self.assert_success(self.run_version('--check-staged'))
 
+    def test_explicit_minor_release_can_reset_build_to_one(self):
+        self.write_versions('4.1.15', 85)
+        self.commit_baseline()
+        self.assert_success(self.run_version('--set', '4.2.0', '1'))
+        self.assert_synced('4.2.0', 1)
+        self.git('add', *VERSION_FILES)
+        self.assert_success(self.run_version('--check-staged'))
+
     def test_check_rejects_a_project_configuration_that_drifted_from_manifest(self):
         project = self.root / 'BlindOracle.xcodeproj/project.pbxproj'
         project.write_text(project.read_text().replace('MARKETING_VERSION = 0.1.1;',
@@ -116,9 +124,9 @@ class VersionTests(unittest.TestCase):
         self.git('add', *VERSION_FILES)
         self.assert_success(self.run_version('--check-staged'))
 
-    def test_staged_check_requires_both_version_and_build_to_increase(self):
+    def test_staged_check_rejects_invalid_version_and_build_changes(self):
         self.commit_baseline()
-        for version, build in [('0.1.1', 3), ('0.1.2', 2)]:
+        for version, build in [('0.1.1', 3), ('0.1.2', 2), ('0.1.2', 1), ('0.2.0', 2)]:
             with self.subTest(version=version, build=build):
                 self.write_versions(version, build)
                 self.assert_success(self.run_version('--check'))

@@ -181,6 +181,7 @@ struct OracleInteractionView: View {
                 Label(L10n.text("随机生成", "Generate numbers"), systemImage: "dice")
                     .font(.system(size: 16, weight: .medium, design: .serif))
                     .frame(maxWidth: .infinity).padding(.vertical, 15)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain).foregroundStyle(InkTheme.cinnabar)
             .background(InkTheme.cinnabar.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
